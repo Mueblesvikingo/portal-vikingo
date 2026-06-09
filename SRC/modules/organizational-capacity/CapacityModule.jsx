@@ -1240,7 +1240,6 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
   const dragLatestPositionRef = useRef(null);
   const cellWidth = useEightColumnWidth(viewportRef, visibleColumnCount);
   const columnStorageKey = `${storageKey}_column_count`;
-  const displayNumberStorageKey = `${storageKey}_display_numbers`;
   const getStoredColumnCount = () => {
     if (typeof window === "undefined") return visibleColumnCount;
 
@@ -1252,16 +1251,6 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     }
   };
   const [columnCount, setColumnCount] = useState(() => getStoredColumnCount());
-  const getStoredDisplayNumbers = () => {
-    if (typeof window === "undefined") return {};
-
-    try {
-      return JSON.parse(window.localStorage.getItem(displayNumberStorageKey) || "{}");
-    } catch {
-      return {};
-    }
-  };
-  const [displayNumbers, setDisplayNumbers] = useState(() => getStoredDisplayNumbers());
   const [dragging, setDragging] = useState(null);
   const [selectedLaneInsight, setSelectedLaneInsight] = useState(null);
   const [lanes, setLanes] = useState(() => initialLanes.map((lane) => ({ ...lane, active: lane.active !== false })));
@@ -1332,10 +1321,9 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     const positions = {};
     initialLanes.filter(isValidLane).forEach((lane, laneIndex) => {
       lane[blockKey].forEach((block, blockIndex) => {
-        const savedStep = firstValue(block, ["order", "orden_flujo", "secuencia"], blockIndex);
         positions[block.id] = {
           laneIndex,
-          step: Math.max(0, toNumber(savedStep, blockIndex)),
+          step: blockIndex,
         };
       });
     });
@@ -1459,15 +1447,6 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     }
   };
 
-  const saveDisplayNumbers = (nextDisplayNumbers) => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(displayNumberStorageKey, JSON.stringify(nextDisplayNumbers));
-    } catch {
-      // localStorage puede estar bloqueado; el estado queda en sesion.
-    }
-  };
-
   const getNode = (blockId) => {
     const position = positions[blockId];
     if (!position) return null;
@@ -1476,59 +1455,51 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     return { x: step * cellWidth, y: laneIndex * laneHeight, laneIndex, step };
   };
 
-  const getBlockDisplayNumber = (block) => {
-    if (displayNumbers[block.id] !== undefined && displayNumbers[block.id] !== null) {
-      return Number(displayNumbers[block.id]);
-    }
+  const getOrderedBlocks = (sourcePositions = positions) =>
+    allBlocks
+      .map((block, fallbackIndex) => ({
+        block,
+        fallbackIndex,
+        position: sourcePositions[block.id] || positions[block.id] || { laneIndex: 0, step: fallbackIndex },
+      }))
+      .sort((a, b) => {
+        const stepDiff =
+          toNumber(a.position?.step, a.fallbackIndex) -
+          toNumber(b.position?.step, b.fallbackIndex);
+        if (stepDiff !== 0) return stepDiff;
 
-    if (block.numero_visual !== undefined && block.numero_visual !== null) {
-      return Number(block.numero_visual);
-    }
+        const laneDiff =
+          toNumber(a.position?.laneIndex, 0) -
+          toNumber(b.position?.laneIndex, 0);
+        if (laneDiff !== 0) return laneDiff;
 
-    if (block.displayNumber !== undefined && block.displayNumber !== null) {
-      return Number(block.displayNumber);
-    }
+        return a.fallbackIndex - b.fallbackIndex;
+      })
+      .map(({ block }) => block);
 
-    return Number(block.id);
-  };
+  const getOrderedBlockPayload = (sourcePositions = positions) =>
+    getOrderedBlocks(sourcePositions).map((block, index) => {
+      const position = sourcePositions[block.id] || positions[block.id] || {};
+      const lane = visibleLanes[toNumber(position.laneIndex, 0)] || {};
+      return {
+        id: block.id,
+        order: index + 1,
+        orden_flujo: index + 1,
+        roleId: lane.roleId,
+        lane: lane.lane,
+      };
+    });
 
-const changeBlockNumber = (currentId, nextRawNumber) => {
-  const nextNumber = Number(nextRawNumber);
+  const displayNumberById = useMemo(() => {
+    const numbers = {};
+    getOrderedBlocks(positions).forEach((block, index) => {
+      numbers[block.id] = index + 1;
+    });
+    return numbers;
+  }, [allBlocks, positions]);
 
-  if (!Number.isInteger(nextNumber) || nextNumber < 1) {
-    alert("El número debe ser entero y mayor a 0.");
-    return;
-  }
+  const getBlockDisplayNumber = (block) => displayNumberById[block.id] || 1;
 
-  const alreadyExists = allBlocks.some(
-    (block) =>
-      Number(block.id) !== Number(currentId) &&
-      getBlockDisplayNumber(block) === nextNumber
-  );
-
-  if (alreadyExists) {
-    alert(`El número ${nextNumber} ya existe en este flujo. Usa otro número.`);
-    return;
-  }
-
-  rememberState();
-
-  setDisplayNumbers((current) => {
-    const next = {
-      ...current,
-      [currentId]: nextNumber,
-    };
-    saveDisplayNumbers(next);
-    return next;
-  });
-
-  updateBlock(currentId, {
-    order: nextNumber,
-    orden: nextNumber,
-    orden_flujo: nextNumber,
-    displayNumber: nextNumber,
-  });
-};
   const startDrag = (event, block) => {
     event.preventDefault();
     dragMovedRef.current = false;
@@ -1563,8 +1534,21 @@ const changeBlockNumber = (currentId, nextRawNumber) => {
       if (dragMovedRef.current && dragStartSnapshotRef.current) {
         rememberState(dragStartSnapshotRef.current);
       }
+      const nextPositions = {
+        ...positions,
+        [dragging.id]: {
+          ...(positions[dragging.id] || {}),
+          ...finalPosition,
+        },
+      };
       const lane = visibleLanes[finalPosition.laneIndex];
-      onMoveBlock?.(dragging.id, finalPosition.step, lane?.roleId, lane?.lane);
+      onMoveBlock?.(
+        dragging.id,
+        finalPosition.step,
+        lane?.roleId,
+        lane?.lane,
+        getOrderedBlockPayload(nextPositions)
+      );
     }
     dragStartSnapshotRef.current = null;
     dragLatestPositionRef.current = null;
@@ -1824,7 +1808,7 @@ const changeBlockNumber = (currentId, nextRawNumber) => {
                   <button key={block.id} onMouseDown={(event) => startDrag(event, block)} onClick={() => { if (!dragMovedRef.current) onSelectBlock(block); }} className={`absolute z-20 flex items-start overflow-hidden rounded-xl border px-1.5 py-1.5 text-left shadow-sm cursor-grab transition-all hover:shadow-md active:cursor-grabbing ${getBlockStyle(block)}`} style={{ left: node.x, top: node.y, width: cellWidth, height: blockHeight, minWidth: cellWidth }}>
                     <div className="flex h-full w-full flex-col justify-between gap-1">
                       <div className="flex items-start justify-between gap-2">
-                        <input type="number" value={getBlockDisplayNumber(block)} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onChange={(event) => changeBlockNumber(block.id, event.target.value)} className={`h-4 w-8 rounded-full border border-transparent text-center text-[10px] font-black shadow-sm outline-none ${block.active === false || block.activo === false || block.activa === false ? "bg-gray-300 text-gray-500" : "bg-white/80 text-current"}`} title="Editar nÃºmero visual" />
+                        <span className={`flex h-4 min-w-8 items-center justify-center rounded-full border border-transparent px-2 text-center text-[10px] font-black shadow-sm ${block.active === false || block.activo === false || block.activa === false ? "bg-gray-300 text-gray-500" : "bg-white/80 text-current"}`} title="NÃºmero visual calculado por posiciÃ³n">{getBlockDisplayNumber(block)}</span>
                         <span role="button" tabIndex={0} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); removeBlock(block.id); }} className="text-[10px] font-black leading-none text-gray-300 hover:text-red-500" title="Quitar bloque">&times;</span>
                       </div>
                       <textarea value={block.name} onFocus={() => { blockEditSnapshotRef.current = cloneState(); }} onBlur={() => { if (blockEditSnapshotRef.current) { rememberState(blockEditSnapshotRef.current); blockEditSnapshotRef.current = null; } }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onChange={(event) => updateBlock(block.id, { name: event.target.value })} className="h-[54px] w-full resize-none overflow-hidden rounded-lg border border-transparent bg-transparent text-center text-[11px] font-black leading-[1.12] text-current outline-none hover:border-white/50 focus:border-white/80 focus:bg-white/40" title="Editar nombre del bloque" />
@@ -2763,9 +2747,36 @@ export default function CapacityModule() {
     });
   };
 
-  const moveSupabaseActivity = (blockId, order, roleId, laneName) => {
+  const moveSupabaseSubprocess = (blockId, order, roleId, laneName, orderedBlocks = []) => {
     if (!blockId) return;
-    updateActivityOrder(blockId, order, roleId, laneName)
+
+    const fallbackOrder = Number.isFinite(Number(order)) ? Number(order) + 1 : 1;
+    const updates = orderedBlocks.length
+      ? orderedBlocks
+      : [{ id: blockId, order: fallbackOrder, roleId, lane: laneName }];
+
+    Promise.all(
+      updates
+        .filter((item) => item?.id)
+        .map((item) => updateSubprocessOrder(item.id, item.order, item.lane || laneName))
+    )
+      .then(() => reloadSelectedProcessData(selectedProcessName))
+      .catch((error) => console.error("Error moviendo subproceso:", error));
+  };
+
+  const moveSupabaseActivity = (blockId, order, roleId, laneName, orderedBlocks = []) => {
+    if (!blockId) return;
+
+    const fallbackOrder = Number.isFinite(Number(order)) ? Number(order) + 1 : 1;
+    const updates = orderedBlocks.length
+      ? orderedBlocks
+      : [{ id: blockId, order: fallbackOrder, roleId, lane: laneName }];
+
+    Promise.all(
+      updates
+        .filter((item) => item?.id)
+        .map((item) => updateActivityOrder(item.id, item.order, item.roleId || roleId, item.lane || laneName))
+    )
       .then(() => reloadSelectedProcessData(selectedProcessName))
       .catch((error) => console.error("Error actualizando orden de flujo:", error));
   };
@@ -2907,13 +2918,7 @@ export default function CapacityModule() {
           onAddBlock={addSupabaseSubprocess}
           onUpdateBlock={updateSupabaseSubprocessInline}
           onRemoveBlock={removeSupabaseSubprocess}
-          onMoveBlock={(blockId, order, roleId, laneName) => {
-            if (!blockId) return;
-
-            updateSubprocessOrder(blockId, order, laneName)
-              .then(() => reloadSelectedProcessData(selectedProcessName))
-              .catch((error) => console.error("Error moviendo subproceso:", error));
-          }}
+          onMoveBlock={moveSupabaseSubprocess}
           onRemoveLane={removeSupabaseRole}
           onUpdateLane={updateSupabaseRoleInline}
           onSaveLaneOrder={saveSupabaseLaneOrder}
