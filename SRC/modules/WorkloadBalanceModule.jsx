@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getWorkloadActivities, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, removeMonthlyPlanActivity, removeWeeklyPlanActivity, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanOrder, updateWeeklyPlanOrder } from "../services/workloadService";
 
 const MONTHLY_CAPACITY_HOURS = 192;
@@ -94,6 +94,9 @@ function writeStoredArray(key, value) {
   } catch {
     // Local storage is a convenience cache; ignore quota/private-mode failures.
   }
+}
+function getScopedStorageKey(baseKey, personId) {
+  return `${baseKey}-${cleanText(personId) || "all"}`;
 }
 function formatHours(value) { return `${Number(value || 0).toFixed(1)} h`; }
 function toDateInputValue(date) { return date.toISOString().slice(0, 10); }
@@ -319,16 +322,17 @@ function applyScheduleOverrides(activities, overrides) { return safeArray(activi
 function normalizeActivities(activities, scheduleOverrides = {}) {
   return applyScheduleOverrides(activities, scheduleOverrides).map((activity) => ({ ...activity, origen: activity?.origen || "Proceso", persona: activity?.persona || activity?.responsable || "Sin persona asignada", rol: activity?.rol || activity?.responsable || "Sin rol asignado", diaTipico: activity?.diaTipico || "Lunes", semanaTipica: activity?.semanaTipica || "Semana 1", estadoAgenda: activity?.estadoAgenda || "Pendiente", duracionMinutos: getDurationMinutes(activity) }));
 }
-function createManualBlock({ id, dayName, name, duration, type, currentUser, order }) {
+function createManualBlock({ id, dayName, name, duration, type, currentUser, order, personId = "", personName = "" }) {
   const manualProcess = type === "Formación" ? "Formación manual" : type === "Tarea" ? "Tarea manual" : "Proyecto manual";
-  return { id, occurrenceId: `${id}-0`, occurrenceIndex: 0, origen: type, proceso: manualProcess, subproceso: "Reserva de capacidad", actividad: name, persona: currentUser?.name || "Usuario", rol: "Líder de proceso", responsable: currentUser?.name || "Usuario", cargaSemanal: Number((duration / 60).toFixed(2)), cargaMensual: Number(((duration / 60) * 4).toFixed(2)), duracionMinutos: duration, diaTipico: dayName, orden: order, semanaTipica: "Semana 1", fecha: "Sin fecha", estadoAgenda: "Programada", isManualProject: true };
+  const ownerName = personName || currentUser?.name || "Usuario";
+  return { id, occurrenceId: `${id}-0`, occurrenceIndex: 0, origen: type, proceso: manualProcess, subproceso: "Reserva de capacidad", actividad: name, persona: ownerName, personaId: personId, rol: "Líder de proceso", responsable: ownerName, cargaSemanal: Number((duration / 60).toFixed(2)), cargaMensual: Number(((duration / 60) * 4).toFixed(2)), duracionMinutos: duration, diaTipico: dayName, orden: order, semanaTipica: "Semana 1", fecha: "Sin fecha", estadoAgenda: "Programada", isManualProject: true };
 }
 function getWeeksForFrequency(frequency) { if (frequency === "Manual") return []; if (frequency === "Mensual") return [4]; if (frequency === "Quincenal") return [2, 4]; return [1, 2, 3, 4]; }
 function getMonthlyBlockWeeks(block) { if (Array.isArray(block?.targetWeeks) && block.targetWeeks.length > 0) return block.targetWeeks; return getWeeksForFrequency(block?.frecuencia); }
-function createMonthlyBlock({ id, name, duration, frequency, type, targetWeeks, monthlyOrder }) {
+function createMonthlyBlock({ id, name, duration, frequency, type, targetWeeks, monthlyOrder, personId = "", personName = "" }) {
   const weeks = targetWeeks || getWeeksForFrequency(frequency);
   const rowType = type === "Proyecto" ? "Proyectos" : type === "Formación" ? "Formación" : "Procesos";
-  return { id, origen: rowType, tipoBloque: type, actividad: name, rol: rowType === "Procesos" ? "Proceso organizacional" : "Líder de proceso", duracionMinutos: duration, frecuencia: frequency, targetWeeks: weeks, ocurrenciasMes: weeks.length, cargaMensual: Number(((duration * weeks.length) / 60).toFixed(2)), monthlyOrder: Number.isFinite(Number(monthlyOrder)) ? Number(monthlyOrder) : Date.now(), isMonthlyBlock: true };
+  return { id, origen: rowType, tipoBloque: type, actividad: name, persona: personName, personaId: personId, responsable: personName, rol: rowType === "Procesos" ? "Proceso organizacional" : "Líder de proceso", duracionMinutos: duration, frecuencia: frequency, targetWeeks: weeks, ocurrenciasMes: weeks.length, cargaMensual: Number(((duration * weeks.length) / 60).toFixed(2)), monthlyOrder: Number.isFinite(Number(monthlyOrder)) ? Number(monthlyOrder) : Date.now(), isMonthlyBlock: true };
 }
 function buildMonthlyMatrix({ weekOccurrences, monthlyBlocks }) {
   const sourceMap = { Procesos: "Proceso", Proyectos: "Proyecto", Formación: "Formación" };
@@ -532,13 +536,13 @@ export default function WorkloadBalanceModule({
   const [scheduleOverrides, setScheduleOverrides] = useState({});
   const [draggedActivity, setDraggedActivity] = useState(null);
   const [dropIndicator, setDropIndicator] = useState(null);
-  const [manualProjects, setManualProjects] = useState(() => readStoredArray("vikingo-workload-manual-projects"));
+  const [manualProjects, setManualProjects] = useState([]);
   const [quickProjectDay, setQuickProjectDay] = useState(null);
   const [quickProjectName, setQuickProjectName] = useState("");
   const [quickProjectMinutes, setQuickProjectMinutes] = useState("120");
   const [quickProjectType, setQuickProjectType] = useState("Proyecto");
   const [editingProjectId, setEditingProjectId] = useState(null);
-  const [monthlyBlocks, setMonthlyBlocks] = useState(() => readStoredArray("vikingo-workload-monthly-blocks"));
+  const [monthlyBlocks, setMonthlyBlocks] = useState([]);
   const [monthlyBlockName, setMonthlyBlockName] = useState("");
   const [monthlyBlockMinutes, setMonthlyBlockMinutes] = useState("60");
   const [monthlyBlockFrequency, setMonthlyBlockFrequency] = useState("Mensual");
@@ -548,13 +552,13 @@ export default function WorkloadBalanceModule({
   const [monthlyQuickTarget, setMonthlyQuickTarget] = useState(null);
   const [monthlyDropIndicator, setMonthlyDropIndicator] = useState(null);
   const [agendaView, setAgendaView] = useState("weekly");
-  const [agendaManualBlocks, setAgendaManualBlocks] = useState(() => readStoredArray("vikingo-workload-agenda-manual-blocks"));
+  const [agendaManualBlocks, setAgendaManualBlocks] = useState([]);
   const [agendaRemovedBlockIds, setAgendaRemovedBlockIds] = useState([]);
   const [agendaQuickDay, setAgendaQuickDay] = useState(null);
   const [agendaBlockName, setAgendaBlockName] = useState("");
   const [agendaBlockMinutes, setAgendaBlockMinutes] = useState("60");
   const [agendaBlockType, setAgendaBlockType] = useState("Proyecto");
-  const [savedPlans, setSavedPlans] = useState(() => readStoredArray("vikingo-workload-saved-plans"));
+  const [savedPlans, setSavedPlans] = useState([]);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [completedAgendaBlockIds, setCompletedAgendaBlockIds] = useState([]);
   const currentWorkWeek = useMemo(() => getCurrentWorkWeekRange(), []);
@@ -569,22 +573,8 @@ export default function WorkloadBalanceModule({
   const [approvalError, setApprovalError] = useState("");
   const [reviewComment, setReviewComment] = useState("");
   const [improvementProposal, setImprovementProposal] = useState("");
-
-  useEffect(() => {
-    writeStoredArray("vikingo-workload-manual-projects", manualProjects);
-  }, [manualProjects]);
-
-  useEffect(() => {
-    writeStoredArray("vikingo-workload-monthly-blocks", monthlyBlocks);
-  }, [monthlyBlocks]);
-
-  useEffect(() => {
-    writeStoredArray("vikingo-workload-agenda-manual-blocks", agendaManualBlocks);
-  }, [agendaManualBlocks]);
-
-  useEffect(() => {
-    writeStoredArray("vikingo-workload-saved-plans", savedPlans);
-  }, [savedPlans]);
+  const storageScopeRef = useRef("");
+  const [storageHydrated, setStorageHydrated] = useState(false);
   const [reviewStatus, setReviewStatus] = useState({ status: "Pendiente revisión", reviewedBy: "", reviewedRole: "", reviewedAt: "" });
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [assignments, setAssignments] = useState([
@@ -613,12 +603,55 @@ export default function WorkloadBalanceModule({
     return peopleOptions.find((person) => normalizeText(person.name) === currentName)?.id || "";
   }, [currentUser?.name, peopleOptions]);
   const effectivePersonFilter = canViewAllWorkloads ? personFilter : currentUserPersonId || personFilter;
+  const selectedPersonOption = useMemo(
+    () => peopleOptions.find((person) => String(person.id) === String(effectivePersonFilter)) || null,
+    [peopleOptions, effectivePersonFilter]
+  );
+  const selectedPersonName = selectedPersonOption?.name || (effectivePersonFilter === "all" ? "" : currentUser?.name || "");
+  const workloadStorageScope = effectivePersonFilter === "all" ? "all" : String(effectivePersonFilter || "all");
   const selectedPersonRoleLinks = useMemo(
     () => effectivePersonFilter === "all"
       ? activePersonRoleLinks
       : activePersonRoleLinks.filter((link) => String(link.persona_id ?? link.person_id ?? "") === String(effectivePersonFilter)),
     [activePersonRoleLinks, effectivePersonFilter]
   );
+  useEffect(() => {
+    storageScopeRef.current = workloadStorageScope;
+    setStorageHydrated(false);
+    setManualProjects(readStoredArray(getScopedStorageKey("vikingo-workload-manual-projects", workloadStorageScope)));
+    setMonthlyBlocks(readStoredArray(getScopedStorageKey("vikingo-workload-monthly-blocks", workloadStorageScope)));
+    setAgendaManualBlocks(readStoredArray(getScopedStorageKey("vikingo-workload-agenda-manual-blocks", workloadStorageScope)));
+    setSavedPlans(readStoredArray(getScopedStorageKey("vikingo-workload-saved-plans", workloadStorageScope)));
+    setAgendaRemovedBlockIds([]);
+    setCompletedAgendaBlockIds([]);
+    setSelectedPlanId(null);
+    setScheduleOverrides({});
+    setDraggedActivity(null);
+    setDraggedMonthlyBlock(null);
+    setAgendaDraggedBlock(null);
+    setStorageHydrated(true);
+  }, [workloadStorageScope]);
+
+  useEffect(() => {
+    if (!storageHydrated) return;
+    writeStoredArray(getScopedStorageKey("vikingo-workload-manual-projects", storageScopeRef.current), manualProjects);
+  }, [manualProjects, storageHydrated]);
+
+  useEffect(() => {
+    if (!storageHydrated) return;
+    writeStoredArray(getScopedStorageKey("vikingo-workload-monthly-blocks", storageScopeRef.current), monthlyBlocks);
+  }, [monthlyBlocks, storageHydrated]);
+
+  useEffect(() => {
+    if (!storageHydrated) return;
+    writeStoredArray(getScopedStorageKey("vikingo-workload-agenda-manual-blocks", storageScopeRef.current), agendaManualBlocks);
+  }, [agendaManualBlocks, storageHydrated]);
+
+  useEffect(() => {
+    if (!storageHydrated) return;
+    writeStoredArray(getScopedStorageKey("vikingo-workload-saved-plans", storageScopeRef.current), savedPlans);
+  }, [savedPlans, storageHydrated]);
+
   const roleOptions = useMemo(
     () => [...new Set(selectedPersonRoleLinks.map(getPersonRoleName).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [selectedPersonRoleLinks]
@@ -640,11 +673,16 @@ export default function WorkloadBalanceModule({
   }, [visibleActivities, selectedPersonRoleLinks, roleFilter]);
   const scheduledActivityIds = useMemo(
     () => {
-      const weeklyIds = collectScheduledActivityIds(weeklyPlansCatalog);
-      const monthlyIds = collectScheduledActivityIds(monthlyPlansCatalog);
+      if (effectivePersonFilter === "all") return new Set();
+      const weeklyIds = collectScheduledActivityIds(
+        safeArray(weeklyPlansCatalog).filter((plan) => getPlanPersonId(plan) === String(effectivePersonFilter))
+      );
+      const monthlyIds = collectScheduledActivityIds(
+        safeArray(monthlyPlansCatalog).filter((plan) => getPlanPersonId(plan) === String(effectivePersonFilter))
+      );
       return new Set([...weeklyIds, ...monthlyIds]);
     },
-    [weeklyPlansCatalog, monthlyPlansCatalog]
+    [weeklyPlansCatalog, monthlyPlansCatalog, effectivePersonFilter]
   );
   const pendingActivities = useMemo(() => {
     if (effectivePersonFilter === "all") return [];
@@ -806,14 +844,23 @@ export default function WorkloadBalanceModule({
     else if (nextActivity) calculatedOrder = Number(nextActivity.orden || 0) - 10;
     updateDraggedSchedule(dragged, (schedule) => ({ ...schedule, diaTipico: dayName, orden: calculatedOrder }));
   }
-  function openQuickProjectForm(dayName) { setQuickProjectDay(dayName); setQuickProjectName(""); setQuickProjectMinutes("120"); setQuickProjectType("Proyecto"); setEditingProjectId(null); }
+  function canCreatePersonScopedBlock() {
+    if (effectivePersonFilter !== "all") return true;
+    setScheduleMessage("Selecciona una persona antes de crear o programar bloques.");
+    return false;
+  }
+  function openQuickProjectForm(dayName) {
+    if (!canCreatePersonScopedBlock()) return;
+    setQuickProjectDay(dayName); setQuickProjectName(""); setQuickProjectMinutes("120"); setQuickProjectType("Proyecto"); setEditingProjectId(null);
+  }
   function cancelQuickProject() { setQuickProjectDay(null); setQuickProjectName(""); setQuickProjectMinutes("120"); setQuickProjectType("Proyecto"); setEditingProjectId(null); }
   function startEditManualProject(activity) { if (!activity?.isManualProject) return; setEditingProjectId(activity.id); setQuickProjectDay(activity.diaTipico); setQuickProjectName(activity.actividad || ""); setQuickProjectMinutes(String(activity.duracionMinutos || 120)); setQuickProjectType(["Proyecto", "Formación", "Tarea"].includes(activity.origen) ? activity.origen : "Proyecto"); }
   function saveQuickProject(dayName) {
     const blockName = quickProjectName.trim(); const duration = Number(quickProjectMinutes);
     if (!blockName || !Number.isFinite(duration) || duration <= 0) return;
-    if (editingProjectId) { setManualProjects((currentProjects) => currentProjects.map((project) => (project.id === editingProjectId ? { ...project, origen: quickProjectType, proceso: quickProjectType === "Formación" ? "Formación manual" : quickProjectType === "Tarea" ? "Tarea manual" : "Proyecto manual", actividad: blockName, rol: "Líder de proceso", cargaSemanal: Number((duration / 60).toFixed(2)), cargaMensual: Number(((duration / 60) * 4).toFixed(2)), duracionMinutos: duration, diaTipico: dayName } : project))); cancelQuickProject(); return; }
-    const id = `manual-${Date.now()}`; const newBlock = createManualBlock({ id, dayName, name: blockName, duration, type: quickProjectType, currentUser, order: getLastOrderForDay(dayName) + 10 }); setManualProjects((currentProjects) => [...currentProjects, newBlock]); cancelQuickProject();
+    if (!canCreatePersonScopedBlock()) return;
+    if (editingProjectId) { setManualProjects((currentProjects) => currentProjects.map((project) => (project.id === editingProjectId ? { ...project, origen: quickProjectType, proceso: quickProjectType === "Formación" ? "Formación manual" : quickProjectType === "Tarea" ? "Tarea manual" : "Proyecto manual", actividad: blockName, persona: selectedPersonName, personaId: effectivePersonFilter, responsable: selectedPersonName, rol: "Líder de proceso", cargaSemanal: Number((duration / 60).toFixed(2)), cargaMensual: Number(((duration / 60) * 4).toFixed(2)), duracionMinutos: duration, diaTipico: dayName } : project))); cancelQuickProject(); return; }
+    const id = `manual-${Date.now()}`; const newBlock = createManualBlock({ id, dayName, name: blockName, duration, type: quickProjectType, currentUser, order: getLastOrderForDay(dayName) + 10, personId: effectivePersonFilter, personName: selectedPersonName }); setManualProjects((currentProjects) => [...currentProjects, newBlock]); cancelQuickProject();
   }
   function deleteManualProject(projectId) { setManualProjects((currentProjects) => currentProjects.filter((project) => project.id !== projectId)); }
   function showDropIndicator(dayName, targetIndex) { if (!draggedActivity) return; setDropIndicator({ day: dayName, index: targetIndex }); }
@@ -824,12 +871,16 @@ export default function WorkloadBalanceModule({
   }
   function resetMonthlyBlockForm() { setMonthlyBlockName(""); setMonthlyBlockMinutes("60"); setMonthlyBlockFrequency("Mensual"); setMonthlyBlockType("Proyecto"); setEditingMonthlyBlockId(null); setMonthlyQuickTarget(null); }
   function getDefaultMonthlyTypeForRow(rowType) { if (rowType === "Proyectos") return "Proyecto"; if (rowType === "Formación") return "Formación"; return "Eventual"; }
-  function openMonthlyBlockForm(rowType, weekNumber) { setMonthlyQuickTarget({ rowType, weekNumber }); setMonthlyBlockName(""); setMonthlyBlockMinutes("60"); setMonthlyBlockFrequency("Manual"); setMonthlyBlockType(getDefaultMonthlyTypeForRow(rowType)); setEditingMonthlyBlockId(null); }
+  function openMonthlyBlockForm(rowType, weekNumber) {
+    if (!canCreatePersonScopedBlock()) return;
+    setMonthlyQuickTarget({ rowType, weekNumber }); setMonthlyBlockName(""); setMonthlyBlockMinutes("60"); setMonthlyBlockFrequency("Manual"); setMonthlyBlockType(getDefaultMonthlyTypeForRow(rowType)); setEditingMonthlyBlockId(null);
+  }
   function saveMonthlyBlock(target = monthlyQuickTarget) {
     const blockName = monthlyBlockName.trim(); const duration = Number(monthlyBlockMinutes);
     if (!blockName || !Number.isFinite(duration) || duration <= 0) return;
-    if (editingMonthlyBlockId) { setMonthlyBlocks((currentBlocks) => currentBlocks.map((block) => (block.id === editingMonthlyBlockId ? createMonthlyBlock({ id: block.id, name: blockName, duration, frequency: monthlyBlockFrequency, type: monthlyBlockType, targetWeeks: target?.weekNumber ? [target.weekNumber] : block.targetWeeks, monthlyOrder: block.monthlyOrder }) : block))); resetMonthlyBlockForm(); return; }
-    const id = `monthly-block-${Date.now()}`; const newBlock = createMonthlyBlock({ id, name: blockName, duration, frequency: target?.weekNumber ? "Manual" : monthlyBlockFrequency, type: monthlyBlockType, targetWeeks: target?.weekNumber ? [target.weekNumber] : undefined, monthlyOrder: Date.now() }); setMonthlyBlocks((currentBlocks) => [...currentBlocks, newBlock]); resetMonthlyBlockForm();
+    if (!canCreatePersonScopedBlock()) return;
+    if (editingMonthlyBlockId) { setMonthlyBlocks((currentBlocks) => currentBlocks.map((block) => (block.id === editingMonthlyBlockId ? createMonthlyBlock({ id: block.id, name: blockName, duration, frequency: monthlyBlockFrequency, type: monthlyBlockType, targetWeeks: target?.weekNumber ? [target.weekNumber] : block.targetWeeks, monthlyOrder: block.monthlyOrder, personId: effectivePersonFilter, personName: selectedPersonName }) : block))); resetMonthlyBlockForm(); return; }
+    const id = `monthly-block-${Date.now()}`; const newBlock = createMonthlyBlock({ id, name: blockName, duration, frequency: target?.weekNumber ? "Manual" : monthlyBlockFrequency, type: monthlyBlockType, targetWeeks: target?.weekNumber ? [target.weekNumber] : undefined, monthlyOrder: Date.now(), personId: effectivePersonFilter, personName: selectedPersonName }); setMonthlyBlocks((currentBlocks) => [...currentBlocks, newBlock]); resetMonthlyBlockForm();
   }
   function getMonthlyInsertOrder(currentBlocks, targetRow, targetWeekNumber, targetIndex, draggedId) {
     const orderedBlocks = safeArray(currentBlocks).filter((block) => block.id !== draggedId && block.origen === targetRow && getMonthlyBlockWeeks(block).includes(targetWeekNumber)).sort((a, b) => Number(a.monthlyOrder || 0) - Number(b.monthlyOrder || 0));
@@ -891,7 +942,14 @@ export default function WorkloadBalanceModule({
   function deleteMonthlyBlock(blockId) { setMonthlyBlocks((currentBlocks) => currentBlocks.filter((block) => block.id !== blockId)); }
   function getLastAgendaOrderForDay(day) { const dayActivities = activeAgendaBlocks.filter((activity) => activity.diaTipico === day); return dayActivities.length === 0 ? 0 : Math.max(...dayActivities.map((activity) => Number(activity.orden || 0))); }
   function resetAgendaBlockForm() { setAgendaQuickDay(null); setAgendaBlockName(""); setAgendaBlockMinutes("60"); setAgendaBlockType("Proyecto"); }
-  function saveAgendaBlock(dayName) { const blockName = agendaBlockName.trim(); const duration = Number(agendaBlockMinutes); if (!blockName || !Number.isFinite(duration) || duration <= 0) return; const id = `agenda-manual-${Date.now()}`; setAgendaManualBlocks((currentBlocks) => [...currentBlocks, createManualBlock({ id, dayName, name: blockName, duration, type: agendaBlockType, currentUser, order: getLastAgendaOrderForDay(dayName) + 10 })]); resetAgendaBlockForm(); }
+  function saveAgendaBlock(dayName) {
+    const blockName = agendaBlockName.trim(); const duration = Number(agendaBlockMinutes);
+    if (!blockName || !Number.isFinite(duration) || duration <= 0) return;
+    if (!canCreatePersonScopedBlock()) return;
+    const id = `agenda-manual-${Date.now()}`;
+    setAgendaManualBlocks((currentBlocks) => [...currentBlocks, createManualBlock({ id, dayName, name: blockName, duration, type: agendaBlockType, currentUser, order: getLastAgendaOrderForDay(dayName) + 10, personId: effectivePersonFilter, personName: selectedPersonName })]);
+    resetAgendaBlockForm();
+  }
   function getAgendaBlockKey(activity) { return activity?.occurrenceId || activity?.id; }
   function toggleAgendaBlockCompleted(activity) { const blockKey = getAgendaBlockKey(activity); if (!blockKey) return; setCompletedAgendaBlockIds((currentIds) => currentIds.includes(blockKey) ? currentIds.filter((id) => id !== blockKey) : [...currentIds, blockKey]); }
   function getPrimaryUserRole() {
@@ -1118,9 +1176,10 @@ function canCreateAssignments() {
   }
   function scheduleAssignment(assignment, dayName = "Lunes") {
     if (assignment?.estado === "Programada") return;
+    if (!canCreatePersonScopedBlock()) return;
     const id = `agenda-assignment-${assignment.id}-${Date.now()}`;
     const duration = Number(assignment.horas || 1) * 60;
-    const block = createManualBlock({ id, dayName, name: assignment.titulo, duration, type: assignment.tipo === "Capacitación extraordinaria" ? "Formación" : "Proyecto", currentUser, order: getLastAgendaOrderForDay(dayName) + 10 });
+    const block = createManualBlock({ id, dayName, name: assignment.titulo, duration, type: assignment.tipo === "Capacitación extraordinaria" ? "Formación" : "Proyecto", currentUser, order: getLastAgendaOrderForDay(dayName) + 10, personId: effectivePersonFilter, personName: selectedPersonName });
     setAgendaManualBlocks((currentBlocks) => [...currentBlocks, { ...block, planningSource: "Asignación", assignmentId: assignment.id }]);
     setAssignments((currentAssignments) => currentAssignments.map((item) => item.id === assignment.id ? { ...item, estado: "Programada", programadaSemanaInicio: planningWeekStart, programadaSemanaFin: planningWeekEnd, programadaDia: dayName, programadaPor: currentUser?.name || "Usuario", programadaAt: new Date().toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) } : item));
     setViewMode("agenda");
@@ -1283,6 +1342,8 @@ function canReviewPlan() {
     const totalMinutes = activeAgendaBlocks.reduce((sum, activity) => sum + getDurationMinutes(activity), 0);
     return {
       id: planId,
+      personaId: effectivePersonFilter,
+      responsable: selectedPersonName,
       name: formatPlanPeriodName(planningWeekStart, planningWeekEnd),
       createdAt: new Date().toLocaleDateString("es-MX"),
       updatedAt: new Date().toLocaleDateString("es-MX"),
@@ -1308,6 +1369,7 @@ function canReviewPlan() {
   }
 
   function saveCurrentAgendaPlan() {
+    if (!canCreatePersonScopedBlock()) return;
     const validationMessage = validatePlanningPeriod();
     if (validationMessage) {
       setPlanSaveWarning(validationMessage);
@@ -1336,6 +1398,7 @@ function canReviewPlan() {
 
   function overwriteSavedPlan() {
     if (!overwritePlanId) return;
+    if (!canCreatePersonScopedBlock()) return;
     const validationMessage = validatePlanningPeriod();
     if (validationMessage) {
       setPlanSaveWarning(validationMessage);
@@ -1434,5 +1497,6 @@ function canReviewPlan() {
     </section>
   );
 }
+
 
 
