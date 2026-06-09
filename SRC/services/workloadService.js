@@ -102,6 +102,74 @@ export async function getWorkloadMonthlyPlans() {
   }
 }
 
+export async function getWorkloadAssignments() {
+  try {
+    const { data, error } = await supabase
+      .from("workload_asignaciones")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error al cargar asignaciones:", error);
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar asignaciones:", err);
+    return [];
+  }
+}
+
+export async function createWorkloadAssignment(payload) {
+  try {
+    const { data, error } = await supabase
+      .from("workload_asignaciones")
+      .insert({
+        persona_id: payload.persona_id,
+        responsable: payload.responsable,
+        rol: payload.rol,
+        tipo: payload.tipo,
+        prioridad: payload.prioridad,
+        gestion: payload.gestion,
+        titulo: payload.titulo,
+        revisara: payload.revisara,
+        aprobara: payload.aprobara,
+        seguimiento: payload.seguimiento,
+        carga_horas: payload.carga_horas,
+        duracion_minutos: payload.duracion_minutos,
+        fecha_limite: payload.fecha_limite,
+        estado: payload.estado || "Pendiente",
+        asigna: payload.asigna,
+        asigna_rol: payload.asigna_rol,
+        activo: payload.activo ?? true,
+      })
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function updateWorkloadAssignment(id, updates) {
+  try {
+    const { data, error } = await supabase
+      .from("workload_asignaciones")
+      .update(updates)
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
 export async function scheduleActivityInWeeklyPlan({ personaId, activityId, dayName, plannedHours }) {
   try {
     const { data: existing, error: existingError } = await supabase
