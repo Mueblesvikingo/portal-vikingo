@@ -1492,35 +1492,43 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     return Number(block.id);
   };
 
-  const changeBlockNumber = (currentId, nextRawNumber) => {
-    const nextNumber = Number(nextRawNumber);
+const changeBlockNumber = (currentId, nextRawNumber) => {
+  const nextNumber = Number(nextRawNumber);
 
-    if (!Number.isInteger(nextNumber) || nextNumber < 1) {
-      alert("El numero debe ser entero y mayor a 0.");
-      return;
-    }
+  if (!Number.isInteger(nextNumber) || nextNumber < 1) {
+    alert("El número debe ser entero y mayor a 0.");
+    return;
+  }
 
-    const alreadyExists = allBlocks.some(
-      (block) =>
-        Number(block.id) !== Number(currentId) &&
-        getBlockDisplayNumber(block) === nextNumber
-    );
+  const alreadyExists = allBlocks.some(
+    (block) =>
+      Number(block.id) !== Number(currentId) &&
+      getBlockDisplayNumber(block) === nextNumber
+  );
 
-    if (alreadyExists) {
-      alert(`El numero ${nextNumber} ya existe en este flujo. Usa otro numero.`);
-      return;
-    }
+  if (alreadyExists) {
+    alert(`El número ${nextNumber} ya existe en este flujo. Usa otro número.`);
+    return;
+  }
 
-    rememberState();
-    setDisplayNumbers((current) => {
-      const next = {
-        ...current,
-        [currentId]: nextNumber,
-      };
-      saveDisplayNumbers(next);
-      return next;
-    });
-  };
+  rememberState();
+
+  setDisplayNumbers((current) => {
+    const next = {
+      ...current,
+      [currentId]: nextNumber,
+    };
+    saveDisplayNumbers(next);
+    return next;
+  });
+
+  updateBlock(currentId, {
+    order: nextNumber,
+    orden: nextNumber,
+    orden_flujo: nextNumber,
+    displayNumber: nextNumber,
+  });
+};
   const startDrag = (event, block) => {
     event.preventDefault();
     dragMovedRef.current = false;
@@ -1777,7 +1785,8 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-[8px] font-black uppercase tracking-[0.18em] text-gray-400">Responsable</div>
                     <div className="flex items-center gap-1">
-                      <button type="button" onClick={() => toggleLaneActive(index)} className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${active === false ? "bg-gray-200 text-gray-500 hover:bg-gray-300" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`} title={active === false ? "Activar rol" : "Apagar rol"}>{active === false ? "OFF" : "ON"}</button>                      <button type="button" onClick={() => removeLane(index)} className="text-[10px] font-black text-gray-300 hover:text-red-500" title="Quitar carril">&times;</button>
+                      <button type="button" onClick={() => toggleLaneActive(index)} className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${active === false ? "bg-gray-200 text-gray-500 hover:bg-gray-300" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`} title={active === false ? "Activar rol" : "Apagar rol"}>{active === false ? "OFF" : "ON"}</button>
+                      <button type="button" onClick={() => removeLane(index)} className="text-[10px] font-black text-gray-300 hover:text-red-500" title="Quitar carril">&times;</button>
                     </div>
                   </div>
                   <div className="mt-1 flex items-center gap-1">
