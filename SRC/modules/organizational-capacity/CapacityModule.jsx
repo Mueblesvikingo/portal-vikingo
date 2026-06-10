@@ -422,7 +422,7 @@ function mapSupabaseDesignData({ processes = [], roles = [], subprocesses = [], 
         status: normalizeBoolean(firstValue(subprocess, ["activo", "active"], true), true)
           ? String(firstValue(subprocess, ["status", "estado"], "default"))
           : "inactive",
-        order: toNumber(firstValue(subprocess, ["orden", "orden_flujo", "secuencia", "id"], index + 1), index + 1),
+        order: toNumber(firstValue(subprocess, ["orden", "orden_flujo", "secuencia", "id"], index), index),
         impact: String(firstValue(subprocess, ["impacto", "impact", "objetivo", "descripcion"], "")),
         benefit: String(firstValue(subprocess, ["beneficio", "benefit"], "")),
         aiAutomation: String(firstValue(subprocess, ["automatizacion_ia", "aiAutomation"], "")),
@@ -468,7 +468,7 @@ function mapSupabaseDesignData({ processes = [], roles = [], subprocesses = [], 
         frequencyType: String(firstValue(activity, ["frecuencia", "frequencyType"], "monthly")),
         frequencyValue: toNumber(firstValue(activity, ["frequencyValue", "frecuencia_valor"], 1), 1),
         typicalDay: String(firstValue(activity, ["dia_tipico", "typicalDay"], "Lunes")),
-        order: toNumber(firstValue(activity, ["orden_flujo", "orden", "secuencia"], index + 1), index + 1),
+        order: toNumber(firstValue(activity, ["orden_flujo", "orden", "secuencia"], index), index),
         impact: String(firstValue(activity, ["impacto", "impact", "descripcion"], "")),
         benefit: String(firstValue(activity, ["beneficio", "benefit"], "")),
         aiAutomation: String(firstValue(activity, ["automatizacion_ia", "aiAutomation"], "")),
@@ -1330,7 +1330,36 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     return positions;
   }, [initialLanesSignature, blockKey]);
 
-  const [positions, setPositions] = useState(() => defaultPositions);
+  const readSavedPositions = () => {
+    if (typeof window === "undefined") return {};
+    try {
+      return JSON.parse(window.localStorage.getItem(storageKey) || "{}") || {};
+    } catch {
+      return {};
+    }
+  };
+
+  const mergeSavedPositions = (basePositions) => {
+    const savedPositions = readSavedPositions();
+    const next = { ...basePositions };
+
+    Object.entries(savedPositions).forEach(([blockId, position]) => {
+      if (!next[blockId]) return;
+      next[blockId] = {
+        ...next[blockId],
+        laneIndex: Number.isFinite(Number(position?.laneIndex))
+          ? Number(position.laneIndex)
+          : next[blockId].laneIndex,
+        step: Number.isFinite(Number(position?.step))
+          ? Number(position.step)
+          : next[blockId].step,
+      };
+    });
+
+    return next;
+  };
+
+  const [positions, setPositions] = useState(() => mergeSavedPositions(defaultPositions));
 
   const visibleLanes = lanes.filter(isValidLane);
   const allBlocks = visibleLanes.flatMap((lane) => lane[blockKey]);
@@ -1415,8 +1444,9 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
 
   useEffect(() => {
     setLanes(initialLanes.map((lane) => ({ ...lane, active: lane.active !== false })));
-    setPositions(defaultPositions);
-    savePositions(defaultPositions);
+    const nextPositions = mergeSavedPositions(defaultPositions);
+    setPositions(nextPositions);
+    savePositions(nextPositions);
   }, [initialLanesSignature, defaultPositions]);
 
   useEffect(() => {
@@ -1477,40 +1507,62 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
       })
       .map(({ block }) => block);
 
-  const getManualOrderValue = (block) => {
-    const candidates = [
-      block?.displayNumber,
-      block?.numero,
-      block?.orden_visual,
-      block?.orden_flujo,
-      block?.orden,
-      block?.order,
-    ];
-
-    for (const candidate of candidates) {
-      const numericValue = Number(candidate);
-      if (Number.isFinite(numericValue) && numericValue > 0) return numericValue;
-    }
-
-    return 1;
-  };
-
   const getOrderedBlockPayload = (sourcePositions = positions) =>
-    getOrderedBlocks(sourcePositions).map((block) => {
+    getOrderedBlocks(sourcePositions).map((block, index) => {
       const position = sourcePositions[block.id] || positions[block.id] || {};
       const lane = visibleLanes[toNumber(position.laneIndex, 0)] || {};
-      const manualOrder = getManualOrderValue(block);
+      const manualOrder = toNumber(
+        firstValue(block, ["order", "orden_flujo", "secuencia"], index + 1),
+        index + 1
+      );
 
       return {
         id: block.id,
         order: manualOrder,
         orden_flujo: manualOrder,
+        positionOrder: index + 1,
         roleId: lane.roleId,
         lane: lane.lane,
       };
     });
 
-  const getBlockDisplayNumber = (block) => getManualOrderValue(block);
+  const displayNumberById = useMemo(() => {
+    const numbers = {};
+    getOrderedBlocks(positions).forEach((block, index) => {
+      numbers[block.id] = firstValue(
+        block,
+        ["code", "codigo", "displayNumber", "numero", "number", "order", "orden_flujo"],
+        index + 1
+      );
+    });
+    return numbers;
+  }, [allBlocks, positions]);
+
+  const getBlockDisplayNumber = (block) =>
+    firstValue(
+      block,
+      ["code", "codigo", "displayNumber", "numero", "number", "order", "orden_flujo"],
+      displayNumberById[block.id] || 1
+    );
+
+  const getBlockNumberUpdates = (block, value) => {
+    const cleanValue = String(value || "").trim();
+
+    if (block?.isSubprocess || block?.subproceso_id || block?.codigo_subproceso !== undefined || block?.codigo !== undefined) {
+      return {
+        code: cleanValue,
+        codigo: cleanValue,
+        codigo_subproceso: cleanValue,
+        displayNumber: cleanValue,
+      };
+    }
+
+    return {
+      order: cleanValue,
+      orden_flujo: cleanValue,
+      displayNumber: cleanValue,
+    };
+  };
 
   const startDrag = (event, block) => {
     event.preventDefault();
@@ -1695,13 +1747,21 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
   };
 
   const updateBlock = (blockId, updates) => {
+    const blockToUpdate = allBlocks.find((block) => Number(block.id) === Number(blockId));
+
     setLanes((current) =>
       current.map((lane) => ({
         ...lane,
-        [blockKey]: lane[blockKey].map((block) => (block.id === blockId ? { ...block, ...updates } : block)),
+        [blockKey]: lane[blockKey].map((block) =>
+          Number(block.id) === Number(blockId) ? { ...block, ...updates } : block
+        ),
       }))
     );
-    onUpdateBlock?.(blockId, updates);
+
+    onUpdateBlock?.(blockId, {
+      ...blockToUpdate,
+      ...updates,
+    });
   };
 
   const addBlock = async () => {
@@ -1820,7 +1880,14 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
                   <button key={block.id} onMouseDown={(event) => startDrag(event, block)} onClick={() => { if (!dragMovedRef.current) onSelectBlock(block); }} className={`absolute z-20 flex items-start overflow-hidden rounded-xl border px-1.5 py-1.5 text-left shadow-sm cursor-grab transition-all hover:shadow-md active:cursor-grabbing ${getBlockStyle(block)}`} style={{ left: node.x, top: node.y, width: cellWidth, height: blockHeight, minWidth: cellWidth }}>
                     <div className="flex h-full w-full flex-col justify-between gap-1">
                       <div className="flex items-start justify-between gap-2">
-                        <span className={`flex h-4 min-w-8 items-center justify-center rounded-full border border-transparent px-2 text-center text-[10px] font-black shadow-sm ${block.active === false || block.activo === false || block.activa === false ? "bg-gray-300 text-gray-500" : "bg-white/80 text-current"}`} title="NÃºmero manual guardado">{getBlockDisplayNumber(block)}</span>
+                        <input
+                          value={getBlockDisplayNumber(block)}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => updateBlock(block.id, getBlockNumberUpdates(block, event.target.value))}
+                          className={`h-4 min-w-8 max-w-14 rounded-full border border-transparent px-2 text-center text-[10px] font-black shadow-sm outline-none focus:border-red-300 ${block.active === false || block.activo === false || block.activa === false ? "bg-gray-300 text-gray-500" : "bg-white/80 text-current"}`}
+                          title="Número editable"
+                        />
                         <span role="button" tabIndex={0} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); removeBlock(block.id); }} className="text-[10px] font-black leading-none text-gray-300 hover:text-red-500" title="Quitar bloque">&times;</span>
                       </div>
                       <textarea value={block.name} onFocus={() => { blockEditSnapshotRef.current = cloneState(); }} onBlur={() => { if (blockEditSnapshotRef.current) { rememberState(blockEditSnapshotRef.current); blockEditSnapshotRef.current = null; } }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onChange={(event) => updateBlock(block.id, { name: event.target.value })} className="h-[54px] w-full resize-none overflow-hidden rounded-lg border border-transparent bg-transparent text-center text-[11px] font-black leading-[1.12] text-current outline-none hover:border-white/50 focus:border-white/80 focus:bg-white/40" title="Editar nombre del bloque" />
@@ -2007,7 +2074,7 @@ export default function CapacityModule() {
             status: normalizeBoolean(firstValue(subprocess, ["activo", "active"], true), true)
               ? String(firstValue(subprocess, ["status", "estado"], "default"))
               : "inactive",
-            order: toNumber(firstValue(subprocess, ["orden", "orden_flujo", "secuencia", "id"], index + 1), index + 1),
+            order: toNumber(firstValue(subprocess, ["orden", "orden_flujo", "secuencia", "id"], index), index),
             impact: String(firstValue(subprocess, ["impacto", "impact", "objetivo", "descripcion"], "")),
             benefit: String(firstValue(subprocess, ["beneficio", "benefit"], "")),
             aiAutomation: String(firstValue(subprocess, ["automatizacion_ia", "aiAutomation"], "")),
@@ -2048,7 +2115,7 @@ export default function CapacityModule() {
             frequencyType: String(firstValue(activity, ["frecuencia", "frequencyType"], "monthly")),
             frequencyValue: toNumber(firstValue(activity, ["frequencyValue", "frecuencia_valor"], 1), 1),
             typicalDay: String(firstValue(activity, ["dia_tipico", "typicalDay"], "Lunes")),
-            order: toNumber(firstValue(activity, ["orden_flujo", "orden", "secuencia"], index + 1), index + 1),
+            order: toNumber(firstValue(activity, ["orden_flujo", "orden", "secuencia"], index), index),
             impact: String(firstValue(activity, ["impacto", "impact", "descripcion"], "")),
             benefit: String(firstValue(activity, ["beneficio", "benefit"], "")),
             aiAutomation: String(firstValue(activity, ["automatizacion_ia", "aiAutomation"], "")),
@@ -2530,6 +2597,7 @@ export default function CapacityModule() {
     try {
       const created = await createSubprocess({
         proceso: selectedProcessName,
+        codigo: String(nextOrder),
         nombre: block?.name || `Nuevo subproceso ${nextOrder}`,
         responsable: laneName,
         carril: laneName,
@@ -2541,8 +2609,9 @@ export default function CapacityModule() {
         ...created,
         id: created.id,
         subproceso_id: created.id,
-        codigo_subproceso: created.codigo || created.codigo_subproceso || "",
-        code: created.codigo || created.codigo_subproceso || "",
+        codigo_subproceso: created.codigo || created.codigo_subproceso || String(nextOrder),
+        codigo: created.codigo || created.codigo_subproceso || String(nextOrder),
+        code: created.codigo || created.codigo_subproceso || String(nextOrder),
         name: created.nombre || created.name || `Nuevo subproceso ${nextOrder}`,
         rol: created.responsable || laneName,
         lane: created.responsable || laneName,
@@ -2736,9 +2805,10 @@ export default function CapacityModule() {
 
     updateSubprocess(blockId, {
       ...updates,
-      nombre: updates.name,
-      responsable: updates.responsible || updates.rol || updates.lane,
-      carril: updates.lane || updates.rol || updates.responsible,
+      codigo: updates.codigo || updates.code || updates.codigo_subproceso,
+      nombre: updates.name || updates.nombre,
+      responsable: updates.responsible || updates.responsable || updates.rol || updates.lane,
+      carril: updates.lane || updates.rol || updates.responsible || updates.responsable,
       proceso: selectedProcessName,
     })
       .then(() => reloadSelectedProcessData(selectedProcessName))
