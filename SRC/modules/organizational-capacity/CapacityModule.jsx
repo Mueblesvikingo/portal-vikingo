@@ -422,7 +422,7 @@ function mapSupabaseDesignData({ processes = [], roles = [], subprocesses = [], 
         status: normalizeBoolean(firstValue(subprocess, ["activo", "active"], true), true)
           ? String(firstValue(subprocess, ["status", "estado"], "default"))
           : "inactive",
-        order: toNumber(firstValue(subprocess, ["orden", "orden_flujo", "secuencia", "id"], index), index),
+        order: toNumber(firstValue(subprocess, ["orden", "orden_flujo", "secuencia", "id"], index + 1), index + 1),
         impact: String(firstValue(subprocess, ["impacto", "impact", "objetivo", "descripcion"], "")),
         benefit: String(firstValue(subprocess, ["beneficio", "benefit"], "")),
         aiAutomation: String(firstValue(subprocess, ["automatizacion_ia", "aiAutomation"], "")),
@@ -468,7 +468,7 @@ function mapSupabaseDesignData({ processes = [], roles = [], subprocesses = [], 
         frequencyType: String(firstValue(activity, ["frecuencia", "frequencyType"], "monthly")),
         frequencyValue: toNumber(firstValue(activity, ["frequencyValue", "frecuencia_valor"], 1), 1),
         typicalDay: String(firstValue(activity, ["dia_tipico", "typicalDay"], "Lunes")),
-        order: toNumber(firstValue(activity, ["orden_flujo", "orden", "secuencia"], index), index),
+        order: toNumber(firstValue(activity, ["orden_flujo", "orden", "secuencia"], index + 1), index + 1),
         impact: String(firstValue(activity, ["impacto", "impact", "descripcion"], "")),
         benefit: String(firstValue(activity, ["beneficio", "benefit"], "")),
         aiAutomation: String(firstValue(activity, ["automatizacion_ia", "aiAutomation"], "")),
@@ -1477,28 +1477,40 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
       })
       .map(({ block }) => block);
 
+  const getManualOrderValue = (block) => {
+    const candidates = [
+      block?.displayNumber,
+      block?.numero,
+      block?.orden_visual,
+      block?.orden_flujo,
+      block?.orden,
+      block?.order,
+    ];
+
+    for (const candidate of candidates) {
+      const numericValue = Number(candidate);
+      if (Number.isFinite(numericValue) && numericValue > 0) return numericValue;
+    }
+
+    return 1;
+  };
+
   const getOrderedBlockPayload = (sourcePositions = positions) =>
-    getOrderedBlocks(sourcePositions).map((block, index) => {
+    getOrderedBlocks(sourcePositions).map((block) => {
       const position = sourcePositions[block.id] || positions[block.id] || {};
       const lane = visibleLanes[toNumber(position.laneIndex, 0)] || {};
+      const manualOrder = getManualOrderValue(block);
+
       return {
         id: block.id,
-        order: index + 1,
-        orden_flujo: index + 1,
+        order: manualOrder,
+        orden_flujo: manualOrder,
         roleId: lane.roleId,
         lane: lane.lane,
       };
     });
 
-  const displayNumberById = useMemo(() => {
-    const numbers = {};
-    getOrderedBlocks(positions).forEach((block, index) => {
-      numbers[block.id] = index + 1;
-    });
-    return numbers;
-  }, [allBlocks, positions]);
-
-  const getBlockDisplayNumber = (block) => displayNumberById[block.id] || 1;
+  const getBlockDisplayNumber = (block) => getManualOrderValue(block);
 
   const startDrag = (event, block) => {
     event.preventDefault();
@@ -1808,7 +1820,7 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
                   <button key={block.id} onMouseDown={(event) => startDrag(event, block)} onClick={() => { if (!dragMovedRef.current) onSelectBlock(block); }} className={`absolute z-20 flex items-start overflow-hidden rounded-xl border px-1.5 py-1.5 text-left shadow-sm cursor-grab transition-all hover:shadow-md active:cursor-grabbing ${getBlockStyle(block)}`} style={{ left: node.x, top: node.y, width: cellWidth, height: blockHeight, minWidth: cellWidth }}>
                     <div className="flex h-full w-full flex-col justify-between gap-1">
                       <div className="flex items-start justify-between gap-2">
-                        <span className={`flex h-4 min-w-8 items-center justify-center rounded-full border border-transparent px-2 text-center text-[10px] font-black shadow-sm ${block.active === false || block.activo === false || block.activa === false ? "bg-gray-300 text-gray-500" : "bg-white/80 text-current"}`} title="NÃºmero visual calculado por posiciÃ³n">{getBlockDisplayNumber(block)}</span>
+                        <span className={`flex h-4 min-w-8 items-center justify-center rounded-full border border-transparent px-2 text-center text-[10px] font-black shadow-sm ${block.active === false || block.activo === false || block.activa === false ? "bg-gray-300 text-gray-500" : "bg-white/80 text-current"}`} title="NÃºmero manual guardado">{getBlockDisplayNumber(block)}</span>
                         <span role="button" tabIndex={0} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); removeBlock(block.id); }} className="text-[10px] font-black leading-none text-gray-300 hover:text-red-500" title="Quitar bloque">&times;</span>
                       </div>
                       <textarea value={block.name} onFocus={() => { blockEditSnapshotRef.current = cloneState(); }} onBlur={() => { if (blockEditSnapshotRef.current) { rememberState(blockEditSnapshotRef.current); blockEditSnapshotRef.current = null; } }} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onChange={(event) => updateBlock(block.id, { name: event.target.value })} className="h-[54px] w-full resize-none overflow-hidden rounded-lg border border-transparent bg-transparent text-center text-[11px] font-black leading-[1.12] text-current outline-none hover:border-white/50 focus:border-white/80 focus:bg-white/40" title="Editar nombre del bloque" />
@@ -1995,7 +2007,7 @@ export default function CapacityModule() {
             status: normalizeBoolean(firstValue(subprocess, ["activo", "active"], true), true)
               ? String(firstValue(subprocess, ["status", "estado"], "default"))
               : "inactive",
-            order: toNumber(firstValue(subprocess, ["orden", "orden_flujo", "secuencia", "id"], index), index),
+            order: toNumber(firstValue(subprocess, ["orden", "orden_flujo", "secuencia", "id"], index + 1), index + 1),
             impact: String(firstValue(subprocess, ["impacto", "impact", "objetivo", "descripcion"], "")),
             benefit: String(firstValue(subprocess, ["beneficio", "benefit"], "")),
             aiAutomation: String(firstValue(subprocess, ["automatizacion_ia", "aiAutomation"], "")),
@@ -2036,7 +2048,7 @@ export default function CapacityModule() {
             frequencyType: String(firstValue(activity, ["frecuencia", "frequencyType"], "monthly")),
             frequencyValue: toNumber(firstValue(activity, ["frequencyValue", "frecuencia_valor"], 1), 1),
             typicalDay: String(firstValue(activity, ["dia_tipico", "typicalDay"], "Lunes")),
-            order: toNumber(firstValue(activity, ["orden_flujo", "orden", "secuencia"], index), index),
+            order: toNumber(firstValue(activity, ["orden_flujo", "orden", "secuencia"], index + 1), index + 1),
             impact: String(firstValue(activity, ["impacto", "impact", "descripcion"], "")),
             benefit: String(firstValue(activity, ["beneficio", "benefit"], "")),
             aiAutomation: String(firstValue(activity, ["automatizacion_ia", "aiAutomation"], "")),
