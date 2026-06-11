@@ -170,6 +170,125 @@ export async function updateWorkloadAssignment(id, updates) {
   }
 }
 
+function cleanSavedPlanPayload(payload = {}) {
+  return {
+    tipo_plan: payload.tipo_plan,
+    persona_id: String(payload.persona_id || ""),
+    responsable: payload.responsable || null,
+    fecha_inicio: payload.fecha_inicio || null,
+    fecha_fin: payload.fecha_fin || null,
+    mes: payload.mes ?? null,
+    anio: payload.anio ?? null,
+    nombre: payload.nombre || null,
+    estado: payload.estado || "Borrador",
+    bloques: Array.isArray(payload.bloques) ? payload.bloques : [],
+    completados: Array.isArray(payload.completados) ? payload.completados : [],
+    resumen: payload.resumen || null,
+    creado_por: payload.creado_por || null,
+    actualizado_por: payload.actualizado_por || null,
+    activo: payload.activo ?? true,
+  };
+}
+
+export async function getSavedWorkloadPlans({ personaId, tipoPlan }) {
+  try {
+    let query = supabase
+      .from("workload_planes_guardados")
+      .select("*")
+      .eq("activo", true)
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (personaId && personaId !== "all") query = query.eq("persona_id", String(personaId));
+    if (tipoPlan) query = query.eq("tipo_plan", tipoPlan);
+
+    const { data, error } = await query;
+    if (error) return { ok: false, error, data: [] };
+    return { ok: true, error: null, data: data || [] };
+  } catch (err) {
+    return { ok: false, error: err, data: [] };
+  }
+}
+
+export async function getSavedWeeklyPlans({ personaId }) {
+  return getSavedWorkloadPlans({ personaId, tipoPlan: "semanal" });
+}
+
+export async function getSavedMonthlyPlans({ personaId }) {
+  return getSavedWorkloadPlans({ personaId, tipoPlan: "mensual" });
+}
+
+export async function saveWorkloadPlan(payload) {
+  try {
+    const { data, error } = await supabase
+      .from("workload_planes_guardados")
+      .insert(cleanSavedPlanPayload(payload))
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function updateSavedWorkloadPlan(id, payload) {
+  try {
+    const { data, error } = await supabase
+      .from("workload_planes_guardados")
+      .update({ ...cleanSavedPlanPayload(payload), updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function findExistingSavedWeek({ personaId, fechaInicio, fechaFin }) {
+  try {
+    const { data, error } = await supabase
+      .from("workload_planes_guardados")
+      .select("*")
+      .eq("activo", true)
+      .eq("tipo_plan", "semanal")
+      .eq("persona_id", String(personaId))
+      .eq("fecha_inicio", fechaInicio)
+      .eq("fecha_fin", fechaFin)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function findExistingSavedMonth({ personaId, mes, anio }) {
+  try {
+    const { data, error } = await supabase
+      .from("workload_planes_guardados")
+      .select("*")
+      .eq("activo", true)
+      .eq("tipo_plan", "mensual")
+      .eq("persona_id", String(personaId))
+      .eq("mes", Number(mes))
+      .eq("anio", Number(anio))
+      .limit(1)
+      .maybeSingle();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
 export async function scheduleActivityInWeeklyPlan({ personaId, activityId, dayName, plannedHours }) {
   try {
     const { data: existing, error: existingError } = await supabase

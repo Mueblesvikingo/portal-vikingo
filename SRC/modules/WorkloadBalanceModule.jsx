@@ -1,5 +1,5 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createWorkloadAssignment, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, removeMonthlyPlanActivity, removeWeeklyPlanActivity, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanOrder, updateWeeklyPlanOrder, updateWorkloadAssignment } from "../services/workloadService";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createWorkloadAssignment, findExistingSavedMonth, findExistingSavedWeek, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanOrder, updateWorkloadAssignment } from "../services/workloadService";
 
 const MONTHLY_CAPACITY_HOURS = 192;
 const WEEKLY_CAPACITY_HOURS = 48;
@@ -120,6 +120,32 @@ function formatPlanPeriodName(startValue, endValue) {
   const monthNames = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
   const month = monthNames[date.getMonth()] || "mes";
   return `Sem ${startValue || "sin-fecha"} a ${endValue || "sin-fecha"} (${month})`;
+}
+function getMonthPlanParts(dateValue) {
+  const date = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date();
+  return { mes: date.getMonth() + 1, anio: date.getFullYear() };
+}
+function formatMonthPlanName(mes, anio) {
+  return `Mes ${String(mes || "").padStart(2, "0")}/${anio || new Date().getFullYear()}`;
+}
+function mapSavedWorkloadPlan(plan) {
+  const tipoPlan = plan?.tipo_plan || plan?.tipoPlan || "semanal";
+  return {
+    id: plan?.id,
+    tipoPlan,
+    personaId: plan?.persona_id || plan?.personaId,
+    responsable: plan?.responsable || "",
+    name: plan?.nombre || plan?.name || (tipoPlan === "mensual" ? formatMonthPlanName(plan?.mes, plan?.anio) : formatPlanPeriodName(plan?.fecha_inicio, plan?.fecha_fin)),
+    blocks: safeArray(plan?.bloques || plan?.blocks),
+    completedBlockIds: safeArray(plan?.completados || plan?.completedBlockIds),
+    completionSummary: plan?.resumen || plan?.completionSummary || null,
+    weekStart: plan?.fecha_inicio || plan?.weekStart || "",
+    weekEnd: plan?.fecha_fin || plan?.weekEnd || "",
+    month: plan?.mes || plan?.month || null,
+    year: plan?.anio || plan?.year || null,
+    status: plan?.estado || plan?.status || "Borrador",
+    sourceRecord: plan,
+  };
 }
 function getNextWorkWeekRange(startValue, endValue) {
   const base = endValue ? new Date(`${endValue}T00:00:00`) : startValue ? new Date(`${startValue}T00:00:00`) : new Date();
@@ -576,6 +602,7 @@ export default function WorkloadBalanceModule({
   const [draggedMonthlyBlock, setDraggedMonthlyBlock] = useState(null);
   const [monthlyQuickTarget, setMonthlyQuickTarget] = useState(null);
   const [monthlyDropIndicator, setMonthlyDropIndicator] = useState(null);
+  const [monthlySnapshotMode, setMonthlySnapshotMode] = useState(false);
   const [agendaView, setAgendaView] = useState("weekly");
   const [agendaManualBlocks, setAgendaManualBlocks] = useState([]);
   const [agendaRemovedBlockIds, setAgendaRemovedBlockIds] = useState([]);
@@ -631,6 +658,7 @@ export default function WorkloadBalanceModule({
     [peopleOptions, effectivePersonFilter]
   );
   const selectedPersonName = selectedPersonOption?.name || (effectivePersonFilter === "all" ? "" : currentUser?.name || "");
+  const isMonthlyPlanning = agendaView === "monthly";
   const workloadStorageScope = effectivePersonFilter === "all" ? "all" : String(effectivePersonFilter || "all");
   const visibleAssignments = useMemo(
     () => assignments.filter((assignment) => {
@@ -660,6 +688,7 @@ export default function WorkloadBalanceModule({
     setAgendaRemovedBlockIds([]);
     setCompletedAgendaBlockIds([]);
     setSelectedPlanId(null);
+    setMonthlySnapshotMode(false);
     setScheduleOverrides({});
     setDraggedActivity(null);
     setDraggedMonthlyBlock(null);
@@ -686,6 +715,10 @@ export default function WorkloadBalanceModule({
     if (!storageHydrated) return;
     writeStoredArray(getScopedStorageKey("vikingo-workload-saved-plans", storageScopeRef.current), savedPlans);
   }, [savedPlans, storageHydrated]);
+
+  useEffect(() => {
+    loadSavedPlansFromSupabase();
+  }, [effectivePersonFilter, isMonthlyPlanning]);
 
   const roleOptions = useMemo(
     () => [...new Set(selectedPersonRoleLinks.map(getPersonRoleName).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
@@ -831,7 +864,8 @@ export default function WorkloadBalanceModule({
     [visibleAssignments]
   );
   const weekOccurrences = useMemo(() => expandWeeklyOccurrences(scheduledWeeklyActivities).filter((activity) => WEEK_VISIBLE_TYPES.includes(activity.origen)).concat(manualProjects).sort(compareOrderCreated), [scheduledWeeklyActivities, manualProjects]);
-  const monthlyMatrix = useMemo(() => buildMonthlyMatrix({ weekOccurrences: [], monthlyBlocks: scheduledMonthlyBlocks.concat(scheduledAssignmentMonthlyBlocks, monthlyBlocks) }), [scheduledMonthlyBlocks, scheduledAssignmentMonthlyBlocks, monthlyBlocks]);
+  const planningMonthlyBlocks = monthlySnapshotMode ? monthlyBlocks : scheduledMonthlyBlocks.concat(scheduledAssignmentMonthlyBlocks, monthlyBlocks);
+  const monthlyMatrix = useMemo(() => buildMonthlyMatrix({ weekOccurrences: [], monthlyBlocks: planningMonthlyBlocks }), [planningMonthlyBlocks]);
   const typicalMonth = useMemo(() => [1, 2, 3, 4].map((weekNumber) => { const totalMinutes = monthlyMatrix.reduce((sum, row) => { const week = row.weeks.find((item) => item.weekNumber === weekNumber); return sum + Number(week?.usedMinutes || 0); }, 0); const total = totalMinutes / 60; const occupation = (total / WEEKLY_CAPACITY_HOURS) * 100; return { week: `Semana ${weekNumber}`, total, occupation, status: getWorkloadStatus(occupation) }; }), [monthlyMatrix]);
   const dayCapacitySummary = useMemo(() => WEEK_DAYS.map((day) => { const activitiesForDay = weekOccurrences.filter((activity) => activity.diaTipico === day).sort(compareOrderCreated); const usedMinutes = activitiesForDay.reduce((sum, activity) => sum + getDurationMinutes(activity), 0); const occupation = (usedMinutes / DAILY_CAPACITY_MINUTES) * 100; return { day, activities: activitiesForDay, usedMinutes, occupation, availabilityMinutes: DAILY_CAPACITY_MINUTES - usedMinutes, status: getWorkloadStatus(occupation) }; }), [weekOccurrences]);
   const activeAgendaBlocks = useMemo(() => weekOccurrences.filter((activity) => !agendaRemovedBlockIds.includes(activity.occurrenceId)).map((activity) => ({ ...activity, planningSource: "Semana tipica" })).concat(agendaManualBlocks).sort(compareOrderCreated), [weekOccurrences, agendaRemovedBlockIds, agendaManualBlocks]);
@@ -848,7 +882,7 @@ export default function WorkloadBalanceModule({
     const completion = planned > 0 ? (completed / planned) * 100 : 0;
     return { planned, completed, pending: Math.max(planned - completed, 0), completion: Number(completion.toFixed(0)), weeks: plans.length };
   }, [savedPlans, activeAgendaBlocks, completedAgendaBlockIds]);
-  const selectedPlan = savedPlans.find((plan) => plan.id === selectedPlanId);
+  const selectedPlan = savedPlans.find((plan) => String(plan.id) === String(selectedPlanId));
 
   function getLastOrderForDay(day) { const dayActivities = weekOccurrences.filter((activity) => activity.diaTipico === day); return dayActivities.length === 0 ? 0 : Math.max(...dayActivities.map((activity) => Number(activity.orden || 0))); }
   function updateDraggedSchedule(dragged, updater) {
@@ -1455,12 +1489,53 @@ function canReviewPlan() {
     setOverwritePlanId(null);
     setSelectedPlanId(null);
   }
+
+  async function loadSavedPlansFromSupabase() {
+    if (!effectivePersonFilter || effectivePersonFilter === "all") {
+      setSavedPlans([]);
+      setSelectedPlanId(null);
+      return [];
+    }
+
+    const result = isMonthlyPlanning
+      ? await getSavedMonthlyPlans({ personaId: effectivePersonFilter })
+      : await getSavedWeeklyPlans({ personaId: effectivePersonFilter });
+
+    if (!result?.ok) {
+      console.error(result?.error);
+      return savedPlans;
+    }
+
+    const nextPlans = safeArray(result.data).map(mapSavedWorkloadPlan);
+    setSavedPlans(nextPlans);
+    if (selectedPlanId && !nextPlans.some((plan) => String(plan.id) === String(selectedPlanId))) {
+      setSelectedPlanId(null);
+    }
+    return nextPlans;
+  }
+
   function startNewAgendaWeek() {
     resetAgendaPlanningState(getCurrentWorkWeekRange());
   }
+
+  function startNewAgendaMonth() {
+    setMonthlyBlocks([]);
+    setMonthlySnapshotMode(false);
+    setMonthlyQuickTarget(null);
+    setMonthlyBlockName("");
+    setMonthlyBlockMinutes("60");
+    setMonthlyBlockFrequency("Mensual");
+    setMonthlyBlockType("Proyecto");
+    setEditingMonthlyBlockId(null);
+    setPlanSaveWarning("");
+    setOverwritePlanId(null);
+    setSelectedPlanId(null);
+  }
+
   function startNextAgendaWeek(nextSavedPlans = savedPlans) {
     resetAgendaPlanningState(getNextAvailableWorkWeekRange(nextSavedPlans, planningWeekStart, planningWeekEnd));
   }
+
   function buildPlanPayload(planId) {
     const totalMinutes = activeAgendaBlocks.reduce((sum, activity) => sum + getDurationMinutes(activity), 0);
     return {
@@ -1483,6 +1558,69 @@ function canReviewPlan() {
     };
   }
 
+  function buildSavedWeeklyPayload() {
+    return {
+      tipo_plan: "semanal",
+      persona_id: effectivePersonFilter,
+      responsable: selectedPersonName,
+      fecha_inicio: planningWeekStart,
+      fecha_fin: planningWeekEnd,
+      nombre: formatPlanPeriodName(planningWeekStart, planningWeekEnd),
+      estado: "Borrador",
+      bloques: activeAgendaBlocks,
+      completados: completedAgendaBlockIds,
+      resumen: weeklyPlanKpi,
+      creado_por: currentUser?.name || "Usuario",
+      actualizado_por: currentUser?.name || "Usuario",
+      activo: true,
+    };
+  }
+
+  function buildMonthlySnapshotBlocks() {
+    return monthlyMatrix.flatMap((row) =>
+      row.weeks.flatMap((week) =>
+        safeArray(week.blocks).map((block, index) => ({
+          ...block,
+          id: block.id || `month-snapshot-${row.type}-${week.weekNumber}-${index}`,
+          monthlyOccurrenceId: block.monthlyOccurrenceId || block.id || `month-snapshot-${row.type}-${week.weekNumber}-${index}`,
+          origen: row.type,
+          targetWeeks: [week.weekNumber],
+          semanaMes: week.weekNumber,
+          monthlyOrder: Number(block.monthlyOrder || block.orden || index + 1),
+          isMonthlyBlock: true,
+        }))
+      )
+    );
+  }
+
+  function buildSavedMonthlyPayload() {
+    const { mes, anio } = getMonthPlanParts(planningWeekStart);
+    const snapshotBlocks = buildMonthlySnapshotBlocks();
+    const totalMinutes = snapshotBlocks.reduce((sum, block) => sum + getDurationMinutes(block), 0);
+    return {
+      tipo_plan: "mensual",
+      persona_id: effectivePersonFilter,
+      responsable: selectedPersonName,
+      mes,
+      anio,
+      nombre: formatMonthPlanName(mes, anio),
+      estado: "Borrador",
+      bloques: snapshotBlocks,
+      completados: [],
+      resumen: {
+        weeks: typicalMonth.map((week) => ({
+          week: week.week,
+          total: week.total,
+          occupation: Number(week.occupation.toFixed(0)),
+        })),
+        totalHours: Number((totalMinutes / 60).toFixed(1)),
+      },
+      creado_por: currentUser?.name || "Usuario",
+      actualizado_por: currentUser?.name || "Usuario",
+      activo: true,
+    };
+  }
+
   function validatePlanningPeriod() {
     const diffDays = getDateDiffDays(planningWeekStart, planningWeekEnd);
     if (!planningWeekStart || !planningWeekEnd) return "Selecciona fecha inicial y fecha final para guardar la planificación.";
@@ -1491,7 +1629,7 @@ function canReviewPlan() {
     return "";
   }
 
-  function saveCurrentAgendaPlan() {
+  async function saveCurrentAgendaPlan() {
     if (!canCreatePersonScopedBlock()) return;
     const validationMessage = validatePlanningPeriod();
     if (validationMessage) {
@@ -1500,39 +1638,95 @@ function canReviewPlan() {
       return;
     }
 
-    const duplicatedPlan = savedPlans.find((plan) => plan.weekStart === planningWeekStart && plan.weekEnd === planningWeekEnd);
-    if (duplicatedPlan) {
+    const existingResult = await findExistingSavedWeek({
+      personaId: effectivePersonFilter,
+      fechaInicio: planningWeekStart,
+      fechaFin: planningWeekEnd,
+    });
+
+    if (!existingResult?.ok) {
+      console.error(existingResult?.error);
+      setPlanSaveWarning("No fue posible validar si la semana ya existe en Supabase.");
+      return;
+    }
+
+    if (existingResult.data) {
+      const duplicatedPlan = mapSavedWorkloadPlan(existingResult.data);
       setPlanSaveWarning(`Ya existe ${duplicatedPlan.name}. ¿Deseas sobreescribir la planificación guardada?`);
       setOverwritePlanId(duplicatedPlan.id);
       setSelectedPlanId(duplicatedPlan.id);
       return;
     }
 
-    setPlanSaveWarning("");
-    setOverwritePlanId(null);
-    const planId = `plan-${Date.now()}`;
-    const newPlan = buildPlanPayload(planId);
-    setSavedPlans((currentPlans) => {
-      const nextPlans = [newPlan, ...currentPlans];
-      startNextAgendaWeek(nextPlans);
-      return nextPlans;
-    });
-  }
-
-  function overwriteSavedPlan() {
-    if (!overwritePlanId) return;
-    if (!canCreatePersonScopedBlock()) return;
-    const validationMessage = validatePlanningPeriod();
-    if (validationMessage) {
-      setPlanSaveWarning(validationMessage);
+    const saveResult = await saveWorkloadPlan(buildSavedWeeklyPayload());
+    if (!saveResult?.ok) {
+      console.error(saveResult?.error);
+      setPlanSaveWarning("No fue posible guardar la semana en Supabase.");
       return;
     }
-    const updatedPlan = buildPlanPayload(overwritePlanId);
-    setSavedPlans((currentPlans) => {
-      const nextPlans = currentPlans.map((plan) => (plan.id === overwritePlanId ? { ...plan, ...updatedPlan } : plan));
-      startNextAgendaWeek(nextPlans);
-      return nextPlans;
-    });
+
+    setPlanSaveWarning("");
+    setOverwritePlanId(null);
+    const nextPlans = await loadSavedPlansFromSupabase();
+    startNextAgendaWeek(nextPlans);
+  }
+
+  async function saveCurrentAgendaMonth() {
+    if (!canCreatePersonScopedBlock()) return;
+    const { mes, anio } = getMonthPlanParts(planningWeekStart);
+    const existingResult = await findExistingSavedMonth({ personaId: effectivePersonFilter, mes, anio });
+
+    if (!existingResult?.ok) {
+      console.error(existingResult?.error);
+      setPlanSaveWarning("No fue posible validar si el mes ya existe en Supabase.");
+      return;
+    }
+
+    if (existingResult.data) {
+      const duplicatedPlan = mapSavedWorkloadPlan(existingResult.data);
+      setPlanSaveWarning(`Ya existe ${duplicatedPlan.name}. ¿Deseas sobreescribir la planificación guardada?`);
+      setOverwritePlanId(duplicatedPlan.id);
+      setSelectedPlanId(duplicatedPlan.id);
+      return;
+    }
+
+    const saveResult = await saveWorkloadPlan(buildSavedMonthlyPayload());
+    if (!saveResult?.ok) {
+      console.error(saveResult?.error);
+      setPlanSaveWarning("No fue posible guardar el mes en Supabase.");
+      return;
+    }
+
+    setPlanSaveWarning("");
+    setOverwritePlanId(null);
+    setMonthlySnapshotMode(false);
+    await loadSavedPlansFromSupabase();
+  }
+
+  async function overwriteSavedPlan() {
+    if (!overwritePlanId) return;
+    if (!canCreatePersonScopedBlock()) return;
+    if (!isMonthlyPlanning) {
+      const validationMessage = validatePlanningPeriod();
+      if (validationMessage) {
+        setPlanSaveWarning(validationMessage);
+        return;
+      }
+    }
+
+    const payload = isMonthlyPlanning ? buildSavedMonthlyPayload() : buildSavedWeeklyPayload();
+    const updateResult = await updateSavedWorkloadPlan(overwritePlanId, payload);
+    if (!updateResult?.ok) {
+      console.error(updateResult?.error);
+      setPlanSaveWarning("No fue posible sobreescribir la planificación en Supabase.");
+      return;
+    }
+
+    setPlanSaveWarning("");
+    setOverwritePlanId(null);
+    const nextPlans = await loadSavedPlansFromSupabase();
+    if (isMonthlyPlanning) setMonthlySnapshotMode(false);
+    else startNextAgendaWeek(nextPlans);
   }
 
   function cancelOverwritePlan() {
@@ -1541,11 +1735,30 @@ function canReviewPlan() {
   }
 
   function loadSavedPlan(planId) {
-    const plan = savedPlans.find((item) => item.id === planId);
+    const plan = savedPlans.find((item) => String(item.id) === String(planId));
     if (!plan) return;
     setPlanSaveWarning("");
     setOverwritePlanId(null);
     setSelectedPlanId(planId);
+    if (plan.tipoPlan === "mensual") {
+      const savedBlocks = safeArray(plan.blocks).map((block, index) => ({
+        ...block,
+        id: block.id || `saved-month-block-${plan.id}-${index}`,
+        monthlyOccurrenceId: block.monthlyOccurrenceId || block.id || `saved-month-block-${plan.id}-${index}`,
+        targetWeeks: safeArray(block.targetWeeks).length > 0 ? block.targetWeeks : [Number(block.semanaMes || block.semana_mes || 1)],
+        semanaMes: Number(block.semanaMes || block.semana_mes || safeArray(block.targetWeeks)[0] || 1),
+        monthlyOrder: Number(block.monthlyOrder || block.orden || index + 1),
+        isMonthlyBlock: true,
+      }));
+
+      setMonthlyBlocks(savedBlocks);
+      setMonthlySnapshotMode(true);
+      setMonthlyQuickTarget(null);
+      setDraggedMonthlyBlock(null);
+      setMonthlyDropIndicator(null);
+      return;
+    }
+
     if (plan.approval) setPlanApproval(plan.approval);
     if (plan.review) setReviewStatus(plan.review);
     if (typeof plan.reviewComment === "string") setReviewComment(plan.reviewComment);
@@ -1591,7 +1804,7 @@ function canReviewPlan() {
 
             {viewMode === "assignments" && <div className="p-3"><div className="mb-3 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2"><div><p className="text-xs font-black uppercase tracking-widest text-slate-800">Asignaciones</p><p className="text-[10px] font-bold text-slate-400">Centro de encargos para programar posteriormente en planificación.</p></div><button type="button" disabled={!canCreateAssignments()} onClick={() => setShowAssignmentModal(true)} className={`h-8 rounded-lg px-3 text-[10px] font-black shadow-sm ${canCreateAssignments() ? "bg-[#001225] text-white" : "bg-slate-100 text-slate-300 cursor-not-allowed"}`}>+ Nueva asignación</button></div><div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><table className="min-w-full table-fixed divide-y divide-slate-100 text-[10px]"><thead className="bg-slate-50 text-left font-black uppercase tracking-[0.18em] text-slate-400"><tr><th className="w-[17%] px-3 py-2">Tipo</th><th className="w-[12%] px-3 py-2">Prioridad</th><th className="w-[13%] px-3 py-2">Gestión</th><th className="w-[9%] px-3 py-2">Carga</th><th className="w-[14%] px-3 py-2">Fecha límite</th><th className="w-[13%] px-3 py-2">Asignó</th><th className="w-[10%] px-3 py-2">Estado</th><th className="w-[12%] px-3 py-2 text-right">Acción</th></tr></thead><tbody className="divide-y divide-slate-100">{assignments.map((assignment) => <tr key={assignment.id} className="h-9 hover:bg-slate-50/70"><td className="px-3 py-1.5 font-black text-slate-800"><span className="block truncate">{assignment.tipo}</span><span className="block truncate text-[8px] font-bold text-slate-400">{assignment.titulo}</span></td><td className="px-3 py-1.5"><span className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${getAssignmentPriorityStyle(assignment.prioridad)}`}>{assignment.prioridad}</span></td><td className="px-3 py-1.5"><button type="button" onClick={() => openAssignmentManagementDetail(assignment)} className="rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[9px] font-black text-sky-700 transition hover:bg-sky-100 hover:shadow-sm">{assignment.gestionarEn}</button></td><td className="px-3 py-1.5 font-black text-slate-600">{formatHours(assignment.horas)}</td><td className="px-3 py-1.5 font-bold text-slate-500">{assignment.fechaLimite}</td><td className="px-3 py-1.5 font-bold text-slate-500"><span className="block truncate">{assignment.asigna}</span><span className="block truncate text-[8px] text-slate-400">{assignment.asignaRol}</span></td><td className="px-3 py-1.5"><button type="button" onClick={() => openAssignmentStatusDetail(assignment)} className={`rounded-full border px-2 py-0.5 text-[9px] font-black transition hover:shadow-sm ${assignment.estado === "Programada" ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-amber-100 bg-amber-50 text-amber-700"}`}>{assignment.estado}</button></td><td className="px-3 py-1.5 text-right"><button type="button" disabled={assignment.estado === "Programada"} onClick={() => scheduleAssignment(assignment)} className={`rounded-lg border px-2 py-1 text-[9px] font-black ${assignment.estado === "Programada" ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300" : "border-sky-100 bg-sky-50 text-sky-700 hover:bg-sky-100"}`}>{assignment.estado === "Programada" ? "Programada" : "Programar"}</button></td></tr>)}</tbody></table></div>{assignmentManagementDetail && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="border-b border-slate-200 bg-gradient-to-r from-slate-100 to-slate-50 px-4 py-4"><div className="flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-widest text-slate-800">Detalle de gestión</p><p className="text-[10px] font-bold text-slate-500">{assignmentManagementDetail.titulo}</p></div><button type="button" onClick={() => setAssignmentManagementDetail(null)} className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-black text-slate-500 shadow-sm hover:bg-slate-50">×</button></div></div><div className="h-1 w-full bg-gradient-to-r from-[#001225] via-[#0B5ED7] to-[#7AA7D9]" /><div className="space-y-2 bg-white p-4 text-[11px] font-bold text-slate-700"><div className="flex justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span className="text-[#0066CC]">Canal</span><span>{assignmentManagementDetail.gestionarEn}</span></div><div className="flex justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span className="text-slate-500">Revisará</span><span>{assignmentManagementDetail.revisara}</span></div><div className="flex justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span className="text-emerald-600">Aprobará</span><span>{assignmentManagementDetail.aprobara}</span></div><div className="flex justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span className="text-orange-600">Dará seguimiento</span><span>{assignmentManagementDetail.seguimiento}</span></div></div><div className="flex justify-end border-t border-slate-100 bg-white px-4 pb-4 pt-3"><button type="button" onClick={() => setAssignmentManagementDetail(null)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 hover:bg-slate-50">Cerrar</button></div></div></div>}{assignmentStatusDetail && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"><div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-widest text-slate-900">Detalle de estado</p><p className="text-[10px] font-bold text-slate-400">{assignmentStatusDetail.titulo}</p></div><button type="button" onClick={() => setAssignmentStatusDetail(null)} className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-sm font-black text-slate-400 hover:bg-slate-50">×</button></div><div className="space-y-2 text-[11px] font-bold text-slate-600"><div className="flex justify-between rounded-xl bg-slate-50 px-3 py-2"><span className="text-slate-400">Estado</span><span>{assignmentStatusDetail.estado}</span></div><div className="flex justify-between rounded-xl bg-slate-50 px-3 py-2"><span className="text-slate-400">Asignó</span><span>{assignmentStatusDetail.asigna} · {assignmentStatusDetail.asignaRol}</span></div>{assignmentStatusDetail.estado === "Programada" ? <><div className="flex justify-between rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700"><span>Semana</span><span>{assignmentStatusDetail.programadaSemanaInicio} a {assignmentStatusDetail.programadaSemanaFin}</span></div><div className="flex justify-between rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700"><span>Día</span><span>{assignmentStatusDetail.programadaDia}</span></div><div className="flex justify-between rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700"><span>Programó</span><span>{assignmentStatusDetail.programadaPor} · {assignmentStatusDetail.programadaAt}</span></div></> : <div className="rounded-xl bg-amber-50 px-3 py-2 text-amber-700">Esta asignación aún no ha sido programada en una semana.</div>}</div><div className="mt-3 flex justify-end"><button type="button" onClick={() => setAssignmentStatusDetail(null)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cerrar</button></div></div></div>}{showAssignmentModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"><div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-widest text-slate-900">Nueva asignación</p><p className="text-[10px] font-bold text-slate-400">Formulario con listas desplegables para evitar captura abierta.</p></div><button type="button" onClick={() => setShowAssignmentModal(false)} className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-sm font-black text-slate-400 hover:bg-slate-50">×</button></div><div className="grid gap-2 md:grid-cols-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tipo<select value={assignmentDraft.tipo} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, tipo: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Responsable<select value={assignmentDraft.responsable} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, responsable: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_RESPONSIBLES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prioridad<select value={assignmentDraft.prioridad} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, prioridad: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_PRIORITIES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Revisará<select value={assignmentDraft.revisara} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, revisara: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_REVIEWERS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Aprobará<select value={assignmentDraft.aprobara} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, aprobara: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_APPROVERS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dará seguimiento<select value={assignmentDraft.seguimiento} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, seguimiento: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_FOLLOWUPS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Gestionar en<select value={assignmentDraft.gestionarEn} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, gestionarEn: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_CHANNELS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Carga estimada (horas)<input type="number" min="0.5" step="0.5" value={assignmentDraft.horas} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, horas: Number(event.target.value) }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Fecha límite<input type="date" value={assignmentDraft.fechaLimite} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, fechaLimite: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label></div><div className="mt-3 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-2"><span className="text-[10px] font-bold text-slate-400">Asignará: {currentUser?.name || "Usuario"} · {getPrimaryUserRole()}</span><div className="flex gap-2"><button type="button" onClick={createAssignment} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Guardar asignación</button><button type="button" onClick={() => setShowAssignmentModal(false)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button></div></div></div></div>}</div>}
 
-            {viewMode === "agenda" && <div className="p-3"><div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-2"><div className="flex flex-wrap items-center gap-2"><div className="flex gap-1 rounded-xl bg-white p-1 shadow-sm"><button type="button" onClick={() => setAgendaView("weekly")} className={`rounded-lg px-3 py-1 text-[10px] font-black uppercase tracking-widest transition ${agendaView === "weekly" ? "bg-[#001225] text-white" : "text-slate-400 hover:bg-slate-50"}`}>Vista semanal</button><button type="button" onClick={() => setAgendaView("monthly")} className={`rounded-lg px-3 py-1 text-[10px] font-black uppercase tracking-widest transition ${agendaView === "monthly" ? "bg-[#001225] text-white" : "text-slate-400 hover:bg-slate-50"}`}>Vista mensual</button></div><div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-1 shadow-sm"><span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Semana</span><input type="date" value={planningWeekStart} onChange={(event) => setPlanningWeekStart(event.target.value)} className="rounded-md border border-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600 outline-none" /><span className="text-[9px] font-black text-slate-300">a</span><input type="date" value={planningWeekEnd} onChange={(event) => setPlanningWeekEnd(event.target.value)} className="rounded-md border border-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600 outline-none" /></div></div><div className="flex items-center gap-2"><select value={selectedPlanId || ""} onChange={(event) => loadSavedPlan(event.target.value)} className="h-9 w-[190px] shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-bold text-slate-600 outline-none"><option value="">Consultar semana guardada</option>{savedPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select><button type="button" onClick={startNewAgendaWeek} className="h-9 w-[86px] shrink-0 rounded-lg border border-slate-200 bg-white px-2 text-center text-[10px] font-black leading-tight text-slate-600 shadow-sm hover:bg-slate-50">Nueva<br />semana</button><button type="button" onClick={saveCurrentAgendaPlan} className="h-9 w-[92px] shrink-0 rounded-lg bg-[#001225] px-2 text-center text-[10px] font-black leading-tight text-white shadow-sm">Guardar<br />semana</button><button type="button" disabled={!canApprovePlan()} title={planApproval.status === "Aprobada con VOBO" ? `Aprobada por ${planApproval.approvedBy} · ${planApproval.approvedRole || "Autorizador"} · ${planApproval.approvedAt}` : "Pendiente VOBO"} onClick={() => setShowApprovalForm((current) => !current)} className={`h-9 w-[76px] shrink-0 rounded-lg border px-3 py-1.5 text-[10px] font-black shadow-sm ${planApproval.status === "Aprobada con VOBO" ? "border-emerald-600 bg-emerald-600 text-white" : canApprovePlan() ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed"}`}>VOBO</button><button type="button" title={reviewStatus.status === "Revisada" ? `Revisada por ${reviewStatus.reviewedBy} · ${reviewStatus.reviewedRole} · ${reviewStatus.reviewedAt}${reviewComment ? ` · Comentarios: ${reviewComment}` : ""}${improvementProposal ? ` · Mejora propuesta: ${improvementProposal}` : ""}` : "Pendiente revisión"} onClick={() => setShowReviewModal(true)} className={`h-9 w-[86px] shrink-0 rounded-lg border px-3 py-1.5 text-[10px] font-black shadow-sm transition ${reviewStatus.status === "Revisada" ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>Revisión</button></div></div>{showApprovalForm && <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2"><span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Autoriza: {currentUser?.name || "Usuario"}</span><span className="rounded-lg border border-emerald-100 bg-white px-2 py-1 text-[10px] font-bold text-slate-600">Rol: {getPrimaryUserRole()}</span><button type="button" onClick={approveCurrentPlan} className="rounded-lg bg-emerald-600 px-3 py-1 text-[10px] font-black text-white">Confirmar VOBO</button><button type="button" onClick={() => { setShowApprovalForm(false); setApprovalError(""); }} className="rounded-lg border border-emerald-100 bg-white px-3 py-1 text-[10px] font-black text-emerald-600">Cancelar</button>{approvalError && <span className="text-[10px] font-bold text-red-500">{approvalError}</span>}</div>}{planSaveWarning && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-100 bg-red-50/80 px-3 py-2 text-[10px] font-bold text-red-600"><span>{planSaveWarning}</span>{overwritePlanId && <div className="flex gap-1"><button type="button" onClick={overwriteSavedPlan} className="rounded-md bg-red-600 px-2 py-1 text-[9px] font-black text-white">Sobreescribir</button><button type="button" onClick={cancelOverwritePlan} className="rounded-md border border-red-100 bg-white px-2 py-1 text-[9px] font-black text-red-500">Cancelar</button></div>}</div>}
+            {viewMode === "agenda" && <div className="p-3"><div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-2"><div className="flex flex-wrap items-center gap-2"><div className="flex gap-1 rounded-xl bg-white p-1 shadow-sm"><button type="button" onClick={() => setAgendaView("weekly")} className={`rounded-lg px-3 py-1 text-[10px] font-black uppercase tracking-widest transition ${agendaView === "weekly" ? "bg-[#001225] text-white" : "text-slate-400 hover:bg-slate-50"}`}>Vista semanal</button><button type="button" onClick={() => setAgendaView("monthly")} className={`rounded-lg px-3 py-1 text-[10px] font-black uppercase tracking-widest transition ${agendaView === "monthly" ? "bg-[#001225] text-white" : "text-slate-400 hover:bg-slate-50"}`}>Vista mensual</button></div><div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-1 shadow-sm"><span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Semana</span><input type="date" value={planningWeekStart} onChange={(event) => setPlanningWeekStart(event.target.value)} className="rounded-md border border-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600 outline-none" /><span className="text-[9px] font-black text-slate-300">a</span><input type="date" value={planningWeekEnd} onChange={(event) => setPlanningWeekEnd(event.target.value)} className="rounded-md border border-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600 outline-none" /></div></div><div className="flex items-center gap-2"><select value={selectedPlanId || ""} onChange={(event) => loadSavedPlan(event.target.value)} className="h-9 w-[190px] shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-bold text-slate-600 outline-none"><option value="">{isMonthlyPlanning ? "Consultar mes guardado" : "Consultar semana guardada"}</option>{savedPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select><button type="button" onClick={isMonthlyPlanning ? startNewAgendaMonth : startNewAgendaWeek} className="h-9 w-[86px] shrink-0 rounded-lg border border-slate-200 bg-white px-2 text-center text-[10px] font-black leading-tight text-slate-600 shadow-sm hover:bg-slate-50">Nueva<br />{isMonthlyPlanning ? "mes" : "semana"}</button><button type="button" onClick={isMonthlyPlanning ? saveCurrentAgendaMonth : saveCurrentAgendaPlan} className="h-9 w-[92px] shrink-0 rounded-lg bg-[#001225] px-2 text-center text-[10px] font-black leading-tight text-white shadow-sm">Guardar<br />{isMonthlyPlanning ? "mes" : "semana"}</button><button type="button" disabled={!canApprovePlan()} title={planApproval.status === "Aprobada con VOBO" ? `Aprobada por ${planApproval.approvedBy} · ${planApproval.approvedRole || "Autorizador"} · ${planApproval.approvedAt}` : "Pendiente VOBO"} onClick={() => setShowApprovalForm((current) => !current)} className={`h-9 w-[76px] shrink-0 rounded-lg border px-3 py-1.5 text-[10px] font-black shadow-sm ${planApproval.status === "Aprobada con VOBO" ? "border-emerald-600 bg-emerald-600 text-white" : canApprovePlan() ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed"}`}>VOBO</button><button type="button" title={reviewStatus.status === "Revisada" ? `Revisada por ${reviewStatus.reviewedBy} · ${reviewStatus.reviewedRole} · ${reviewStatus.reviewedAt}${reviewComment ? ` · Comentarios: ${reviewComment}` : ""}${improvementProposal ? ` · Mejora propuesta: ${improvementProposal}` : ""}` : "Pendiente revisión"} onClick={() => setShowReviewModal(true)} className={`h-9 w-[86px] shrink-0 rounded-lg border px-3 py-1.5 text-[10px] font-black shadow-sm transition ${reviewStatus.status === "Revisada" ? "border-sky-600 bg-sky-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>Revisión</button></div></div>{showApprovalForm && <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2"><span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Autoriza: {currentUser?.name || "Usuario"}</span><span className="rounded-lg border border-emerald-100 bg-white px-2 py-1 text-[10px] font-bold text-slate-600">Rol: {getPrimaryUserRole()}</span><button type="button" onClick={approveCurrentPlan} className="rounded-lg bg-emerald-600 px-3 py-1 text-[10px] font-black text-white">Confirmar VOBO</button><button type="button" onClick={() => { setShowApprovalForm(false); setApprovalError(""); }} className="rounded-lg border border-emerald-100 bg-white px-3 py-1 text-[10px] font-black text-emerald-600">Cancelar</button>{approvalError && <span className="text-[10px] font-bold text-red-500">{approvalError}</span>}</div>}{planSaveWarning && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-100 bg-red-50/80 px-3 py-2 text-[10px] font-bold text-red-600"><span>{planSaveWarning}</span>{overwritePlanId && <div className="flex gap-1"><button type="button" onClick={overwriteSavedPlan} className="rounded-md bg-red-600 px-2 py-1 text-[9px] font-black text-white">Sobreescribir</button><button type="button" onClick={cancelOverwritePlan} className="rounded-md border border-red-100 bg-white px-2 py-1 text-[9px] font-black text-red-500">Cancelar</button></div>}</div>}
 {showReviewModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"><div className="mb-3 flex items-center justify-between gap-2"><div><p className="text-xs font-black uppercase tracking-widest text-slate-900">Revisión semanal</p><p className="text-[10px] font-bold text-slate-400">Retroalimentación, firma de revisado y acciones de mejora</p></div><button type="button" onClick={() => setShowReviewModal(false)} className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-sm font-black text-slate-400 hover:bg-slate-50">×</button></div><div className="mb-3 grid gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-[1.1fr_0.9fr_0.9fr]"><div className="rounded-xl border border-slate-200 bg-white px-3 py-2"><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Plan semanal cumplido</p><div className="mt-2 flex items-end gap-2"><span className="text-3xl font-black text-[#001225]">{weeklyPlanKpi.completion}%</span><span className={`mb-1 rounded-full border px-2 py-0.5 text-[9px] font-black ${weeklyPlanKpi.hasApproval ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-amber-100 bg-amber-50 text-amber-700"}`}>{weeklyPlanKpi.hasApproval ? "Con VOBO" : "Pendiente VOBO"}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(weeklyPlanKpi.completion, 100)}%` }} /></div></div><div className="rounded-xl border border-slate-200 bg-white px-3 py-2"><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Actividades del plan</p><p className="mt-2 text-2xl font-black text-slate-900">{weeklyPlanKpi.planned}</p><p className="mt-1 text-[10px] font-bold text-slate-400">Base aprobada para la semana</p></div><div className="rounded-xl border border-slate-200 bg-white px-3 py-2"><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Palomeadas</p><p className="mt-2 text-2xl font-black text-emerald-700">{weeklyPlanKpi.completed}</p><p className="mt-1 text-[10px] font-bold text-slate-400">Pendientes: {weeklyPlanKpi.pending}</p></div></div><div className="grid gap-3 md:grid-cols-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Comentarios / retroalimentación<textarea value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} placeholder="Comentarios del usuario o jefe directo sobre la semana..." className="mt-1 h-28 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Acción o mejora propuesta<textarea value={improvementProposal} onChange={(event) => setImprovementProposal(event.target.value)} placeholder="Proponer acción, mejora, ajuste de carga o circunstancia relevante..." className="mt-1 h-28 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold normal-case tracking-normal text-slate-700 outline-none" /></label></div><div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50 p-2"><span className={`rounded-full border px-3 py-1 text-center text-[10px] font-black ${reviewStatus.status === "Revisada" ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-400"}`}>{reviewStatus.status === "Revisada" ? `Revisada por ${reviewStatus.reviewedBy} · ${reviewStatus.reviewedRole} · ${reviewStatus.reviewedAt}` : reviewStatus.status}</span><div className="flex gap-2"><button type="button" disabled={!canReviewPlan()} onClick={markPlanReviewed} className={`rounded-lg px-3 py-1.5 text-[10px] font-black ${canReviewPlan() ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-300 cursor-not-allowed"}`}>Firmar revisado</button><button type="button" onClick={() => setShowReviewModal(false)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cerrar</button></div></div></div></div>}{agendaView === "weekly" && <div className="grid grid-cols-5 gap-2">{agendaWeekSummary.map((day) => { const overflow = day.occupation > 100; return <div key={day.day} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); reorderAgendaBlock(agendaDraggedBlock, day.day, day.activities.length); }} className={`min-w-0 rounded-2xl border bg-white shadow-sm transition ${agendaDraggedBlock ? "border-sky-200 bg-sky-50/30" : "border-slate-200"}`}><div className="border-b border-slate-100 px-2.5 py-2"><div className="flex items-center justify-between gap-2"><p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-600">{day.day}</p><StatusPill status={day.status} /></div><div className="mt-1.5 flex items-center justify-between text-[9px] font-black text-slate-500"><span>{formatHours(day.usedMinutes / 60)} / {formatHours(DAILY_CAPACITY_HOURS)}</span><span className={overflow ? "text-red-500" : "text-slate-700"}>{day.occupation.toFixed(0)}%</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${day.status.bar}`} style={{ width: `${Math.min(day.occupation, 140)}%` }} /></div></div><div className="space-y-1 p-2">{day.activities.map((activity, activityIndex) => <React.Fragment key={activity.occurrenceId || activity.id}>{renderAgendaInsertLine(day.day, activityIndex)}<div draggable onDragStart={() => setAgendaDraggedBlock(activity)} onDragEnd={() => { setAgendaDraggedBlock(null); setAgendaDropIndicator(null); }} className={`relative cursor-grab rounded-lg border px-1.5 py-1 shadow-sm transition active:cursor-grabbing ${agendaDraggedBlock && getAgendaBlockKey(agendaDraggedBlock) === getAgendaBlockKey(activity) ? "opacity-40" : ""} ${getCardStyle(activity.origen)}`}><button type="button" onClick={() => toggleAgendaBlockCompleted(activity)} className={`absolute left-1 top-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black transition ${completedAgendaBlockIds.includes(getAgendaBlockKey(activity)) ? "bg-emerald-500 text-white" : "text-slate-300 hover:text-emerald-500"}`} title="Marcar realizado">✓</button>{canRemoveAgendaBlock(activity) && <button type="button" onClick={() => removeAgendaBlock(activity)} className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black text-slate-300 transition hover:bg-red-50 hover:text-red-500">×</button>}<div className="px-5"><p className="line-clamp-2 text-[9px] font-black leading-tight text-slate-950">{activity.actividad}</p><p className="mt-0.5 truncate text-[8px] font-bold text-slate-500">{activity.planningSource || "Bloque adicional"}</p><div className="mt-1 flex items-end justify-between gap-2"><span className={`inline-flex rounded-md border px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wide ${getCardAccentStyle(activity.origen)}`}>{activity.origen}</span><span className="text-[8px] font-black text-slate-500">{activity.duracionMinutos} min</span></div></div></div></React.Fragment>)}{renderAgendaInsertLine(day.day, day.activities.length)}{agendaQuickDay === day.day ? <div className="rounded-lg border border-sky-100 bg-sky-50/40 p-1.5"><select value={agendaBlockType} onChange={(event) => setAgendaBlockType(event.target.value)} className="mb-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-[9px] font-bold text-slate-700 outline-none"><option value="Proyecto">Proyecto</option><option value="Formación">Formación</option><option value="Tarea">Tarea</option><option value="Eventual">Eventual</option></select><input value={agendaBlockName} onChange={(event) => setAgendaBlockName(event.target.value)} placeholder="Nombre" className="mb-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-[9px] font-bold text-slate-700 outline-none" /><div className="flex gap-1"><input value={agendaBlockMinutes} onChange={(event) => setAgendaBlockMinutes(event.target.value)} type="number" min="1" placeholder="Min" className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[9px] font-bold text-slate-700 outline-none" /><button type="button" onClick={() => saveAgendaBlock(day.day)} className="rounded-md bg-[#001225] px-2 py-1 text-[8px] font-black text-white">OK</button><button type="button" onClick={resetAgendaBlockForm} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[8px] font-black text-slate-400">X</button></div></div> : <button type="button" onClick={() => setAgendaQuickDay(day.day)} className="w-full rounded-lg border border-dashed border-slate-200 py-1 text-[9px] font-black text-slate-300 transition hover:border-sky-200 hover:text-sky-600">+ Bloque</button>}</div></div>; })}</div>}{agendaView === "monthly" && <div className="grid grid-cols-4 gap-2">{agendaMonthSummary.map((week) => <div key={week.weekNumber} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"><div className="mb-2 flex items-center justify-between gap-2"><p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-600">{week.label}</p><StatusPill status={week.status} /></div><div className="mb-2 flex items-center justify-between text-[9px] font-black text-slate-500"><span>{formatHours(week.usedMinutes / 60)} / {formatHours(WEEKLY_CAPACITY_HOURS)}</span><span>{week.occupation.toFixed(0)}%</span></div><div className="mb-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${week.status.bar}`} style={{ width: `${Math.min(week.occupation, 140)}%` }} /></div><div className="space-y-1">{MONTH_MATRIX_ROWS.map((rowType) => { const sourceType = rowType === "Procesos" ? "Proceso" : rowType === "Proyectos" ? "Proyecto" : "Formación"; const count = activeAgendaBlocks.filter((activity) => activity.origen === sourceType).length; const minutes = activeAgendaBlocks.filter((activity) => activity.origen === sourceType).reduce((sum, activity) => sum + getDurationMinutes(activity), 0); return <div key={rowType} className="rounded-lg border border-slate-100 bg-slate-50/60 px-2 py-1"><div className="flex items-center justify-between gap-2"><SourcePill source={rowType} /><span className="text-[9px] font-black text-slate-500">{formatHours(minutes / 60)}</span></div><p className="mt-0.5 text-[8px] font-bold text-slate-400">{count} bloques planificados</p></div>; })}</div></div>)}</div>}</div>}
 
             {viewMode === "capacity" && filteredActivities.length === 0 && <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">No hay actividades con los filtros seleccionados.</div>}
