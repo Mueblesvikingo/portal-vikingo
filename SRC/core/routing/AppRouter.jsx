@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import AppLayout from "../../layout/AppLayout";
 
@@ -14,10 +14,18 @@ import MaturityModule from "../../modules/maturity/MaturityModule";
 import SigDiagnosisModule from "../../modules/sig/SigDiagnosisModule";
 import OrganizationCatalogModule from "../../modules/organization-catalog/OrganizationCatalogModule";
 
+function shouldStartInCapacity(currentUser) {
+  const role = currentUser?.rol_organizacional || "";
+
+  return role === "PM" || role === "Analista de Procesos";
+}
+
 export default function AppRouter({
   currentUser,
   onLogout,
 }) {
+  const restrictedStart = shouldStartInCapacity(currentUser);
+
   return (
     <BrowserRouter>
       <AppLayout
@@ -25,7 +33,16 @@ export default function AppRouter({
         onLogout={onLogout}
       >
         <Routes>
-          <Route path="/" element={<ExecutiveHome />} />
+          <Route
+            path="/"
+            element={
+              restrictedStart ? (
+                <Navigate to="/capacity" replace />
+              ) : (
+                <ExecutiveHome />
+              )
+            }
+          />
 
           <Route
             path="/performance"

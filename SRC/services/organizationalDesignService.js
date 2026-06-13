@@ -346,8 +346,10 @@ export async function updateSubprocess(id, updates) {
       updates.code,
 
     nombre:
-      updates.nombre ||
-      updates.name,
+      updates.nombre ??
+      updates.name ??
+      updates.subproceso ??
+      updates.titulo,
 
     objetivo:
       updates.objetivo ||

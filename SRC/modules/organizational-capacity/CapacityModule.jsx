@@ -1257,6 +1257,17 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
   const [editingLane, setEditingLane] = useState(null);
   const [showRolePicker, setShowRolePicker] = useState(false);
   const [rolePickerValue, setRolePickerValue] = useState("");
+  const visibleEmptyLaneStorageKey = `${storageKey}_visible_empty_lanes`;
+  const readVisibleEmptyLaneIds = () => {
+    if (typeof window === "undefined") return [];
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(visibleEmptyLaneStorageKey) || "[]");
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  };
+  const [visibleEmptyLaneIds, setVisibleEmptyLaneIds] = useState(() => readVisibleEmptyLaneIds());
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const dragStartSnapshotRef = useRef(null);
@@ -1272,9 +1283,12 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     if (["seleccionar rol", "responsable", "subprocesos"].includes(normalizedName)) return false;
     if (normalizedName.startsWith("nuevo rol")) return false;
     if (lane?.active === false || lane?.activo === false || lane?.activa === false) return false;
-    if (!Array.isArray(lane?.[blockKey]) || lane[blockKey].length === 0) return false;
+    if (Array.isArray(lane?.[blockKey]) && lane[blockKey].length > 0) return true;
 
-    return true;
+    const laneId = lane?.roleId || lane?.id;
+    if (laneId && visibleEmptyLaneIds.includes(String(laneId))) return true;
+
+    return false;
   };
   const initialLanesSignature = JSON.stringify(
     initialLanes.map((lane) => ({
@@ -1348,9 +1362,6 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
 
       next[blockId] = {
         ...next[blockId],
-        laneIndex: Number.isFinite(Number(position?.laneIndex))
-          ? Number(position.laneIndex)
-          : next[blockId].laneIndex,
         step: Number.isFinite(Number(position?.step))
           ? Number(position.step)
           : next[blockId].step,
@@ -1449,6 +1460,15 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     setPositions(nextPositions);
     savePositions(nextPositions);
   }, [initialLanesSignature, defaultPositions]);
+
+  useEffect(() => {
+    setVisibleEmptyLaneIds(readVisibleEmptyLaneIds());
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(visibleEmptyLaneStorageKey, JSON.stringify(visibleEmptyLaneIds));
+  }, [visibleEmptyLaneStorageKey, visibleEmptyLaneIds]);
 
   useEffect(() => {
     setPositions((current) => {
@@ -1647,6 +1667,10 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     const createdLane = onAddLane ? await onAddLane(laneName, visibleLanes.length) : null;
     if (onAddLane && !createdLane) return;
     rememberState();
+    const createdLaneId = createdLane?.roleId || createdLane?.id;
+    if (createdLaneId) {
+      setVisibleEmptyLaneIds((current) => [...new Set([...current, String(createdLaneId)])]);
+    }
     setLanes((current) => [...current, { lane: createdLane?.lane || laneName, roleId: createdLane?.roleId, active: true, [blockKey]: [] }]);
     setShowRolePicker(false);
   };
@@ -2328,7 +2352,7 @@ export default function CapacityModule() {
  const savedSubprocess = await updateSubprocess(subprocessId, {
   proceso: selectedProcessName,
   codigo: updatedFields.code,
-  nombre: updatedFields.name,
+  nombre: updatedFields.name ?? updatedFields.nombre ?? updatedFields.subproceso ?? updatedFields.titulo,
   objetivo: updatedFields.objective,
   responsable: updatedFields.owner,
   carril:
@@ -2535,10 +2559,36 @@ export default function CapacityModule() {
   const addSupabaseRole = async (laneName, order) => {
     if (!selectedProcessName) return null;
 
+    const normalizeLaneName = (value) => String(value || "").trim();
     const nextOrder = Number(order ?? selectedProcessLanes.length ?? 0) + 1;
-    const finalLaneName = laneName || `Nuevo carril ${nextOrder}`;
+    const finalLaneName = normalizeLaneName(laneName) || `Nuevo carril ${nextOrder}`;
 
     try {
+      const existingLane = (selectedProcess?.processRoles || []).find((role) => {
+        const roleName = normalizeLaneName(role.rol || role.roleName || role.nombre || role.name || role.responsable);
+        return roleName.toLowerCase() === finalLaneName.toLowerCase();
+      });
+
+      if (existingLane) {
+        if (existingLane.activo === false || existingLane.active === false) {
+          await updateRole(existingLane.id, {
+            rol: finalLaneName,
+            responsable: existingLane.responsable || finalLaneName,
+            orden: existingLane.orden ?? nextOrder,
+            activo: true,
+          });
+        }
+
+        await reloadSelectedProcessData(selectedProcessName);
+        setRoleCatalogError(null);
+        return {
+          lane: finalLaneName,
+          roleId: existingLane.id,
+          active: true,
+          blocks: [],
+        };
+      }
+
       const created = await createRole({
         proceso: selectedProcessName,
         rol: finalLaneName,
@@ -2554,6 +2604,7 @@ export default function CapacityModule() {
       };
 
       await reloadSelectedProcessData(selectedProcessName);
+      setRoleCatalogError(null);
       return createdLane;
     } catch (error) {
       console.error("Error creando carril en Supabase:", error);
@@ -2800,7 +2851,7 @@ export default function CapacityModule() {
 
     updateSubprocess(blockId, {
       ...updates,
-      nombre: updates.name || updates.nombre,
+      nombre: updates.name ?? updates.nombre ?? updates.subproceso ?? updates.titulo,
       responsable: updates.responsible || updates.responsable || updates.rol || updates.lane,
       carril: updates.lane || updates.rol || updates.responsible || updates.responsable,
       orden_flujo: updates.orden_flujo ?? updates.order,
