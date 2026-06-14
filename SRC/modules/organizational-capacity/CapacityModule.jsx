@@ -913,8 +913,18 @@ function ActivityModal({ activity, onSave, onClose, availableRoles = [] }) {
   );
 }
 
-function GeneralDataModal({ process, onSave, onClose, traceability = [] }) {
-  const restrictedRoles = "DirecciÃ³n, Coordinador SIG o Analista de procesos";
+function GeneralDataModal({ process, onSave, onClose, traceability = [], availableRoles = [] }) {
+  const restrictedRoles = "Dirección, Coordinador SIG o Analista de procesos";
+  const roleOptions = useMemo(() => {
+    const seen = new Set();
+    return (availableRoles || [])
+      .map((role) => String(firstValue(role, ["rol", "roleName", "nombre", "name", "responsable"], "") || "").trim())
+      .filter((roleName) => {
+        if (!roleName || seen.has(roleName)) return false;
+        seen.add(roleName);
+        return true;
+      });
+  }, [availableRoles]);
   const [draft, setDraft] = useState({
   code: process.code || process.codigo || process.codigo_subproceso || "",
   name: process.name || process.nombre || "",
@@ -943,10 +953,10 @@ const [traceLog, setTraceLog] = useState(
     : [
         {
           id: 1,
-          field: "CreaciÃ³n del registro",
+          field: "Creación del registro",
           user: "Sistema",
           date: "Hoy",
-          detail: "Registro inicial del subproceso en el mÃ³dulo de capacidad.",
+          detail: "Registro inicial del subproceso en el módulo de capacidad.",
         },
       ]
 );
@@ -992,7 +1002,7 @@ const [traceLog, setTraceLog] = useState(
 
         <div className="grid grid-cols-2 gap-2 overflow-y-auto p-4">
       <EditableCard
-  title="CÃ³digo"
+  title="Código"
   value={draft.code}
   onChange={(value) => updateDraft("code", value)}
 />
@@ -1013,8 +1023,20 @@ const [traceLog, setTraceLog] = useState(
               <option value="inactive">Inactivo</option>
             </select>
           </div>
-          <LockedCard title="AprobaciÃ³n" value={draft.approved ? "Aprobado" : "Pendiente de aprobaciÃ³n"} note={`Campo bloqueado. Solo ${restrictedRoles} pueden modificarlo.`} />
-          <EditableCard title="Responsable" value={draft.owner} onChange={(value) => updateDraft("owner", value)} />
+          <LockedCard title="Aprobación" value={draft.approved ? "Aprobado" : "Pendiente de aprobación"} note={`Campo bloqueado. Solo ${restrictedRoles} pueden modificarlo.`} />
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+            <div className="text-[10px] font-black uppercase text-gray-400">Responsable</div>
+            <select
+              value={roleOptions.includes(draft.owner) ? draft.owner : ""}
+              onChange={(event) => updateDraft("owner", event.target.value)}
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm font-black text-[#0f172a] outline-none focus:border-red-300"
+            >
+              <option value="">Seleccionar rol</option>
+              {roleOptions.map((roleName) => (
+                <option key={roleName} value={roleName}>{roleName}</option>
+              ))}
+            </select>
+          </div>
       
           <LockedCard title="Auditado" value={draft.audited ? "Auditado" : "No auditado"} note={`Campo bloqueado. Solo ${restrictedRoles} pueden modificarlo.`} />
 
@@ -1044,7 +1066,7 @@ const [traceLog, setTraceLog] = useState(
                   <div className="text-[9px] font-bold text-gray-400">{item.date}</div>
                 </div>
                 <div className="mt-1 text-[10px] font-semibold text-gray-500">
-                  {item.user} Â· {item.detail}
+                  {item.user} · {item.detail}
                 </div>
               </div>
             ))}
@@ -2453,7 +2475,14 @@ export default function CapacityModule() {
         frecuencia_valor: updatedActivity.frecuencia_valor ?? updatedActivity.frequencyValue ?? 1,
         dia_tipico: updatedActivity.typicalDay || "Lunes",
         orden_flujo: updatedActivity.order,
-        rol: updatedActivity.responsible,
+        rol:
+          updatedActivity.rol ||
+          updatedActivity.role ||
+          updatedActivity.lane ||
+          updatedActivity.puesto ||
+          updatedActivity.position ||
+          updatedActivity.responsible ||
+          null,
         fase: updatedActivity.fase,
         descripcion: updatedActivity.description || updatedActivity.impact,
         criticidad: updatedActivity.criticidad || updatedActivity.criticality,
@@ -2969,7 +2998,7 @@ export default function CapacityModule() {
             />
           </div>
         </section>
-        {showGeneralData && selectedSubprocess && <GeneralDataModal process={selectedSubprocess} onSave={saveSubprocessGeneralChanges} onClose={() => setShowGeneralData(false)} />}
+        {showGeneralData && selectedSubprocess && <GeneralDataModal process={selectedSubprocess} onSave={saveSubprocessGeneralChanges} onClose={() => setShowGeneralData(false)} availableRoles={selectedProcess?.processRoles || []} />}
         {showLaneForm && <LaneFormModal processName={selectedProcessName} nextOrder={nextLaneOrder} onSave={saveSupabaseRole} onClose={() => setShowLaneForm(false)} />}
         {showBlockForm && <BlockFormModal processName={selectedProcessName} roles={selectedProcess?.roles || []} nextOrder={nextBlockOrder} onSave={saveSupabaseActivity} onClose={() => setShowBlockForm(false)} />}
 {selectedActivity && (

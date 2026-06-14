@@ -519,9 +519,13 @@ export async function createActivity(payload) {
 
     rol:
       payload.rol ||
+      payload.role ||
       payload.lane ||
+      payload.puesto ||
+      payload.position ||
       payload.responsable ||
-      payload.responsible,
+      payload.responsible ||
+      null,
 
     subproceso_id:
       payload.subproceso_id ||
@@ -650,9 +654,13 @@ export async function updateActivity(id, updates) {
 
     rol:
       updates.rol ||
+      updates.role ||
       updates.lane ||
+      updates.puesto ||
+      updates.position ||
       updates.responsable ||
-      updates.responsible,
+      updates.responsible ||
+      null,
 
     subproceso_id:
       updates.subproceso_id,

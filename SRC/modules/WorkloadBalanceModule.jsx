@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createWorkloadAssignment, findExistingSavedMonth, findExistingSavedWeek, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanOrder, updateWorkloadAssignment } from "../services/workloadService";
 
 const MONTHLY_CAPACITY_HOURS = 192;
@@ -195,10 +195,16 @@ function activityMatchesRoleLink(activity, link) {
   const activityProcess = normalizeText(activity?.proceso);
 
   if (!activityRole || !linkRole || activityRole !== linkRole) return false;
+
+  const isLeaderProcessRole =
+    activityRole === "lider de proceso" ||
+    activityRole === "líder de proceso";
+
+  if (isLeaderProcessRole) {
+    return true;
+  }
+
   return !linkProcess || linkProcess === activityProcess;
-}
-function getScheduledActivityId(record) {
-  return cleanText(record?.proceso_actividad_id ?? record?.actividad_id ?? record?.activity_id ?? record?.source_activity_id ?? record?.actividadId ?? record?.id_actividad ?? "");
 }
 function collectScheduledActivityIds(plans) {
   const ids = new Set();
@@ -1101,7 +1107,7 @@ function canCreateAssignments() {
       return;
     }
 
-    const plannedHours = Number(schedulingActivity.cargaSemanal || getDurationMinutes(schedulingActivity) / 60);
+    const plannedHours = Number((getDurationMinutes(schedulingActivity) / 60).toFixed(2));
 
     for (const dayName of selectedScheduleDays) {
       await scheduleActivityInWeeklyPlan({
