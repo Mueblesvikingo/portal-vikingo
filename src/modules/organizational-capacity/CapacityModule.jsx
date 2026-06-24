@@ -11,7 +11,6 @@ import {
   updateSubprocessOrder,
   updateSubprocess,
   deleteActivity,
-  deactivateRole,
   deleteSubprocess,
   getOrganizationalDesignData,
   getProcessDesignData,
@@ -21,6 +20,8 @@ import {
   getSubprocessTraceability,
 createSubprocessTraceability,
 } from "../../services/organizationalDesignService";
+
+const organizationalDesignVideoUrl = "https://www.youtube.com/embed/h9zZ-Ct12q4?autoplay=1&rel=0&modestbranding=1";
 
 const ventasProcesses = [
   {
@@ -1280,6 +1281,7 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
   const [showRolePicker, setShowRolePicker] = useState(false);
   const [rolePickerValue, setRolePickerValue] = useState("");
   const visibleEmptyLaneStorageKey = `${storageKey}_visible_empty_lanes`;
+  const hiddenLaneStorageKey = `${storageKey}_hidden_lanes`;
   const readVisibleEmptyLaneIds = () => {
     if (typeof window === "undefined") return [];
     try {
@@ -1290,6 +1292,16 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     }
   };
   const [visibleEmptyLaneIds, setVisibleEmptyLaneIds] = useState(() => readVisibleEmptyLaneIds());
+  const readHiddenLaneKeys = () => {
+    if (typeof window === "undefined") return [];
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(hiddenLaneStorageKey) || "[]");
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  };
+  const [hiddenLaneKeys, setHiddenLaneKeys] = useState(() => readHiddenLaneKeys());
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const dragStartSnapshotRef = useRef(null);
@@ -1297,6 +1309,13 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
   const blockEditSnapshotRef = useRef(null);
   const getLaneName = (lane) =>
     String(firstValue(lane, ["lane", "rol", "roleName", "name", "responsable"], "") || "").trim();
+  const getLaneRemovalKey = (lane) => {
+    const laneId = lane?.roleId || lane?.id;
+    if (laneId) return `id:${laneId}`;
+
+    const laneName = getLaneName(lane).toLowerCase();
+    return laneName ? `name:${laneName}` : "";
+  };
   const isValidLane = (lane) => {
     const laneName = getLaneName(lane);
     const normalizedName = laneName.toLowerCase();
@@ -1305,10 +1324,14 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     if (["seleccionar rol", "responsable", "subprocesos"].includes(normalizedName)) return false;
     if (normalizedName.startsWith("nuevo rol")) return false;
     if (lane?.active === false || lane?.activo === false || lane?.activa === false) return false;
+    if (hiddenLaneKeys.includes(getLaneRemovalKey(lane))) return false;
     if (Array.isArray(lane?.[blockKey]) && lane[blockKey].length > 0) return true;
 
     const laneId = lane?.roleId || lane?.id;
     if (laneId && visibleEmptyLaneIds.includes(String(laneId))) return true;
+    if (lane?.isExplicitLane === true) return true;
+    if (lane?.orden !== null && lane?.orden !== undefined && String(lane.orden).trim() !== "") return true;
+    if (lane?.order !== null && lane?.order !== undefined && String(lane.order).trim() !== "") return true;
 
     return false;
   };
@@ -1485,12 +1508,18 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
 
   useEffect(() => {
     setVisibleEmptyLaneIds(readVisibleEmptyLaneIds());
+    setHiddenLaneKeys(readHiddenLaneKeys());
   }, [storageKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(visibleEmptyLaneStorageKey, JSON.stringify(visibleEmptyLaneIds));
   }, [visibleEmptyLaneStorageKey, visibleEmptyLaneIds]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(hiddenLaneStorageKey, JSON.stringify(hiddenLaneKeys));
+  }, [hiddenLaneStorageKey, hiddenLaneKeys]);
 
   useEffect(() => {
     setPositions((current) => {
@@ -1693,7 +1722,24 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     if (createdLaneId) {
       setVisibleEmptyLaneIds((current) => [...new Set([...current, String(createdLaneId)])]);
     }
-    setLanes((current) => [...current, { lane: createdLane?.lane || laneName, roleId: createdLane?.roleId, active: true, [blockKey]: [] }]);
+    const nextLane = {
+      lane: createdLane?.lane || laneName,
+      roleId: createdLane?.roleId || createdLane?.id,
+      id: createdLane?.id,
+      orden: createdLane?.orden,
+      order: createdLane?.order,
+      active: true,
+      isExplicitLane: true,
+      [blockKey]: [],
+    };
+    const laneRemovalKey = getLaneRemovalKey(nextLane);
+    if (laneRemovalKey) {
+      setHiddenLaneKeys((current) => current.filter((key) => key !== laneRemovalKey));
+    }
+    setLanes((current) => [
+      ...current.filter((lane) => getLaneRemovalKey(lane) !== laneRemovalKey),
+      nextLane,
+    ]);
     setShowRolePicker(false);
   };
 
@@ -1706,18 +1752,32 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
   };
 
   const removeLane = (laneIndex) => {
-    if (visibleLanes.length <= 1) return;
+    const laneToRemove = visibleLanes[laneIndex];
+    if (!laneToRemove) return;
     rememberState();
-    onRemoveLane?.(visibleLanes[laneIndex]);
-    const removedIds = new Set(visibleLanes[laneIndex]?.[blockKey].map((block) => block.id));
-    setLanes((current) => current.filter((item) => getLaneKey(item, 0) !== getLaneKey(visibleLanes[laneIndex], 0)));
+    onRemoveLane?.(laneToRemove);
+    const laneRemovalKey = getLaneRemovalKey(laneToRemove);
+    const laneId = laneToRemove?.roleId || laneToRemove?.id;
+    if (laneRemovalKey) {
+      setHiddenLaneKeys((current) => [...new Set([...current, laneRemovalKey])]);
+    }
+    if (laneId) {
+      setVisibleEmptyLaneIds((current) => current.filter((id) => id !== String(laneId)));
+    }
+    const removedIds = new Set((laneToRemove?.[blockKey] || []).map((block) => block.id));
+    const nextVisibleCount = Math.max(visibleLanes.length - 1, 0);
+    setLanes((current) => current.filter((item) => getLaneKey(item, 0) !== getLaneKey(laneToRemove, 0)));
     setPositions((current) => {
       const next = {};
       Object.entries(current).forEach(([id, position]) => {
         if (removedIds.has(Number(id))) return;
         next[id] = {
           ...position,
-          laneIndex: position.laneIndex > laneIndex ? position.laneIndex - 1 : Math.min(position.laneIndex ?? 0, visibleLanes.length - 2),
+          laneIndex: nextVisibleCount <= 0
+            ? 0
+            : position.laneIndex > laneIndex
+              ? position.laneIndex - 1
+              : Math.min(position.laneIndex ?? 0, nextVisibleCount - 1),
         };
       });
       savePositions(next);
@@ -2041,6 +2101,7 @@ export default function CapacityModule() {
   const [showBlockForm, setShowBlockForm] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [roleCatalogError, setRoleCatalogError] = useState(null);
+  const [showVideo, setShowVideo] = useState(false);
   const [processFilter, setProcessFilter] = useState("Ventas");
   const loadedProcessRef = useRef("");
   const previousProcessFilterRef = useRef(processFilter);
@@ -2237,6 +2298,15 @@ export default function CapacityModule() {
     const normalizeLaneName = (value) => String(value || "").trim();
     const getRoleName = (role) => normalizeLaneName(role.roleName || role.rol || role.nombre || role.name || "");
     const roleNames = new Set(roles.map(getRoleName).filter(Boolean));
+    const hiddenRoleNames = new Set(
+      roles
+        .filter((role) => {
+          const order = firstValue(role, ["orden", "order"], null);
+          return order === null || order === undefined || String(order).trim() === "";
+        })
+        .map(getRoleName)
+        .filter(Boolean)
+    );
     const roleByResponsible = new Map(
       roles
         .map((role) => [normalizeLaneName(role.responsable || role.responsible), getRoleName(role)])
@@ -2250,20 +2320,32 @@ export default function CapacityModule() {
       return roleByResponsible.get(responsible) || explicitLane;
     };
 
+    const seenRoleLanes = new Set();
     const roleLanes = roles.map((role, index) => {
       const lane = getRoleName(role);
+      const order = firstValue(role, ["orden", "order"], null);
+      const hasOrder = order !== null && order !== undefined && String(order).trim() !== "";
       return {
         id: role.id,
         lane,
         roleId: role.id,
+        orden: order,
+        order,
+        isExplicitLane: hasOrder,
         active: role.activo !== false && role.active !== false,
         blocks: subprocesses.filter((subprocess) => getSubprocessLaneName(subprocess) === lane),
       };
+    }).filter((lane) => {
+      const key = lane.lane.toLowerCase();
+      if (!key || seenRoleLanes.has(key) || !lane.isExplicitLane) return false;
+      seenRoleLanes.add(key);
+      return true;
     });
 
     const roleLaneNames = new Set(roleLanes.map((lane) => lane.lane));
     const lanesFromSubprocesses = Array.from(new Set(subprocesses.map((subprocess) => getSubprocessLaneName(subprocess)).filter(Boolean)))
       .filter((lane) => !roleLaneNames.has(lane))
+      .filter((lane) => !hiddenRoleNames.has(lane))
       .map((lane) => ({
         lane,
         active: true,
@@ -2272,30 +2354,103 @@ export default function CapacityModule() {
 
     const lanes = [...roleLanes, ...lanesFromSubprocesses].filter((lane) => lane.lane);
 
-    return lanes.length > 0
-      ? lanes
-      : [{ lane: selectedProcess.owner || "Subprocesos", blocks: [] }];
+    return lanes;
   }, [selectedProcess]);
+
+  const isLocalhost = typeof window !== "undefined" && window.location.hostname === "localhost";
+  const macroStorageKey = `capacity_process_${selectedProcess?.id || processFilter}_flow_v1`;
+  const macroHiddenLaneStorageKey = `${macroStorageKey}_hidden_lanes`;
+
+  const laneDiagnostics = useMemo(() => {
+    if (!isLocalhost || !selectedProcess) return [];
+
+    const processRoles = selectedProcess.processRoles || [];
+    const selectedLaneKeys = new Set(
+      selectedProcessLanes.map((lane) => {
+        const laneId = lane?.roleId || lane?.id;
+        const laneName = String(lane?.lane || lane?.rol || lane?.name || lane?.responsable || "").trim().toLowerCase();
+        return laneId ? `id:${laneId}` : `name:${laneName}`;
+      })
+    );
+    const selectedLaneNames = new Set(
+      selectedProcessLanes
+        .map((lane) => String(lane?.lane || lane?.rol || lane?.name || lane?.responsable || "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+    const hiddenLaneKeys = (() => {
+      if (typeof window === "undefined") return [];
+      try {
+        const parsed = JSON.parse(window.localStorage.getItem(macroHiddenLaneStorageKey) || "[]");
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+      } catch {
+        return [];
+      }
+    })();
+    const seenRoleNames = new Set();
+
+    return processRoles.map((role) => {
+      const roleName = String(role.roleName || role.rol || role.nombre || role.name || "").trim();
+      const normalizedRoleName = roleName.toLowerCase();
+      const laneKey = role.id ? `id:${role.id}` : `name:${normalizedRoleName}`;
+      const order = firstValue(role, ["orden", "order"], null);
+      const hasOrder = order !== null && order !== undefined && String(order).trim() !== "";
+      const active = role.activo !== false && role.active !== false && role.activa !== false;
+      const reservedName = ["seleccionar rol", "responsable", "subprocesos"].includes(normalizedRoleName);
+      const isNewRole = normalizedRoleName.startsWith("nuevo rol");
+      const duplicate = normalizedRoleName ? seenRoleNames.has(normalizedRoleName) : false;
+      if (normalizedRoleName) seenRoleNames.add(normalizedRoleName);
+
+      const inSelectedProcessLanes = selectedLaneKeys.has(laneKey) || selectedLaneNames.has(normalizedRoleName);
+      const hiddenLocal = hiddenLaneKeys.includes(laneKey) || hiddenLaneKeys.includes(`name:${normalizedRoleName}`);
+      const inVisibleLanes = Boolean(
+        roleName &&
+        !reservedName &&
+        !isNewRole &&
+        active &&
+        !hiddenLocal &&
+        inSelectedProcessLanes
+      );
+
+      let reason = "Visible";
+      if (!roleName) reason = "Rol sin nombre";
+      else if (reservedName) reason = "Nombre reservado";
+      else if (isNewRole) reason = "Nombre temporal";
+      else if (!active) reason = "Rol inactivo";
+      else if (!hasOrder) reason = "Sin orden";
+      else if (duplicate && !inSelectedProcessLanes) reason = "Duplicado por nombre";
+      else if (!inSelectedProcessLanes) reason = "No entra a selectedProcessLanes";
+      else if (hiddenLocal) reason = "Oculto en localStorage";
+
+      return {
+        id: role.id,
+        rol: roleName,
+        responsable: role.responsable || role.responsible || "",
+        orden: order,
+        activo: active,
+        inSelectedProcessLanes,
+        inVisibleLanes,
+        hiddenLocal,
+        reason,
+      };
+    });
+  }, [isLocalhost, selectedProcess, selectedProcessLanes, macroHiddenLaneStorageKey]);
+
+  const clearHiddenLanesForCurrentProcess = () => {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(macroHiddenLaneStorageKey);
+    window.location.reload();
+  };
 
   const selectedSubprocessActivities = useMemo(() => {
     if (!selectedProcess || !selectedSubprocess) return [];
 
     const subprocessId = selectedSubprocess.subproceso_id || selectedSubprocess.id;
-    const subprocessCode = selectedSubprocess.codigo_subproceso || selectedSubprocess.codigo || selectedSubprocess.code;
-    const subprocessName = selectedSubprocess.name || selectedSubprocess.nombre;
 
     return (selectedProcess.activities || [])
       .filter((activity) => {
         const activitySubprocessId = activity.subproceso_id;
-        const activityCode = activity.codigo_subproceso;
-        const activitySubprocess = activity.subproceso;
 
-        return (
-          (subprocessId && activitySubprocessId && String(activitySubprocessId) === String(subprocessId)) ||
-          (subprocessCode && activityCode && String(activityCode) === String(subprocessCode)) ||
-          (subprocessCode && activitySubprocess && String(activitySubprocess) === String(subprocessCode)) ||
-          (subprocessName && activitySubprocess && String(activitySubprocess) === String(subprocessName))
-        );
+        return subprocessId && activitySubprocessId && String(activitySubprocessId) === String(subprocessId);
       })
       .sort(
         (a, b) =>
@@ -2326,16 +2481,26 @@ export default function CapacityModule() {
           "Responsable"
       );
 
+    const seenRoleLanes = new Set();
     const roleLanes = roles.map((role) => {
       const lane = normalizeLaneName(role.roleName || role.rol || role.nombre || role.name || role.responsable || "");
+      const order = firstValue(role, ["orden", "order"], null);
       return {
         id: role.id,
         lane,
         roleId: role.id,
+        orden: order,
+        order,
+        isExplicitLane: order !== null && order !== undefined && String(order).trim() !== "",
         active: role.activo !== false && role.active !== false,
         blocks: activities.filter((activity) => getActivityLaneName(activity) === lane),
       };
-    }).filter((lane) => lane.lane);
+    }).filter((lane) => {
+      const key = lane.lane.toLowerCase();
+      if (!key || seenRoleLanes.has(key)) return false;
+      seenRoleLanes.add(key);
+      return true;
+    });
 
     const roleLaneNames = new Set(roleLanes.map((lane) => lane.lane));
     const lanesFromActivities = Array.from(
@@ -2354,9 +2519,7 @@ export default function CapacityModule() {
 
     const lanes = [...roleLanes, ...lanesFromActivities];
 
-    return lanes.length > 0
-      ? lanes
-      : [{ lane: "Responsable", active: true, blocks: [] }];
+    return lanes;
   }, [selectedProcess, selectedSubprocess, selectedSubprocessActivities]);
 
   const saveProcessChanges = (updatedFields) => {
@@ -2599,11 +2762,16 @@ export default function CapacityModule() {
       });
 
       if (existingLane) {
-        if (existingLane.activo === false || existingLane.active === false) {
-          await updateRole(existingLane.id, {
+        const existingOrder = firstValue(existingLane, ["orden", "order"], null);
+        const needsActivation = existingLane.activo === false || existingLane.active === false;
+        const needsOrder = existingOrder === null || existingOrder === undefined || String(existingOrder).trim() === "";
+        let savedLane = existingLane;
+
+        if (needsActivation || needsOrder) {
+          savedLane = await updateRole(existingLane.id, {
             rol: finalLaneName,
             responsable: existingLane.responsable || finalLaneName,
-            orden: existingLane.orden ?? nextOrder,
+            orden: needsOrder ? nextOrder : existingOrder,
             activo: true,
           });
         }
@@ -2612,7 +2780,8 @@ export default function CapacityModule() {
         setRoleCatalogError(null);
         return {
           lane: finalLaneName,
-          roleId: existingLane.id,
+          roleId: savedLane?.id || existingLane.id,
+          orden: savedLane?.orden ?? (needsOrder ? nextOrder : existingOrder),
           active: true,
           blocks: [],
         };
@@ -2628,6 +2797,7 @@ export default function CapacityModule() {
       const createdLane = {
         lane: created.rol || finalLaneName,
         roleId: created.id,
+        orden: created.orden ?? nextOrder,
         active: created.activo !== false,
         blocks: [],
       };
@@ -2831,9 +3001,9 @@ export default function CapacityModule() {
 
   const removeSupabaseRole = (lane) => {
     if (!lane?.roleId) return;
-    deactivateRole(lane.roleId)
+    updateRole(lane.roleId, { orden: null, activo: true })
       .then(() => reloadSelectedProcessData(selectedProcessName))
-      .catch((error) => console.error("Error desactivando carril en Supabase:", error));
+      .catch((error) => console.error("Error quitando carril del macroproceso:", error));
   };
 
   const updateSupabaseRoleInline = (lane, updates) => {
@@ -2955,7 +3125,7 @@ export default function CapacityModule() {
           <div className="bg-slate-50/40 p-4">
             <VisualGridMap
               title="Actividades del subproceso"
-              initialLanes={selectedSubprocessLanes.length ? selectedSubprocessLanes : [{ lane: selectedSubprocess.responsible || selectedProcess?.owner || "Responsable", blocks: [] }]}
+              initialLanes={selectedSubprocessLanes}
               blockKey="blocks"
               storageKey={`capacity_subprocess_${selectedSubprocess.id || selectedSubprocess.name}_flow_v1`}
               onSelectBlock={setSelectedActivity}
@@ -2990,7 +3160,7 @@ export default function CapacityModule() {
               onUpdateBlock={updateSupabaseActivityInline}
               onRemoveBlock={removeSupabaseActivity}
               onMoveBlock={moveSupabaseActivity}
-              onRemoveLane={removeSupabaseRole}
+              onRemoveLane={undefined}
               onUpdateLane={updateSupabaseRoleInline}
               onSaveLaneOrder={saveSupabaseLaneOrder}
               availableRoles={selectedProcess?.roles || []}
@@ -3028,7 +3198,14 @@ export default function CapacityModule() {
         <select value={processFilter} onChange={(event) => setProcessFilter(event.target.value)} className="h-8 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs font-semibold text-[#0f172a] outline-none focus:border-red-300">
           {processOptions.map((option) => (<option key={option}>{option}</option>))}
         </select>
-        <button onClick={() => setShowGeneralData(true)} className="h-8 rounded-xl border border-gray-200 bg-white px-4 text-[11px] font-black text-gray-500 hover:border-red-200 hover:text-red-500">Editar</button>
+        <button onClick={() => setShowVideo(true)} className="h-8 rounded-xl bg-red-600 px-3 text-[11px] font-black text-white shadow-sm hover:bg-red-700">▶ Ver video</button>
+        <button
+          type="button"
+          onClick={() => window.open("/manuales/Manual_Organizational_Design.pdf", "_blank")}
+          className="h-8 rounded-xl border border-gray-200 bg-white px-4 text-[11px] font-black text-gray-500 hover:border-red-200 hover:text-red-500"
+        >
+          📄 Manual
+        </button>
       </section>
 
       <section className="grid grid-cols-4 gap-1.5">
@@ -3045,11 +3222,7 @@ export default function CapacityModule() {
         </div>
         <VisualGridMap
           title="Editor visual del macroproceso"
-          initialLanes={
-            selectedProcessLanes.length
-              ? selectedProcessLanes
-              : [{ lane: selectedProcess?.owner || "Responsable", blocks: [] }]
-          }
+          initialLanes={selectedProcessLanes}
           blockKey="blocks"
           storageKey={`capacity_process_${selectedProcess?.id || processFilter}_flow_v1`}
           onSelectBlock={setSelectedSubprocess}
@@ -3082,6 +3255,59 @@ export default function CapacityModule() {
           availableRoles={selectedProcess?.roles || []}
           roleCatalogError={roleCatalogError}
         />
+        {isLocalhost && (
+          <div className="border-t border-gray-200 bg-slate-50/60 px-4 py-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.24em] text-gray-400">Diagnóstico de carriles</div>
+                <div className="mt-1 text-[11px] font-semibold text-gray-500">Visible solo en localhost. Revisa en qué filtro se queda cada rol.</div>
+              </div>
+              <button
+                type="button"
+                onClick={clearHiddenLanesForCurrentProcess}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black text-gray-500 hover:border-red-200 hover:text-red-600"
+              >
+                Limpiar carriles ocultos de este proceso
+              </button>
+            </div>
+            <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
+              <table className="min-w-full text-left text-[11px]">
+                <thead className="bg-gray-50 text-[9px] uppercase tracking-[0.16em] text-gray-400">
+                  <tr>
+                    <th className="px-3 py-2">Rol</th>
+                    <th className="px-3 py-2">Responsable</th>
+                    <th className="px-3 py-2">Orden</th>
+                    <th className="px-3 py-2">Activo</th>
+                    <th className="px-3 py-2">En selectedProcessLanes</th>
+                    <th className="px-3 py-2">En visibleLanes</th>
+                    <th className="px-3 py-2">Oculto local</th>
+                    <th className="px-3 py-2">Motivo de exclusión</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {laneDiagnostics.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-3 py-3 text-center font-semibold text-gray-400">Sin roles cargados para diagnosticar.</td>
+                    </tr>
+                  ) : (
+                    laneDiagnostics.map((item) => (
+                      <tr key={item.id || item.rol} className="border-t border-gray-100">
+                        <td className="px-3 py-2 font-black text-[#0f172a]">{item.rol || "-"}</td>
+                        <td className="px-3 py-2 text-gray-500">{item.responsable || "-"}</td>
+                        <td className="px-3 py-2 font-bold text-gray-600">{item.orden ?? "-"}</td>
+                        <td className="px-3 py-2">{item.activo ? "Sí" : "No"}</td>
+                        <td className="px-3 py-2">{item.inSelectedProcessLanes ? "Sí" : "No"}</td>
+                        <td className="px-3 py-2">{item.inVisibleLanes ? "Sí" : "No"}</td>
+                        <td className="px-3 py-2">{item.hiddenLocal ? "Sí" : "No"}</td>
+                        <td className="px-3 py-2 font-semibold text-gray-600">{item.reason}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </section>
       {showGeneralData && selectedProcess && <GeneralDataModal process={selectedProcess} onSave={saveProcessChanges} onClose={() => setShowGeneralData(false)} />}
       {showLaneForm && <LaneFormModal processName={selectedProcessName} nextOrder={nextLaneOrder} onSave={saveSupabaseRole} onClose={() => setShowLaneForm(false)} />}
@@ -3101,6 +3327,36 @@ export default function CapacityModule() {
     onCancel={() => setDeleteConfirm(null)}
     onConfirm={confirmDeleteSubprocess}
   />
+)}
+{showVideo && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+    <div className="w-full max-w-5xl overflow-hidden rounded-3xl border border-white/10 bg-white text-gray-800 shadow-2xl">
+      <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+        <div>
+          <div className="text-xs font-black uppercase tracking-wide text-gray-400">Video de apoyo</div>
+          <div className="font-black">Video Diseño Organizacional</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowVideo(false)}
+          className="h-10 w-10 rounded-xl bg-red-600 text-xl font-black text-white transition hover:bg-red-700"
+          aria-label="Cerrar video"
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="aspect-video bg-black">
+        <iframe
+          src={organizationalDesignVideoUrl}
+          title="Video Diseño Organizacional"
+          className="h-full w-full"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    </div>
+  </div>
 )}
 </div>
 

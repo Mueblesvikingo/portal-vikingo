@@ -5,15 +5,12 @@ const pageTitles = {
   "/performance": "Desempeño Organizacional",
   "/strategic-followup": "Seguimiento Estratégico",
   "/capacity": "Diseño organizacional",
+  "/strategic-deployment": "Despliegue Estratégico",
   "/organization-catalog": "Catálogo Organizacional",
   "/workload-balance": "Balance de Carga",
   "/decision-center": "Centro de Decisiones",
-  "/process-view": "Vista Proceso",
-  "/responsible-view": "Vista Responsable",
   "/maturity": "Madurez Organizacional",
   "/sig": "Diagnóstico SIG",
-  "/memory": "Memoria Organizacional",
-  "/ai-vikingo": "IA Vikingo",
 };
 
 export default function Topbar({

@@ -4,21 +4,19 @@ const menuItems = [
   { label: "Inicio Ejecutivo", route: "/" },
   { label: "Desempeño Organizacional", route: "/performance" },
   { label: "Seguimiento Estratégico", route: "/strategic-followup" },
+  { label: "Despliegue Estratégico", route: "/strategic-deployment" },
   { label: "Diseño organizacional", route: "/capacity" },
   { label: "Balance de Carga", route: "/workload-balance" },
   { label: "Centro de Decisiones", route: "/decision-center" },
-  { label: "Vista Proceso", route: "/process-view" },
-  { label: "Vista Responsable", route: "/responsible-view" },
   { label: "Madurez Organizacional", route: "/maturity" },
   { label: "Diagnóstico SIG", route: "/sig" },
   { label: "Catálogo Organizacional", route: "/organization-catalog" },
-  { label: "Memoria Organizacional", route: "/memory" },
-  { label: "IA Vikingo", route: "/ai-vikingo" },
 ];
 
 const restrictedRoles = ["PM", "Analista de Procesos"];
 
 const allowedForRestricted = [
+  "Seguimiento Estratégico",
   "Diseño organizacional",
   "Catálogo Organizacional",
   "Balance de Carga",

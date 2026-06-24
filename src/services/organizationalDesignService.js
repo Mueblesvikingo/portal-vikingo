@@ -256,10 +256,11 @@ export async function updateRole(id, updates) {
     throw new Error("updateRole requiere un id real de Supabase.");
   }
 
+  const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
   const payload = cleanUndefined({
     rol: updates.rol || updates.lane || updates.name,
     responsable: updates.responsable || updates.responsible,
-    orden: updates.orden ?? updates.order,
+    orden: hasOwn(updates, "orden") ? updates.orden : updates.order,
     activo:
       updates.activo ??
       (updates.active === undefined ? undefined : updates.active !== false),
@@ -292,13 +293,76 @@ export async function deactivateRole(id) {
   return data;
 }
 
+function normalizeCodePart(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim();
+}
+
+function buildSubprocessCodePrefix(processName) {
+  const cleanName = normalizeCodePart(processName);
+  const firstWord = cleanName.split(/\s+/).filter(Boolean)[0] || "SUB";
+  return `${firstWord.slice(0, 3).toUpperCase()}-SP-`;
+}
+
+async function getUniqueSubprocessCode(processName, requestedCode = "", excludeId = null) {
+  const cleanProcess = String(processName || "").trim();
+  const cleanRequestedCode = String(requestedCode || "").trim();
+
+  if (!cleanProcess && cleanRequestedCode) return cleanRequestedCode;
+
+  const { data, error } = await supabase
+    .from("subprocesos")
+    .select("id,codigo")
+    .eq("proceso", cleanProcess);
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const duplicatedCode = cleanRequestedCode
+    ? rows.some((row) => String(row.id) !== String(excludeId || "") && String(row.codigo || "").trim() === cleanRequestedCode)
+    : false;
+
+  if (duplicatedCode) {
+    throw new Error(`Ya existe un subproceso con el codigo "${cleanRequestedCode}" dentro de ${cleanProcess}.`);
+  }
+
+  if (cleanRequestedCode) return cleanRequestedCode;
+
+  const existingCodes = rows.map((row) => String(row.codigo || "").trim()).filter(Boolean);
+  const prefixCounts = existingCodes.reduce((counts, code) => {
+    const match = code.match(/^(.*?)(\d+)$/);
+    if (!match) return counts;
+    counts[match[1]] = (counts[match[1]] || 0) + 1;
+    return counts;
+  }, {});
+  const prefix =
+    Object.entries(prefixCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
+    buildSubprocessCodePrefix(cleanProcess);
+
+  const maxNumber = existingCodes.reduce((max, code) => {
+    const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = code.match(new RegExp(`^${escapedPrefix}(\\d+)$`));
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+
+  return `${prefix}${String(maxNumber + 1).padStart(2, "0")}`;
+}
+
 export async function createSubprocess(payload) {
+  const code = await getUniqueSubprocessCode(
+    payload.proceso,
+    payload.codigo || payload.codigo_subproceso
+  );
+
   const { data, error } = await supabase
     .from("subprocesos")
     .insert([
       {
         proceso: payload.proceso,
-        codigo: payload.codigo || payload.codigo_subproceso || null,
+        codigo: code,
         nombre: payload.nombre || payload.name || "Nuevo subproceso",
         objetivo:
           payload.objetivo ||
@@ -339,11 +403,17 @@ export async function updateSubprocess(id, updates) {
     throw new Error("updateSubprocess requiere un id real de Supabase.");
   }
 
+  const nextCode =
+    updates.codigo ||
+    updates.codigo_subproceso ||
+    updates.code;
+  const processName = updates.proceso;
+  const safeCode = nextCode
+    ? await getUniqueSubprocessCode(processName, nextCode, id)
+    : undefined;
+
   const payload = cleanUndefined({
-    codigo:
-      updates.codigo ||
-      updates.codigo_subproceso ||
-      updates.code,
+    codigo: safeCode,
 
     nombre:
       updates.nombre ??

@@ -4,11 +4,10 @@ import AppLayout from "../../layout/AppLayout";
 
 import ExecutiveHome from "../../modules/executive/ExecutiveHome";
 import PerformanceModule from "../../modules/performance/PerformanceModule";
+import StrategicDeploymentModule from "../../modules/StrategicDeploymentModule";
 import CapacityModule from "../../modules/organizational-capacity/CapacityModule";
 import DecisionCenterModule from "../../modules/decision-center/DecisionCenterModule";
 import StrategicFollowupModule from "../../modules/strategic-followup/StrategicFollowupModule";
-import ProcessViewModule from "../../modules/process-view/ProcessViewModule";
-import ResponsibleViewModule from "../../modules/responsible-view/ResponsibleViewModule";
 import WorkloadBalanceModule from "../../modules/WorkloadBalanceModule";
 import MaturityModule from "../../modules/maturity/MaturityModule";
 import SigDiagnosisModule from "../../modules/sig/SigDiagnosisModule";
@@ -49,6 +48,11 @@ export default function AppRouter({
             element={<PerformanceModule />}
           />
 
+<Route
+  path="/strategic-deployment"
+  element={<StrategicDeploymentModule />}
+/>
+
           <Route
             path="/capacity"
             element={<CapacityModule />}
@@ -64,15 +68,7 @@ export default function AppRouter({
             element={<StrategicFollowupModule />}
           />
 
-          <Route
-            path="/process-view"
-            element={<ProcessViewModule />}
-          />
 
-          <Route
-            path="/responsible-view"
-            element={<ResponsibleViewModule />}
-          />
 
           <Route
             path="/organization-catalog"

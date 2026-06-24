@@ -206,6 +206,9 @@ function activityMatchesRoleLink(activity, link) {
 
   return !linkProcess || linkProcess === activityProcess;
 }
+function getScheduledActivityId(record) {
+  return cleanText(record?.proceso_actividad_id ?? record?.actividad_id ?? record?.activity_id ?? record?.source_activity_id ?? record?.actividadId ?? record?.id_actividad ?? "");
+}
 function collectScheduledActivityIds(plans) {
   const ids = new Set();
   const collect = (record) => {
@@ -235,6 +238,10 @@ function translateStatus(value) {
   const normalized = normalizeText(value);
   const labels = { active: "Activa", activa: "Activa", inactive: "Inactiva", inactiva: "Inactiva", pending: "Pendiente", pendiente: "Pendiente" };
   return labels[normalized] || cleanText(value) || "Activa";
+}
+function isInactiveWorkloadActivity(activity) {
+  const status = normalizeText(activity?.estado || activity?.sourceRecord?.estado || activity?.estadoAgenda);
+  return activity?.activa === false || activity?.sourceRecord?.activa === false || status === "inactive" || status === "inactiva";
 }
 function translateCriticality(value) {
   const normalized = normalizeText(value);
@@ -460,7 +467,16 @@ function getViewGuideText(viewMode) {
   return guides[viewMode] || "Consulta y ajusta la carga de trabajo según la capacidad disponible.";
 }
 function PendingActivitiesView({ hasSelectedPerson, activities, totalHours, onOpenSchedule }) {
-  return <div className="p-3"><div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3"><div><p className="text-xs font-black uppercase tracking-widest text-slate-800">Pendientes de programación</p><p className="text-[10px] font-bold text-slate-400">Actividades de los roles asignados a la persona que aún no están en Semana o Mes típico.</p></div><div className="flex gap-2"><span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black text-slate-500">{activities.length} pendientes</span><span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black text-slate-500">{formatHours(totalHours)}</span></div></div>{!hasSelectedPerson ? <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">Selecciona una persona para ver sus actividades pendientes.</div> : activities.length === 0 ? <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">No hay actividades pendientes por programar.</div> : <table className="min-w-full table-fixed divide-y divide-slate-100 text-[10px]"><thead className="bg-slate-50 text-left font-black uppercase tracking-[0.14em] text-slate-400"><tr><th className="w-[32%] px-3 py-2">Actividad</th><th className="w-[18%] px-3 py-2">Proceso</th><th className="w-[18%] px-3 py-2">Rol</th><th className="w-[10%] px-3 py-2">Frecuencia</th><th className="w-[8%] px-3 py-2">Duración</th><th className="w-[8%] px-3 py-2">Estado</th><th className="w-[6%] px-3 py-2 text-right">Acción</th></tr></thead><tbody className="divide-y divide-slate-100">{activities.map((activity) => <tr key={activity.id} className="align-top hover:bg-slate-50/70"><td className="px-3 py-2 font-black leading-tight text-slate-800 whitespace-normal">{activity.actividad}</td><td className="px-3 py-2 font-bold leading-tight text-slate-600 whitespace-normal">{activity.proceso}</td><td className="px-3 py-2 font-bold leading-tight text-slate-600 whitespace-normal">{activity.rol}</td><td className="px-3 py-2 font-bold text-slate-500">{translateFrequency(activity.frecuencia)}</td><td className="px-3 py-2 font-black text-slate-600">{activity.duracionMinutos} min</td><td className="px-3 py-2"><span className="rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[9px] font-black text-emerald-700">{translateStatus(activity.sourceRecord?.estado || activity.estadoAgenda)}</span></td><td className="px-3 py-2 text-right"><button type="button" onClick={() => onOpenSchedule(activity)} className="rounded-lg bg-[#001225] px-2 py-1 text-[9px] font-black text-white shadow-sm hover:bg-slate-800">Programar</button></td></tr>)}</tbody></table>}</div></div>;
+  const sortedActivities = safeArray(activities)
+    .map((activity, index) => ({ activity, index }))
+    .sort((a, b) => Number(isInactiveWorkloadActivity(a.activity)) - Number(isInactiveWorkloadActivity(b.activity)) || a.index - b.index)
+    .map(({ activity }) => activity);
+  const visibleTotalHours = sortedActivities.reduce((sum, activity) => sum + getDurationMinutes(activity) / 60, 0);
+  const activeTotalHours = sortedActivities
+    .filter((activity) => !isInactiveWorkloadActivity(activity))
+    .reduce((sum, activity) => sum + getDurationMinutes(activity) / 60, 0);
+
+  return <div className="p-3"><div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3"><div><p className="text-xs font-black uppercase tracking-widest text-slate-800">Pendientes de programación</p><p className="text-[10px] font-bold text-slate-400">Actividades de los roles asignados a la persona que aún no están en Semana o Mes típico.</p></div><div className="flex gap-2"><span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black text-slate-500">{sortedActivities.length} pendientes | {formatHours(visibleTotalHours || totalHours)} total | {formatHours(activeTotalHours)} activas</span></div></div>{!hasSelectedPerson ? <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">Selecciona una persona para ver sus actividades pendientes.</div> : sortedActivities.length === 0 ? <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">No hay actividades pendientes por programar.</div> : <table className="min-w-full table-fixed divide-y divide-slate-100 text-[10px]"><thead className="bg-slate-50 text-left font-black uppercase tracking-[0.14em] text-slate-400"><tr><th className="w-[32%] px-3 py-2">Actividad</th><th className="w-[18%] px-3 py-2">Proceso</th><th className="w-[18%] px-3 py-2">Rol</th><th className="w-[10%] px-3 py-2">Frecuencia</th><th className="w-[8%] px-3 py-2">Duración</th><th className="w-[8%] px-3 py-2">Estado</th><th className="w-[6%] px-3 py-2 text-right">Acción</th></tr></thead><tbody className="divide-y divide-slate-100">{sortedActivities.map((activity) => { const inactive = isInactiveWorkloadActivity(activity); const statusValue = inactive ? "inactive" : activity.sourceRecord?.estado || activity.estado || activity.estadoAgenda; return <tr key={activity.id} className={`align-top hover:bg-slate-50/70 ${inactive ? "bg-gray-50 text-gray-400" : ""}`}><td className={`px-3 py-2 font-black leading-tight whitespace-normal ${inactive ? "text-gray-400" : "text-slate-800"}`}>{activity.actividad}</td><td className={`px-3 py-2 font-bold leading-tight whitespace-normal ${inactive ? "text-gray-400" : "text-slate-600"}`}>{activity.proceso}</td><td className={`px-3 py-2 font-bold leading-tight whitespace-normal ${inactive ? "text-gray-400" : "text-slate-600"}`}>{activity.rol}</td><td className={`px-3 py-2 font-bold ${inactive ? "text-gray-400" : "text-slate-500"}`}>{translateFrequency(activity.frecuencia)}</td><td className={`px-3 py-2 font-black ${inactive ? "text-gray-400" : "text-slate-600"}`}>{activity.duracionMinutos} min</td><td className="px-3 py-2"><span className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${inactive ? "border-gray-200 bg-gray-100 text-gray-500" : "border-emerald-100 bg-emerald-50 text-emerald-700"}`}>{translateStatus(statusValue)}</span></td><td className="px-3 py-2 text-right"><button type="button" onClick={() => onOpenSchedule(activity)} className="rounded-lg bg-[#001225] px-2 py-1 text-[9px] font-black text-white shadow-sm hover:bg-slate-800">Programar</button></td></tr>; })}</tbody></table>}</div></div>;
 }
 function SchedulePendingModal({ activity, selectedDays, selectedWeeks, onToggleDay, onToggleWeek, onSave, onClose }) {
   if (!activity) return null;
@@ -557,7 +573,7 @@ export default function WorkloadBalanceModule({
     })));
 
     if (data.length > 0) {
-      const mappedActivities = data.filter((item) => isActiveRecord(item, "activa")).map((item) => ({
+      const mappedActivities = data.map((item) => ({
         id: item.id,
         origen: item.tipo || item.origen || "Proceso",
         proceso: item.proceso || "Proceso Operativo",
@@ -574,6 +590,8 @@ export default function WorkloadBalanceModule({
         frecuenciaValor: item.frecuencia_valor,
         semanaTipica: "Semana 1",
         fecha: item.fecha_inicio || "Sin fecha",
+        activa: item.activa !== false,
+        estado: item.estado || (item.activa === false ? "inactive" : "active"),
         estadoAgenda: item.estado || "Pendiente",
         sourceRecord: item,
       }));
