@@ -1,6 +1,9 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createWorkloadAssignment, findExistingSavedMonth, findExistingSavedWeek, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanOrder, updateWorkloadAssignment } from "../services/workloadService";
 
+const WORKLOAD_VIDEO_URL = "https://www.youtube.com/embed/COLOCA_AQUI_ID_DEL_VIDEO";
+const WORKLOAD_MANUAL_URL = "/manuales/Balance_de_Carga.pdf";
+
 const MONTHLY_CAPACITY_HOURS = 192;
 const WEEKLY_CAPACITY_HOURS = 48;
 const DAILY_CAPACITY_MINUTES = 570;
@@ -519,6 +522,7 @@ export default function WorkloadBalanceModule({
   },
 }){
   const [activities, setActivities] = useState(demoActivities);
+  const [showWorkloadVideo, setShowWorkloadVideo] = useState(false);
   const [peopleCatalog, setPeopleCatalog] = useState([]);
   const [personRoleLinks, setPersonRoleLinks] = useState([]);
   const [weeklyPlansCatalog, setWeeklyPlansCatalog] = useState([]);
@@ -1815,7 +1819,14 @@ function canReviewPlan() {
             <FilterSelect label="Filtrar por rol" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}><option value="all">Todos los roles</option>{roleOptions.map((role) => <option key={role} value={role}>{role}</option>)}</FilterSelect>
           </div>
           <div className="mt-2 overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between bg-[#001225] px-4 py-1.5 text-white"><h2 className="text-[13px] font-black uppercase tracking-tight">Gestión de Carga y Capacidad</h2><div className="flex gap-1 rounded-xl bg-white/10 p-0.5"><ViewTab active={viewMode === "capacity"} onClick={() => setViewMode("capacity")}>Capacidad</ViewTab><ViewTab active={viewMode === "assignments"} onClick={() => setViewMode("assignments")}>Asignaciones</ViewTab><ViewTab active={viewMode === "pending"} onClick={() => setViewMode("pending")}>Pendientes</ViewTab><ViewTab active={viewMode === "agenda"} onClick={() => setViewMode("agenda")}>Planificación</ViewTab><ViewTab active={viewMode === "week"} onClick={() => setViewMode("week")}>Semana</ViewTab><ViewTab active={viewMode === "month"} onClick={() => setViewMode("month")}>Mes</ViewTab></div></div>
+            <div className="flex items-center justify-between gap-3 bg-[#001225] px-4 py-1.5 text-white">
+              <div className="flex items-center gap-2">
+                <h2 className="text-[13px] font-black uppercase tracking-tight">Gestión de Carga y Capacidad</h2>
+                <button type="button" onClick={() => setShowWorkloadVideo(true)} className="rounded-lg bg-red-600 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-red-700">▶ Ver video</button>
+                <button type="button" onClick={() => window.open(WORKLOAD_MANUAL_URL, "_blank")} className="rounded-lg border border-white/20 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-wide text-[#001225] shadow-sm transition hover:bg-slate-100">📄 Manual</button>
+              </div>
+              <div className="flex gap-1 rounded-xl bg-white/10 p-0.5"><ViewTab active={viewMode === "capacity"} onClick={() => setViewMode("capacity")}>Capacidad</ViewTab><ViewTab active={viewMode === "assignments"} onClick={() => setViewMode("assignments")}>Asignaciones</ViewTab><ViewTab active={viewMode === "pending"} onClick={() => setViewMode("pending")}>Pendientes</ViewTab><ViewTab active={viewMode === "agenda"} onClick={() => setViewMode("agenda")}>Planificación</ViewTab><ViewTab active={viewMode === "week"} onClick={() => setViewMode("week")}>Semana</ViewTab><ViewTab active={viewMode === "month"} onClick={() => setViewMode("month")}>Mes</ViewTab></div>
+            </div>
             <div className="border-b border-slate-200 bg-slate-50 px-4 py-1"><p className="text-[10px] font-semibold text-slate-500">{getViewGuideText(viewMode)}</p></div>
 
 {viewMode === "capacity" && <div className="p-3"><SourceDistributionPie items={sourceSummary} weeklyPlanKpi={allWeeksPlanKpi} /></div>}
@@ -1854,6 +1865,23 @@ function canReviewPlan() {
           setMovePlanTarget("");
         }}
       />
+
+      {showWorkloadVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-4xl overflow-hidden rounded-[24px] bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-[#001225] px-5 py-3 text-white">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">Video tutorial</p>
+                <h3 className="text-lg font-black">Balance de Carga</h3>
+              </div>
+              <button type="button" onClick={() => setShowWorkloadVideo(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-lg font-black text-white hover:bg-red-700">×</button>
+            </div>
+            <div className="aspect-video w-full bg-black">
+              <iframe className="h-full w-full" src={WORKLOAD_VIDEO_URL} title="Video Balance de Carga" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
