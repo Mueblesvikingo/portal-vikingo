@@ -1,7 +1,8 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createWorkloadAssignment, findExistingSavedMonth, findExistingSavedWeek, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanOrder, updateWorkloadAssignment } from "../services/workloadService";
 
-const WORKLOAD_VIDEO_URL = "https://youtu.be/bun2Ku2R1JI";
+const WORKLOAD_VIDEO_URL =
+  "https://www.youtube.com/embed/bun2Ku2R1JI?autoplay=1&rel=0&modestbranding=1";
 const WORKLOAD_MANUAL_URL = "/manuales/Balance_de_Carga.pdf";
 
 const MONTHLY_CAPACITY_HOURS = 192;
