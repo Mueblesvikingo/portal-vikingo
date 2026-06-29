@@ -14,6 +14,30 @@ function cleanUndefined(payload) {
   return payload;
 }
 
+function getUniqueRoles(rows = []) {
+  const map = new Map();
+
+  rows.forEach((row) => {
+    const rol = String(row?.rol || "").trim();
+    if (!rol) return;
+
+    const key = rol.toLowerCase();
+
+    if (!map.has(key)) {
+      map.set(key, {
+        ...row,
+        rol,
+      });
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) =>
+    String(a.rol || "").localeCompare(String(b.rol || ""), "es", {
+      sensitivity: "base",
+    })
+  );
+}
+
 function workloadPayload(activity) {
   const durationMinutes = Number(
     activity.duracion_minutos ||
@@ -24,34 +48,18 @@ function workloadPayload(activity) {
   return {
     titulo: activity.actividad || activity.name || "Nueva actividad",
     descripcion:
-      activity.descripcion ||
-      activity.description ||
-      activity.impact ||
-      null,
+      activity.descripcion || activity.description || activity.impact || null,
     tipo: "Proceso",
     proceso:
-      activity.proceso ||
-      activity.processName ||
-      "Diseño Organizacional",
-    responsable:
-      activity.responsable ||
-      activity.responsible ||
-      null,
+      activity.proceso || activity.processName || "Diseño Organizacional",
+    responsable: activity.responsable || activity.responsible || null,
     puesto:
-      activity.puesto ||
-      activity.position ||
-      activity.responsible ||
-      null,
+      activity.puesto || activity.position || activity.responsible || null,
     duracion_minutos: durationMinutes,
     carga_horas: Number((durationMinutes / 60).toFixed(2)),
-    frecuencia:
-      activity.frecuencia ||
-      activity.frequencyType ||
-      "Mensual",
+    frecuencia: activity.frecuencia || activity.frequencyType || "Mensual",
     observaciones: `Día típico: ${
-      activity.dia_tipico ||
-      activity.typicalDay ||
-      "Lunes"
+      activity.dia_tipico || activity.typicalDay || "Lunes"
     }`,
     estado: "Programada",
     origen_proceso: ORIGIN,
@@ -60,17 +68,16 @@ function workloadPayload(activity) {
 }
 
 export async function getOrganizationalDesignData() {
-  const [
-    processesResult,
-    rolesResult,
-    subprocessesResult,
-    activitiesResult,
-  ] = await Promise.all([
-    supabase.from("procesos").select("*").order("id", { ascending: true }),
-    supabase.from("proceso_roles").select("*").order("orden", { ascending: true }),
-    supabase.from("subprocesos").select("*"),
-    supabase.from("proceso_actividades").select("*"),
-  ]);
+  const [processesResult, rolesResult, subprocessesResult, activitiesResult] =
+    await Promise.all([
+      supabase.from("procesos").select("*").order("id", { ascending: true }),
+      supabase
+        .from("proceso_roles")
+        .select("*")
+        .order("orden", { ascending: true }),
+      supabase.from("subprocesos").select("*"),
+      supabase.from("proceso_actividades").select("*"),
+    ]);
 
   if (processesResult.error) {
     console.error("SUPABASE procesos ERROR:", processesResult.error);
@@ -100,6 +107,8 @@ export async function getProcessDesignData(processName) {
   if (!processName) {
     return {
       roles: [],
+      roleCatalog: [],
+      roleCatalogError: null,
       subprocesses: [],
       activities: [],
     };
@@ -107,35 +116,24 @@ export async function getProcessDesignData(processName) {
 
   const cleanName = String(processName).trim();
 
-  const [
-    rolesResult,
-    roleCatalogResult,
-    subprocessesResult,
-    activitiesResult,
-  ] = await Promise.all([
-    supabase
-      .from("proceso_roles")
-      .select("*")
-      .eq("proceso", cleanName)
-      .order("orden", { ascending: true }),
+  const [rolesResult, roleCatalogResult, subprocessesResult, activitiesResult] =
+    await Promise.all([
+      supabase
+        .from("proceso_roles")
+        .select("*")
+        .eq("proceso", cleanName)
+        .order("orden", { ascending: true }),
 
-    supabase
-      .from("roles_catalogo")
-      .select("*")
-      .eq("macroproceso", cleanName)
-      .eq("activo", true)
-      .order("orden", { ascending: true }),
+      supabase
+        .from("roles_catalogo")
+        .select("*")
+        .eq("activo", true)
+        .order("rol", { ascending: true }),
 
-    supabase
-      .from("subprocesos")
-      .select("*")
-      .eq("proceso", cleanName),
+      supabase.from("subprocesos").select("*").eq("proceso", cleanName),
 
-    supabase
-      .from("proceso_actividades")
-      .select("*")
-      .eq("proceso", cleanName),
-  ]);
+      supabase.from("proceso_actividades").select("*").eq("proceso", cleanName),
+    ]);
 
   if (rolesResult.error) {
     console.error("SUPABASE proceso_roles ERROR:", rolesResult.error);
@@ -153,22 +151,11 @@ export async function getProcessDesignData(processName) {
     console.error("SUPABASE proceso_actividades ERROR:", activitiesResult.error);
   }
 
-  /*
-    Importante:
-    No filtramos inactivos aquí.
-
-    Regla actual:
-    - activo = true  -> visible normal
-    - activo = false -> visible en gris
-    - eliminar con X -> delete real en Supabase, previa confirmación
-  */
-
   const roles = rolesResult.error
     ? []
     : (rolesResult.data || []).sort(
         (a, b) =>
-          Number(a.orden ?? a.id ?? 0) -
-          Number(b.orden ?? b.id ?? 0)
+          Number(a.orden ?? a.id ?? 0) - Number(b.orden ?? b.id ?? 0)
       );
 
   const subprocesses = subprocessesResult.error
@@ -189,29 +176,28 @@ export async function getProcessDesignData(processName) {
 
   return {
     roles,
-    roleCatalog: roleCatalogResult.error ? [] : roleCatalogResult.data || [],
+    roleCatalog: roleCatalogResult.error
+      ? []
+      : getUniqueRoles(roleCatalogResult.data || []),
     roleCatalogError: roleCatalogResult.error?.message || null,
     subprocesses,
     activities,
   };
 }
 
-export async function getRoleCatalogByMacroprocess(macroprocessName) {
-  if (!macroprocessName) return [];
-
+export async function getRoleCatalogByMacroprocess() {
   const { data, error } = await supabase
     .from("roles_catalogo")
     .select("*")
-    .eq("macroproceso", String(macroprocessName).trim())
     .eq("activo", true)
-    .order("orden", { ascending: true });
+    .order("rol", { ascending: true });
 
   if (error) {
     console.error("SUPABASE roles_catalogo ERROR:", error);
     return [];
   }
 
-  return data || [];
+  return getUniqueRoles(data || []);
 }
 
 export async function createProcess(payload) {
@@ -256,7 +242,9 @@ export async function updateRole(id, updates) {
     throw new Error("updateRole requiere un id real de Supabase.");
   }
 
-  const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+  const hasOwn = (object, key) =>
+    Object.prototype.hasOwnProperty.call(object, key);
+
   const payload = cleanUndefined({
     rol: updates.rol || updates.lane || updates.name,
     responsable: updates.responsable || updates.responsible,
@@ -307,7 +295,11 @@ function buildSubprocessCodePrefix(processName) {
   return `${firstWord.slice(0, 3).toUpperCase()}-SP-`;
 }
 
-async function getUniqueSubprocessCode(processName, requestedCode = "", excludeId = null) {
+async function getUniqueSubprocessCode(
+  processName,
+  requestedCode = "",
+  excludeId = null
+) {
   const cleanProcess = String(processName || "").trim();
   const cleanRequestedCode = String(requestedCode || "").trim();
 
@@ -322,22 +314,32 @@ async function getUniqueSubprocessCode(processName, requestedCode = "", excludeI
 
   const rows = data || [];
   const duplicatedCode = cleanRequestedCode
-    ? rows.some((row) => String(row.id) !== String(excludeId || "") && String(row.codigo || "").trim() === cleanRequestedCode)
+    ? rows.some(
+        (row) =>
+          String(row.id) !== String(excludeId || "") &&
+          String(row.codigo || "").trim() === cleanRequestedCode
+      )
     : false;
 
   if (duplicatedCode) {
-    throw new Error(`Ya existe un subproceso con el codigo "${cleanRequestedCode}" dentro de ${cleanProcess}.`);
+    throw new Error(
+      `Ya existe un subproceso con el codigo "${cleanRequestedCode}" dentro de ${cleanProcess}.`
+    );
   }
 
   if (cleanRequestedCode) return cleanRequestedCode;
 
-  const existingCodes = rows.map((row) => String(row.codigo || "").trim()).filter(Boolean);
+  const existingCodes = rows
+    .map((row) => String(row.codigo || "").trim())
+    .filter(Boolean);
+
   const prefixCounts = existingCodes.reduce((counts, code) => {
     const match = code.match(/^(.*?)(\d+)$/);
     if (!match) return counts;
     counts[match[1]] = (counts[match[1]] || 0) + 1;
     return counts;
   }, {});
+
   const prefix =
     Object.entries(prefixCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
     buildSubprocessCodePrefix(cleanProcess);
@@ -381,11 +383,7 @@ export async function createSubprocess(payload) {
           payload.responsable ||
           payload.responsible ||
           "Subprocesos",
-        orden_flujo:
-          payload.orden_flujo ??
-          payload.orden ??
-          payload.order ??
-          0,
+        orden_flujo: payload.orden_flujo ?? payload.orden ?? payload.order ?? 0,
         activo:
           payload.activo ??
           (payload.active === undefined ? true : payload.active !== false),
@@ -403,10 +401,7 @@ export async function updateSubprocess(id, updates) {
     throw new Error("updateSubprocess requiere un id real de Supabase.");
   }
 
-  const nextCode =
-    updates.codigo ||
-    updates.codigo_subproceso ||
-    updates.code;
+  const nextCode = updates.codigo || updates.codigo_subproceso || updates.code;
   const processName = updates.proceso;
   const safeCode = nextCode
     ? await getUniqueSubprocessCode(processName, nextCode, id)
@@ -414,52 +409,21 @@ export async function updateSubprocess(id, updates) {
 
   const payload = cleanUndefined({
     codigo: safeCode,
-
-    nombre:
-      updates.nombre ??
-      updates.name ??
-      updates.subproceso ??
-      updates.titulo,
-
-    objetivo:
-      updates.objetivo ||
-      updates.descripcion ||
-      updates.description,
-
+    nombre: updates.nombre ?? updates.name ?? updates.subproceso ?? updates.titulo,
+    objetivo: updates.objetivo || updates.descripcion || updates.description,
     responsable:
-      updates.responsable ||
-      updates.responsible ||
-      updates.rol ||
-      updates.lane,
-
+      updates.responsable || updates.responsible || updates.rol || updates.lane,
     carril:
       updates.carril ||
       updates.lane ||
       updates.rol ||
       updates.responsable ||
       updates.responsible,
-
-    orden_flujo:
-      updates.orden_flujo ??
-      updates.orden ??
-      updates.order,
-
-    criticidad:
-      updates.criticidad ||
-      updates.criticality,
-
-    estado:
-      updates.estado ||
-      updates.status,
-
-    impacto:
-      updates.impacto ??
-      updates.impact,
-
-    beneficio:
-      updates.beneficio ??
-      updates.benefit,
-
+    orden_flujo: updates.orden_flujo ?? updates.orden ?? updates.order,
+    criticidad: updates.criticidad || updates.criticality,
+    estado: updates.estado || updates.status,
+    impacto: updates.impacto ?? updates.impact,
+    beneficio: updates.beneficio ?? updates.benefit,
     activo:
       updates.activo ??
       (updates.active === undefined ? undefined : updates.active !== false),
@@ -522,10 +486,7 @@ export async function deleteSubprocess(id) {
     throw new Error("deleteSubprocess requiere un id real de Supabase.");
   }
 
-  const { error } = await supabase
-    .from("subprocesos")
-    .delete()
-    .eq("id", id);
+  const { error } = await supabase.from("subprocesos").delete().eq("id", id);
 
   if (error) throw error;
   return true;
@@ -539,54 +500,21 @@ export async function createActivity(payload) {
 
   const activityPayload = cleanUndefined({
     proceso_id: payload.proceso_id,
-
-    actividad:
-      payload.actividad ||
-      payload.name ||
-      "Nueva actividad",
-
+    actividad: payload.actividad || payload.name || "Nueva actividad",
     descripcion:
       payload.descripcion ||
       payload.description ||
       payload.impacto ||
       payload.impact ||
       null,
-
-    proceso:
-      payload.proceso ||
-      payload.processName,
-
-    responsable:
-      payload.responsable ||
-      payload.responsible,
-
-    puesto:
-      payload.puesto ||
-      payload.position ||
-      payload.responsible,
-
+    proceso: payload.proceso || payload.processName,
+    responsable: payload.responsable || payload.responsible,
+    puesto: payload.puesto || payload.position || payload.responsible,
     duracion_minutos: durationMinutes,
-
-    frecuencia:
-      payload.frecuencia ||
-      payload.frequencyType ||
-      "Mensual",
-
-    frecuencia_valor:
-      payload.frecuencia_valor ??
-      payload.frequencyValue ??
-      1,
-
-    dia_tipico:
-      payload.dia_tipico ||
-      payload.typicalDay ||
-      "Lunes",
-
-    orden_flujo:
-      payload.orden_flujo ??
-      payload.order ??
-      0,
-
+    frecuencia: payload.frecuencia || payload.frequencyType || "Mensual",
+    frecuencia_valor: payload.frecuencia_valor ?? payload.frequencyValue ?? 1,
+    dia_tipico: payload.dia_tipico || payload.typicalDay || "Lunes",
+    orden_flujo: payload.orden_flujo ?? payload.order ?? 0,
     rol:
       payload.rol ||
       payload.role ||
@@ -596,53 +524,19 @@ export async function createActivity(payload) {
       payload.responsable ||
       payload.responsible ||
       null,
-
-    subproceso_id:
-      payload.subproceso_id ||
-      null,
-
-    codigo_subproceso:
-      payload.codigo_subproceso ||
-      null,
-
-    fase:
-      payload.fase,
-
-    criticidad:
-      payload.criticidad ||
-      payload.criticality ||
-      "medium",
-
-    estado:
-      payload.estado ||
-      payload.status ||
-      "active",
-
-    automatizada:
-      payload.automatizada ??
-      payload.automated ??
-      false,
-
-    impacto:
-      payload.impacto ??
-      payload.impact ??
-      null,
-
-    beneficio:
-      payload.beneficio ??
-      payload.benefit ??
-      null,
-
-    automatizacion_ia:
-      payload.automatizacion_ia ??
-      payload.aiAutomation ??
-      null,
-
+    subproceso_id: payload.subproceso_id || null,
+    codigo_subproceso: payload.codigo_subproceso || null,
+    fase: payload.fase,
+    criticidad: payload.criticidad || payload.criticality || "medium",
+    estado: payload.estado || payload.status || "active",
+    automatizada: payload.automatizada ?? payload.automated ?? false,
+    impacto: payload.impacto ?? payload.impact ?? null,
+    beneficio: payload.beneficio ?? payload.benefit ?? null,
+    automatizacion_ia: payload.automatizacion_ia ?? payload.aiAutomation ?? null,
     carga_horas:
       payload.carga_horas ??
       payload.monthlyHours ??
       Number((durationMinutes / 60).toFixed(2)),
-
     activa:
       payload.activa ??
       (payload.active === undefined ? true : payload.active !== false),
@@ -681,47 +575,20 @@ export async function updateActivity(id, updates) {
       : minutesFromHours(updates.timeHours));
 
   const activityPayload = cleanUndefined({
-    actividad:
-      updates.actividad ||
-      updates.name,
-
+    actividad: updates.actividad || updates.name,
     descripcion:
       updates.descripcion ||
       updates.description ||
       updates.impacto ||
       updates.impact,
-
-    proceso:
-      updates.proceso ||
-      updates.processName,
-
-    responsable:
-      updates.responsable ||
-      updates.responsible,
-
-    puesto:
-      updates.puesto ||
-      updates.position ||
-      updates.responsible,
-
+    proceso: updates.proceso || updates.processName,
+    responsable: updates.responsable || updates.responsible,
+    puesto: updates.puesto || updates.position || updates.responsible,
     duracion_minutos: durationMinutes,
-
-    frecuencia:
-      updates.frecuencia ||
-      updates.frequencyType,
-
-    frecuencia_valor:
-      updates.frecuencia_valor ??
-      updates.frequencyValue,
-
-    dia_tipico:
-      updates.dia_tipico ||
-      updates.typicalDay,
-
-    orden_flujo:
-      updates.orden_flujo ??
-      updates.order,
-
+    frecuencia: updates.frecuencia || updates.frequencyType,
+    frecuencia_valor: updates.frecuencia_valor ?? updates.frequencyValue,
+    dia_tipico: updates.dia_tipico || updates.typicalDay,
+    orden_flujo: updates.orden_flujo ?? updates.order,
     rol:
       updates.rol ||
       updates.role ||
@@ -731,47 +598,19 @@ export async function updateActivity(id, updates) {
       updates.responsable ||
       updates.responsible ||
       null,
-
-    subproceso_id:
-      updates.subproceso_id,
-
-    codigo_subproceso:
-      updates.codigo_subproceso,
-
-    fase:
-      updates.fase,
-
-    criticidad:
-      updates.criticidad ||
-      updates.criticality,
-
-    estado:
-      updates.estado ||
-      updates.status,
-
-    automatizada:
-      updates.automatizada ??
-      updates.automated,
-
-    impacto:
-      updates.impacto ??
-      updates.impact,
-
-    beneficio:
-      updates.beneficio ??
-      updates.benefit,
-
-    automatizacion_ia:
-      updates.automatizacion_ia ??
-      updates.aiAutomation,
-
+    subproceso_id: updates.subproceso_id,
+    codigo_subproceso: updates.codigo_subproceso,
+    fase: updates.fase,
+    criticidad: updates.criticidad || updates.criticality,
+    estado: updates.estado || updates.status,
+    automatizada: updates.automatizada ?? updates.automated,
+    impacto: updates.impacto ?? updates.impact,
+    beneficio: updates.beneficio ?? updates.benefit,
+    automatizacion_ia: updates.automatizacion_ia ?? updates.aiAutomation,
     carga_horas:
       updates.carga_horas ??
       updates.monthlyHours ??
-      (durationMinutes
-        ? Number((durationMinutes / 60).toFixed(2))
-        : undefined),
-
+      (durationMinutes ? Number((durationMinutes / 60).toFixed(2)) : undefined),
     activa:
       updates.activa ??
       (updates.active === undefined ? undefined : updates.active !== false),
@@ -889,6 +728,7 @@ export async function syncActivityToWorkload(activity) {
   if (error) throw error;
   return data;
 }
+
 export async function getSubprocessTraceability(subprocessId) {
   if (!subprocessId) return [];
 

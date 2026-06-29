@@ -2522,6 +2522,29 @@ export default function CapacityModule() {
     return lanes;
   }, [selectedProcess, selectedSubprocess, selectedSubprocessActivities]);
 
+ const selectedAvailableRoles = useMemo(() => {
+  const baseRoles = [
+    ...(selectedProcess?.roles || []),
+    ...(selectedProcess?.processRoles || []),
+    { rol: "Planificador de Producción", roleName: "Planificador de Producción", activo: true },
+  ];
+
+  const seen = new Set();
+
+  return baseRoles.filter((role) => {
+    const roleName = String(
+      firstValue(role, ["rol", "roleName", "nombre", "name", "responsable"], "") || ""
+    ).trim();
+
+    const key = roleName.toLowerCase();
+
+    if (!key || seen.has(key)) return false;
+
+    seen.add(key);
+    return true;
+  });
+}, [selectedProcess]);
+
   const saveProcessChanges = (updatedFields) => {
     setProcessData((current) => current.map((process) => (process.id === selectedProcess?.id ? { ...process, ...updatedFields } : process)));
     setSelectedProcess((current) => (current ? { ...current, ...updatedFields } : current));
@@ -3163,20 +3186,20 @@ export default function CapacityModule() {
               onRemoveLane={undefined}
               onUpdateLane={updateSupabaseRoleInline}
               onSaveLaneOrder={saveSupabaseLaneOrder}
-              availableRoles={selectedProcess?.roles || []}
+              availableRoles={selectedAvailableRoles}
               roleCatalogError={roleCatalogError}
             />
           </div>
         </section>
         {showGeneralData && selectedSubprocess && <GeneralDataModal process={selectedSubprocess} onSave={saveSubprocessGeneralChanges} onClose={() => setShowGeneralData(false)} availableRoles={selectedProcess?.processRoles || []} />}
         {showLaneForm && <LaneFormModal processName={selectedProcessName} nextOrder={nextLaneOrder} onSave={saveSupabaseRole} onClose={() => setShowLaneForm(false)} />}
-        {showBlockForm && <BlockFormModal processName={selectedProcessName} roles={selectedProcess?.roles || []} nextOrder={nextBlockOrder} onSave={saveSupabaseActivity} onClose={() => setShowBlockForm(false)} />}
+        {showBlockForm && <BlockFormModal processName={selectedProcessName} roles={selectedAvailableRoles} nextOrder={nextBlockOrder} onSave={saveSupabaseActivity} onClose={() => setShowBlockForm(false)} />}
 {selectedActivity && (
   <ActivityModal
     activity={selectedActivity}
     onSave={saveActivityChanges}
     onClose={() => setSelectedActivity(null)}
-    availableRoles={selectedProcess?.roles || []}
+    availableRoles={selectedAvailableRoles}
   />
 )}
 
@@ -3252,7 +3275,7 @@ export default function CapacityModule() {
           onRemoveLane={removeSupabaseRole}
           onUpdateLane={updateSupabaseRoleInline}
           onSaveLaneOrder={saveSupabaseLaneOrder}
-          availableRoles={selectedProcess?.roles || []}
+          availableRoles={selectedAvailableRoles}
           roleCatalogError={roleCatalogError}
         />
         {isLocalhost && (
@@ -3311,13 +3334,13 @@ export default function CapacityModule() {
       </section>
       {showGeneralData && selectedProcess && <GeneralDataModal process={selectedProcess} onSave={saveProcessChanges} onClose={() => setShowGeneralData(false)} />}
       {showLaneForm && <LaneFormModal processName={selectedProcessName} nextOrder={nextLaneOrder} onSave={saveSupabaseRole} onClose={() => setShowLaneForm(false)} />}
-      {showBlockForm && <BlockFormModal processName={selectedProcessName} roles={selectedProcess?.roles || []} nextOrder={nextBlockOrder} onSave={saveSupabaseActivity} onClose={() => setShowBlockForm(false)} />}
+      {showBlockForm && <BlockFormModal processName={selectedProcessName} roles={selectedAvailableRoles} nextOrder={nextBlockOrder} onSave={saveSupabaseActivity} onClose={() => setShowBlockForm(false)} />}
 {selectedActivity && (
   <ActivityModal
     activity={selectedActivity}
     onSave={saveActivityChanges}
     onClose={() => setSelectedActivity(null)}
-    availableRoles={selectedProcess?.roles || []}
+    availableRoles={selectedAvailableRoles}
   />
 )}
 

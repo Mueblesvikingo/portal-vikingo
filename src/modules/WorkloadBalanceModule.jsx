@@ -247,6 +247,55 @@ function isInactiveWorkloadActivity(activity) {
   const status = normalizeText(activity?.estado || activity?.sourceRecord?.estado || activity?.estadoAgenda);
   return activity?.activa === false || activity?.sourceRecord?.activa === false || status === "inactive" || status === "inactiva";
 }
+function normalizePendingKeyPart(value) {
+  return normalizeText(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+function getPendingActivityKey(activity) {
+  return [
+    activity?.proceso,
+    activity?.rol,
+    activity?.actividad,
+    getDurationMinutes(activity),
+    activity?.frecuencia,
+  ].map(normalizePendingKeyPart).join("|");
+}
+function getPendingActivityUniqueKey(activity) {
+  const explicitActivityId = cleanText(
+    activity?.actividad_id ||
+      activity?.proceso_actividad_id ||
+      activity?.source_activity_id ||
+      activity?.sourceRecord?.actividad_id ||
+      activity?.sourceRecord?.proceso_actividad_id
+  );
+
+  return explicitActivityId ? `actividad:${explicitActivityId}` : getPendingActivityKey(activity);
+}
+function getActivityFlowOrder(activity) {
+  const order = Number(activity?.sourceRecord?.orden_flujo ?? activity?.orden);
+  return Number.isFinite(order) ? order : 100000;
+}
+function selectPendingActivityRepresentative(current, candidate) {
+  if (!current) return candidate;
+  const currentInactive = isInactiveWorkloadActivity(current);
+  const candidateInactive = isInactiveWorkloadActivity(candidate);
+  if (currentInactive && !candidateInactive) return candidate;
+  if (!currentInactive && candidateInactive) return current;
+  return getActivityFlowOrder(candidate) < getActivityFlowOrder(current) ? candidate : current;
+}
+function dedupePendingActivities(activities) {
+  const groupedActivities = new Map();
+
+  safeArray(activities).forEach((activity) => {
+    const key = getPendingActivityUniqueKey(activity);
+    if (!key) return;
+    groupedActivities.set(key, selectPendingActivityRepresentative(groupedActivities.get(key), activity));
+  });
+
+  return [...groupedActivities.values()].filter(Boolean);
+}
 function translateCriticality(value) {
   const normalized = normalizeText(value);
   const labels = { critical: "Crítica", high: "Alta", medium: "Media", low: "Baja" };
@@ -784,9 +833,24 @@ export default function WorkloadBalanceModule({
   const pendingActivities = useMemo(() => {
     if (effectivePersonFilter === "all") return [];
 
-    return visibleActivities
+    const groupedActivities = new Map();
+
+    visibleActivities
       .filter((activity) => selectedPersonRoleLinks.some((link) => activityMatchesRoleLink(activity, link)))
-      .filter((activity) => !scheduledActivityIds.has(String(activity.id)))
+      .forEach((activity) => {
+        const key = getPendingActivityUniqueKey(activity);
+        if (!key) return;
+
+        const current = groupedActivities.get(key) || { activity: null, scheduled: false };
+        groupedActivities.set(key, {
+          activity: selectPendingActivityRepresentative(current.activity, activity),
+          scheduled: current.scheduled || scheduledActivityIds.has(String(activity.id)),
+        });
+      });
+
+    return [...groupedActivities.values()]
+      .filter((group) => group.activity && !group.scheduled)
+      .map((group) => group.activity)
       .sort((a, b) => {
         const criticalityDiff = getCriticalityRank(a.sourceRecord?.criticidad || a.criticidad) - getCriticalityRank(b.sourceRecord?.criticidad || b.criticidad);
         if (criticalityDiff !== 0) return criticalityDiff;
@@ -795,10 +859,25 @@ export default function WorkloadBalanceModule({
         return cleanText(a.actividad).localeCompare(cleanText(b.actividad));
       });
   }, [effectivePersonFilter, visibleActivities, selectedPersonRoleLinks, scheduledActivityIds]);
-  const filteredPendingActivities = useMemo(
-    () => roleFilter === "all" ? pendingActivities : pendingActivities.filter((activity) => normalizeText(activity.rol) === normalizeText(roleFilter)),
-    [pendingActivities, roleFilter]
-  );
+  const filteredPendingActivities = useMemo(() => {
+    const filtered = roleFilter === "all"
+      ? pendingActivities
+      : pendingActivities.filter((activity) => normalizeText(activity.rol) === normalizeText(roleFilter));
+    const unique = dedupePendingActivities(filtered);
+
+    if (
+      typeof window !== "undefined" &&
+      window.location.hostname === "localhost" &&
+      filtered.length !== unique.length
+    ) {
+      console.log("Pendientes deduplicados:", {
+        antes: filtered.length,
+        despues: unique.length,
+      });
+    }
+
+    return unique;
+  }, [pendingActivities, roleFilter]);
   const pendingTotalHours = useMemo(
     () => filteredPendingActivities.reduce((sum, activity) => sum + Number(activity.cargaSemanal || getDurationMinutes(activity) / 60), 0),
     [filteredPendingActivities]
