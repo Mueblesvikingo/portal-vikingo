@@ -26,7 +26,17 @@ export async function getWorkloadPeople() {
   try {
     const { data, error } = await supabase
       .from("personas")
-      .select("id,nombre")
+      .select(`
+        id,
+        nombre,
+        activo,
+        tipo,
+        horas_lunes,
+        horas_martes,
+        horas_miercoles,
+        horas_jueves,
+        horas_viernes
+      `)
       .eq("activo", true)
       .eq("tipo", "persona")
       .order("nombre", { ascending: true });
@@ -42,7 +52,6 @@ export async function getWorkloadPeople() {
     return [];
   }
 }
-
 export async function getWorkloadPersonRoles() {
   try {
     const { data, error } = await supabase
