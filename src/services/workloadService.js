@@ -22,6 +22,47 @@ export async function getWorkloadActivities() {
   }
 }
 
+export async function updateWorkloadSourceActivity(activityId, payload) {
+  const basePayload = {
+    activa: payload.activa,
+    estado: payload.estado,
+    duracion_minutos: payload.duracion_minutos,
+    frecuencia: payload.frecuencia,
+  };
+  const payloadWithTimestamp = {
+    ...basePayload,
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    let result = await supabase
+      .from("proceso_actividades")
+      .update(payloadWithTimestamp)
+      .eq("id", activityId)
+      .select("*")
+      .single();
+
+    const shouldRetryWithoutUpdatedAt =
+      result.error &&
+      (String(result.error.message || "").toLowerCase().includes("updated_at") ||
+        result.error.code === "PGRST204");
+
+    if (shouldRetryWithoutUpdatedAt) {
+      result = await supabase
+        .from("proceso_actividades")
+        .update(basePayload)
+        .eq("id", activityId)
+        .select("*")
+        .single();
+    }
+
+    if (result.error) return { ok: false, error: result.error, data: null };
+    return { ok: true, error: null, data: result.data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
 export async function getWorkloadPeople() {
   try {
     const { data, error } = await supabase
