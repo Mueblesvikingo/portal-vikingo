@@ -63,6 +63,39 @@ export async function updateWorkloadSourceActivity(activityId, payload) {
   }
 }
 
+export async function createWorkloadSourceActivity(payload) {
+  const activityPayload = {
+    actividad: payload.actividad,
+    descripcion: payload.descripcion || "",
+    proceso: payload.proceso,
+    subproceso: payload.subproceso || "",
+    responsable: payload.responsable || "",
+    puesto: payload.puesto || payload.rol || "",
+    rol: payload.rol || payload.puesto || "",
+    duracion_minutos: payload.duracion_minutos,
+    frecuencia: payload.frecuencia || "Manual",
+    frecuencia_valor: payload.frecuencia_valor || 1,
+    dia_tipico: payload.dia_tipico || "Lunes",
+    orden_flujo: payload.orden_flujo,
+    carga_horas: payload.carga_horas,
+    estado: payload.estado || "Activa",
+    activa: payload.activa ?? true,
+  };
+
+  try {
+    const { data, error } = await supabase
+      .from("proceso_actividades")
+      .insert(activityPayload)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
 export async function getWorkloadPeople() {
   try {
     const { data, error } = await supabase

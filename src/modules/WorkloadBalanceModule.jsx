@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createWorkloadAssignment, findExistingSavedMonth, findExistingSavedWeek, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanOrder, updateWorkloadAssignment, updateWorkloadSourceActivity } from "../services/workloadService";
+import { createWorkloadAssignment, createWorkloadSourceActivity, findExistingSavedMonth, findExistingSavedWeek, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanOrder, updateWorkloadAssignment, updateWorkloadSourceActivity } from "../services/workloadService";
 
 const WORKLOAD_VIDEO_URL =
   "https://www.youtube.com/embed/bun2Ku2R1JI?autoplay=1&rel=0&modestbranding=1";
@@ -41,6 +41,13 @@ const ASSIGNMENT_CHANNELS = ["Teams", "SharePoint", "Planner", "Outlook", "Sala 
 const ASSIGNMENT_REVIEWERS = ["Director General", "PM", "Gerente", "Líder de proceso", "Supervisor"];
 const ASSIGNMENT_APPROVERS = ["Director General", "PM", "Gerente", "No requiere aprobación"];
 const ASSIGNMENT_FOLLOWUPS = ["PMO", "Director General", "Líder de proceso", "Responsable", "Ninguno"];
+const ASSIGNMENT_SCHEDULE_DESTINATIONS = [
+  { value: "weekly-standard", label: "Semana típica" },
+  { value: "monthly-standard", label: "Mes típico" },
+  { value: "weekly-planning", label: "Planeación semanal" },
+  { value: "monthly-planning", label: "Planeación mensual" },
+];
+const ASSIGNMENT_SCHEDULE_ORIGINS = ["Procesos", "Proyectos", "Formación", "Mejora", "Eventual"];
 
 const demoSeeds = [
   [1, "Proceso", "Validar información del pedido", "Laura Martínez", "Jefe de Calidad", 90, "Lunes"],
@@ -501,6 +508,13 @@ function applyScheduleOverrides(activities, overrides) { return safeArray(activi
 function normalizeActivities(activities, scheduleOverrides = {}) {
   return applyScheduleOverrides(activities, scheduleOverrides).map((activity) => ({ ...activity, origen: activity?.origen || "Proceso", persona: activity?.persona || activity?.responsable || "Sin persona asignada", rol: activity?.rol || activity?.responsable || "Sin rol asignado", diaTipico: activity?.diaTipico || "Lunes", semanaTipica: activity?.semanaTipica || "Semana 1", estadoAgenda: activity?.estadoAgenda || "Pendiente", duracionMinutos: getDurationMinutes(activity) }));
 }
+function getManualSourceType(item) {
+  const processName = normalizeText(item?.proceso);
+  if (processName.includes("formacion manual") || processName.includes("formación manual")) return "Formación";
+  if (processName.includes("tarea manual")) return "Tarea";
+  if (processName.includes("proyecto manual")) return "Proyecto";
+  return "";
+}
 function createManualBlock({ id, dayName, name, duration, type, currentUser, order, personId = "", personName = "" }) {
   const manualProcess = type === "Formación" ? "Formación manual" : type === "Tarea" ? "Tarea manual" : "Proyecto manual";
   const ownerName = personName || currentUser?.name || "Usuario";
@@ -512,6 +526,26 @@ function createMonthlyBlock({ id, name, duration, frequency, type, targetWeeks, 
   const weeks = targetWeeks || getWeeksForFrequency(frequency);
   const rowType = type === "Proyecto" ? "Proyectos" : type === "Formación" ? "Formación" : "Procesos";
   return { id, origen: rowType, tipoBloque: type, actividad: name, persona: personName, personaId: personId, responsable: personName, rol: rowType === "Procesos" ? "Proceso organizacional" : "Líder de proceso", duracionMinutos: duration, frecuencia: frequency, targetWeeks: weeks, ocurrenciasMes: weeks.length, cargaMensual: Number(((duration * weeks.length) / 60).toFixed(2)), monthlyOrder: Number.isFinite(Number(monthlyOrder)) ? Number(monthlyOrder) : Date.now(), isMonthlyBlock: true };
+}
+function getAssignmentDefaultOrigin(type) {
+  const normalized = normalizeText(type);
+  if (normalized.includes("capacitacion") || normalized.includes("capacitación") || normalized.includes("formacion") || normalized.includes("formación")) return "Formación";
+  if (normalized.includes("mejora")) return "Mejora";
+  if (normalized.includes("evento") || normalized.includes("eventual") || normalized.includes("reunion") || normalized.includes("reunión")) return "Eventual";
+  if (normalized.includes("proceso")) return "Procesos";
+  return "Proyectos";
+}
+function getWeeklyTypeFromAssignmentOrigin(origin) {
+  if (origin === "Procesos") return "Proceso";
+  if (origin === "Formación") return "Formación";
+  if (origin === "Mejora") return "Mejora";
+  if (origin === "Eventual") return "Eventual";
+  return "Proyecto";
+}
+function getMonthlyTypeFromAssignmentOrigin(origin) {
+  if (origin === "Procesos") return "Proceso";
+  if (origin === "Formación") return "Formación";
+  return "Proyecto";
 }
 function buildMonthlyMatrix({ weekOccurrences, monthlyBlocks }) {
   const sourceMap = { Procesos: "Proceso", Proyectos: "Proyecto", Formación: "Formación" };
@@ -675,6 +709,17 @@ function SchedulePendingModal({ activity, selectedDays, selectedWeeks, onToggleD
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white"><div><p className="text-xs font-black uppercase tracking-widest">Programar actividad</p><p className="text-[10px] font-bold text-slate-300">{activity.actividad}</p></div><button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button></div><div className="space-y-3 p-4"><div className="grid gap-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-bold text-slate-600 md:grid-cols-2"><div><span className="text-slate-400">Proceso</span><p className="text-slate-800">{activity.proceso}</p></div><div><span className="text-slate-400">Rol</span><p className="text-slate-800">{activity.rol}</p></div><div><span className="text-slate-400">Frecuencia</span><p className="text-slate-800">{translateFrequency(activity.frecuencia)}</p></div><div><span className="text-slate-400">Duración</span><p className="text-slate-800">{activity.duracionMinutos} min</p></div></div><div className="grid gap-3 md:grid-cols-2"><div className="rounded-2xl border border-slate-200 bg-white p-3"><p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Semana típica</p><div className="space-y-1">{WEEK_DAYS.map((day) => <label key={day} className="flex items-center gap-2 rounded-lg border border-slate-100 px-2 py-1.5 text-[11px] font-bold text-slate-700"><input type="checkbox" checked={selectedDays.includes(day)} onChange={() => onToggleDay(day)} />{day}</label>)}</div></div><div className="rounded-2xl border border-slate-200 bg-white p-3"><p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Mes típico</p><div className="space-y-1">{[1, 2, 3, 4].map((week) => <label key={week} className="flex items-center gap-2 rounded-lg border border-slate-100 px-2 py-1.5 text-[11px] font-bold text-slate-700"><input type="checkbox" checked={selectedWeeks.includes(week)} onChange={() => onToggleWeek(week)} />Semana {week}</label>)}</div></div></div><div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button><button type="button" onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Guardar</button></div></div></div></div>;
 }
+function AssignmentScheduleModal({ assignment, draft, setDraft, onSave, onClose }) {
+  if (!assignment) return null;
+  const destination = draft.destino || "monthly-standard";
+  const showDay = destination === "weekly-standard" || destination === "weekly-planning";
+  const showWeek = destination === "monthly-standard" || destination === "monthly-planning";
+  const showOrigin = destination === "monthly-standard" || destination === "monthly-planning";
+  const showPlanningWeek = destination === "weekly-planning";
+  const showPlanningMonth = destination === "monthly-planning";
+
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white"><div><p className="text-xs font-black uppercase tracking-widest">Programar asignación</p><p className="text-[10px] font-bold text-slate-300">{assignment.titulo}</p></div><button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button></div><div className="space-y-3 p-4"><div className="grid gap-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-bold text-slate-600 md:grid-cols-2"><div><span className="text-slate-400">Asignación</span><p className="text-slate-900">{assignment.titulo}</p></div><div><span className="text-slate-400">Carga estimada</span><p className="text-slate-900">{formatHours(draft.horas || assignment.horas || 0)}</p></div></div><div className="grid gap-2 md:grid-cols-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Destino<select value={destination} onChange={(event) => setDraft((current) => ({ ...current, destino: event.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_SCHEDULE_DESTINATIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Carga estimada<input type="number" min="0.25" step="0.25" value={draft.horas} onChange={(event) => setDraft((current) => ({ ...current, horas: Number(event.target.value) }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label>{showPlanningWeek && <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Inicio semana<input type="date" value={draft.planningWeekStart} onChange={(event) => { const start = event.target.value; const endDate = new Date(`${start}T00:00:00`); endDate.setDate(endDate.getDate() + 4); setDraft((current) => ({ ...current, planningWeekStart: start, planningWeekEnd: toDateInputValue(endDate) })); }} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label>}{showPlanningMonth && <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Mes / periodo<input type="month" value={draft.planningMonth} onChange={(event) => setDraft((current) => ({ ...current, planningMonth: event.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label>}{showDay && <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Día<select value={draft.dia} onChange={(event) => setDraft((current) => ({ ...current, dia: event.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{WEEK_DAYS.map((day) => <option key={day} value={day}>{day}</option>)}</select></label>}{showWeek && <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Semana<select value={draft.semanaMes} onChange={(event) => setDraft((current) => ({ ...current, semanaMes: Number(event.target.value) }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{[1, 2, 3, 4].map((week) => <option key={week} value={week}>Semana {week}</option>)}</select></label>}{showOrigin && <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Origen<select value={draft.origen} onChange={(event) => setDraft((current) => ({ ...current, origen: event.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_SCHEDULE_ORIGINS.map((origin) => <option key={origin} value={origin}>{origin}</option>)}</select></label>}</div><div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button><button type="button" onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Guardar programación</button></div></div></div></div>;
+}
 function PendingActivityEditModal({ activity, draft, error, saving, onChange, onSave, onClose }) {
   if (!activity) return null;
   const subprocess = getPendingActivitySubprocess(activity);
@@ -798,7 +843,7 @@ export default function WorkloadBalanceModule({
     if (data.length > 0) {
       const mappedActivities = data.map((item) => ({
         id: item.id,
-        origen: item.tipo || item.origen || "Proceso",
+        origen: item.tipo || item.origen || getManualSourceType(item) || "Proceso",
         proceso: item.proceso || "Proceso Operativo",
         subproceso: item.subproceso || item.sourceRecord?.subproceso || "",
         actividad: item.actividad || item.titulo,
@@ -895,7 +940,16 @@ export default function WorkloadBalanceModule({
   const [assignmentStatusDetail, setAssignmentStatusDetail] = useState(null);
   const [assignmentManagementDetail, setAssignmentManagementDetail] = useState(null);
   const [assignmentScheduleModal, setAssignmentScheduleModal] = useState(null);
-  const [assignmentScheduleDraft, setAssignmentScheduleDraft] = useState({ semanaMes: 1, dia: "Lunes", origen: "Proyectos", horas: 4 });
+  const [assignmentScheduleDraft, setAssignmentScheduleDraft] = useState({
+    destino: "monthly-standard",
+    semanaMes: 1,
+    dia: "Lunes",
+    origen: "Proyectos",
+    horas: 4,
+    planningWeekStart: currentWorkWeek.start,
+    planningWeekEnd: currentWorkWeek.end,
+    planningMonth: currentWorkWeek.start.slice(0, 7),
+  });
 
   const canViewAllWorkloads = hasFullAccess(currentUser);
   const normalizedActivities = useMemo(() => normalizeActivities(activities, scheduleOverrides), [activities, scheduleOverrides]);
@@ -1175,7 +1229,40 @@ export default function WorkloadBalanceModule({
       }),
     [visibleAssignments]
   );
-  const weekOccurrences = useMemo(() => expandWeeklyOccurrences(scheduledWeeklyActivities).filter((activity) => WEEK_VISIBLE_TYPES.includes(activity.origen)).concat(manualProjects).sort(compareOrderCreated), [scheduledWeeklyActivities, manualProjects]);
+  const scheduledAssignmentWeeklyActivities = useMemo(
+    () => visibleAssignments
+      .filter((assignment) => assignment.estado === "Programada" && assignment.programadaDia && !Number(assignment.semanaMes || assignment.semana_mes))
+      .map((assignment) => {
+        const durationMinutes = Number(assignment.duracionMinutos || assignment.duracion_minutos || Number(assignment.horas || assignment.carga_horas || 1) * 60);
+        const sourceType = getWeeklyTypeFromAssignmentOrigin(assignment.origen || getAssignmentDefaultOrigin(assignment.tipo));
+        return {
+          id: `assignment-weekly-${assignment.id}`,
+          occurrenceId: `assignment-weekly-${assignment.id}-0`,
+          occurrenceIndex: 0,
+          assignmentId: assignment.id,
+          origen: sourceType,
+          proceso: "Asignación",
+          subproceso: assignment.tipo || "",
+          actividad: assignment.titulo,
+          persona: assignment.responsable,
+          personaId: assignment.personaId,
+          responsable: assignment.responsable,
+          rol: assignment.rol || assignment.responsable || "Asignación",
+          duracionMinutos: durationMinutes,
+          cargaSemanal: Number((durationMinutes / 60).toFixed(2)),
+          cargaMensual: Number(((durationMinutes / 60) * 4).toFixed(2)),
+          frecuencia: "Asignación",
+          diaTipico: assignment.programadaDia,
+          semanaTipica: "Semana 1",
+          orden: getSortableOrder({ orden: assignment.orden, created_at: assignment.created_at, id: assignment.id }, 0),
+          estadoAgenda: "Programada",
+          planningSource: "Asignación",
+          isAssignmentBlock: true,
+        };
+      }),
+    [visibleAssignments]
+  );
+  const weekOccurrences = useMemo(() => expandWeeklyOccurrences(scheduledWeeklyActivities).filter((activity) => WEEK_VISIBLE_TYPES.includes(activity.origen)).concat(scheduledAssignmentWeeklyActivities, manualProjects).sort(compareOrderCreated), [scheduledWeeklyActivities, scheduledAssignmentWeeklyActivities, manualProjects]);
   const planningMonthlyBlocks = monthlySnapshotMode ? monthlyBlocks : scheduledMonthlyBlocks.concat(scheduledAssignmentMonthlyBlocks, monthlyBlocks);
   const monthlyMatrix = useMemo(() => buildMonthlyMatrix({ weekOccurrences: [], monthlyBlocks: planningMonthlyBlocks }), [planningMonthlyBlocks]);
   const monthlyPlanningBaseBlocks = useMemo(() => monthlyMatrix.flatMap((row) =>
@@ -1287,23 +1374,69 @@ export default function WorkloadBalanceModule({
     else if (nextActivity) calculatedOrder = Number(nextActivity.orden || 0) - 10;
     updateDraggedSchedule(dragged, (schedule) => ({ ...schedule, diaTipico: dayName, orden: calculatedOrder }));
   }
-  function canCreatePersonScopedBlock() {
-    if (effectivePersonFilter !== "all") return true;
-    setScheduleMessage("Selecciona una persona antes de crear o programar bloques.");
-    return false;
-  }
+function canCreatePersonScopedBlock() {
+  const hasSelectedPerson =
+    cleanText(effectivePersonFilter) &&
+    cleanText(effectivePersonFilter) !== "all" &&
+    cleanText(selectedPersonName);
+
+  if (hasSelectedPerson) return true;
+
+  setScheduleMessage("Selecciona una persona antes de crear o programar bloques.");
+  return false;
+}
   function openQuickProjectForm(dayName) {
     if (!canCreatePersonScopedBlock()) return;
     setQuickProjectDay(dayName); setQuickProjectName(""); setQuickProjectMinutes("120"); setQuickProjectType("Proyecto"); setEditingProjectId(null);
   }
   function cancelQuickProject() { setQuickProjectDay(null); setQuickProjectName(""); setQuickProjectMinutes("120"); setQuickProjectType("Proyecto"); setEditingProjectId(null); }
   function startEditManualProject(activity) { if (!activity?.isManualProject) return; setEditingProjectId(activity.id); setQuickProjectDay(activity.diaTipico); setQuickProjectName(activity.actividad || ""); setQuickProjectMinutes(String(activity.duracionMinutos || 120)); setQuickProjectType(["Proyecto", "Formación", "Tarea"].includes(activity.origen) ? activity.origen : "Proyecto"); }
-  function saveQuickProject(dayName) {
+  async function saveQuickProject(dayName) {
     const blockName = quickProjectName.trim(); const duration = Number(quickProjectMinutes);
     if (!blockName || !Number.isFinite(duration) || duration <= 0) return;
     if (!canCreatePersonScopedBlock()) return;
     if (editingProjectId) { setManualProjects((currentProjects) => currentProjects.map((project) => (project.id === editingProjectId ? { ...project, origen: quickProjectType, proceso: quickProjectType === "Formación" ? "Formación manual" : quickProjectType === "Tarea" ? "Tarea manual" : "Proyecto manual", actividad: blockName, persona: selectedPersonName, personaId: effectivePersonFilter, responsable: selectedPersonName, rol: "Líder de proceso", cargaSemanal: Number((duration / 60).toFixed(2)), cargaMensual: Number(((duration / 60) * 4).toFixed(2)), duracionMinutos: duration, diaTipico: dayName } : project))); cancelQuickProject(); return; }
-    const id = `manual-${Date.now()}`; const newBlock = createManualBlock({ id, dayName, name: blockName, duration, type: quickProjectType, currentUser, order: getLastOrderForDay(dayName) + 10, personId: effectivePersonFilter, personName: selectedPersonName }); setManualProjects((currentProjects) => [...currentProjects, newBlock]); cancelQuickProject();
+    const manualProcess = quickProjectType === "Formación" ? "Formación manual" : quickProjectType === "Tarea" ? "Tarea manual" : "Proyecto manual";
+    const manualOrder = getLastOrderForDay(dayName) + 10;
+    const sourceResult = await createWorkloadSourceActivity({
+      actividad: blockName,
+      descripcion: "Bloque manual creado desde Semana típica.",
+      proceso: manualProcess,
+      subproceso: "Reserva de capacidad",
+      responsable: selectedPersonName,
+      puesto: "Líder de proceso",
+      rol: "Líder de proceso",
+      duracion_minutos: duration,
+      frecuencia: "Manual",
+      frecuencia_valor: 1,
+      dia_tipico: dayName,
+      orden_flujo: manualOrder,
+      carga_horas: Number((duration / 60).toFixed(2)),
+      estado: "Activa",
+      activa: true,
+    });
+
+    if (!sourceResult?.ok || !sourceResult.data?.id) {
+      console.error(sourceResult?.error);
+      setScheduleMessage("No fue posible guardar el bloque manual en Supabase.");
+      return;
+    }
+
+    const weeklyResult = await scheduleActivityInWeeklyPlan({
+      personaId: effectivePersonFilter,
+      activityId: sourceResult.data.id,
+      dayName,
+      plannedHours: Number((duration / 60).toFixed(2)),
+    });
+
+    if (!weeklyResult) {
+      setScheduleMessage("El bloque se creó, pero no fue posible programarlo en Semana típica.");
+      return;
+    }
+
+    await loadWorkloadData();
+    cancelQuickProject();
+    setScheduleMessage("Bloque manual guardado correctamente.");
   }
   function deleteManualProject(projectId) { setManualProjects((currentProjects) => currentProjects.filter((project) => project.id !== projectId)); }
   function showDropIndicator(dayName, targetIndex) { if (!draggedActivity) return; setDropIndicator({ day: dayName, index: targetIndex }); }
@@ -1737,6 +1870,126 @@ function canCreateAssignments() {
     await loadWorkloadData();
     setScheduleMessage("Actividad reubicada correctamente.");
   }
+  function getAssignmentPlanningWeekRange() {
+    const start = assignmentScheduleDraft.planningWeekStart || currentWorkWeek.start;
+    const endDate = new Date(`${start}T00:00:00`);
+    endDate.setDate(endDate.getDate() + 4);
+    return { start, end: assignmentScheduleDraft.planningWeekEnd || toDateInputValue(endDate) };
+  }
+  function buildAssignmentWeeklyBlock({ assignment, dayName, hours, origin, order = Date.now(), idPrefix = "assignment-weekly-block" }) {
+    const duration = Math.max(1, Math.round(Number(hours || 0) * 60));
+    const sourceType = getWeeklyTypeFromAssignmentOrigin(origin);
+    return {
+      ...createManualBlock({
+        id: `${idPrefix}-${assignment.id}`,
+        dayName,
+        name: assignment.titulo,
+        duration,
+        type: sourceType,
+        currentUser,
+        order,
+        personId: effectivePersonFilter,
+        personName: selectedPersonName,
+      }),
+      proceso: "Asignación",
+      subproceso: assignment.tipo || "",
+      rol: assignment.rol || assignment.responsable || "Asignación",
+      responsable: selectedPersonName,
+      planningSource: "Asignación",
+      assignmentId: assignment.id,
+      isAssignmentBlock: true,
+    };
+  }
+  function buildAssignmentMonthlyBlock({ assignment, weekNumber, hours, origin, order = Date.now(), idPrefix = "assignment-monthly-block" }) {
+    const duration = Math.max(1, Math.round(Number(hours || 0) * 60));
+    const normalizedOrigin = ASSIGNMENT_SCHEDULE_ORIGINS.includes(origin) ? origin : getAssignmentDefaultOrigin(assignment.tipo);
+    const block = createMonthlyBlock({
+      id: `${idPrefix}-${assignment.id}-w${weekNumber}`,
+      name: assignment.titulo,
+      duration,
+      frequency: "Manual",
+      type: getMonthlyTypeFromAssignmentOrigin(normalizedOrigin),
+      targetWeeks: [Number(weekNumber || 1)],
+      monthlyOrder: order,
+      personId: effectivePersonFilter,
+      personName: selectedPersonName,
+    });
+
+    return {
+      ...block,
+      origen: normalizedOrigin === "Formación" ? "Formación" : normalizedOrigin === "Procesos" ? "Procesos" : "Proyectos",
+      tipoBloque: "Asignación",
+      proceso: "Asignación",
+      subproceso: assignment.tipo || "",
+      rol: assignment.rol || assignment.responsable || "Asignación",
+      responsable: selectedPersonName,
+      planningSource: "Asignación",
+      assignmentId: assignment.id,
+      semanaMes: Number(weekNumber || 1),
+      targetWeeks: [Number(weekNumber || 1)],
+      monthlyOrder: order,
+      isAssignmentBlock: true,
+      isMonthlyBlock: true,
+    };
+  }
+  async function saveAssignmentPlanningWeek(block, range) {
+    const nextBlocks = activeAgendaBlocks
+      .filter((item) => String(item.assignmentId || "") !== String(block.assignmentId || ""))
+      .concat(block);
+    const existingResult = await findExistingSavedWeek({
+      personaId: effectivePersonFilter,
+      fechaInicio: range.start,
+      fechaFin: range.end,
+    });
+    if (!existingResult?.ok) return existingResult;
+
+    const payload = {
+      ...buildSavedWeeklyPayload(),
+      fecha_inicio: range.start,
+      fecha_fin: range.end,
+      nombre: formatPlanPeriodName(range.start, range.end),
+      bloques: nextBlocks,
+      resumen: {
+        ...weeklyPlanKpi,
+        planned: nextBlocks.length,
+        totalHours: Number((nextBlocks.reduce((sum, item) => sum + getDurationMinutes(item), 0) / 60).toFixed(1)),
+      },
+    };
+
+    return existingResult.data
+      ? updateSavedWorkloadPlan(existingResult.data.id, payload)
+      : saveWorkloadPlan(payload);
+  }
+  async function saveAssignmentPlanningMonth(block, monthDate) {
+    const { mes, anio } = getMonthPlanParts(monthDate);
+    const baseBlocks = selectedPlanId && agendaView === "monthly" ? buildMonthlySnapshotBlocks() : monthlyPlanningBaseBlocks;
+    const nextBlocks = baseBlocks
+      .filter((item) => String(item.assignmentId || "") !== String(block.assignmentId || ""))
+      .concat(block);
+    const totalMinutes = nextBlocks.reduce((sum, item) => sum + getDurationMinutes(item), 0);
+    const existingResult = await findExistingSavedMonth({ personaId: effectivePersonFilter, mes, anio });
+    if (!existingResult?.ok) return existingResult;
+
+    const payload = {
+      tipo_plan: "mensual",
+      persona_id: effectivePersonFilter,
+      responsable: selectedPersonName,
+      mes,
+      anio,
+      nombre: formatMonthPlanName(mes, anio),
+      estado: "Borrador",
+      bloques: nextBlocks,
+      completados: [],
+      resumen: { totalHours: Number((totalMinutes / 60).toFixed(1)) },
+      creado_por: currentUser?.name || "Usuario",
+      actualizado_por: currentUser?.name || "Usuario",
+      activo: true,
+    };
+
+    return existingResult.data
+      ? updateSavedWorkloadPlan(existingResult.data.id, payload)
+      : saveWorkloadPlan(payload);
+  }
   async function createAssignment() {
     if (!canCreatePersonScopedBlock()) return;
     const hours = Number(assignmentDraft.horas || 4);
@@ -1776,28 +2029,100 @@ function canCreateAssignments() {
   function scheduleAssignment(assignment) {
     if (assignment?.estado === "Programada") return;
     if (!canCreatePersonScopedBlock()) return;
+    const nextWeek = getNextWorkWeekRange(currentWorkWeek.start, currentWorkWeek.end);
+    const defaultOrigin = getAssignmentDefaultOrigin(assignment.tipo);
     setAssignmentScheduleModal(assignment);
     setAssignmentScheduleDraft({
+      destino: "monthly-standard",
       semanaMes: Number(assignment.semanaMes || 1),
       dia: assignment.programadaDia || "Lunes",
-      origen: assignment.tipo === "Capacitación extraordinaria" ? "Formación" : "Proyectos",
+      origen: defaultOrigin,
       horas: Number(assignment.horas || 1),
+      planningWeekStart: nextWeek.start,
+      planningWeekEnd: nextWeek.end,
+      planningMonth: currentWorkWeek.start.slice(0, 7),
     });
   }
   async function saveAssignmentSchedule() {
     if (!assignmentScheduleModal?.id) return;
     const hours = Number(assignmentScheduleDraft.horas || assignmentScheduleModal.horas || 1);
-    const result = await updateWorkloadAssignment(assignmentScheduleModal.id, {
+    const durationMinutes = Math.max(1, Math.round(hours * 60));
+    const destination = assignmentScheduleDraft.destino || "monthly-standard";
+    const origin = assignmentScheduleDraft.origen || getAssignmentDefaultOrigin(assignmentScheduleModal.tipo);
+    const commonAssignmentUpdate = {
       estado: "Programada",
-      semana_mes: Number(assignmentScheduleDraft.semanaMes || 1),
-      dia_semana: assignmentScheduleDraft.dia,
-      origen: assignmentScheduleDraft.origen,
-      categoria: assignmentScheduleDraft.origen,
       carga_horas: hours,
-      duracion_minutos: Math.round(hours * 60),
+      duracion_minutos: durationMinutes,
       programada_por: currentUser?.name || "Usuario",
       programada_at: new Date().toISOString(),
-    });
+    };
+    let result = null;
+    let nextViewMode = "month";
+    let nextAgendaView = agendaView;
+
+    if (destination === "weekly-standard") {
+      result = await updateWorkloadAssignment(assignmentScheduleModal.id, {
+        ...commonAssignmentUpdate,
+        semana_mes: null,
+        dia_semana: assignmentScheduleDraft.dia,
+        origen: origin,
+      });
+      nextViewMode = "week";
+    } else if (destination === "monthly-standard") {
+      result = await updateWorkloadAssignment(assignmentScheduleModal.id, {
+        ...commonAssignmentUpdate,
+        semana_mes: Number(assignmentScheduleDraft.semanaMes || 1),
+        dia_semana: assignmentScheduleDraft.dia,
+        origen: origin,
+      });
+      nextViewMode = "month";
+    } else if (destination === "weekly-planning") {
+      const range = getAssignmentPlanningWeekRange();
+      const block = buildAssignmentWeeklyBlock({
+        assignment: assignmentScheduleModal,
+        dayName: assignmentScheduleDraft.dia,
+        hours,
+        origin,
+        idPrefix: "assignment-plan-weekly",
+      });
+      result = await saveAssignmentPlanningWeek(block, range);
+      if (result?.ok) {
+        setPlanningWeekStart(range.start);
+        setPlanningWeekEnd(range.end);
+        setAgendaManualBlocks((currentBlocks) => currentBlocks.filter((item) => String(item.assignmentId || "") !== String(assignmentScheduleModal.id)).concat(block));
+        const assignmentResult = await updateWorkloadAssignment(assignmentScheduleModal.id, {
+          ...commonAssignmentUpdate,
+          semana_mes: null,
+          dia_semana: null,
+          origen: origin,
+        });
+        if (!assignmentResult?.ok) result = assignmentResult;
+      }
+      nextViewMode = "agenda";
+      nextAgendaView = "weekly";
+    } else if (destination === "monthly-planning") {
+      const monthDate = `${assignmentScheduleDraft.planningMonth || currentWorkWeek.start.slice(0, 7)}-01`;
+      const block = buildAssignmentMonthlyBlock({
+        assignment: assignmentScheduleModal,
+        weekNumber: Number(assignmentScheduleDraft.semanaMes || 1),
+        hours,
+        origin,
+        idPrefix: "assignment-plan-monthly",
+      });
+      result = await saveAssignmentPlanningMonth(block, monthDate);
+      if (result?.ok) {
+        setAgendaMonthlyBlocks((currentBlocks) => currentBlocks.filter((item) => String(item.assignmentId || "") !== String(assignmentScheduleModal.id)).concat(block));
+        const assignmentResult = await updateWorkloadAssignment(assignmentScheduleModal.id, {
+          ...commonAssignmentUpdate,
+          semana_mes: null,
+          dia_semana: null,
+          origen: origin,
+        });
+        if (!assignmentResult?.ok) result = assignmentResult;
+      }
+      nextViewMode = "agenda";
+      nextAgendaView = "monthly";
+    }
 
     if (!result?.ok) {
       console.error(result?.error);
@@ -1807,8 +2132,9 @@ function canCreateAssignments() {
 
     setAssignmentScheduleModal(null);
     await loadWorkloadData();
-    setViewMode("month");
-    setScheduleMessage("Asignación programada en Mes Típico.");
+    setViewMode(nextViewMode);
+    if (nextViewMode === "agenda") setAgendaView(nextAgendaView);
+    setScheduleMessage("Asignación programada correctamente.");
   }
   function openAssignmentStatusDetail(assignment) {
     if (!assignment) return;
@@ -2401,6 +2727,13 @@ function canReviewPlan() {
         onToggleWeek={toggleScheduleWeek}
         onSave={savePendingSchedule}
         onClose={closeScheduleModal}
+      />
+      <AssignmentScheduleModal
+        assignment={assignmentScheduleModal}
+        draft={assignmentScheduleDraft}
+        setDraft={setAssignmentScheduleDraft}
+        onSave={saveAssignmentSchedule}
+        onClose={() => setAssignmentScheduleModal(null)}
       />
       <PendingActivityEditModal
         activity={editingPendingActivity}
