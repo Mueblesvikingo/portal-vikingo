@@ -586,7 +586,6 @@ export default function OrganizationCatalogModule() {
                     "Nombre",
                     "Puesto",
                     "Rol sistema",
-                    "Rol organizacional",
                     "Persona vinculada",
                     "Estatus",
                     "Acciones",
@@ -611,12 +610,6 @@ export default function OrganizationCatalogModule() {
                         value={item.rol_sistema}
                         onSave={(value) =>
                           updateCell("usuarios", item, "rol_sistema", value)
-                        }
-                      />
-                      <EditableCell
-                        value={item.rol_organizacional}
-                        onSave={(value) =>
-                          updateCell("usuarios", item, "rol_organizacional", value)
                         }
                       />
                       <td className="px-5 py-2 text-sm">
@@ -711,18 +704,6 @@ export default function OrganizationCatalogModule() {
                   <Input label="Nombre" value={usuarioForm.nombre} onChange={(value) => setUsuarioForm({ ...usuarioForm, nombre: value })} required />
                   <Input label="Puesto" value={usuarioForm.puesto} onChange={(value) => setUsuarioForm({ ...usuarioForm, puesto: value })} />
                   <Input label="Rol sistema" value={usuarioForm.rol_sistema} onChange={(value) => setUsuarioForm({ ...usuarioForm, rol_sistema: value })} />
-                  {rolesPermisos.length > 0 ? (
-                    <Select label="Rol organizacional" value={usuarioForm.rol_organizacional} onChange={(value) => setUsuarioForm({ ...usuarioForm, rol_organizacional: value })}>
-                      <option value="">Seleccionar rol</option>
-                      {rolesPermisos.map((rolItem) => (
-                        <option key={rolItem.id} value={rolItem.rol}>
-                          {rolItem.rol}
-                        </option>
-                      ))}
-                    </Select>
-                  ) : (
-                    <Input label="Rol organizacional" value={usuarioForm.rol_organizacional} onChange={(value) => setUsuarioForm({ ...usuarioForm, rol_organizacional: value })} />
-                  )}
                   <Select label="Persona vinculada" value={usuarioForm.persona_id} onChange={(value) => setUsuarioForm({ ...usuarioForm, persona_id: value })}>
                     <option value="">Sin vincular</option>
                     {personasVinculables.map((persona) => (
