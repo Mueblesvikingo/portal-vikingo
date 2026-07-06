@@ -173,7 +173,8 @@ export async function updatePersonaRole(id, payload) {
 
 /* =========================
    USUARIOS
-   Nota: no editamos password_hash aquí todavía.
+   Nota: password_hash se guarda tal cual se recibe (sin hashear en cliente),
+   igual que ya está guardada la de los usuarios existentes en esta tabla.
 ========================= */
 
 export async function getUsuarios() {
@@ -196,6 +197,8 @@ export async function createUsuario(payload) {
         puesto: payload.puesto || null,
         rol_sistema: payload.rol_sistema || "Usuario",
         rol_organizacional: payload.rol_organizacional || null,
+        password_hash: payload.password_hash || null,
+        persona_id: payload.persona_id || null,
         activo: payload.activo ?? true,
       }),
     ])
@@ -217,6 +220,9 @@ export async function updateUsuario(id, payload) {
         rol_sistema: payload.rol_sistema,
         rol_organizacional: payload.rol_organizacional,
         activo: payload.activo,
+        permisos_custom: payload.permisos_custom,
+        password_hash: payload.password_hash,
+        persona_id: payload.persona_id,
       })
     )
     .eq("id", id)
@@ -225,4 +231,67 @@ export async function updateUsuario(id, payload) {
 
   if (error) throw error;
   return data;
+}
+
+// Excepciones de permisos por usuario puntual (columna jsonb `permisos_custom`).
+// NULL/{} = usar la lógica de permisos por rol existente (ver permissionsService.js).
+export async function updateUsuarioPermisos(id, permisosCustom) {
+  const { data, error } = await supabase
+    .from("usuarios")
+    .update({ permisos_custom: permisosCustom })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/* =========================
+   ROLES Y PERMISOS
+   Permisos por defecto de cada rol organizacional (tabla roles_permisos).
+   Ver src/services/permissionsService.js para cómo se consumen.
+========================= */
+
+export async function getRolesPermisos() {
+  const { data, error } = await supabase
+    .from("roles_permisos")
+    .select("*")
+    .order("rol", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createRolPermisos(rol) {
+  const cleanRol = String(rol || "").trim();
+  if (!cleanRol) throw new Error("El nombre del rol no puede estar vacío.");
+
+  const { data, error } = await supabase
+    .from("roles_permisos")
+    .insert([{ rol: cleanRol, permisos: {} }])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateRolPermisos(id, permisos) {
+  const { data, error } = await supabase
+    .from("roles_permisos")
+    .update({ permisos, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteRolPermisos(id) {
+  const { error } = await supabase.from("roles_permisos").delete().eq("id", id);
+
+  if (error) throw error;
+  return true;
 }

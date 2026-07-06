@@ -1,45 +1,21 @@
 ﻿import { NavLink } from "react-router-dom";
+import { canViewModule } from "../services/permissionsService";
 
 const menuItems = [
-  { label: "Inicio Ejecutivo", route: "/" },
-  { label: "Desempeño Organizacional", route: "/performance" },
-  { label: "Seguimiento Estratégico", route: "/strategic-followup" },
-  { label: "Despliegue Estratégico", route: "/strategic-deployment" },
-  { label: "Diseño organizacional", route: "/capacity" },
-  { label: "Balance de Carga", route: "/workload-balance" },
-  { label: "Centro de Decisiones", route: "/decision-center" },
-  { label: "Madurez Organizacional", route: "/maturity" },
-  { label: "Diagnóstico SIG", route: "/sig" },
-  { label: "Catálogo Organizacional", route: "/organization-catalog" },
+  { label: "Inicio Ejecutivo", route: "/", moduleKey: "home" },
+  { label: "Desempeño Organizacional", route: "/performance", moduleKey: "performance" },
+  { label: "Seguimiento Estratégico", route: "/strategic-followup", moduleKey: "strategic-followup" },
+  { label: "Despliegue Estratégico", route: "/strategic-deployment", moduleKey: "strategic-deployment" },
+  { label: "Diseño organizacional", route: "/capacity", moduleKey: "capacity" },
+  { label: "Balance de Carga", route: "/workload-balance", moduleKey: "workload-balance" },
+  { label: "Centro de Decisiones", route: "/decision-center", moduleKey: "decision-center" },
+  { label: "Madurez Organizacional", route: "/maturity", moduleKey: "maturity" },
+  { label: "Diagnóstico SIG", route: "/sig", moduleKey: "sig" },
+  { label: "Catálogo Organizacional", route: "/organization-catalog", moduleKey: "organization-catalog" },
 ];
-
-const restrictedRoles = ["PM", "Analista de Procesos"];
-
-const allowedForRestricted = [
-  "Seguimiento Estratégico",
-  "Diseño organizacional",
-  "Catálogo Organizacional",
-  "Balance de Carga",
-  "Madurez Organizacional",
-  "Diagnóstico SIG",
-];
-
-function getUserRole(currentUser) {
-  return (
-    currentUser?.rol_organizacional ||
-    currentUser?.rol_sistema ||
-    currentUser?.role ||
-    ""
-  );
-}
 
 export default function Sidebar({ currentUser }) {
-  const userRole = getUserRole(currentUser);
-  const isRestrictedUser = restrictedRoles.includes(userRole);
-
-  const visibleMenuItems = isRestrictedUser
-    ? menuItems.filter((item) => allowedForRestricted.includes(item.label))
-    : menuItems;
+  const visibleMenuItems = menuItems.filter((item) => canViewModule(currentUser, item.moduleKey));
 
   return (
     <aside className="w-[280px] min-h-screen bg-[#071226] text-white flex flex-col">

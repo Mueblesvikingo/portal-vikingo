@@ -20,6 +20,7 @@ import {
   getSubprocessTraceability,
 createSubprocessTraceability,
 } from "../../services/organizationalDesignService";
+import { canEditModule } from "../../services/permissionsService";
 
 const organizationalDesignVideoUrl = "https://www.youtube.com/embed/h9zZ-Ct12q4?autoplay=1&rel=0&modestbranding=1";
 
@@ -2089,7 +2090,8 @@ function DeleteConfirmModal({ item, onCancel, onConfirm }) {
 }
 
 
-export default function CapacityModule() {
+export default function CapacityModule({ currentUser } = {}) {
+  const canEdit = canEditModule(currentUser, "capacity");
   const [processData, setProcessData] = useState(ventasProcesses);
   const [laneOptions, setLaneOptions] = useState(processLanes);
   const [selectedProcess, setSelectedProcess] = useState(null);
@@ -2546,11 +2548,13 @@ export default function CapacityModule() {
 }, [selectedProcess]);
 
   const saveProcessChanges = (updatedFields) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     setProcessData((current) => current.map((process) => (process.id === selectedProcess?.id ? { ...process, ...updatedFields } : process)));
     setSelectedProcess((current) => (current ? { ...current, ...updatedFields } : current));
   };
 
   const saveSubprocessGeneralChanges = async (updatedFields) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     if (!selectedSubprocess?.id) return;
 
     const subprocessId = selectedSubprocess.subproceso_id || selectedSubprocess.id;
@@ -2639,6 +2643,7 @@ export default function CapacityModule() {
   };
 
   const saveActivityChanges = async (updatedActivity) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     let savedActivity = updatedActivity;
     const processNameForSave = selectedProcess?.name || selectedProcessName || updatedActivity.proceso || updatedActivity.processName;
     const activityDbId =
@@ -2742,6 +2747,7 @@ export default function CapacityModule() {
   };
 
   const confirmDeleteSubprocess = async () => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     if (!deleteConfirm?.id) return;
 
     try {
@@ -2772,6 +2778,7 @@ export default function CapacityModule() {
   const nextBlockOrder = (selectedProcess?.activities || []).length;
 
   const addSupabaseRole = async (laneName, order) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return null; }
     if (!selectedProcessName) return null;
 
     const normalizeLaneName = (value) => String(value || "").trim();
@@ -2836,6 +2843,7 @@ export default function CapacityModule() {
   };
 
   const saveSupabaseRole = async (draft) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     if (!selectedProcessName) return;
     try {
       await createRole({
@@ -2853,6 +2861,7 @@ export default function CapacityModule() {
   };
 
   const addSupabaseSubprocess = async (block) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return null; }
     if (!selectedProcessName) return null;
 
     const laneName = block?.lane || block?.responsible || selectedProcess?.owner || "Subprocesos";
@@ -2904,6 +2913,7 @@ export default function CapacityModule() {
   };
 
  const addSupabaseActivity = async (block) => {
+  if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return null; }
   if (!selectedProcessName || !selectedSubprocess) return null;
 
   const laneName =
@@ -2975,6 +2985,7 @@ export default function CapacityModule() {
 };
 
   const saveSupabaseActivity = async (draft) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     if (!selectedProcessName) return;
     try {
       await createActivity({
@@ -2992,6 +3003,7 @@ export default function CapacityModule() {
   };
 
   const updateSupabaseActivityInline = (blockId, updates) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     if (!selectedProcess?.id || !blockId) return;
 
     const cleanUpdates = { ...updates };
@@ -3009,6 +3021,7 @@ export default function CapacityModule() {
   };
 
   const removeSupabaseActivity = (blockId, block) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     if (!blockId) return;
 
     setDeleteConfirm({
@@ -3023,6 +3036,7 @@ export default function CapacityModule() {
   };
 
   const removeSupabaseRole = (lane) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     if (!lane?.roleId) return;
     updateRole(lane.roleId, { orden: null, activo: true })
       .then(() => reloadSelectedProcessData(selectedProcessName))
@@ -3030,6 +3044,7 @@ export default function CapacityModule() {
   };
 
   const updateSupabaseRoleInline = (lane, updates) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     if (!lane?.roleId) return;
 
     updateRole(lane.roleId, {
@@ -3042,6 +3057,7 @@ export default function CapacityModule() {
   };
 
   const saveSupabaseLaneOrder = async (orderedLanes) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     const updates = (orderedLanes || [])
       .map((lane, index) => ({
         id: lane?.id || lane?.roleId,
@@ -3069,6 +3085,7 @@ export default function CapacityModule() {
   };
 
   const updateSupabaseSubprocessInline = (blockId, updates) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     if (!blockId) return;
 
     updateSubprocess(blockId, {
@@ -3084,6 +3101,7 @@ export default function CapacityModule() {
   };
 
   const removeSupabaseSubprocess = (blockId, block) => {
+    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
     if (!blockId) return;
 
     setDeleteConfirm({
@@ -3098,6 +3116,7 @@ export default function CapacityModule() {
   };
 
   const moveSupabaseSubprocess = (blockId, order, roleId, laneName, orderedBlocks = []) => {
+    if (!canEdit) return;
     if (!blockId) return;
 
     const fallbackOrder = Number.isFinite(Number(order)) ? Number(order) + 1 : 1;
@@ -3115,6 +3134,7 @@ export default function CapacityModule() {
   };
 
   const moveSupabaseActivity = (blockId, order, roleId, laneName, orderedBlocks = []) => {
+    if (!canEdit) return;
     if (!blockId) return;
 
     const fallbackOrder = Number.isFinite(Number(order)) ? Number(order) + 1 : 1;
@@ -3141,6 +3161,7 @@ export default function CapacityModule() {
               <div className="mt-1 truncate text-lg font-black text-white">{selectedSubprocess.name}</div>
             </div>
             <div className="flex items-center gap-2">
+              {!canEdit && <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-white">Solo lectura</span>}
               <button onClick={() => setShowGeneralData(true)} className="rounded-xl bg-white/10 px-4 py-1.5 text-[11px] font-black text-white hover:bg-white/20">Datos generales</button>
               <button onClick={() => { setSelectedSubprocess(null); setSelectedActivity(null); setShowGeneralData(false); }} className="rounded-xl bg-white/10 px-4 py-1.5 text-[11px] font-black text-white hover:bg-white/20">&larr; Volver al macro</button>
             </div>
@@ -3240,7 +3261,10 @@ export default function CapacityModule() {
 
       <section className="overflow-hidden rounded-3xl border border-gray-200 bg-white">
         <div className="bg-[#071226] px-5 py-2">
-          <div className="text-lg font-black text-white">MACROPROCESO {selectedProcess?.name || processFilter}</div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-lg font-black text-white">MACROPROCESO {selectedProcess?.name || processFilter}</div>
+            {!canEdit && <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-white">Solo lectura</span>}
+          </div>
           <div className="text-[11px] text-gray-400">Flujo horizontal por carriles de rol. Selecciona un bloque para abrir su vista detallada.</div>
         </div>
         <VisualGridMap

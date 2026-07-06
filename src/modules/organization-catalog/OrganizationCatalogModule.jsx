@@ -12,6 +12,10 @@ import {
   getUsuarios,
   createUsuario,
   updateUsuario,
+  updateUsuarioPermisos,
+  getRolesPermisos,
+  createRolPermisos,
+  updateRolPermisos,
 } from "../../services/organizationCatalogService";
 
 const TABS = [
@@ -51,8 +55,64 @@ const EMPTY_USUARIO = {
   puesto: "",
   rol_sistema: "Usuario",
   rol_organizacional: "",
+  password_hash: "",
+  persona_id: "",
   activo: true,
 };
+
+// Módulos del menú (ver Sidebar.jsx) sobre los que se puede dar una excepción
+// de permisos a un usuario puntual. `editable: true` solo en los dos módulos
+// donde hoy existe un candado de edición real (ver permissionsService.js);
+// en el resto, un checkbox de "editar" no bloquearía nada todavía.
+const PERMISSION_MODULES = [
+  { key: "home", label: "Inicio Ejecutivo", editable: false },
+  { key: "performance", label: "Desempeño Organizacional", editable: false },
+  { key: "strategic-followup", label: "Seguimiento Estratégico", editable: false },
+  { key: "strategic-deployment", label: "Despliegue Estratégico", editable: false },
+  { key: "capacity", label: "Diseño Organizacional", editable: true },
+  { key: "workload-balance", label: "Balance de Carga", editable: true },
+  { key: "decision-center", label: "Centro de Decisiones", editable: false },
+  { key: "maturity", label: "Madurez Organizacional", editable: false },
+  { key: "sig", label: "Diagnóstico SIG", editable: false },
+  { key: "organization-catalog", label: "Catálogo Organizacional", editable: false },
+];
+
+function buildPermisosDraft(permisosCustom) {
+  const draft = {};
+
+  PERMISSION_MODULES.forEach(({ key }) => {
+    const override = permisosCustom?.[key];
+    draft[key] = {
+      visible: typeof override?.visible === "boolean" ? String(override.visible) : "default",
+      editar: typeof override?.editar === "boolean" ? String(override.editar) : "default",
+    };
+  });
+
+  return draft;
+}
+
+function serializePermisosDraft(draft) {
+  const result = {};
+
+  PERMISSION_MODULES.forEach(({ key }) => {
+    const entry = draft[key] || {};
+    const moduleOverride = {};
+
+    if (entry.visible === "true" || entry.visible === "false") {
+      moduleOverride.visible = entry.visible === "true";
+    }
+
+    if (entry.editar === "true" || entry.editar === "false") {
+      moduleOverride.editar = entry.editar === "true";
+    }
+
+    if (Object.keys(moduleOverride).length > 0) {
+      result[key] = moduleOverride;
+    }
+  });
+
+  return Object.keys(result).length > 0 ? result : null;
+}
 
 export default function OrganizationCatalogModule() {
   const [activeTab, setActiveTab] = useState("puestos");
@@ -61,6 +121,7 @@ export default function OrganizationCatalogModule() {
   const [personas, setPersonas] = useState([]);
   const [roles, setRoles] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
+  const [rolesPermisos, setRolesPermisos] = useState([]);
 
   const [puestoForm, setPuestoForm] = useState(EMPTY_PUESTO);
   const [personaForm, setPersonaForm] = useState(EMPTY_PERSONA);
@@ -70,6 +131,14 @@ export default function OrganizationCatalogModule() {
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const [permisosUser, setPermisosUser] = useState(null);
+  const [permisosDraft, setPermisosDraft] = useState({});
+  const [savingPermisos, setSavingPermisos] = useState(false);
+
+  const [permisosRol, setPermisosRol] = useState(null);
+  const [permisosRolDraft, setPermisosRolDraft] = useState({});
+  const [savingPermisosRol, setSavingPermisosRol] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -88,12 +157,14 @@ export default function OrganizationCatalogModule() {
         getPersonas(),
         getPersonaRoles(),
         getUsuarios(),
+        getRolesPermisos(),
       ]);
 
       if (results[0].status === "fulfilled") setPuestos(results[0].value || []);
       if (results[1].status === "fulfilled") setPersonas(results[1].value || []);
       if (results[2].status === "fulfilled") setRoles(results[2].value || []);
       if (results[3].status === "fulfilled") setUsuarios(results[3].value || []);
+      if (results[4].status === "fulfilled") setRolesPermisos(results[4].value || []);
 
       const errores = results
         .filter((result) => result.status === "rejected")
@@ -131,6 +202,10 @@ export default function OrganizationCatalogModule() {
     const persona = personas.find((p) => String(p.id) === String(personaId));
     return persona?.nombre || "Sin persona";
   }
+
+  const personasVinculables = personas
+    .filter((persona) => persona.tipo === "persona" && persona.activo !== false)
+    .sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || "")));
 
   function getUniquePuestos() {
     const seen = new Set();
@@ -223,6 +298,111 @@ export default function OrganizationCatalogModule() {
       setError(err.message || "Error al cambiar el estatus.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function openPermisosModal(item) {
+    setPermisosUser(item);
+    setPermisosDraft(buildPermisosDraft(item.permisos_custom));
+    setError("");
+    setSuccess("");
+  }
+
+  function closePermisosModal() {
+    setPermisosUser(null);
+    setPermisosDraft({});
+  }
+
+  function updatePermisosDraftField(moduleKey, field, value) {
+    setPermisosDraft((current) => ({
+      ...current,
+      [moduleKey]: { ...current[moduleKey], [field]: value },
+    }));
+  }
+
+  async function savePermisos() {
+    if (!permisosUser) return;
+
+    try {
+      setSavingPermisos(true);
+      setError("");
+      setSuccess("");
+
+      const permisosCustom = serializePermisosDraft(permisosDraft);
+      await updateUsuarioPermisos(permisosUser.id, permisosCustom);
+
+      setSuccess(`Permisos de "${permisosUser.usuario}" actualizados correctamente.`);
+      closePermisosModal();
+      await loadCatalog();
+    } catch (err) {
+      setError(err.message || "Error al guardar los permisos del usuario.");
+    } finally {
+      setSavingPermisos(false);
+    }
+  }
+
+  // Roles que realmente aplican a un usuario: su rol de cuenta, más todos los
+  // roles operativos activos de la persona vinculada (pestaña Roles).
+  function getRolesForUsuario(item) {
+    const applicableRoles = new Set();
+
+    if (item.rol_organizacional) applicableRoles.add(item.rol_organizacional);
+
+    if (item.persona_id) {
+      roles
+        .filter((r) => String(r.persona_id) === String(item.persona_id) && r.activo !== false)
+        .forEach((r) => {
+          if (r.rol) applicableRoles.add(r.rol);
+        });
+    }
+
+    return Array.from(applicableRoles);
+  }
+
+  function openPermisosRolModal(rolNombre) {
+    const existing = rolesPermisos.find((r) => r.rol === rolNombre);
+    setPermisosRol({ rol: rolNombre, id: existing?.id || null });
+    setPermisosRolDraft(buildPermisosDraft(existing?.permisos));
+    setError("");
+    setSuccess("");
+  }
+
+  function closePermisosRolModal() {
+    setPermisosRol(null);
+    setPermisosRolDraft({});
+  }
+
+  function updatePermisosRolDraftField(moduleKey, field, value) {
+    setPermisosRolDraft((current) => ({
+      ...current,
+      [moduleKey]: { ...current[moduleKey], [field]: value },
+    }));
+  }
+
+  async function savePermisosRol() {
+    if (!permisosRol) return;
+
+    try {
+      setSavingPermisosRol(true);
+      setError("");
+      setSuccess("");
+
+      const permisos = serializePermisosDraft(permisosRolDraft) || {};
+
+      if (permisosRol.id) {
+        await updateRolPermisos(permisosRol.id, permisos);
+      } else {
+        const created = await createRolPermisos(permisosRol.rol);
+        await updateRolPermisos(created.id, permisos);
+      }
+
+      setSuccess(`Permisos por defecto del rol "${permisosRol.rol}" actualizados correctamente.`);
+      closePermisosRolModal();
+      await loadCatalog();
+    } catch (err) {
+      setError(err.message || "Error al guardar los permisos del rol.");
+    } finally {
+      setSavingPermisosRol(false);
     }
   }
 
@@ -407,6 +587,7 @@ export default function OrganizationCatalogModule() {
                     "Puesto",
                     "Rol sistema",
                     "Rol organizacional",
+                    "Persona vinculada",
                     "Estatus",
                     "Acciones",
                   ]}
@@ -439,16 +620,40 @@ export default function OrganizationCatalogModule() {
                         }
                       />
                       <td className="px-5 py-2 text-sm">
+                        <select
+                          value={item.persona_id || ""}
+                          onChange={(e) => updateCell("usuarios", item, "persona_id", e.target.value || null)}
+                          className="w-full min-w-[180px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-slate-400"
+                        >
+                          <option value="">Sin vincular</option>
+                          {personasVinculables.map((persona) => (
+                            <option key={persona.id} value={persona.id}>
+                              {persona.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-5 py-2 text-sm">
                         <StatusBadge active={item.activo} />
                       </td>
                       <td className="px-5 py-2 text-sm">
-                        <ActionButton item={item} onToggle={toggleActivo} />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openPermisosModal(item)}
+                            className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                          >
+                            Permisos
+                          </button>
+                          <ActionButton item={item} onToggle={toggleActivo} />
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
+
           </div>
         </section>
 
@@ -502,10 +707,30 @@ export default function OrganizationCatalogModule() {
               {activeTab === "usuarios" && (
                 <>
                   <Input label="Usuario" value={usuarioForm.usuario} onChange={(value) => setUsuarioForm({ ...usuarioForm, usuario: value })} required />
+                  <Input label="Contraseña" type="password" value={usuarioForm.password_hash} onChange={(value) => setUsuarioForm({ ...usuarioForm, password_hash: value })} required />
                   <Input label="Nombre" value={usuarioForm.nombre} onChange={(value) => setUsuarioForm({ ...usuarioForm, nombre: value })} required />
                   <Input label="Puesto" value={usuarioForm.puesto} onChange={(value) => setUsuarioForm({ ...usuarioForm, puesto: value })} />
                   <Input label="Rol sistema" value={usuarioForm.rol_sistema} onChange={(value) => setUsuarioForm({ ...usuarioForm, rol_sistema: value })} />
-                  <Input label="Rol organizacional" value={usuarioForm.rol_organizacional} onChange={(value) => setUsuarioForm({ ...usuarioForm, rol_organizacional: value })} />
+                  {rolesPermisos.length > 0 ? (
+                    <Select label="Rol organizacional" value={usuarioForm.rol_organizacional} onChange={(value) => setUsuarioForm({ ...usuarioForm, rol_organizacional: value })}>
+                      <option value="">Seleccionar rol</option>
+                      {rolesPermisos.map((rolItem) => (
+                        <option key={rolItem.id} value={rolItem.rol}>
+                          {rolItem.rol}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input label="Rol organizacional" value={usuarioForm.rol_organizacional} onChange={(value) => setUsuarioForm({ ...usuarioForm, rol_organizacional: value })} />
+                  )}
+                  <Select label="Persona vinculada" value={usuarioForm.persona_id} onChange={(value) => setUsuarioForm({ ...usuarioForm, persona_id: value })}>
+                    <option value="">Sin vincular</option>
+                    {personasVinculables.map((persona) => (
+                      <option key={persona.id} value={persona.id}>
+                        {persona.nombre}
+                      </option>
+                    ))}
+                  </Select>
                   <Switch value={usuarioForm.activo} onChange={(value) => setUsuarioForm({ ...usuarioForm, activo: value })} />
                 </>
               )}
@@ -533,7 +758,149 @@ export default function OrganizationCatalogModule() {
             </form>
           </Modal>
         )}
+
+        {permisosUser && (
+          <Modal
+            title="Permisos personalizados"
+            subtitle={`${permisosUser.nombre || permisosUser.usuario} · excepción sobre los permisos por rol`}
+            onClose={closePermisosModal}
+          >
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs font-black uppercase tracking-widest text-slate-400">Roles de este usuario</div>
+                <p className="mt-1 text-sm text-slate-500">
+                  Cada uno de estos roles trae su propio permiso por defecto. Edítalo aquí y aplicará a{" "}
+                  <span className="font-semibold text-slate-700">todos</span> los usuarios que tengan ese mismo rol,
+                  no solo a este.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {getRolesForUsuario(permisosUser).map((rolNombre) => (
+                    <button
+                      key={rolNombre}
+                      type="button"
+                      onClick={() => openPermisosRolModal(rolNombre)}
+                      className="rounded-full border border-slate-300 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-100"
+                    >
+                      {rolNombre} · editar valores por defecto
+                    </button>
+                  ))}
+                  {getRolesForUsuario(permisosUser).length === 0 && (
+                    <span className="text-xs text-slate-400">
+                      Este usuario no tiene rol organizacional ni persona vinculada con roles todavía.
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-sm text-slate-500">
+                Y aquí, una excepción que aplica <span className="font-semibold text-slate-700">solo a este usuario</span>,
+                por encima de lo que digan sus roles.
+              </p>
+
+              <PermisosGrid draft={permisosDraft} onChange={updatePermisosDraftField} />
+
+              <div className="flex justify-end gap-3 border-t border-slate-200 pt-5">
+                <button
+                  type="button"
+                  onClick={closePermisosModal}
+                  className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={savePermisos}
+                  disabled={savingPermisos}
+                  className="rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+                >
+                  {savingPermisos ? "Guardando..." : "Guardar permisos"}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {permisosRol && (
+          <Modal
+            title="Permisos por defecto del rol"
+            subtitle={`${permisosRol.rol} · aplica a todos los usuarios con este rol, salvo excepción puntual`}
+            onClose={closePermisosRolModal}
+          >
+            <div className="space-y-4">
+              <p className="text-sm text-slate-500">
+                Esto define lo que ve y puede editar cualquier usuario con el rol{" "}
+                <span className="font-semibold text-slate-700">{permisosRol.rol}</span> (sea su rol de cuenta o un
+                rol operativo de su persona vinculada), salvo que ese usuario tenga una excepción propia.
+              </p>
+
+              <PermisosGrid draft={permisosRolDraft} onChange={updatePermisosRolDraftField} />
+
+              <div className="flex justify-end gap-3 border-t border-slate-200 pt-5">
+                <button
+                  type="button"
+                  onClick={closePermisosRolModal}
+                  className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={savePermisosRol}
+                  disabled={savingPermisosRol}
+                  className="rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+                >
+                  {savingPermisosRol ? "Guardando..." : "Guardar permisos"}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
       </div>
+    </div>
+  );
+}
+
+function PermisosGrid({ draft, onChange }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200">
+      <table className="min-w-full divide-y divide-slate-200">
+        <TableHead headers={["Módulo", "Visible", "Editar"]} />
+        <tbody className="divide-y divide-slate-100 bg-white">
+          {PERMISSION_MODULES.map((module) => (
+            <tr key={module.key}>
+              <td className="px-5 py-2 text-sm font-semibold text-slate-700">{module.label}</td>
+              <td className="px-5 py-2 text-sm">
+                <select
+                  value={draft[module.key]?.visible || "default"}
+                  onChange={(e) => onChange(module.key, "visible", e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 outline-none focus:border-slate-900"
+                >
+                  <option value="default">Sin excepción (valor por defecto)</option>
+                  <option value="true">Sí, mostrar siempre</option>
+                  <option value="false">No, ocultar siempre</option>
+                </select>
+              </td>
+              <td className="px-5 py-2 text-sm">
+                {module.editable ? (
+                  <select
+                    value={draft[module.key]?.editar || "default"}
+                    onChange={(e) => onChange(module.key, "editar", e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 outline-none focus:border-slate-900"
+                  >
+                    <option value="default">Sin excepción (valor por defecto)</option>
+                    <option value="true">Sí, puede editar</option>
+                    <option value="false">No, solo lectura</option>
+                  </select>
+                ) : (
+                  <span className="text-xs text-slate-400">No aplica todavía</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -616,18 +983,30 @@ function Modal({ title, subtitle, children, onClose }) {
   );
 }
 
-function Input({ label, value, onChange, required = false }) {
+function Input({ label, value, onChange, required = false, type = "text", suggestions, helpText }) {
+  const listId = suggestions ? `${label.replace(/\s+/g, "-").toLowerCase()}-suggestions` : undefined;
+
   return (
     <label className="block">
       <span className="mb-1 block text-sm font-semibold text-slate-700">
         {label}
       </span>
       <input
+        type={type}
         value={value || ""}
         required={required}
+        list={listId}
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
       />
+      {helpText && <span className="mt-1 block text-xs text-slate-400">{helpText}</span>}
+      {suggestions && (
+        <datalist id={listId}>
+          {suggestions.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+      )}
     </label>
   );
 }

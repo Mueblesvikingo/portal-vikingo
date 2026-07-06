@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import AppLayout from "../../layout/AppLayout";
+import { canViewModule } from "../../services/permissionsService";
 
 import ExecutiveHome from "../../modules/executive/ExecutiveHome";
 import PerformanceModule from "../../modules/performance/PerformanceModule";
@@ -13,17 +14,11 @@ import MaturityModule from "../../modules/maturity/MaturityModule";
 import SigDiagnosisModule from "../../modules/sig/SigDiagnosisModule";
 import OrganizationCatalogModule from "../../modules/organization-catalog/OrganizationCatalogModule";
 
-function shouldStartInCapacity(currentUser) {
-  const role = currentUser?.rol_organizacional || "";
-
-  return role === "PM" || role === "Analista de Procesos";
-}
-
 export default function AppRouter({
   currentUser,
   onLogout,
 }) {
-  const restrictedStart = shouldStartInCapacity(currentUser);
+  const restrictedStart = !canViewModule(currentUser, "home");
 
   return (
     <BrowserRouter>
@@ -55,7 +50,7 @@ export default function AppRouter({
 
           <Route
             path="/capacity"
-            element={<CapacityModule />}
+            element={<CapacityModule currentUser={currentUser} />}
           />
 
           <Route
@@ -77,7 +72,7 @@ export default function AppRouter({
 
           <Route
             path="/workload-balance"
-            element={<WorkloadBalanceModule />}
+            element={<WorkloadBalanceModule currentUser={currentUser} />}
           />
 
           <Route

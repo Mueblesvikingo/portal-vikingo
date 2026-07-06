@@ -30,6 +30,8 @@ export async function loginWithUserAndPassword(usuario, password) {
     rol_sistema: data.rol_sistema,
     rol_organizacional: data.rol_organizacional,
     activo: data.activo,
+    permisos_custom: data.permisos_custom || null,
+    persona_id: data.persona_id || null,
   };
 }
 
