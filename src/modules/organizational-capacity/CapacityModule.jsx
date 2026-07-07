@@ -20,7 +20,7 @@ import {
   getSubprocessTraceability,
 createSubprocessTraceability,
 } from "../../services/organizationalDesignService";
-import { canEditModule } from "../../services/permissionsService";
+import { canEditProcess } from "../../services/permissionsService";
 
 const organizationalDesignVideoUrl = "https://www.youtube.com/embed/h9zZ-Ct12q4?autoplay=1&rel=0&modestbranding=1";
 
@@ -2091,10 +2091,10 @@ function DeleteConfirmModal({ item, onCancel, onConfirm }) {
 
 
 export default function CapacityModule({ currentUser } = {}) {
-  const canEdit = canEditModule(currentUser, "capacity");
   const [processData, setProcessData] = useState(ventasProcesses);
   const [laneOptions, setLaneOptions] = useState(processLanes);
   const [selectedProcess, setSelectedProcess] = useState(null);
+  const canEdit = canEditProcess(currentUser, selectedProcess);
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [selectedSubprocess, setSelectedSubprocess] = useState(null);
   const [showGeneralData, setShowGeneralData] = useState(false);
@@ -2548,13 +2548,13 @@ export default function CapacityModule({ currentUser } = {}) {
 }, [selectedProcess]);
 
   const saveProcessChanges = (updatedFields) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     setProcessData((current) => current.map((process) => (process.id === selectedProcess?.id ? { ...process, ...updatedFields } : process)));
     setSelectedProcess((current) => (current ? { ...current, ...updatedFields } : current));
   };
 
   const saveSubprocessGeneralChanges = async (updatedFields) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     if (!selectedSubprocess?.id) return;
 
     const subprocessId = selectedSubprocess.subproceso_id || selectedSubprocess.id;
@@ -2643,7 +2643,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const saveActivityChanges = async (updatedActivity) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     let savedActivity = updatedActivity;
     const processNameForSave = selectedProcess?.name || selectedProcessName || updatedActivity.proceso || updatedActivity.processName;
     const activityDbId =
@@ -2747,7 +2747,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const confirmDeleteSubprocess = async () => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     if (!deleteConfirm?.id) return;
 
     try {
@@ -2778,7 +2778,7 @@ export default function CapacityModule({ currentUser } = {}) {
   const nextBlockOrder = (selectedProcess?.activities || []).length;
 
   const addSupabaseRole = async (laneName, order) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return null; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return null; }
     if (!selectedProcessName) return null;
 
     const normalizeLaneName = (value) => String(value || "").trim();
@@ -2843,7 +2843,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const saveSupabaseRole = async (draft) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     if (!selectedProcessName) return;
     try {
       await createRole({
@@ -2861,7 +2861,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const addSupabaseSubprocess = async (block) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return null; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return null; }
     if (!selectedProcessName) return null;
 
     const laneName = block?.lane || block?.responsible || selectedProcess?.owner || "Subprocesos";
@@ -2913,7 +2913,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
  const addSupabaseActivity = async (block) => {
-  if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return null; }
+  if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return null; }
   if (!selectedProcessName || !selectedSubprocess) return null;
 
   const laneName =
@@ -2985,7 +2985,7 @@ export default function CapacityModule({ currentUser } = {}) {
 };
 
   const saveSupabaseActivity = async (draft) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     if (!selectedProcessName) return;
     try {
       await createActivity({
@@ -3003,7 +3003,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const updateSupabaseActivityInline = (blockId, updates) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     if (!selectedProcess?.id || !blockId) return;
 
     const cleanUpdates = { ...updates };
@@ -3021,7 +3021,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const removeSupabaseActivity = (blockId, block) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     if (!blockId) return;
 
     setDeleteConfirm({
@@ -3036,7 +3036,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const removeSupabaseRole = (lane) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     if (!lane?.roleId) return;
     updateRole(lane.roleId, { orden: null, activo: true })
       .then(() => reloadSelectedProcessData(selectedProcessName))
@@ -3044,7 +3044,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const updateSupabaseRoleInline = (lane, updates) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     if (!lane?.roleId) return;
 
     updateRole(lane.roleId, {
@@ -3057,7 +3057,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const saveSupabaseLaneOrder = async (orderedLanes) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     const updates = (orderedLanes || [])
       .map((lane, index) => ({
         id: lane?.id || lane?.roleId,
@@ -3085,7 +3085,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const updateSupabaseSubprocessInline = (blockId, updates) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     if (!blockId) return;
 
     updateSubprocess(blockId, {
@@ -3101,7 +3101,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const removeSupabaseSubprocess = (blockId, block) => {
-    if (!canEdit) { alert("No tienes permiso para editar Diseño Organizacional."); return; }
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     if (!blockId) return;
 
     setDeleteConfirm({

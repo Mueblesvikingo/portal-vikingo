@@ -174,6 +174,45 @@ export function canEditModule(user, moduleKey) {
   return true;
 }
 
+// Diseño Organizacional: si el usuario/rol tiene una excepción explícita de
+// "editar" (por usuario o por rol), esa excepción manda para TODOS los
+// procesos (permite dar acceso total a alguien, ej. Administrador). Si no hay
+// ninguna excepción explícita, el default deja de ser "editar todo" — pasa a
+// ser "solo puede editar el/los procesos de los que es responsable/dueño",
+// y ve el resto en modo lectura.
+export function canEditProcess(user, process) {
+  const userOverride = getUserModuleOverride(user, "capacity");
+  if (userOverride && typeof userOverride.editar === "boolean") return userOverride.editar;
+
+  const rolesEditar = getRolesFieldValue(user, "capacity", "editar");
+  if (rolesEditar !== null) return rolesEditar;
+
+  return isProcessOwner(user, process);
+}
+
+// Compara nombres de persona tolerando diferencias de orden y acentos: en
+// Supabase el mismo Cristian aparece como "Cristian García Hernández"
+// (procesos.responsable) y como "GARCIA HERNANDEZ CRISTIAN" (personas.nombre).
+// Se compara por el conjunto de palabras normalizado, no por igualdad exacta.
+function normalizeNameWords(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .sort()
+    .join(" ");
+}
+
+function isProcessOwner(user, process) {
+  const ownerName = normalizeNameWords(process?.owner || process?.responsable || process?.responsible);
+  if (!ownerName) return false;
+
+  const candidateNames = [user?.persona_nombre, user?.nombre].filter(Boolean).map(normalizeNameWords);
+  return candidateNames.includes(ownerName);
+}
+
 export function hasWorkloadFullAccess(user) {
   const userOverride = getUserModuleOverride(user, "workload-balance");
   if (userOverride && typeof userOverride.editar === "boolean") return userOverride.editar;

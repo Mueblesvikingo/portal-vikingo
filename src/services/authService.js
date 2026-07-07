@@ -10,7 +10,7 @@ export async function loginWithUserAndPassword(usuario, password) {
 
   const { data, error } = await supabase
     .from("usuarios")
-    .select("*")
+    .select("*, persona:personas(nombre)")
     .eq("usuario", cleanUser)
     .eq("activo", true)
     .single();
@@ -32,6 +32,7 @@ export async function loginWithUserAndPassword(usuario, password) {
     activo: data.activo,
     permisos_custom: data.permisos_custom || null,
     persona_id: data.persona_id || null,
+    persona_nombre: data.persona?.nombre || null,
   };
 }
 
