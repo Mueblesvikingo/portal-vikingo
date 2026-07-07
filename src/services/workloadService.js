@@ -106,6 +106,7 @@ export async function getWorkloadPeople() {
       .select(`
         id,
         nombre,
+        puesto,
         activo,
         tipo,
         horas_lunes,
