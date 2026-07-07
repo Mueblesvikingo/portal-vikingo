@@ -23,12 +23,15 @@ export async function getWorkloadActivities() {
 }
 
 export async function updateWorkloadSourceActivity(activityId, payload) {
-  const basePayload = {
-    activa: payload.activa,
-    estado: payload.estado,
-    duracion_minutos: payload.duracion_minutos,
-    frecuencia: payload.frecuencia,
-  };
+  const basePayload = Object.fromEntries(
+    Object.entries({
+      activa: payload.activa,
+      estado: payload.estado,
+      duracion_minutos: payload.duracion_minutos,
+      frecuencia: payload.frecuencia,
+      mes_planeado: payload.mes_planeado,
+    }).filter(([, value]) => value !== undefined)
+  );
   const payloadWithTimestamp = {
     ...basePayload,
     updated_at: new Date().toISOString(),
@@ -610,3 +613,4 @@ export async function removeMonthlyPlanActivity(planId) {
     return { ok: false, error: err };
   }
 }
+

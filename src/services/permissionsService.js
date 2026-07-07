@@ -18,6 +18,11 @@ import { supabase } from "./supabase";
 
 const RESTRICTED_MENU_ROLES = ["PM", "Analista de Procesos"];
 
+// Módulos que están OCULTOS por defecto para cualquier rol, salvo que ese rol
+// tenga una excepción explícita "visible: true" en roles_permisos (ver
+// Catálogo Organizacional → Usuarios → Permisos → "Roles de este usuario").
+const MODULES_HIDDEN_BY_DEFAULT = ["organization-catalog"];
+
 const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
   "strategic-followup",
   "capacity",
@@ -143,6 +148,8 @@ function getRolesFieldValue(user, moduleKey, field) {
 }
 
 function defaultVisible(user, moduleKey) {
+  if (MODULES_HIDDEN_BY_DEFAULT.includes(moduleKey)) return false;
+
   const role = getPrimaryRole(user);
   if (!RESTRICTED_MENU_ROLES.includes(role)) return true;
 

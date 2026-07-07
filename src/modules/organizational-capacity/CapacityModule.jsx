@@ -1584,15 +1584,15 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     getOrderedBlocks(sourcePositions).map((block, index) => {
       const position = sourcePositions[block.id] || positions[block.id] || {};
       const lane = visibleLanes[toNumber(position.laneIndex, 0)] || {};
-      const manualNumber = toNumber(
-        firstValue(block, ["displayNumber", "order", "orden_flujo", "secuencia"], index + 1),
-        index + 1
-      );
-
+      // El orden que se guarda en Supabase debe reflejar la posición NUEVA
+      // (index) tras el arrastre, no el orden_flujo viejo del bloque — si no,
+      // mover un bloque nunca queda guardado en la base de datos y, en
+      // cualquier navegador/dispositivo sin la caché local, el bloque vuelve
+      // a su posición anterior.
       return {
         id: block.id,
-        order: manualNumber,
-        orden_flujo: manualNumber,
+        order: index + 1,
+        orden_flujo: index + 1,
         positionOrder: index + 1,
         roleId: lane.roleId,
         lane: lane.lane,

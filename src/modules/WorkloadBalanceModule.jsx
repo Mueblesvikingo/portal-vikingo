@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createWorkloadAssignment, createWorkloadSourceActivity, findExistingSavedMonth, findExistingSavedWeek, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanOrder, updateWorkloadAssignment, updateWorkloadSourceActivity } from "../services/workloadService";
 import { hasWorkloadFullAccess, canEditWorkloadPendingActivities } from "../services/permissionsService";
 
@@ -357,6 +357,43 @@ function getPendingActivityPlannedMonth(activity) {
       activity?.sourceRecord?.mes_planeado
   ) || "Sin definir";
 }
+function normalizePlannedMonthInput(value) {
+  const text = cleanText(value);
+  if (!text || normalizeText(text) === "sin definir") return "";
+  const match = text.match(/^(\d{4})-(\d{2})/);
+  if (match) return `${match[1]}-${match[2]}`;
+  const parsed = new Date(`${text}T00:00:00`);
+  if (!Number.isNaN(parsed.getTime())) return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
+  return "";
+}
+function formatPlannedMonthLabel(value) {
+  const normalized = normalizePlannedMonthInput(value);
+  if (!normalized) return "Sin mes previsto";
+  const [year, month] = normalized.split("-").map(Number);
+  const date = new Date(year, month - 1, 1);
+  return new Intl.DateTimeFormat("es-MX", { month: "long", year: "numeric" }).format(date);
+}
+function getMonthsUntilPlannedMonth(value) {
+  const normalized = normalizePlannedMonthInput(value);
+  if (!normalized) return null;
+  const [year, month] = normalized.split("-").map(Number);
+  const today = new Date();
+  return (year - today.getFullYear()) * 12 + (month - 1 - today.getMonth());
+}
+function getPlannedMonthStatusText(value) {
+  const months = getMonthsUntilPlannedMonth(value);
+  if (months === null) return "Pendiente de definir";
+  if (months < 0) return `Vencida hace ${Math.abs(months)} ${Math.abs(months) === 1 ? "mes" : "meses"}`;
+  if (months === 0) return "Planificar este mes";
+  if (months === 1) return "Falta 1 mes";
+  return `Faltan ${months} meses`;
+}
+function getPendingActivityPlannedMonthLabel(activity) {
+  const plannedMonth = getPendingActivityPlannedMonth(activity);
+  const normalized = normalizePlannedMonthInput(plannedMonth);
+  if (!normalized) return "Sin mes previsto";
+  return `${formatPlannedMonthLabel(normalized)} · ${getPlannedMonthStatusText(normalized)}`;
+}
 function comparePendingActivities(a, b) {
   const processDiff = cleanText(a?.proceso).localeCompare(cleanText(b?.proceso));
   if (processDiff !== 0) return processDiff;
@@ -700,15 +737,73 @@ function PendingActivitiesView({ hasSelectedPerson, activities, totalHours, canE
     const statusValue = inactive ? "inactive" : activity.sourceRecord?.estado || activity.estado || activity.estadoAgenda;
     const subprocess = getPendingActivitySubprocess(activity);
     const activityNumber = getPendingActivityNumber(activity);
-    return <tr key={`${section.key}-${activity.id || getPendingActivityKey(activity)}`} className={`align-top hover:bg-slate-50/70 ${inactive ? "bg-gray-50 text-gray-400" : ""}`}><td className={`px-3 py-2 font-black leading-tight whitespace-normal ${inactive ? "text-gray-400" : "text-slate-800"}`}>{activity.actividad}</td><td className={`px-3 py-2 font-bold leading-tight whitespace-normal ${inactive ? "text-gray-400" : "text-slate-600"}`}><span className="block">{activity.proceso}</span>{subprocess && <span className={`mt-0.5 block text-[9px] font-bold ${inactive ? "text-gray-400" : "text-slate-400"}`}>{subprocess}{activityNumber ? ` · Act. ${activityNumber}` : ""}</span>}</td><td className={`px-3 py-2 font-bold leading-tight whitespace-normal ${inactive ? "text-gray-400" : "text-slate-600"}`}>{activity.rol}</td><td className={`px-3 py-2 font-bold ${inactive ? "text-gray-400" : "text-slate-500"}`}><span className="block">{translateFrequency(activity.frecuencia)}</span>{section.key === "radar" && <span className={`mt-0.5 block text-[8px] font-black ${inactive ? "text-gray-400" : "text-slate-400"}`}>Mes planeado: {getPendingActivityPlannedMonth(activity)}</span>}</td><td className={`px-3 py-2 font-black ${inactive ? "text-gray-400" : "text-slate-600"}`}>{activity.duracionMinutos} min</td><td className="px-3 py-2"><span className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${inactive ? "border-gray-200 bg-gray-100 text-gray-500" : "border-emerald-100 bg-emerald-50 text-emerald-700"}`}>{translateStatus(statusValue)}</span></td><td className="px-3 py-2 text-right"><div className="flex justify-end gap-1">{canEditActivities && <button type="button" onClick={() => onEditActivity(activity)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[9px] font-black text-slate-500 shadow-sm hover:bg-slate-50">Editar</button>}<button type="button" onClick={() => onOpenSchedule(activity)} className="rounded-lg bg-[#001225] px-2 py-1 text-[9px] font-black text-white shadow-sm hover:bg-slate-800">Programar</button></div></td></tr>;
+    return <tr key={`${section.key}-${activity.id || getPendingActivityKey(activity)}`} className={`align-top hover:bg-slate-50/70 ${inactive ? "bg-gray-50 text-gray-400" : ""}`}><td className={`px-3 py-2 font-black leading-tight whitespace-normal ${inactive ? "text-gray-400" : "text-slate-800"}`}>{activity.actividad}</td><td className={`px-3 py-2 font-bold leading-tight whitespace-normal ${inactive ? "text-gray-400" : "text-slate-600"}`}><span className="block">{activity.proceso}</span>{subprocess && <span className={`mt-0.5 block text-[9px] font-bold ${inactive ? "text-gray-400" : "text-slate-400"}`}>{subprocess}{activityNumber ? ` · Act. ${activityNumber}` : ""}</span>}</td><td className={`px-3 py-2 font-bold leading-tight whitespace-normal ${inactive ? "text-gray-400" : "text-slate-600"}`}>{activity.rol}</td><td className={`px-3 py-2 font-bold ${inactive ? "text-gray-400" : "text-slate-500"}`}><span className="block">{translateFrequency(activity.frecuencia)}</span>{section.key === "radar" && <span className={`mt-0.5 block text-[8px] font-black ${inactive ? "text-gray-400" : "text-slate-400"}`}>Mes previsto: {getPendingActivityPlannedMonthLabel(activity)}</span>}</td><td className={`px-3 py-2 font-black ${inactive ? "text-gray-400" : "text-slate-600"}`}>{activity.duracionMinutos} min</td><td className="px-3 py-2"><span className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${inactive ? "border-gray-200 bg-gray-100 text-gray-500" : "border-emerald-100 bg-emerald-50 text-emerald-700"}`}>{translateStatus(statusValue)}</span></td><td className="px-3 py-2 text-right"><div className="flex justify-end gap-1">{canEditActivities && <button type="button" onClick={() => onEditActivity(activity)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[9px] font-black text-slate-500 shadow-sm hover:bg-slate-50">Editar</button>}<button type="button" onClick={() => onOpenSchedule(activity)} className="rounded-lg bg-[#001225] px-2 py-1 text-[9px] font-black text-white shadow-sm hover:bg-slate-800">{section.key === "radar" ? "Mes previsto" : "Programar"}</button></div></td></tr>;
   });
 
   return <div className="p-3"><div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3"><div><p className="text-xs font-black uppercase tracking-widest text-slate-800">Pendientes de programación</p><p className="text-[10px] font-bold text-slate-400">Actividades de los roles asignados a la persona que aún no están en Semana o Mes típico.</p></div><div className="flex gap-2"><span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black text-slate-500">{sortedActivities.length} actividades | {sectionCounts.programmable || 0} programables | {sectionCounts.radar || 0} en radar | {sectionCounts.eventual || 0} eventuales</span></div></div>{hasSelectedPerson && <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-white px-4 py-2"><select value={processFilter} onChange={(event) => setProcessFilter(event.target.value)} className="h-8 min-w-[220px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-black text-slate-600 outline-none"><option value="all">Todos los procesos</option>{processOptions.map((process) => <option key={process} value={process}>{process}</option>)}</select><select value={subprocessFilter} onChange={(event) => setSubprocessFilter(event.target.value)} disabled={subprocessOptions.length === 0} className="h-8 min-w-[220px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-black text-slate-600 outline-none disabled:text-slate-300"><option value="all">Todos los subprocesos</option>{subprocessOptions.map((subprocess) => <option key={subprocess} value={subprocess}>{subprocess}</option>)}</select><button type="button" onClick={() => { setProcessFilter("all"); setSubprocessFilter("all"); }} className="h-8 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-400 transition hover:bg-slate-50 hover:text-slate-700">Limpiar filtros</button></div>}{!hasSelectedPerson ? <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">Selecciona una persona para ver sus actividades pendientes.</div> : sortedActivities.length === 0 ? <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">No hay actividades pendientes por programar.</div> : <div className="divide-y divide-slate-100">{visibleSections.map((section) => <section key={section.key}><div className="flex items-center justify-between gap-2 bg-white px-4 py-2"><div><p className="text-[10px] font-black uppercase tracking-widest text-slate-700">{section.title} ({section.activities.length})</p><p className="text-[9px] font-bold text-slate-400">{section.description}</p></div><span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-black text-slate-400">{section.activities.length} {section.countLabel}</span></div><table className="min-w-full table-fixed divide-y divide-slate-100 text-[10px]"><thead className="bg-slate-50 text-left font-black uppercase tracking-[0.14em] text-slate-400"><tr><th className="w-[32%] px-3 py-2">Actividad</th><th className="w-[18%] px-3 py-2">Proceso</th><th className="w-[18%] px-3 py-2">Rol</th><th className="w-[10%] px-3 py-2">Frecuencia</th><th className="w-[8%] px-3 py-2">Duración</th><th className="w-[8%] px-3 py-2">Estado</th><th className="w-[6%] px-3 py-2 text-right">Acción</th></tr></thead><tbody className="divide-y divide-slate-100">{renderRows(section)}</tbody></table></section>)}</div>}</div></div>;
 }
-function SchedulePendingModal({ activity, selectedDays, selectedWeeks, onToggleDay, onToggleWeek, onSave, onClose }) {
+function SchedulePendingModal({ activity, selectedDays, selectedWeeks, selectedMonth, onToggleDay, onToggleWeek, onChangeMonth, onSave, onClose }) {
   if (!activity) return null;
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white"><div><p className="text-xs font-black uppercase tracking-widest">Programar actividad</p><p className="text-[10px] font-bold text-slate-300">{activity.actividad}</p></div><button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button></div><div className="space-y-3 p-4"><div className="grid gap-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-bold text-slate-600 md:grid-cols-2"><div><span className="text-slate-400">Proceso</span><p className="text-slate-800">{activity.proceso}</p></div><div><span className="text-slate-400">Rol</span><p className="text-slate-800">{activity.rol}</p></div><div><span className="text-slate-400">Frecuencia</span><p className="text-slate-800">{translateFrequency(activity.frecuencia)}</p></div><div><span className="text-slate-400">Duración</span><p className="text-slate-800">{activity.duracionMinutos} min</p></div></div><div className="grid gap-3 md:grid-cols-2"><div className="rounded-2xl border border-slate-200 bg-white p-3"><p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Semana típica</p><div className="space-y-1">{WEEK_DAYS.map((day) => <label key={day} className="flex items-center gap-2 rounded-lg border border-slate-100 px-2 py-1.5 text-[11px] font-bold text-slate-700"><input type="checkbox" checked={selectedDays.includes(day)} onChange={() => onToggleDay(day)} />{day}</label>)}</div></div><div className="rounded-2xl border border-slate-200 bg-white p-3"><p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Mes típico</p><div className="space-y-1">{[1, 2, 3, 4].map((week) => <label key={week} className="flex items-center gap-2 rounded-lg border border-slate-100 px-2 py-1.5 text-[11px] font-bold text-slate-700"><input type="checkbox" checked={selectedWeeks.includes(week)} onChange={() => onToggleWeek(week)} />Semana {week}</label>)}</div></div></div><div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button><button type="button" onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Guardar</button></div></div></div></div>;
+  const isRadarActivity = getPendingActivityFrequencyGroup(activity) === "radar";
+  const monthStatus = getPlannedMonthStatusText(selectedMonth);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest">{isRadarActivity ? "Mes previsto" : "Programar actividad"}</p>
+            <p className="text-[10px] font-bold text-slate-300">{activity.actividad}</p>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
+        </div>
+        <div className="space-y-3 p-4">
+          <div className="grid gap-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-bold text-slate-600 md:grid-cols-2">
+            <div><span className="text-slate-400">Proceso</span><p className="text-slate-800">{activity.proceso}</p></div>
+            <div><span className="text-slate-400">Rol</span><p className="text-slate-800">{activity.rol}</p></div>
+            <div><span className="text-slate-400">Frecuencia</span><p className="text-slate-800">{translateFrequency(activity.frecuencia)}</p></div>
+            <div><span className="text-slate-400">Duración</span><p className="text-slate-800">{activity.duracionMinutos} min</p></div>
+          </div>
+
+          {isRadarActivity ? (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-3">
+              <label className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+                Mes previsto para planificación
+                <input
+                  type="month"
+                  value={selectedMonth || ""}
+                  onChange={(event) => onChangeMonth(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-amber-100 bg-white px-3 py-2 text-[12px] font-black normal-case tracking-normal text-slate-700 outline-none focus:border-amber-300"
+                />
+              </label>
+              <div className="mt-2 rounded-xl border border-amber-100 bg-white px-3 py-2">
+                <p className="text-[10px] font-black text-slate-700">{selectedMonth ? formatPlannedMonthLabel(selectedMonth) : "Sin mes previsto"}</p>
+                <p className="mt-0.5 text-[9px] font-bold text-amber-700">{monthStatus}</p>
+              </div>
+              <p className="mt-2 text-[9px] font-bold leading-snug text-slate-500">Esta actividad queda en radar. No se agregará a Semana típica, Mes típico ni Planeación hasta que el usuario decida programarla llegada la fecha.</p>
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Semana típica</p>
+                <div className="space-y-1">{WEEK_DAYS.map((day) => <label key={day} className="flex items-center gap-2 rounded-lg border border-slate-100 px-2 py-1.5 text-[11px] font-bold text-slate-700"><input type="checkbox" checked={selectedDays.includes(day)} onChange={() => onToggleDay(day)} />{day}</label>)}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Mes típico</p>
+                <div className="space-y-1">{[1, 2, 3, 4].map((week) => <label key={week} className="flex items-center gap-2 rounded-lg border border-slate-100 px-2 py-1.5 text-[11px] font-bold text-slate-700"><input type="checkbox" checked={selectedWeeks.includes(week)} onChange={() => onToggleWeek(week)} />Semana {week}</label>)}</div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+            <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button>
+            <button type="button" onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 function AssignmentScheduleModal({ assignment, draft, setDraft, onSave, onClose }) {
   if (!assignment) return null;
@@ -770,6 +865,7 @@ export default function WorkloadBalanceModule({
   const [schedulingActivity, setSchedulingActivity] = useState(null);
   const [selectedScheduleDays, setSelectedScheduleDays] = useState([]);
   const [selectedScheduleWeeks, setSelectedScheduleWeeks] = useState([]);
+  const [selectedScheduleMonth, setSelectedScheduleMonth] = useState("");
   const [editingPendingActivity, setEditingPendingActivity] = useState(null);
   const [pendingActivityDraft, setPendingActivityDraft] = useState({ estado: "Activa", duracionMinutos: "60", frecuencia: "Mensual" });
   const [pendingActivityEditError, setPendingActivityEditError] = useState("");
@@ -835,6 +931,8 @@ export default function WorkloadBalanceModule({
         duracionMinutos: Number(item.duracion_minutos || 60),
         diaTipico: item.dia_tipico || item.observaciones?.replace("Día típico: ", "") || "Lunes",
         frecuencia: item.frecuencia,
+        mesPlaneado: item.mes_planeado || item.mesPlaneado || "",
+        mes_planeado: item.mes_planeado || item.mesPlaneado || "",
         frecuenciaValor: item.frecuencia_valor,
         ordenFlujo: item.orden_flujo ?? item.ordenFlujo ?? item.sourceRecord?.orden_flujo,
         orden_flujo: item.orden_flujo ?? item.ordenFlujo ?? item.sourceRecord?.orden_flujo,
@@ -1615,12 +1713,14 @@ function canCreateAssignments() {
     setSchedulingActivity(activity);
     setSelectedScheduleDays([]);
     setSelectedScheduleWeeks([]);
+    setSelectedScheduleMonth(normalizePlannedMonthInput(getPendingActivityPlannedMonth(activity)));
     setScheduleMessage("");
   }
   function closeScheduleModal() {
     setSchedulingActivity(null);
     setSelectedScheduleDays([]);
     setSelectedScheduleWeeks([]);
+    setSelectedScheduleMonth("");
   }
   function openPendingActivityEditModal(activity) {
     if (!activity || !canEditPendingActivities()) return;
@@ -1679,6 +1779,29 @@ function canCreateAssignments() {
   }
   async function savePendingSchedule() {
     if (!schedulingActivity || effectivePersonFilter === "all") return;
+
+    if (getPendingActivityFrequencyGroup(schedulingActivity) === "radar") {
+      if (!selectedScheduleMonth) {
+        setScheduleMessage("Selecciona un mes previsto para esta actividad.");
+        return;
+      }
+
+      const result = await updateWorkloadSourceActivity(schedulingActivity.id, {
+        mes_planeado: selectedScheduleMonth,
+      });
+
+      if (!result?.ok) {
+        console.error(result?.error);
+        setScheduleMessage(result?.error?.message || "No se pudo guardar el mes previsto. Revisa permisos o columna mes_planeado en Supabase.");
+        return;
+      }
+
+      await loadWorkloadData();
+      closeScheduleModal();
+      setScheduleMessage("Mes previsto actualizado. La actividad queda en radar para planificarla llegada la fecha.");
+      return;
+    }
+
     if (selectedScheduleDays.length === 0 && selectedScheduleWeeks.length === 0) {
       setScheduleMessage("Selecciona al menos un día o una semana.");
       return;
@@ -2747,8 +2870,10 @@ function canReviewPlan() {
         activity={schedulingActivity}
         selectedDays={selectedScheduleDays}
         selectedWeeks={selectedScheduleWeeks}
+        selectedMonth={selectedScheduleMonth}
         onToggleDay={toggleScheduleDay}
         onToggleWeek={toggleScheduleWeek}
+        onChangeMonth={setSelectedScheduleMonth}
         onSave={savePendingSchedule}
         onClose={closeScheduleModal}
       />
@@ -2805,6 +2930,7 @@ function canReviewPlan() {
     </section>
   );
 }
+
 
 
 
