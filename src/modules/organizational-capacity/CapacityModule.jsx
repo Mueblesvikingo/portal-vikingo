@@ -2076,7 +2076,7 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
 
         {visibleLanes.length === 0 && (
           <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[11px] font-black text-amber-700">
-            {"No existen roles configurados para este macroproceso"}
+            {`No existen roles configurados para ${/subproceso/i.test(title) ? "este subproceso" : "este macroproceso"}`}
           </div>
         )}
 
