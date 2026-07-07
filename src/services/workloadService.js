@@ -230,6 +230,7 @@ export async function createWorkloadAssignment(payload) {
         asigna: payload.asigna,
         asigna_rol: payload.asigna_rol,
         activo: payload.activo ?? true,
+        grupo_reunion: payload.grupo_reunion || null,
       })
       .select("*")
       .single();
