@@ -33,7 +33,7 @@ export default function AppRouter({
               restrictedStart ? (
                 <Navigate to="/capacity" replace />
               ) : (
-                <ExecutiveHome />
+                <ExecutiveHome currentUser={currentUser} />
               )
             }
           />

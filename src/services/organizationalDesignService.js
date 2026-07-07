@@ -14,6 +14,16 @@ function cleanUndefined(payload) {
   return payload;
 }
 
+// A diferencia de `a ?? b`, esto NO sigue a `b` cuando `a` es explícitamente
+// null — null es un valor válido (ej. "limpiar quién aprobó") y no debe
+// colapsar al alias en inglés si ese alias simplemente no fue enviado.
+function firstDefined(...values) {
+  for (const value of values) {
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
 function getUniqueRoles(rows = []) {
   const map = new Map();
 
@@ -427,6 +437,12 @@ export async function updateSubprocess(id, updates) {
     activo:
       updates.activo ??
       (updates.active === undefined ? undefined : updates.active !== false),
+    aprobado: firstDefined(updates.aprobado, updates.approved),
+    aprobado_por: firstDefined(updates.aprobado_por, updates.approvedBy),
+    aprobado_en: firstDefined(updates.aprobado_en, updates.approvedAt),
+    auditado: firstDefined(updates.auditado, updates.audited),
+    auditado_por: firstDefined(updates.auditado_por, updates.auditedBy),
+    auditado_en: firstDefined(updates.auditado_en, updates.auditedAt),
   });
 
   const { data, error } = await supabase

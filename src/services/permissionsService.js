@@ -51,6 +51,13 @@ const WORKLOAD_PENDING_ACTIVITY_EDIT_ROLES = [
   "Administrador Operativo",
 ];
 
+// Equipo estratégico: los únicos roles que, por defecto, pueden aprobar y
+// auditar subprocesos en Diseño Organizacional (independiente de si son
+// responsables/dueños del proceso). Igual que el resto de permisos, se puede
+// dar/quitar esta capacidad a un rol o usuario puntual desde Catálogo
+// Organizacional → Usuarios → Permisos (módulo "capacity", campo "aprobar").
+const STRATEGIC_TEAM_ROLES = ["PM", "Coordinador SIG", "Analista de Procesos", "Director General"];
+
 let rolePermissionsCache = {};
 let personaRolesCache = {};
 
@@ -195,6 +202,21 @@ export function canEditProcess(user, process) {
   if (rolesEditar !== null) return rolesEditar;
 
   return isProcessOwner(user, process);
+}
+
+// Aprobar/auditar un subproceso es distinto de poder editarlo: un
+// responsable de proceso puede editar sus propios subprocesos, pero solo el
+// equipo estratégico valida (aprueba/audita) el diseño, sin importar de
+// quién sea el proceso.
+export function canApproveOrAuditProcess(user) {
+  const userOverride = getUserModuleOverride(user, "capacity");
+  if (userOverride && typeof userOverride.aprobar === "boolean") return userOverride.aprobar;
+
+  const rolesAprobar = getRolesFieldValue(user, "capacity", "aprobar");
+  if (rolesAprobar !== null) return rolesAprobar;
+
+  const roles = getApplicableRoles(user);
+  return roles.some((role) => STRATEGIC_TEAM_ROLES.includes(role));
 }
 
 // Compara nombres de persona tolerando diferencias de orden y acentos: en

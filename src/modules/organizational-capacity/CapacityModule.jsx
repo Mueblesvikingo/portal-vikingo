@@ -20,7 +20,7 @@ import {
   getSubprocessTraceability,
 createSubprocessTraceability,
 } from "../../services/organizationalDesignService";
-import { canEditProcess } from "../../services/permissionsService";
+import { canEditProcess, canApproveOrAuditProcess } from "../../services/permissionsService";
 
 const organizationalDesignVideoUrl = "https://www.youtube.com/embed/h9zZ-Ct12q4?autoplay=1&rel=0&modestbranding=1";
 
@@ -640,6 +640,37 @@ function LockedCard({ title, value, note }) {
   );
 }
 
+function ApprovalCard({ title, active, activeLabel, inactiveLabel, signatureLabel, canManage, onToggle, lockedNote }) {
+  return (
+    <div className={`rounded-2xl border p-3 ${active ? "border-emerald-200 bg-emerald-50" : "border-gray-200 bg-gray-100"}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10px] font-black uppercase text-gray-400">{title}</div>
+        {canManage ? (
+          <button
+            type="button"
+            onClick={onToggle}
+            className={`rounded-full px-3 py-1 text-[9px] font-black ${
+              active
+                ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                : "border border-gray-200 bg-white text-gray-500 hover:border-emerald-300 hover:text-emerald-600"
+            }`}
+          >
+            {active ? "Quitar" : "Marcar"}
+          </button>
+        ) : (
+          <div className="rounded-full bg-white px-2 py-0.5 text-[9px] font-black text-gray-400">Bloqueado</div>
+        )}
+      </div>
+      <div className={`mt-1 text-base font-black ${active ? "text-emerald-700" : "text-[#0f172a]"}`}>
+        {active ? activeLabel : inactiveLabel}
+      </div>
+      <div className="mt-1 text-[9px] font-semibold leading-tight text-gray-400">
+        {active && signatureLabel ? signatureLabel : canManage ? "Puedes marcarlo tú mismo." : lockedNote}
+      </div>
+    </div>
+  );
+}
+
 function ActivityModal({ activity, onSave, onClose, availableRoles = [] }) {
   const [traceLog, setTraceLog] = useState([]);
   const cleanRoleText = (role) => {
@@ -915,8 +946,10 @@ function ActivityModal({ activity, onSave, onClose, availableRoles = [] }) {
   );
 }
 
-function GeneralDataModal({ process, onSave, onClose, traceability = [], availableRoles = [] }) {
-  const restrictedRoles = "Dirección, Coordinador SIG o Analista de procesos";
+function GeneralDataModal({ process, onSave, onClose, traceability = [], availableRoles = [], currentUser = null }) {
+  const restrictedRoles = "PM, Coordinador SIG, Analista de Procesos o Director General";
+  const canApproveAudit = canApproveOrAuditProcess(currentUser);
+  const currentUserLabel = currentUser?.persona_nombre || currentUser?.nombre || currentUser?.usuario || "Usuario actual";
   const roleOptions = useMemo(() => {
     const seen = new Set();
     return (availableRoles || [])
@@ -932,8 +965,12 @@ function GeneralDataModal({ process, onSave, onClose, traceability = [], availab
   name: process.name || process.nombre || "",
   objective: process.objective || process.objetivo || process.description || "",
   active: process.active !== false,
-  approved: Boolean(process.approved),
-  audited: Boolean(process.audited),
+  approved: Boolean(process.aprobado ?? process.approved),
+  approvedBy: process.aprobado_por || process.approvedBy || "",
+  approvedAt: process.aprobado_en || process.approvedAt || null,
+  audited: Boolean(process.auditado ?? process.audited),
+  auditedBy: process.auditado_por || process.auditedBy || "",
+  auditedAt: process.auditado_en || process.auditedAt || null,
   owner: process.owner || process.responsible || process.responsable || "",
   impact: process.impact || "",
   benefit: process.benefit || "",
@@ -963,15 +1000,84 @@ const [traceLog, setTraceLog] = useState(
       ]
 );
 
+  const CONTENT_FIELDS_THAT_INVALIDATE_APPROVAL = ["name", "objective", "impact", "benefit"];
+
   const updateDraft = (field, value) => {
-    setDraft((current) => ({ ...current, [field]: value }));
+    const shouldResetApproval =
+      CONTENT_FIELDS_THAT_INVALIDATE_APPROVAL.includes(field) && (draft.approved || draft.audited);
+
+    setDraft((current) => ({
+      ...current,
+      [field]: value,
+      ...(shouldResetApproval
+        ? { approved: false, approvedBy: "", approvedAt: null, audited: false, auditedBy: "", auditedAt: null }
+        : {}),
+    }));
+
+    setTraceLog((current) => {
+      const withChange = [
+        {
+          id: current.length + 1,
+          field,
+          user: currentUserLabel,
+          date: new Date().toLocaleString("es-MX"),
+          detail: `Cambio registrado en ${field}`,
+        },
+        ...current,
+      ];
+
+      if (!shouldResetApproval) return withChange;
+
+      return [
+        {
+          id: withChange.length + 1,
+          field: "Aprobación/Auditoría",
+          user: "Sistema",
+          date: new Date().toLocaleString("es-MX"),
+          detail: `Se reinició la aprobación y auditoría porque cambió "${field}".`,
+        },
+        ...withChange,
+      ];
+    });
+  };
+
+  const toggleApproved = () => {
+    if (!canApproveAudit) return;
+    const nextApproved = !draft.approved;
+    setDraft((current) => ({
+      ...current,
+      approved: nextApproved,
+      approvedBy: nextApproved ? currentUserLabel : "",
+      approvedAt: nextApproved ? new Date().toISOString() : null,
+    }));
     setTraceLog((current) => [
       {
         id: current.length + 1,
-        field,
-        user: "Usuario actual",
+        field: "Aprobación",
+        user: currentUserLabel,
         date: new Date().toLocaleString("es-MX"),
-        detail: `Cambio registrado en ${field}`,
+        detail: nextApproved ? "Marcado como aprobado." : "Aprobación retirada.",
+      },
+      ...current,
+    ]);
+  };
+
+  const toggleAudited = () => {
+    if (!canApproveAudit) return;
+    const nextAudited = !draft.audited;
+    setDraft((current) => ({
+      ...current,
+      audited: nextAudited,
+      auditedBy: nextAudited ? currentUserLabel : "",
+      auditedAt: nextAudited ? new Date().toISOString() : null,
+    }));
+    setTraceLog((current) => [
+      {
+        id: current.length + 1,
+        field: "Auditoría",
+        user: currentUserLabel,
+        date: new Date().toLocaleString("es-MX"),
+        detail: nextAudited ? "Marcado como auditado." : "Auditoría retirada.",
       },
       ...current,
     ]);
@@ -1025,7 +1131,20 @@ const [traceLog, setTraceLog] = useState(
               <option value="inactive">Inactivo</option>
             </select>
           </div>
-          <LockedCard title="Aprobación" value={draft.approved ? "Aprobado" : "Pendiente de aprobación"} note={`Campo bloqueado. Solo ${restrictedRoles} pueden modificarlo.`} />
+          <ApprovalCard
+            title="Aprobación"
+            active={draft.approved}
+            activeLabel="Aprobado"
+            inactiveLabel="Pendiente de aprobación"
+            signatureLabel={
+              draft.approvedBy
+                ? `Aprobado por ${draft.approvedBy} · ${draft.approvedAt ? new Date(draft.approvedAt).toLocaleString("es-MX") : ""}`
+                : ""
+            }
+            canManage={canApproveAudit}
+            onToggle={toggleApproved}
+            lockedNote={`Campo bloqueado. Solo ${restrictedRoles} pueden modificarlo.`}
+          />
           <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
             <div className="text-[10px] font-black uppercase text-gray-400">Responsable</div>
             <select
@@ -1040,7 +1159,20 @@ const [traceLog, setTraceLog] = useState(
             </select>
           </div>
       
-          <LockedCard title="Auditado" value={draft.audited ? "Auditado" : "No auditado"} note={`Campo bloqueado. Solo ${restrictedRoles} pueden modificarlo.`} />
+          <ApprovalCard
+            title="Auditado"
+            active={draft.audited}
+            activeLabel="Auditado"
+            inactiveLabel="No auditado"
+            signatureLabel={
+              draft.auditedBy
+                ? `Auditado por ${draft.auditedBy} · ${draft.auditedAt ? new Date(draft.auditedAt).toLocaleString("es-MX") : ""}`
+                : ""
+            }
+            canManage={canApproveAudit}
+            onToggle={toggleAudited}
+            lockedNote={`Campo bloqueado. Solo ${restrictedRoles} pueden modificarlo.`}
+          />
 
           <div className="col-span-2 grid gap-3 md:grid-cols-2">
             <div className="rounded-2xl border border-red-100 bg-red-50/50 p-4">
@@ -2610,6 +2742,12 @@ export default function CapacityModule({ currentUser } = {}) {
   impacto: updatedFields.impact,
   beneficio: updatedFields.benefit,
   activo: nextActive,
+  aprobado: updatedFields.approved,
+  aprobado_por: updatedFields.approvedBy || null,
+  aprobado_en: updatedFields.approvedAt || null,
+  auditado: updatedFields.audited,
+  auditado_por: updatedFields.auditedBy || null,
+  auditado_en: updatedFields.auditedAt || null,
 });
       const updatedSubprocess = {
         ...selectedSubprocess,
@@ -2629,7 +2767,19 @@ export default function CapacityModule({ currentUser } = {}) {
         impacto: savedSubprocess.impacto ?? updatedFields.impact,
         benefit: savedSubprocess.beneficio ?? updatedFields.benefit,
         beneficio: savedSubprocess.beneficio ?? updatedFields.benefit,
-      
+        aprobado: savedSubprocess.aprobado ?? updatedFields.approved,
+        approved: savedSubprocess.aprobado ?? updatedFields.approved,
+        aprobado_por: savedSubprocess.aprobado_por ?? updatedFields.approvedBy,
+        approvedBy: savedSubprocess.aprobado_por ?? updatedFields.approvedBy,
+        aprobado_en: savedSubprocess.aprobado_en ?? updatedFields.approvedAt,
+        approvedAt: savedSubprocess.aprobado_en ?? updatedFields.approvedAt,
+        auditado: savedSubprocess.auditado ?? updatedFields.audited,
+        audited: savedSubprocess.auditado ?? updatedFields.audited,
+        auditado_por: savedSubprocess.auditado_por ?? updatedFields.auditedBy,
+        auditedBy: savedSubprocess.auditado_por ?? updatedFields.auditedBy,
+        auditado_en: savedSubprocess.auditado_en ?? updatedFields.auditedAt,
+        auditedAt: savedSubprocess.auditado_en ?? updatedFields.auditedAt,
+
         active: savedSubprocess.activo ?? nextActive,
         activo: savedSubprocess.activo ?? nextActive,
         status: (savedSubprocess.activo ?? nextActive)
@@ -3248,7 +3398,7 @@ export default function CapacityModule({ currentUser } = {}) {
             />
           </div>
         </section>
-        {showGeneralData && selectedSubprocess && <GeneralDataModal process={selectedSubprocess} onSave={saveSubprocessGeneralChanges} onClose={() => setShowGeneralData(false)} availableRoles={selectedProcess?.processRoles || []} />}
+        {showGeneralData && selectedSubprocess && <GeneralDataModal process={selectedSubprocess} onSave={saveSubprocessGeneralChanges} onClose={() => setShowGeneralData(false)} availableRoles={selectedProcess?.processRoles || []} currentUser={currentUser} />}
         {showLaneForm && <LaneFormModal processName={selectedProcessName} nextOrder={nextLaneOrder} onSave={saveSupabaseRole} onClose={() => setShowLaneForm(false)} />}
         {showBlockForm && <BlockFormModal processName={selectedProcessName} roles={selectedAvailableRoles} nextOrder={nextBlockOrder} onSave={saveSupabaseActivity} onClose={() => setShowBlockForm(false)} />}
 {selectedActivity && (
