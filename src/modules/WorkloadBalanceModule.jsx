@@ -267,7 +267,20 @@ function getCriticalityRank(value) {
 }
 function translateFrequency(value) {
   const normalized = normalizeText(value);
-  const labels = { monthly: "Mensual", semanal: "Semanal", weekly: "Semanal", daily: "Diaria", quarterly: "Trimestral", event: "Por evento" };
+  const labels = {
+    monthly: "Mensual",
+    semanal: "Semanal",
+    weekly: "Semanal",
+    daily: "Diaria",
+    bimonthly: "Bimestral",
+    quarterly: "Trimestral",
+    "four-monthly": "Cuatrimestral",
+    semiannual: "Semestral",
+    biannual: "Semestral",
+    annual: "Anual",
+    yearly: "Anual",
+    event: "Por evento",
+  };
   return labels[normalized] || cleanText(value) || "Sin frecuencia";
 }
 function translateStatus(value) {
@@ -343,9 +356,14 @@ function getPendingActivityOperationalOrder(activity) {
 function getPendingActivityFrequencyGroup(activity) {
   const frequency = normalizePendingKeyPart(activity?.frecuencia || activity?.sourceRecord?.frecuencia);
 
-  if (["semanal", "quincenal", "mensual"].includes(frequency)) return "programmable";
-  if (["bimestral", "trimestral", "cuatrimestral", "semestral", "anual"].includes(frequency)) return "radar";
-  if (["por evento", "eventual", "bajo demanda", "cuando aplique"].includes(frequency)) return "eventual";
+  if (["semanal", "weekly", "quincenal", "biweekly", "mensual", "monthly", "diaria", "daily"].includes(frequency)) return "programmable";
+  if (
+    ["bimestral", "bimonthly", "trimestral", "quarterly", "cuatrimestral", "four-monthly", "semestral", "semiannual", "biannual", "anual", "annual", "yearly"].includes(
+      frequency
+    )
+  )
+    return "radar";
+  if (["por evento", "eventual", "bajo demanda", "cuando aplique", "event"].includes(frequency)) return "eventual";
 
   return "programmable";
 }
