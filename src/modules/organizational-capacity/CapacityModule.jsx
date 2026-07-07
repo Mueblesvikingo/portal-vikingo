@@ -2512,14 +2512,22 @@ export default function CapacityModule({ currentUser } = {}) {
     const seenRoleLanes = new Set();
     const roleLanes = roles.map((role) => {
       const lane = normalizeLaneName(role.roleName || role.rol || role.nombre || role.name || role.responsable || "");
-      const order = firstValue(role, ["orden", "order"], null);
+      // El "orden" viene de proceso_roles, que es del proceso completo, no de
+      // este subproceso en particular. isValidLane() (dentro de
+      // VisualGridMap) trata tanto isExplicitLane=true como un orden/order
+      // presente como señal de "mostrar aunque esté vacío" — si se propaga
+      // cualquiera de los dos, un carril creado en el macroproceso (o en
+      // OTRO subproceso) aparecería vacío aquí también. La visibilidad de un
+      // carril vacío en este subproceso debe depender solo de sus propias
+      // actividades o de que el usuario lo haya agregado explícitamente en
+      // esta misma vista (ver visibleEmptyLaneIds en VisualGridMap).
       return {
         id: role.id,
         lane,
         roleId: role.id,
-        orden: order,
-        order,
-        isExplicitLane: order !== null && order !== undefined && String(order).trim() !== "",
+        orden: null,
+        order: null,
+        isExplicitLane: false,
         active: role.activo !== false && role.active !== false,
         blocks: activities.filter((activity) => getActivityLaneName(activity) === lane),
       };
