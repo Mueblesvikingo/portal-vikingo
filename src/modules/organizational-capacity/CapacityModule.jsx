@@ -1377,17 +1377,38 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     }))
   );
 
+  // posicion_columna es la columna visual real guardada en Supabase (incluye
+  // huecos dejados a propósito). Si un bloque ya la tiene, es la fuente de
+  // verdad: debe verse igual para cualquier usuario/dispositivo. Si no la
+  // tiene (bloque nunca movido desde que existe esta columna), se usa el
+  // índice dentro del carril como antes.
   const defaultPositions = useMemo(() => {
     const positions = {};
     initialLanes.filter(isValidLane).forEach((lane, laneIndex) => {
       lane[blockKey].forEach((block, blockIndex) => {
+        const hasPersistedStep = block.posicion_columna !== null && block.posicion_columna !== undefined;
+        const persistedStep = Number(block.posicion_columna);
         positions[block.id] = {
           laneIndex,
-          step: blockIndex,
+          step: hasPersistedStep && Number.isFinite(persistedStep) ? persistedStep : blockIndex,
         };
       });
     });
     return positions;
+  }, [initialLanesSignature, blockKey]);
+
+  // Bloques que ya tienen posicion_columna guardada en Supabase: para estos,
+  // la base de datos manda y NO se debe dejar que una caché local vieja de
+  // este navegador la vuelva a pisar (eso era justo el bug original).
+  const persistedStepBlockIds = useMemo(() => {
+    const ids = new Set();
+    initialLanes.filter(isValidLane).forEach((lane) => {
+      lane[blockKey].forEach((block) => {
+        const hasPersistedStep = block.posicion_columna !== null && block.posicion_columna !== undefined;
+        if (hasPersistedStep && Number.isFinite(Number(block.posicion_columna))) ids.add(String(block.id));
+      });
+    });
+    return ids;
   }, [initialLanesSignature, blockKey]);
 
   const readSavedPositions = () => {
@@ -1405,6 +1426,7 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
 
     Object.entries(savedPositions).forEach(([blockId, position]) => {
       if (!next[blockId]) return;
+      if (persistedStepBlockIds.has(String(blockId))) return;
 
       next[blockId] = {
         ...next[blockId],
@@ -1589,11 +1611,15 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
       // mover un bloque nunca queda guardado en la base de datos y, en
       // cualquier navegador/dispositivo sin la caché local, el bloque vuelve
       // a su posición anterior.
+      // posicionColumna guarda la columna visual EXACTA (incluye huecos
+      // dejados a propósito), para que el acomodo se vea igual en cualquier
+      // cuenta/dispositivo y no solo en el navegador donde se arrastró.
       return {
         id: block.id,
         order: index + 1,
         orden_flujo: index + 1,
         positionOrder: index + 1,
+        posicionColumna: toNumber(position.step, index),
         roleId: lane.roleId,
         lane: lane.lane,
       };
@@ -3127,7 +3153,7 @@ export default function CapacityModule({ currentUser } = {}) {
     Promise.all(
       updates
         .filter((item) => item?.id)
-        .map((item) => updateSubprocessOrder(item.id, item.order, item.lane || laneName))
+        .map((item) => updateSubprocessOrder(item.id, item.order, item.lane || laneName, item.posicionColumna))
     )
       .then(() => reloadSelectedProcessData(selectedProcessName))
       .catch((error) => console.error("Error moviendo subproceso:", error));
@@ -3145,7 +3171,9 @@ export default function CapacityModule({ currentUser } = {}) {
     Promise.all(
       updates
         .filter((item) => item?.id)
-        .map((item) => updateActivityOrder(item.id, item.order, item.roleId || roleId, item.lane || laneName))
+        .map((item) =>
+          updateActivityOrder(item.id, item.order, item.roleId || roleId, item.lane || laneName, item.posicionColumna)
+        )
     )
       .then(() => reloadSelectedProcessData(selectedProcessName))
       .catch((error) => console.error("Error actualizando orden de flujo:", error));

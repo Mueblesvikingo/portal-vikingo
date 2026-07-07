@@ -440,7 +440,7 @@ export async function updateSubprocess(id, updates) {
   return data;
 }
 
-export async function updateSubprocessOrder(id, order, carril) {
+export async function updateSubprocessOrder(id, order, carril, posicionColumna) {
   if (!id) {
     throw new Error("updateSubprocessOrder requiere un id real de Supabase.");
   }
@@ -452,6 +452,10 @@ export async function updateSubprocessOrder(id, order, carril) {
   if (carril) {
     updates.carril = carril;
     updates.responsable = carril;
+  }
+
+  if (Number.isFinite(Number(posicionColumna))) {
+    updates.posicion_columna = Number(posicionColumna);
   }
 
   const { data, error } = await supabase
@@ -638,7 +642,7 @@ export async function updateActivity(id, updates) {
   return data;
 }
 
-export async function updateActivityOrder(id, order, roleId, laneName) {
+export async function updateActivityOrder(id, order, roleId, laneName, posicionColumna) {
   if (!id) {
     throw new Error("updateActivityOrder requiere un id real de Supabase.");
   }
@@ -651,6 +655,10 @@ export async function updateActivityOrder(id, order, roleId, laneName) {
     updates.rol = laneName;
     updates.responsable = laneName;
     updates.puesto = laneName;
+  }
+
+  if (Number.isFinite(Number(posicionColumna))) {
+    updates.posicion_columna = Number(posicionColumna);
   }
 
   const { data, error } = await supabase
