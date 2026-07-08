@@ -21,6 +21,7 @@ import {
 createSubprocessTraceability,
 } from "../../services/organizationalDesignService";
 import { canEditProcess, canApproveOrAuditProcess } from "../../services/permissionsService";
+import OrgDesignAssistant from "./OrgDesignAssistant";
 
 const organizationalDesignVideoUrl = "https://www.youtube.com/embed/h9zZ-Ct12q4?autoplay=1&rel=0&modestbranding=1";
 
@@ -3591,6 +3592,12 @@ export default function CapacityModule({ currentUser } = {}) {
     </div>
   </div>
 )}
+<OrgDesignAssistant
+  processName={selectedProcess?.name || processFilter}
+  activities={selectedProcess?.activities || []}
+  subprocesses={selectedProcess?.subprocesses || []}
+  processRoles={selectedProcess?.processRoles || []}
+/>
 </div>
 
   );
