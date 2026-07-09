@@ -27,7 +27,9 @@ export async function updateWorkloadSourceActivity(activityId, payload) {
     Object.entries({
       activa: payload.activa,
       estado: payload.estado,
+      actividad: payload.actividad,
       duracion_minutos: payload.duracion_minutos,
+      carga_horas: payload.carga_horas,
       frecuencia: payload.frecuencia,
       mes_planeado: payload.mes_planeado,
     }).filter(([, value]) => value !== undefined)
@@ -485,6 +487,38 @@ export async function scheduleActivityInMonthlyPlan({ personaId, activityId, wee
     return { ok: true, data, error: null };
   } catch (err) {
     console.error("Error inesperado al programar actividad mensual:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function updateWeeklyPlanHours(planId, hours) {
+  try {
+    const { data, error } = await supabase
+      .from("workload_plan_semanal_detalle")
+      .update({ horas_planificadas: hours })
+      .eq("id", planId)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function updateMonthlyPlanHours(planId, hours) {
+  try {
+    const { data, error } = await supabase
+      .from("workload_plan_mensual")
+      .update({ horas_planificadas: hours })
+      .eq("id", planId)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
     return { ok: false, error: err, data: null };
   }
 }
