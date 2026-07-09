@@ -8,8 +8,8 @@ const WORKLOAD_MANUAL_URL = "/manuales/Balance_de_Carga.pdf";
 // Video/manual específicos de la pestaña Asignaciones (independientes del
 // video/manual general del módulo). Se completan cuando se compartan los
 // archivos reales.
-const ASSIGNMENTS_VIDEO_URL = "";
-const ASSIGNMENTS_MANUAL_URL = "";
+const ASSIGNMENTS_VIDEO_URL = "/videos/Planeacion_de_Iniciativas.mp4";
+const ASSIGNMENTS_MANUAL_URL = "/manuales/Strategic_Capacity_Execution.pdf";
 
 const MONTHLY_CAPACITY_HOURS = 192;
 const WEEKLY_CAPACITY_HOURS = 48;
@@ -3530,12 +3530,12 @@ function canReviewPlan() {
             <div className="flex items-center justify-between bg-[#001225] px-5 py-3 text-white">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">Video tutorial</p>
-                <h3 className="text-lg font-black">Asignaciones</h3>
+                <h3 className="text-lg font-black">Planeación de Iniciativas</h3>
               </div>
               <button type="button" onClick={() => setShowAssignmentsVideo(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-lg font-black text-white hover:bg-red-700">×</button>
             </div>
             <div className="aspect-video w-full bg-black">
-              <iframe className="h-full w-full" src={ASSIGNMENTS_VIDEO_URL} title="Video Asignaciones" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+              <video className="h-full w-full" src={ASSIGNMENTS_VIDEO_URL} controls autoPlay />
             </div>
           </div>
         </div>
