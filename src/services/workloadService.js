@@ -150,6 +150,55 @@ export async function getWorkloadPersonRoles() {
   }
 }
 
+// Duración personalizada por persona para actividades del rol transversal
+// "Líder de proceso": la misma actividad aplica a todos los que tienen ese
+// rol, pero cuánto les toma varía según el proceso que cada quien lidera.
+// Guardar aquí evita tocar proceso_actividades (la fuente maestra que lee
+// Diseño Organizacional) cada vez que alguien ajusta su propio tiempo.
+export async function getLiderProcesoOverrides() {
+  try {
+    const { data, error } = await supabase
+      .from("workload_lider_proceso_overrides")
+      .select("*");
+
+    if (error) {
+      console.error("Error al cargar duraciones personalizadas de Líder de proceso:", error);
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar duraciones personalizadas de Líder de proceso:", err);
+    return [];
+  }
+}
+
+export async function upsertLiderProcesoOverride({ personaId, actividadId, duracionMinutos }) {
+  try {
+    const cargaHoras = Number((duracionMinutos / 60).toFixed(2));
+    const { data, error } = await supabase
+      .from("workload_lider_proceso_overrides")
+      .upsert(
+        {
+          persona_id: personaId,
+          actividad_id: actividadId,
+          duracion_minutos: duracionMinutos,
+          carga_horas: cargaHoras,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "persona_id,actividad_id" }
+      )
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al guardar duración personalizada de Líder de proceso:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
 export async function getWorkloadWeeklyPlans() {
   try {
     const { data, error } = await supabase

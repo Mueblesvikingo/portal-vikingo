@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { cancelAssignment, createWorkloadAssignment, createWorkloadSourceActivity, finalizeAssignment, findExistingSavedMonth, findExistingSavedWeek, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, pauseAssignment, programAssignmentHours, reactivateAssignment, recalculateAssignmentHours, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanHours, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanHours, updateWeeklyPlanOrder, updateWorkloadAssignment, updateWorkloadSourceActivity } from "../services/workloadService";
+import { cancelAssignment, createWorkloadAssignment, createWorkloadSourceActivity, finalizeAssignment, findExistingSavedMonth, findExistingSavedWeek, getLiderProcesoOverrides, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, pauseAssignment, programAssignmentHours, reactivateAssignment, recalculateAssignmentHours, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanHours, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanHours, updateWeeklyPlanOrder, updateWorkloadAssignment, updateWorkloadSourceActivity, upsertLiderProcesoOverride } from "../services/workloadService";
 import { hasWorkloadFullAccess, canEditWorkloadPendingActivities } from "../services/permissionsService";
 
 const WORKLOAD_VIDEO_URL =
@@ -601,6 +601,10 @@ function getManualSourceType(item) {
 function isManualReservationActivity(activity) {
   return normalizeText(activity?.proceso).endsWith("manual");
 }
+function isLiderDeProcesoActivity(activity) {
+  const rol = normalizeText(activity?.rol);
+  return rol === "lider de proceso" || rol === "líder de proceso";
+}
 function createManualBlock({ id, dayName, name, duration, type, currentUser, order, personId = "", personName = "" }) {
   const manualProcess = type === "Formación" ? "Formación manual" : type === "Tarea" ? "Tarea manual" : "Proyecto manual";
   const ownerName = personName || currentUser?.name || "Usuario";
@@ -887,8 +891,9 @@ function PendingActivityEditModal({ activity, draft, error, saving, onChange, on
   const subprocess = getPendingActivitySubprocess(activity);
   const frequencyOptions = ["Diaria", "Semanal", "Mensual", "Quincenal", "Trimestral", "Anual", "Por evento"];
   const options = [...new Set([draft.frecuencia, ...frequencyOptions].filter(Boolean))];
+  const isLiderProceso = isLiderDeProcesoActivity(activity);
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white"><div><p className="text-xs font-black uppercase tracking-widest">Edición rápida</p><p className="text-[10px] font-bold text-slate-300">Pendientes de programación</p></div><button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button></div><div className="space-y-3 p-4"><div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-bold text-slate-600"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Actividad</p><p className="mt-1 text-sm font-black text-slate-900">{activity.actividad}</p><div className="mt-2 grid gap-2 md:grid-cols-2"><div><span className="text-slate-400">Proceso</span><p className="text-slate-800">{activity.proceso}</p></div><div><span className="text-slate-400">Subproceso</span><p className="text-slate-800">{subprocess || "Sin subproceso"}</p></div></div></div><div className="grid gap-3 md:grid-cols-3"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Estado<select value={draft.estado} onChange={(event) => onChange("estado", event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"><option value="Activa">Activa</option><option value="Inactiva">Inactiva</option></select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Duración<input type="number" min="1" value={draft.duracionMinutos} onChange={(event) => onChange("duracionMinutos", event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Frecuencia<select value={draft.frecuencia} onChange={(event) => onChange("frecuencia", event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{options.map((option) => <option key={option} value={option}>{translateFrequency(option)}</option>)}</select></label></div>{error && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{error}</div>}<div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button><button type="button" disabled={saving} onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">{saving ? "Guardando..." : "Guardar"}</button></div></div></div></div>;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white"><div><p className="text-xs font-black uppercase tracking-widest">Edición rápida</p><p className="text-[10px] font-bold text-slate-300">Pendientes de programación</p></div><button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button></div><div className="space-y-3 p-4"><div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-bold text-slate-600"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Actividad</p><p className="mt-1 text-sm font-black text-slate-900">{activity.actividad}</p><div className="mt-2 grid gap-2 md:grid-cols-2"><div><span className="text-slate-400">Proceso</span><p className="text-slate-800">{activity.proceso}</p></div><div><span className="text-slate-400">Subproceso</span><p className="text-slate-800">{subprocess || "Sin subproceso"}</p></div></div></div>{isLiderProceso ? <div className="rounded-xl border border-sky-100 bg-sky-50/60 px-3 py-2 text-[10px] font-bold text-sky-700">Actividad del rol transversal "Líder de proceso": la duración que captures aquí es solo tuya y no cambia lo que ven los demás líderes de proceso ni la actividad maestra en Diseño Organizacional.</div> : null}<div className={`grid gap-3 ${isLiderProceso ? "md:grid-cols-1" : "md:grid-cols-3"}`}>{!isLiderProceso && <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Estado<select value={draft.estado} onChange={(event) => onChange("estado", event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"><option value="Activa">Activa</option><option value="Inactiva">Inactiva</option></select></label>}<label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Duración (min){isLiderProceso ? " · personal" : ""}<input type="number" min="1" value={draft.duracionMinutos} onChange={(event) => onChange("duracionMinutos", event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label>{!isLiderProceso && <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Frecuencia<select value={draft.frecuencia} onChange={(event) => onChange("frecuencia", event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{options.map((option) => <option key={option} value={option}>{translateFrequency(option)}</option>)}</select></label>}</div>{error && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{error}</div>}<div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button><button type="button" disabled={saving} onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">{saving ? "Guardando..." : "Guardar"}</button></div></div></div></div>;
 }
 function MoveScheduledModal({ modal, target, setTarget, onSave, onClose }) {
   if (!modal?.activity) return null;
@@ -927,6 +932,7 @@ export default function WorkloadBalanceModule({
   const [peopleCatalog, setPeopleCatalog] = useState([]);
   const [personRoleLinks, setPersonRoleLinks] = useState([]);
   const [weeklyPlansCatalog, setWeeklyPlansCatalog] = useState([]);
+  const [liderProcesoOverrides, setLiderProcesoOverrides] = useState([]);
   const [monthlyPlansCatalog, setMonthlyPlansCatalog] = useState([]);
   const [schedulingActivity, setSchedulingActivity] = useState(null);
   const [selectedScheduleDays, setSelectedScheduleDays] = useState([]);
@@ -946,19 +952,21 @@ export default function WorkloadBalanceModule({
   async function loadWorkloadData() {
     setLoadingActivities(true);
 
-    const [data, peopleData, personRolesData, weeklyPlansData, monthlyPlansData, assignmentsData] = await Promise.all([
+    const [data, peopleData, personRolesData, weeklyPlansData, monthlyPlansData, assignmentsData, liderProcesoOverridesData] = await Promise.all([
       getWorkloadActivities(),
       getWorkloadPeople(),
       getWorkloadPersonRoles(),
       getWorkloadWeeklyPlans(),
       getWorkloadMonthlyPlans(),
       getWorkloadAssignments(),
+      getLiderProcesoOverrides(),
     ]);
 
     setPeopleCatalog(safeArray(peopleData).filter((person) => isActiveRecord(person)));
     setPersonRoleLinks(safeArray(personRolesData).filter((link) => isActiveRecord(link) && getPersonRoleName(link)));
     setWeeklyPlansCatalog(safeArray(weeklyPlansData).filter((plan) => isActiveRecord(plan)));
     setMonthlyPlansCatalog(safeArray(monthlyPlansData).filter((plan) => isActiveRecord(plan)));
+    setLiderProcesoOverrides(safeArray(liderProcesoOverridesData));
     setAssignments(safeArray(assignmentsData).filter((assignment) => isActiveRecord(assignment)).map((assignment) => ({
       id: assignment.id,
       personaId: assignment.persona_id,
@@ -1255,7 +1263,23 @@ export default function WorkloadBalanceModule({
       setRoleFilter("all");
     }
   }, [roleFilter, roleOptions]);
-  const visibleActivities = normalizedActivities;
+  const visibleActivities = useMemo(() => {
+    if (effectivePersonFilter === "all") return normalizedActivities;
+    return normalizedActivities.map((activity) => {
+      if (!isLiderDeProcesoActivity(activity)) return activity;
+      const override = liderProcesoOverrides.find(
+        (item) => String(item.persona_id) === String(effectivePersonFilter) && String(item.actividad_id) === String(activity.id)
+      );
+      if (!override) return activity;
+      return {
+        ...activity,
+        duracionMinutos: Number(override.duracion_minutos),
+        cargaSemanal: Number(override.carga_horas),
+        cargaMensual: Number((Number(override.carga_horas) * getActivityMonthlyOccurrences(activity.frecuencia)).toFixed(2)),
+        hasLiderProcesoOverride: true,
+      };
+    });
+  }, [normalizedActivities, liderProcesoOverrides, effectivePersonFilter]);
   const filteredActivities = useMemo(() => {
     const roleLinks = roleFilter === "all"
       ? selectedPersonRoleLinks
@@ -1935,12 +1959,18 @@ function canCreateAssignments() {
     setSavingPendingActivity(true);
     setPendingActivityEditError("");
 
-    const result = await updateWorkloadSourceActivity(editingPendingActivity.id, {
-      activa: pendingActivityDraft.estado !== "Inactiva",
-      estado: pendingActivityDraft.estado,
-      duracion_minutos: Math.round(duration),
-      frecuencia: pendingActivityDraft.frecuencia,
-    });
+    const result = isLiderDeProcesoActivity(editingPendingActivity)
+      ? await upsertLiderProcesoOverride({
+        personaId: effectivePersonFilter,
+        actividadId: editingPendingActivity.id,
+        duracionMinutos: Math.round(duration),
+      })
+      : await updateWorkloadSourceActivity(editingPendingActivity.id, {
+        activa: pendingActivityDraft.estado !== "Inactiva",
+        estado: pendingActivityDraft.estado,
+        duracion_minutos: Math.round(duration),
+        frecuencia: pendingActivityDraft.frecuencia,
+      });
 
     if (!result?.ok) {
       console.error(result?.error);
