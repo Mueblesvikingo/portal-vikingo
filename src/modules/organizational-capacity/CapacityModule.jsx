@@ -794,7 +794,7 @@ function ActivityModal({ activity, onSave, onClose, availableRoles = [] }) {
       impacto: draft.impact,
       beneficio: draft.benefit,
       automatizacion_ia: draft.aiAutomation,
-      carga_horas: capacity.monthlyHours,
+      carga_horas: Number(toNumber(draft.timeHours).toFixed(2)),
       frecuencia: draft.frequencyType,
       frecuencia_valor: Number(draft.frequencyValue || 1),
       frequencyType: draft.frequencyType,

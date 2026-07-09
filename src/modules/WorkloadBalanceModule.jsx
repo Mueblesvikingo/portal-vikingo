@@ -579,6 +579,17 @@ function applyScheduleOverrides(activities, overrides) { return safeArray(activi
 function normalizeActivities(activities, scheduleOverrides = {}) {
   return applyScheduleOverrides(activities, scheduleOverrides).map((activity) => ({ ...activity, origen: activity?.origen || "Proceso", persona: activity?.persona || activity?.responsable || "Sin persona asignada", rol: activity?.rol || activity?.responsable || "Sin rol asignado", diaTipico: activity?.diaTipico || "Lunes", semanaTipica: activity?.semanaTipica || "Semana 1", estadoAgenda: activity?.estadoAgenda || "Pendiente", duracionMinutos: getDurationMinutes(activity) }));
 }
+function getActivityMonthlyOccurrences(frecuencia) {
+  const key = normalizeText(frecuencia);
+  if (key === "event" || key === "por evento") return 0;
+  if (key === "daily" || key === "diaria") return 22;
+  if (key === "weekly" || key === "semanal") return 4.33;
+  if (key === "biweekly" || key === "quincenal") return 2.16;
+  if (key === "quarterly" || key === "trimestral") return 1 / 3;
+  if (key === "semiannual" || key === "semestral") return 1 / 6;
+  if (key === "annual" || key === "anual") return 1 / 12;
+  return 1; // monthly, manual, u otras frecuencias sin equivalencia definida
+}
 function getManualSourceType(item) {
   const processName = normalizeText(item?.proceso);
   if (processName.includes("formacion manual") || processName.includes("formación manual")) return "Formación";
@@ -1000,7 +1011,7 @@ export default function WorkloadBalanceModule({
         rol: item.rol || item.puesto || "Sin rol asignado",
         responsable: item.responsable || "Sin responsable",
         cargaSemanal: Number(item.carga_horas || 0),
-        cargaMensual: Number((Number(item.carga_horas || 0) * 4).toFixed(2)),
+        cargaMensual: Number((Number(item.carga_horas || 0) * getActivityMonthlyOccurrences(item.frecuencia)).toFixed(2)),
         duracionMinutos: Number(item.duracion_minutos || 60),
         diaTipico: item.dia_tipico || item.observaciones?.replace("Día típico: ", "") || "Lunes",
         frecuencia: item.frecuencia,
