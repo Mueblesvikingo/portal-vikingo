@@ -395,6 +395,7 @@ export async function recalculateAssignmentHours(assignmentId) {
 function getAssignmentManualProcessLabel(tipo) {
   const normalized = String(tipo || "").toLowerCase();
   if (normalized.includes("formaci") || normalized.includes("capacit")) return "Formación manual";
+  if (normalized.includes("reunion") || normalized.includes("reunión")) return "Reunión manual";
   return "Proyecto manual";
 }
 
