@@ -266,10 +266,34 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(numberValue) ? numberValue : fallback;
 }
 
+function normalizeFrequencyType(type) {
+  const key = String(type || "").trim().toLowerCase();
+  const aliases = {
+    event: "event",
+    "por evento": "event",
+    daily: "daily",
+    diaria: "daily",
+    weekly: "weekly",
+    semanal: "weekly",
+    biweekly: "biweekly",
+    quincenal: "biweekly",
+    monthly: "monthly",
+    mensual: "monthly",
+    quarterly: "quarterly",
+    trimestral: "quarterly",
+    semiannual: "semiannual",
+    semestral: "semiannual",
+    annual: "annual",
+    anual: "annual",
+  };
+
+  return aliases[key] || "monthly";
+}
+
 function getFrequencyMonthlyEquivalent(type = "monthly", value = 1) {
   const frequencyValue = Math.max(0, toNumber(value, 0));
 
-  switch (type) {
+  switch (normalizeFrequencyType(type)) {
     case "event":
       return 0;
     case "daily":
@@ -303,7 +327,7 @@ function getFrequencyLabel(type) {
     annual: "Anual",
   };
 
-  return labels[type] || labels.monthly;
+  return labels[normalizeFrequencyType(type)] || labels.monthly;
 }
 
 function calculateCapacity({ timeHours = 0, frequencyType = "monthly", frequencyValue = 1, frequencyMonthly = null }) {
@@ -702,7 +726,7 @@ function ActivityModal({ activity, onSave, onClose, availableRoles = [] }) {
     rol: activity.rol || activity.lane || activity.responsable || activity.responsible || "",
     criticality: activity.criticidad || activity.criticality || "medium",
     timeHours: activity.timeHours ?? activity.time ?? (activity.duracion_minutos ? Number(activity.duracion_minutos) / 60 : ""),
-    frequencyType: activity.frecuencia || activity.frequencyType || "monthly",
+    frequencyType: getFrequencyLabel(activity.frecuencia || activity.frequencyType || "monthly"),
     frequencyValue: activity.frecuencia_valor ?? activity.frequencyValue ?? activity.frequencyMonthly ?? 1,
     load: activity.carga_horas ?? activity.load ?? 0,
     status: activity.estado || activity.status || (activity.active === false || activity.activa === false ? "inactive" : "active"),
@@ -879,14 +903,12 @@ function ActivityModal({ activity, onSave, onClose, availableRoles = [] }) {
                 onChange={(event) => updateDraft("frequencyType", event.target.value)}
                 className="mt-1 w-full min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-black text-[#0f172a] outline-none"
               >
-                <option value="event">Por evento</option>
-                <option value="daily">Diaria</option>
-                <option value="weekly">Semanal</option>
-                <option value="biweekly">Quincenal</option>
-                <option value="monthly">Mensual</option>
-                <option value="quarterly">Trimestral</option>
-                <option value="semiannual">Semestral</option>
-                <option value="annual">Anual</option>
+                <option value="Por evento">Por evento</option>
+                <option value="Diaria">Diaria</option>
+                <option value="Semanal">Semanal</option>
+                <option value="Mensual">Mensual</option>
+                <option value="Trimestral">Trimestral</option>
+                <option value="Anual">Anual</option>
               </select>
             </div>
             <EditableCard title="Cantidad" value={draft.frequencyValue} onChange={(value) => updateDraft("frequencyValue", value)} />
