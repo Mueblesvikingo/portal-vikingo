@@ -232,6 +232,17 @@ export async function createWorkloadAssignment(payload) {
         asigna_rol: payload.asigna_rol,
         activo: payload.activo ?? true,
         grupo_reunion: payload.grupo_reunion || null,
+        nombre: payload.nombre || payload.titulo,
+        descripcion: payload.descripcion || "",
+        origen_estrategico: payload.origen_estrategico || null,
+        horas_totales: payload.horas_totales ?? payload.carga_horas ?? 0,
+        horas_programadas: payload.horas_programadas ?? 0,
+        horas_ejecutadas: payload.horas_ejecutadas ?? 0,
+        horas_pendientes: payload.horas_pendientes ?? payload.horas_totales ?? payload.carga_horas ?? 0,
+        estado_proyecto: payload.estado_proyecto || "Pendiente",
+        estado_programacion: payload.estado_programacion || "Sin programar",
+        fecha_inicio: payload.fecha_inicio || null,
+        url_externa: payload.url_externa || null,
       })
       .select("*")
       .single();
@@ -257,6 +268,200 @@ export async function updateWorkloadAssignment(id, updates) {
   } catch (err) {
     return { ok: false, error: err, data: null };
   }
+}
+
+// Backlog de asignaciones/proyectos: una asignación se crea con horas_totales
+// y se va programando en Semana/Mes típico en varias llamadas parciales, sin
+// que la asignación desaparezca del backlog. Cada llamada crea (o reutiliza)
+// una única fila en proceso_actividades para esa asignación, y añade una fila
+// de programación por semana/mes, marcada con asignacion_id para poder sumar
+// horas_programadas por asignación en cualquier momento.
+export async function recalculateAssignmentHours(assignmentId) {
+  try {
+    const { data: assignment, error: fetchError } = await supabase
+      .from("workload_asignaciones")
+      .select("*")
+      .eq("id", assignmentId)
+      .single();
+
+    if (fetchError || !assignment) return { ok: false, error: fetchError, data: null };
+
+    const [weeklyResult, monthlyResult] = await Promise.all([
+      supabase
+        .from("workload_plan_semanal_detalle")
+        .select("horas_planificadas")
+        .eq("asignacion_id", assignmentId)
+        .eq("activo", true),
+      supabase
+        .from("workload_plan_mensual")
+        .select("horas_planificadas")
+        .eq("asignacion_id", assignmentId)
+        .eq("activo", true),
+    ]);
+
+    if (weeklyResult.error) console.error("Error al sumar horas semanales de la asignación:", weeklyResult.error);
+    if (monthlyResult.error) console.error("Error al sumar horas mensuales de la asignación:", monthlyResult.error);
+
+    const horasProgramadas = [...(weeklyResult.data || []), ...(monthlyResult.data || [])]
+      .reduce((sum, row) => sum + Number(row.horas_planificadas || 0), 0);
+
+    const horasTotales = Number(assignment.horas_totales || assignment.carga_horas || 0);
+    const horasEjecutadas = Number(assignment.horas_ejecutadas || 0);
+    const horasPendientes = Math.max(0, horasTotales - horasProgramadas);
+
+    let estadoProgramacion = "Sin programar";
+    if (horasProgramadas > 0 && horasProgramadas < horasTotales) estadoProgramacion = "Programado parcialmente";
+    if (horasTotales > 0 && horasProgramadas >= horasTotales) estadoProgramacion = "Totalmente programado";
+    if (horasTotales > 0 && horasEjecutadas >= horasTotales) estadoProgramacion = "Completado";
+    if (assignment.estado_proyecto === "En pausa") estadoProgramacion = "Programación suspendida";
+
+    let estadoProyecto = assignment.estado_proyecto || "Pendiente";
+    if (estadoProyecto === "Pendiente" && horasProgramadas > 0) estadoProyecto = "En ejecución";
+    if (horasTotales > 0 && horasEjecutadas >= horasTotales) estadoProyecto = "Finalizado";
+
+    const { data, error } = await supabase
+      .from("workload_asignaciones")
+      .update({
+        horas_programadas: horasProgramadas,
+        horas_pendientes: horasPendientes,
+        estado_programacion: estadoProgramacion,
+        estado_proyecto: estadoProyecto,
+      })
+      .eq("id", assignmentId)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al recalcular horas de la asignación:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function programAssignmentHours({ assignmentId, personaId, type, hours, dayName, weekNumber, origen }) {
+  try {
+    const { data: assignment, error: fetchError } = await supabase
+      .from("workload_asignaciones")
+      .select("*")
+      .eq("id", assignmentId)
+      .single();
+
+    if (fetchError || !assignment) return { ok: false, error: fetchError || new Error("Asignación no encontrada") };
+
+    if (["En pausa", "Finalizado", "Cancelado"].includes(assignment.estado_proyecto)) {
+      return { ok: false, error: new Error(`No se puede programar: el proyecto está ${assignment.estado_proyecto}.`) };
+    }
+
+    const horasTotales = Number(assignment.horas_totales || assignment.carga_horas || 0);
+    const horasProgramadasActuales = Number(assignment.horas_programadas || 0);
+    const horasPendientes = Math.max(0, horasTotales - horasProgramadasActuales);
+    const horasAProgramar = Number(hours);
+
+    if (!Number.isFinite(horasAProgramar) || horasAProgramar <= 0) {
+      return { ok: false, error: new Error("Las horas a programar deben ser mayores a 0.") };
+    }
+    if (horasAProgramar > horasPendientes) {
+      return { ok: false, error: new Error(`No puedes programar más de las horas pendientes (${horasPendientes} h).`) };
+    }
+
+    let activityId = assignment.proceso_actividad_id;
+
+    if (!activityId) {
+      const { data: activityData, error: activityError } = await supabase
+        .from("proceso_actividades")
+        .insert({
+          actividad: assignment.nombre || assignment.titulo,
+          descripcion: assignment.descripcion || "",
+          proceso: "Asignación",
+          responsable: assignment.responsable || "",
+          puesto: assignment.rol || "Líder de proceso",
+          rol: assignment.rol || "Líder de proceso",
+          duracion_minutos: Math.round(horasTotales * 60),
+          frecuencia: "Manual",
+          frecuencia_valor: 1,
+          orden_flujo: Math.floor(Date.now() / 1000),
+          carga_horas: horasTotales,
+          estado: "Activa",
+          activa: true,
+        })
+        .select("id")
+        .single();
+
+      if (activityError) return { ok: false, error: activityError };
+      activityId = activityData.id;
+
+      const { error: linkError } = await supabase
+        .from("workload_asignaciones")
+        .update({ proceso_actividad_id: activityId })
+        .eq("id", assignmentId);
+      if (linkError) console.error("Error al vincular la actividad maestra a la asignación:", linkError);
+    }
+
+    const table = type === "weekly" ? "workload_plan_semanal_detalle" : "workload_plan_mensual";
+    const groupFilter = type === "weekly" ? { dia_semana: dayName || "Lunes" } : { semana_mes: Number(weekNumber || 1) };
+
+    const { data: currentGroup, error: orderError } = await supabase
+      .from(table)
+      .select("orden")
+      .eq("persona_id", personaId)
+      .match(groupFilter)
+      .eq("activo", true)
+      .order("orden", { ascending: false, nullsFirst: false })
+      .limit(1);
+    if (orderError) console.error("Error al calcular el orden del bloque de asignación:", orderError);
+    const nextOrder = Number(currentGroup?.[0]?.orden || 0) + 1;
+
+    const insertPayload = {
+      persona_id: personaId,
+      actividad_id: activityId,
+      asignacion_id: assignmentId,
+      origen: origen || "Asignaciones",
+      orden: nextOrder,
+      horas_planificadas: horasAProgramar,
+      activo: true,
+      ...groupFilter,
+    };
+
+    const { error: insertError } = await supabase.from(table).insert(insertPayload);
+    if (insertError) return { ok: false, error: insertError };
+
+    return await recalculateAssignmentHours(assignmentId);
+  } catch (err) {
+    console.error("Error inesperado al programar horas de la asignación:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+async function setAssignmentProjectState(id, estadoProyecto) {
+  try {
+    const { error } = await supabase
+      .from("workload_asignaciones")
+      .update({ estado_proyecto: estadoProyecto })
+      .eq("id", id);
+
+    if (error) return { ok: false, error, data: null };
+    return await recalculateAssignmentHours(id);
+  } catch (err) {
+    console.error(`Error inesperado al cambiar el estado de la asignación a "${estadoProyecto}":`, err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function pauseAssignment(id) {
+  return setAssignmentProjectState(id, "En pausa");
+}
+
+export async function reactivateAssignment(id) {
+  return setAssignmentProjectState(id, "Pendiente");
+}
+
+export async function finalizeAssignment(id) {
+  return setAssignmentProjectState(id, "Finalizado");
+}
+
+export async function cancelAssignment(id) {
+  return setAssignmentProjectState(id, "Cancelado");
 }
 
 function cleanSavedPlanPayload(payload = {}) {
