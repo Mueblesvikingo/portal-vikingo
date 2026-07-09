@@ -55,7 +55,13 @@ export default function AppRouter({
 
           <Route
             path="/decision-center"
-            element={<DecisionCenterModule />}
+            element={
+              canViewModule(currentUser, "decision-center") ? (
+                <DecisionCenterModule />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
           />
 
           <Route

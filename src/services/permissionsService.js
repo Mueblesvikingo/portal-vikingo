@@ -58,6 +58,12 @@ const WORKLOAD_PENDING_ACTIVITY_EDIT_ROLES = [
 // Organizacional → Usuarios → Permisos (módulo "capacity", campo "aprobar").
 const STRATEGIC_TEAM_ROLES = ["PM", "Coordinador SIG", "Analista de Procesos", "Director General"];
 
+// Módulos visibles SOLO para el equipo estratégico (STRATEGIC_TEAM_ROLES),
+// sin importar si el usuario es de rol restringido o no. Igual que el resto
+// de permisos, se puede dar acceso puntual desde Catálogo Organizacional →
+// Usuarios → Permisos (override por usuario o por rol).
+const STRATEGIC_TEAM_ONLY_MODULES = ["decision-center"];
+
 let rolePermissionsCache = {};
 let personaRolesCache = {};
 
@@ -156,6 +162,11 @@ function getRolesFieldValue(user, moduleKey, field) {
 
 function defaultVisible(user, moduleKey) {
   if (MODULES_HIDDEN_BY_DEFAULT.includes(moduleKey)) return false;
+
+  if (STRATEGIC_TEAM_ONLY_MODULES.includes(moduleKey)) {
+    const roles = getApplicableRoles(user);
+    return roles.some((role) => STRATEGIC_TEAM_ROLES.includes(role));
+  }
 
   const role = getPrimaryRole(user);
   if (!RESTRICTED_MENU_ROLES.includes(role)) return true;
