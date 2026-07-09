@@ -339,6 +339,16 @@ export async function recalculateAssignmentHours(assignmentId) {
   }
 }
 
+// Mapea el tipo de asignación al mismo marcador "X manual" que usan los
+// bloques manuales de Semana/Mes típico, para que el bloque programado se
+// vea con el color/etiqueta de origen correctos (Proyecto, Formación, etc.)
+// en vez de caer en el "Proceso" por defecto.
+function getAssignmentManualProcessLabel(tipo) {
+  const normalized = String(tipo || "").toLowerCase();
+  if (normalized.includes("formaci") || normalized.includes("capacit")) return "Formación manual";
+  return "Proyecto manual";
+}
+
 export async function programAssignmentHours({ assignmentId, personaId, type, hours, dayName, weekNumber, origen }) {
   try {
     const { data: assignment, error: fetchError } = await supabase
@@ -373,7 +383,7 @@ export async function programAssignmentHours({ assignmentId, personaId, type, ho
         .insert({
           actividad: assignment.nombre || assignment.titulo,
           descripcion: assignment.descripcion || "",
-          proceso: "Asignación",
+          proceso: getAssignmentManualProcessLabel(assignment.tipo),
           responsable: assignment.responsable || "",
           puesto: assignment.rol || "Líder de proceso",
           rol: assignment.rol || "Líder de proceso",
