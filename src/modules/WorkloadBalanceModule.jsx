@@ -564,8 +564,12 @@ function getManualSourceType(item) {
   const processName = normalizeText(item?.proceso);
   if (processName.includes("formacion manual") || processName.includes("formación manual")) return "Formación";
   if (processName.includes("tarea manual")) return "Tarea";
+  if (processName.includes("eventual manual")) return "Proceso";
   if (processName.includes("proyecto manual")) return "Proyecto";
   return "";
+}
+function isManualReservationActivity(activity) {
+  return normalizeText(activity?.proceso).endsWith("manual");
 }
 function createManualBlock({ id, dayName, name, duration, type, currentUser, order, personId = "", personName = "" }) {
   const manualProcess = type === "Formación" ? "Formación manual" : type === "Tarea" ? "Tarea manual" : "Proyecto manual";
@@ -1189,9 +1193,12 @@ export default function WorkloadBalanceModule({
       : selectedPersonRoleLinks.filter((link) => normalizeText(getPersonRoleName(link)) === normalizeText(roleFilter));
 
     return visibleActivities.filter((activity) => {
+      if (isManualReservationActivity(activity)) {
+        return normalizeText(activity.responsable) === normalizeText(selectedPersonName);
+      }
       return roleLinks.some((link) => activityMatchesRoleLink(activity, link));
     });
-  }, [visibleActivities, selectedPersonRoleLinks, roleFilter]);
+  }, [visibleActivities, selectedPersonRoleLinks, roleFilter, selectedPersonName]);
   const scheduledActivityIds = useMemo(
     () => {
       if (effectivePersonFilter === "all") return new Set();
@@ -1211,6 +1218,7 @@ export default function WorkloadBalanceModule({
     const groupedActivities = new Map();
 
     visibleActivities
+      .filter((activity) => !isManualReservationActivity(activity))
       .filter((activity) => selectedPersonRoleLinks.some((link) => activityMatchesRoleLink(activity, link)))
       .forEach((activity) => {
         const key = getPendingActivityUniqueKey(activity);
@@ -1568,12 +1576,59 @@ function canCreatePersonScopedBlock() {
     if (!canCreatePersonScopedBlock()) return;
     setMonthlyQuickTarget({ rowType, weekNumber }); setMonthlyBlockName(""); setMonthlyBlockMinutes("60"); setMonthlyBlockFrequency("Manual"); setMonthlyBlockType(getDefaultMonthlyTypeForRow(rowType)); setEditingMonthlyBlockId(null);
   }
-  function saveMonthlyBlock(target = monthlyQuickTarget) {
+  async function saveMonthlyBlock(target = monthlyQuickTarget) {
     const blockName = monthlyBlockName.trim(); const duration = Number(monthlyBlockMinutes);
     if (!blockName || !Number.isFinite(duration) || duration <= 0) return;
     if (!canCreatePersonScopedBlock()) return;
     if (editingMonthlyBlockId) { setMonthlyBlocks((currentBlocks) => currentBlocks.map((block) => (block.id === editingMonthlyBlockId ? createMonthlyBlock({ id: block.id, name: blockName, duration, frequency: monthlyBlockFrequency, type: monthlyBlockType, targetWeeks: target?.weekNumber ? [target.weekNumber] : block.targetWeeks, monthlyOrder: block.monthlyOrder, personId: effectivePersonFilter, personName: selectedPersonName }) : block))); resetMonthlyBlockForm(); return; }
-    const id = `monthly-block-${Date.now()}`; const newBlock = createMonthlyBlock({ id, name: blockName, duration, frequency: target?.weekNumber ? "Manual" : monthlyBlockFrequency, type: monthlyBlockType, targetWeeks: target?.weekNumber ? [target.weekNumber] : undefined, monthlyOrder: Date.now(), personId: effectivePersonFilter, personName: selectedPersonName }); setMonthlyBlocks((currentBlocks) => [...currentBlocks, newBlock]); resetMonthlyBlockForm();
+
+    if (!target?.weekNumber) {
+      const id = `monthly-block-${Date.now()}`;
+      const newBlock = createMonthlyBlock({ id, name: blockName, duration, frequency: monthlyBlockFrequency, type: monthlyBlockType, monthlyOrder: Date.now(), personId: effectivePersonFilter, personName: selectedPersonName });
+      setMonthlyBlocks((currentBlocks) => [...currentBlocks, newBlock]);
+      resetMonthlyBlockForm();
+      return;
+    }
+
+    const manualProcess = monthlyBlockType === "Formación" ? "Formación manual" : monthlyBlockType === "Eventual" ? "Eventual manual" : "Proyecto manual";
+    const sourceResult = await createWorkloadSourceActivity({
+      actividad: blockName,
+      descripcion: "Bloque manual creado desde Mes típico.",
+      proceso: manualProcess,
+      responsable: selectedPersonName,
+      puesto: "Líder de proceso",
+      rol: "Líder de proceso",
+      duracion_minutos: duration,
+      frecuencia: "Manual",
+      frecuencia_valor: 1,
+      orden_flujo: Math.floor(Date.now() / 1000),
+      carga_horas: Number((duration / 60).toFixed(2)),
+      estado: "Activa",
+      activa: true,
+    });
+
+    if (!sourceResult?.ok || !sourceResult.data?.id) {
+      console.error(sourceResult?.error);
+      setScheduleMessage("No fue posible guardar el bloque manual en Supabase.");
+      return;
+    }
+
+    const monthlyResult = await scheduleActivityInMonthlyPlan({
+      personaId: effectivePersonFilter,
+      activityId: sourceResult.data.id,
+      weekNumber: Number(target.weekNumber),
+      plannedHours: Number((duration / 60).toFixed(2)),
+    });
+
+    if (!monthlyResult?.ok) {
+      console.error(monthlyResult?.error);
+      setScheduleMessage("El bloque se creó, pero no fue posible programarlo en Mes típico.");
+      return;
+    }
+
+    await loadWorkloadData();
+    resetMonthlyBlockForm();
+    setScheduleMessage("Bloque manual guardado correctamente.");
   }
   function getMonthlyInsertOrder(currentBlocks, targetRow, targetWeekNumber, targetIndex, draggedId) {
     const orderedBlocks = safeArray(currentBlocks).filter((block) => block.id !== draggedId && block.origen === targetRow && getMonthlyBlockWeeks(block).includes(targetWeekNumber)).sort((a, b) => Number(a.monthlyOrder || 0) - Number(b.monthlyOrder || 0));
