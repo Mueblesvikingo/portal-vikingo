@@ -71,7 +71,6 @@ export async function createWorkloadSourceActivity(payload) {
     actividad: payload.actividad,
     descripcion: payload.descripcion || "",
     proceso: payload.proceso,
-    subproceso: payload.subproceso || "",
     responsable: payload.responsable || "",
     puesto: payload.puesto || payload.rol || "",
     rol: payload.rol || payload.puesto || "",
