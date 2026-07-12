@@ -3,8 +3,13 @@ import { confirmMeetingAttendance, getPendingMeetingConfirmations } from "../ser
 
 const POLL_INTERVAL_MS = 25000;
 const SNOOZE_MS = 90000;
-const BEEP_INTERVAL_MS = 3500;
+const BEEP_INTERVAL_MS = 2600;
 const ALARM_TITLE = "⚠️ CONFIRMA TU ASISTENCIA";
+const ALERT_TONE_A = 900;
+const ALERT_TONE_B = 700;
+const ALERT_BEEP_DURATION = 0.13;
+const ALERT_BEEP_GAP = 0.045;
+const ALERT_PAIR_COUNT = 4;
 
 function formatMeetingWhen(meeting) {
   const fecha = meeting?.fecha_limite || "Sin fecha";
@@ -79,27 +84,39 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
 
   useEffect(() => {
     if (!active) return undefined;
-    function beep() {
+    function playTone(ctx, frequency, startTime, duration) {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = "square";
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.09, startTime + 0.01);
+      gain.gain.setValueAtTime(0.09, startTime + duration - 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration);
+    }
+    function seismicAlertTone() {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
         if (!audioCtxRef.current) audioCtxRef.current = new AudioCtx();
         const ctx = audioCtxRef.current;
-        const oscillator = ctx.createOscillator();
-        const gain = ctx.createGain();
-        oscillator.type = "square";
-        oscillator.frequency.value = 880;
-        gain.gain.value = 0.06;
-        oscillator.connect(gain);
-        gain.connect(ctx.destination);
-        oscillator.start();
-        oscillator.stop(ctx.currentTime + 0.16);
+        let time = ctx.currentTime;
+        for (let i = 0; i < ALERT_PAIR_COUNT; i++) {
+          playTone(ctx, ALERT_TONE_A, time, ALERT_BEEP_DURATION);
+          time += ALERT_BEEP_DURATION + ALERT_BEEP_GAP;
+          playTone(ctx, ALERT_TONE_B, time, ALERT_BEEP_DURATION);
+          time += ALERT_BEEP_DURATION + ALERT_BEEP_GAP;
+        }
       } catch {
         // Audio bloqueado por el navegador; el resto de la alerta sigue funcionando.
       }
     }
-    beep();
-    const interval = setInterval(beep, BEEP_INTERVAL_MS);
+    seismicAlertTone();
+    const interval = setInterval(seismicAlertTone, BEEP_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [active?.id]);
 
