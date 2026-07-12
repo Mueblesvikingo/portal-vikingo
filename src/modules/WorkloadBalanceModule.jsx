@@ -254,13 +254,19 @@ function getPersonId(person) { return person?.id ?? person?.persona_id ?? person
 function getPersonName(person) { return firstText(person, ["nombre", "name", "persona", "nombre_completo", "full_name"], "Sin nombre"); }
 function getPersonRoleName(link) { return firstText(link, ["rol", "role", "roleName", "nombre", "name", "responsable"]); }
 function getPersonRoleProcess(link) { return firstText(link, ["proceso", "macroproceso", "process"]); }
-function activityMatchesRoleLink(activity, link) {
+function activityMatchesRoleLink(activity, link, { strictLiderProceso = false } = {}) {
   const activityRole = normalizeText(activity?.rol);
   const linkRole = normalizeText(getPersonRoleName(link));
   const linkProcess = normalizeText(getPersonRoleProcess(link));
   const activityProcess = normalizeText(activity?.proceso);
 
   if (!activityRole || !linkRole || activityRole !== linkRole) return false;
+
+  const isLeaderProcessRole = activityRole === "lider de proceso" || activityRole === "líder de proceso";
+  // Cualquier dueño de proceso ve TODAS las actividades de Líder de proceso en
+  // Pendientes (visibilidad/coordinación), pero para Capacidad (horas/utilización)
+  // solo debe contar el proceso donde esa persona realmente es la líder.
+  if (isLeaderProcessRole && !strictLiderProceso) return true;
 
   return !linkProcess || linkProcess === activityProcess;
 }
@@ -1337,7 +1343,7 @@ export default function WorkloadBalanceModule({
       if (isManualReservationActivity(activity)) {
         return normalizeText(activity.responsable) === normalizeText(selectedPersonName);
       }
-      return roleLinks.some((link) => activityMatchesRoleLink(activity, link));
+      return roleLinks.some((link) => activityMatchesRoleLink(activity, link, { strictLiderProceso: true }));
     });
   }, [visibleActivities, selectedPersonRoleLinks, roleFilter, selectedPersonName]);
   const scheduledActivityIds = useMemo(
