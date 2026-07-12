@@ -2181,15 +2181,17 @@ function canCreateAssignments() {
     if (isManual) {
       const blockName = editBlockDraft.name.trim();
       if (!blockName) return;
+      // Solo el nombre va al bloque maestro: un trigger de Supabase
+      // (trg_sync_workload_duration_from_design) replica duracion_minutos a
+      // TODOS los días/meses programados de esa actividad en cuanto cambia,
+      // así que actualizar la duración aquí rompería el ajuste por día.
       const updateResult = await updateWorkloadSourceActivity(activity.sourceActivityId, {
         actividad: blockName,
-        duracion_minutos: duration,
-        carga_horas: Number((duration / 60).toFixed(2)),
       });
 
       if (!updateResult?.ok) {
         console.error(updateResult?.error);
-        setScheduleMessage("No fue posible actualizar el bloque manual.");
+        setScheduleMessage("No fue posible actualizar el nombre del bloque manual.");
         return;
       }
     }
