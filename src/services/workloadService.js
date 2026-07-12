@@ -276,6 +276,7 @@ export async function createWorkloadAssignment(payload) {
         carga_horas: payload.carga_horas,
         duracion_minutos: payload.duracion_minutos,
         fecha_limite: payload.fecha_limite,
+        hora_limite: payload.hora_limite || null,
         estado: payload.estado || "Pendiente",
         asigna: payload.asigna,
         asigna_rol: payload.asigna_rol,
@@ -315,6 +316,49 @@ export async function updateWorkloadAssignment(id, updates) {
     if (error) return { ok: false, error, data: null };
     return { ok: true, error: null, data };
   } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+// Confirmación de asistencia a reuniones: cada participante tiene su propia
+// fila en workload_asignaciones (comparten grupo_reunion), así que el check
+// de asistencia es un campo más por fila, sin necesitar tabla aparte.
+export async function getPendingMeetingConfirmations(personaId) {
+  try {
+    const { data, error } = await supabase
+      .from("workload_asignaciones")
+      .select("*")
+      .eq("persona_id", String(personaId))
+      .eq("activo", true)
+      .ilike("tipo", "%reuni%")
+      .or("confirmado_asistencia.is.null,confirmado_asistencia.eq.false")
+      .neq("estado_proyecto", "Cancelado")
+      .order("fecha_limite", { ascending: true });
+
+    if (error) {
+      console.error("Error al cargar confirmaciones pendientes de reunión:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar confirmaciones pendientes de reunión:", err);
+    return [];
+  }
+}
+
+export async function confirmMeetingAttendance(assignmentId) {
+  try {
+    const { data, error } = await supabase
+      .from("workload_asignaciones")
+      .update({ confirmado_asistencia: true, confirmado_at: new Date().toISOString() })
+      .eq("id", assignmentId)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al confirmar asistencia:", err);
     return { ok: false, error: err, data: null };
   }
 }
@@ -541,6 +585,16 @@ function cleanSavedPlanPayload(payload = {}) {
     creado_por: payload.creado_por || null,
     actualizado_por: payload.actualizado_por || null,
     activo: payload.activo ?? true,
+    aprobado_vobo: Boolean(payload.aprobado_vobo),
+    aprobado_por: payload.aprobado_por || null,
+    aprobado_rol: payload.aprobado_rol || null,
+    aprobado_at: payload.aprobado_at || null,
+    revisado: Boolean(payload.revisado),
+    revisado_por: payload.revisado_por || null,
+    revisado_rol: payload.revisado_rol || null,
+    revisado_at: payload.revisado_at || null,
+    comentario_revision: payload.comentario_revision || null,
+    propuesta_mejora: payload.propuesta_mejora || null,
   };
 }
 

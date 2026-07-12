@@ -1,5 +1,6 @@
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import MeetingAttendanceAlarm from "../components/MeetingAttendanceAlarm";
 
 export default function AppLayout({
   children,
@@ -20,6 +21,8 @@ export default function AppLayout({
           {children}
         </main>
       </div>
+
+      <MeetingAttendanceAlarm currentUser={currentUser} />
     </div>
   );
 }
