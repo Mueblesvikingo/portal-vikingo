@@ -363,6 +363,51 @@ export async function confirmMeetingAttendance(assignmentId) {
   }
 }
 
+// Recordatorio adicional 45 min antes de que la reunión comience, independiente
+// de si ya se confirmó asistencia. Requiere su propio check ("Entendido").
+export async function getPendingPreMeetingReminders(personaId) {
+  try {
+    const { data, error } = await supabase
+      .from("workload_asignaciones")
+      .select("*")
+      .eq("persona_id", String(personaId))
+      .eq("activo", true)
+      .ilike("tipo", "%reuni%")
+      .or("recordatorio_previo_confirmado.is.null,recordatorio_previo_confirmado.eq.false")
+      .not("fecha_limite", "is", null)
+      .not("hora_limite", "is", null)
+      .neq("estado_proyecto", "Cancelado")
+      .neq("estado_proyecto", "Finalizado")
+      .order("fecha_limite", { ascending: true });
+
+    if (error) {
+      console.error("Error al cargar recordatorios previos de reunión:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar recordatorios previos de reunión:", err);
+    return [];
+  }
+}
+
+export async function confirmPreMeetingReminder(assignmentId) {
+  try {
+    const { data, error } = await supabase
+      .from("workload_asignaciones")
+      .update({ recordatorio_previo_confirmado: true, recordatorio_previo_confirmado_at: new Date().toISOString() })
+      .eq("id", assignmentId)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al confirmar recordatorio previo:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
 // Backlog de asignaciones/proyectos: una asignación se crea con horas_totales
 // y se va programando en Semana/Mes típico en varias llamadas parciales, sin
 // que la asignación desaparezca del backlog. Cada llamada crea (o reutiliza)

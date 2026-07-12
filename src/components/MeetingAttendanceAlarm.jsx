@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { confirmMeetingAttendance, getPendingMeetingConfirmations } from "../services/workloadService";
+import {
+  confirmMeetingAttendance,
+  confirmPreMeetingReminder,
+  getPendingMeetingConfirmations,
+  getPendingPreMeetingReminders,
+} from "../services/workloadService";
 
 const POLL_INTERVAL_MS = 25000;
 const SNOOZE_MS = 90000;
 const BEEP_INTERVAL_MS = 2400;
-const ALARM_TITLE = "⚠️ CONFIRMA TU ASISTENCIA";
+const PRE_MEETING_WINDOW_MS = 45 * 60 * 1000;
+const ATTENDANCE_TITLE = "⚠️ CONFIRMA TU ASISTENCIA";
+const PRE_MEETING_TITLE = "⏰ TU REUNIÓN ESTÁ POR COMENZAR";
 const SIREN_LOW_FREQ = 420;
 const SIREN_HIGH_FREQ = 1250;
 const SIREN_SWEEP_DURATION = 0.28;
@@ -16,9 +23,23 @@ function formatMeetingWhen(meeting) {
   return hora ? `${fecha} · ${hora}` : fecha;
 }
 
+function getMeetingStartTimestamp(item) {
+  if (!item?.fecha_limite || !item?.hora_limite) return null;
+  const timePart = item.hora_limite.length === 5 ? `${item.hora_limite}:00` : item.hora_limite;
+  const date = new Date(`${item.fecha_limite}T${timePart}`);
+  return Number.isNaN(date.getTime()) ? null : date.getTime();
+}
+
+function getMinutesUntil(item) {
+  const start = getMeetingStartTimestamp(item);
+  if (start === null) return null;
+  return Math.round((start - Date.now()) / 60000);
+}
+
 export default function MeetingAttendanceAlarm({ currentUser }) {
   const personaId = currentUser?.persona_id;
-  const [pending, setPending] = useState([]);
+  const [pendingAttendance, setPendingAttendance] = useState([]);
+  const [pendingPreMeeting, setPendingPreMeeting] = useState([]);
   const [confirming, setConfirming] = useState(false);
   const snoozedUntilRef = useRef({});
   const originalTitleRef = useRef(typeof document !== "undefined" ? document.title : "");
@@ -27,7 +48,7 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
 
   useEffect(() => {
     if (!personaId) {
-      setPending([]);
+      setPendingAttendance([]);
       return undefined;
     }
 
@@ -37,8 +58,8 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
       const result = await getPendingMeetingConfirmations(personaId);
       if (cancelled) return;
       const now = Date.now();
-      const visible = (result || []).filter((item) => (snoozedUntilRef.current[item.id] || 0) <= now);
-      setPending(visible);
+      const visible = (result || []).filter((item) => (snoozedUntilRef.current[`attendance-${item.id}`] || 0) <= now);
+      setPendingAttendance(visible);
     }
 
     poll();
@@ -49,37 +70,72 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
     };
   }, [personaId]);
 
-  const active = pending[0] || null;
+  useEffect(() => {
+    if (!personaId) {
+      setPendingPreMeeting([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function poll() {
+      const result = await getPendingPreMeetingReminders(personaId);
+      if (cancelled) return;
+      const now = Date.now();
+      const visible = (result || []).filter((item) => {
+        if ((snoozedUntilRef.current[`pre-${item.id}`] || 0) > now) return false;
+        const start = getMeetingStartTimestamp(item);
+        if (start === null) return false;
+        return start - now <= PRE_MEETING_WINDOW_MS;
+      });
+      setPendingPreMeeting(visible);
+    }
+
+    poll();
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [personaId]);
+
+  const activePreMeeting = pendingPreMeeting[0] || null;
+  const activeAttendance = pendingAttendance[0] || null;
+  const activeType = activePreMeeting ? "pre-meeting" : activeAttendance ? "attendance" : null;
+  const active = activePreMeeting || activeAttendance;
+  const notifyKey = active ? `${activeType}-${active.id}` : null;
 
   useEffect(() => {
     if (!active) {
       if (typeof document !== "undefined") document.title = originalTitleRef.current;
       return undefined;
     }
+    const alarmTitle = activeType === "pre-meeting" ? PRE_MEETING_TITLE : ATTENDANCE_TITLE;
     let showAlarmTitle = false;
     const interval = setInterval(() => {
-      document.title = showAlarmTitle ? originalTitleRef.current : ALARM_TITLE;
+      document.title = showAlarmTitle ? originalTitleRef.current : alarmTitle;
       showAlarmTitle = !showAlarmTitle;
     }, 1000);
     return () => {
       clearInterval(interval);
       document.title = originalTitleRef.current;
     };
-  }, [active?.id]);
+  }, [notifyKey, activeType]);
 
   useEffect(() => {
-    if (!active || notifiedRef.current.has(active.id)) return;
-    notifiedRef.current.add(active.id);
+    if (!active || !notifyKey || notifiedRef.current.has(notifyKey)) return;
+    notifiedRef.current.add(notifyKey);
     if (typeof Notification === "undefined") return;
+    const title = activeType === "pre-meeting" ? "Tu reunión está por comenzar" : "Confirma tu asistencia a una reunión";
     if (Notification.permission === "granted") {
-      new Notification("Confirma tu asistencia a una reunión", {
+      new Notification(title, {
         body: `${active.nombre || active.titulo || "Reunión"} · ${formatMeetingWhen(active)}`,
         icon: "/favicon.svg",
       });
     } else if (Notification.permission !== "denied") {
       Notification.requestPermission();
     }
-  }, [active?.id]);
+  }, [notifyKey, activeType]);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -116,33 +172,54 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
     carAlarmSiren();
     const interval = setInterval(carAlarmSiren, BEEP_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [active?.id]);
+  }, [notifyKey]);
 
   if (!active) return null;
 
+  const minutesUntil = activeType === "pre-meeting" ? getMinutesUntil(active) : null;
+
   async function handleConfirm() {
     setConfirming(true);
-    const result = await confirmMeetingAttendance(active.id);
+    const result = activeType === "pre-meeting"
+      ? await confirmPreMeetingReminder(active.id)
+      : await confirmMeetingAttendance(active.id);
     setConfirming(false);
     if (result?.ok) {
-      setPending((current) => current.filter((item) => item.id !== active.id));
+      if (activeType === "pre-meeting") {
+        setPendingPreMeeting((current) => current.filter((item) => item.id !== active.id));
+      } else {
+        setPendingAttendance((current) => current.filter((item) => item.id !== active.id));
+      }
     }
   }
 
   function handleSnooze() {
-    snoozedUntilRef.current[active.id] = Date.now() + SNOOZE_MS;
-    setPending((current) => current.filter((item) => item.id !== active.id));
+    snoozedUntilRef.current[`${activeType === "pre-meeting" ? "pre" : "attendance"}-${active.id}`] = Date.now() + SNOOZE_MS;
+    if (activeType === "pre-meeting") {
+      setPendingPreMeeting((current) => current.filter((item) => item.id !== active.id));
+    } else {
+      setPendingAttendance((current) => current.filter((item) => item.id !== active.id));
+    }
   }
+
+  const isPreMeeting = activeType === "pre-meeting";
 
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-red-950/80 p-4">
       <div className="w-full max-w-sm animate-pulse rounded-2xl border-4 border-red-500 bg-white p-5 shadow-2xl">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">⚠️</span>
-          <p className="text-sm font-black uppercase tracking-widest text-red-600">Confirma tu asistencia</p>
+          <span className="text-2xl">{isPreMeeting ? "⏰" : "⚠️"}</span>
+          <p className="text-sm font-black uppercase tracking-widest text-red-600">
+            {isPreMeeting ? "Tu reunión está por comenzar" : "Confirma tu asistencia"}
+          </p>
         </div>
         <p className="mt-3 text-base font-black text-slate-900">{active.nombre || active.titulo || "Reunión"}</p>
         <p className="mt-1 text-[11px] font-bold text-slate-500">{formatMeetingWhen(active)} · {active.gestion || "Sin canal"}</p>
+        {isPreMeeting && minutesUntil !== null && (
+          <p className="mt-1 text-[11px] font-black text-red-600">
+            {minutesUntil > 0 ? `Comienza en ${minutesUntil} min` : "Está comenzando ahora"}
+          </p>
+        )}
         <div className="mt-4 flex flex-col gap-2">
           <button
             type="button"
@@ -150,7 +227,7 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
             onClick={handleConfirm}
             className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
           >
-            {confirming ? "Confirmando..." : "✓ Confirmar asistencia"}
+            {confirming ? "Confirmando..." : isPreMeeting ? "✓ Entendido, ya voy" : "✓ Confirmar asistencia"}
           </button>
           <button
             type="button"
