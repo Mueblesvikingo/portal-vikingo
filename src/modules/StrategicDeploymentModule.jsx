@@ -502,7 +502,7 @@ const [activePdfTitle, setActivePdfTitle] = useState("");
     "Transformación Digital y Automatización": "Integra herramientas digitales para mejorar trazabilidad y control operativo.",
   };
 
-  const activeColor = COLORS[activeObjective.perspective] || "#111827";
+  const activeColor = COLORS[activeObjective?.perspective] || "#111827";
   const card = darkMode ? "bg-[#111827] border-white/10 text-white" : "bg-white border-gray-200 text-gray-800";
   const muted = darkMode ? "text-gray-400" : "text-gray-500";
   const strong = darkMode ? "text-white" : "text-gray-800";
