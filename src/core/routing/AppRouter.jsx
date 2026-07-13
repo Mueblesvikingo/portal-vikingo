@@ -40,7 +40,7 @@ export default function AppRouter({
 
           <Route
             path="/performance"
-            element={<PerformanceModule />}
+            element={<PerformanceModule currentUser={currentUser} />}
           />
 
 <Route

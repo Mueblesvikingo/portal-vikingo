@@ -30,6 +30,7 @@ const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
   "workload-balance",
   "maturity",
   "sig",
+  "performance",
 ];
 
 const WORKLOAD_FULL_ACCESS_ROLES = [
