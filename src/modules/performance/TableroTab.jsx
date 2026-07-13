@@ -8,6 +8,7 @@ import {
   PERIODICIDAD_OPTIONS,
   computeCumplimiento,
   getCumplimientoStatus,
+  getPreviousMonthInfo,
   formatKpiValue,
 } from "./performanceHelpers";
 
@@ -103,11 +104,23 @@ function GaugeCard({ label, cumplimiento, color }) {
   );
 }
 
-export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onUpdateKpi, onCreateKpi, onDeactivateKpi }) {
+function DetailField({ label, children }) {
+  return (
+    <div>
+      <p className="mb-0.5 text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onUpdateKpi, onDeactivateKpi }) {
+  const [openKpiId, setOpenKpiId] = useState(null);
   const isEstrategico = scope === "ESTRATEGICO";
+  const mesAnteriorLabel = getPreviousMonthInfo().label;
   const groups = isEstrategico
     ? PERSPECTIVAS.map((p) => ({ label: p, color: PERSPECTIVA_COLOR[p], items: kpis.filter((k) => k.perspectiva === p) }))
     : [{ label: scope, color: PERSPECTIVA_COLOR.Financiera, items: kpis }];
+  const colCount = canEdit ? 5 : 4;
 
   return (
     <div className="space-y-4">
@@ -125,19 +138,12 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-        <table className="w-full min-w-[1000px] border-collapse text-[11px]">
+        <table className="w-full min-w-[560px] border-collapse text-[11px]">
           <thead>
             <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
-              <th className="px-3 py-2 text-white">Objetivo estratégico</th>
               <th className="px-3 py-2 text-white">Indicador</th>
-              <th className="px-3 py-2">Fórmula</th>
-              <th className="px-3 py-2">Fuente</th>
-              <th className="px-3 py-2">Periodicidad</th>
-              <th className="px-3 py-2">Medida</th>
-              <th className="px-3 py-2">Responsable</th>
-              <th className="px-3 py-2">Gráfico</th>
-              <th className="px-3 py-2 text-right">Real</th>
-              <th className="px-3 py-2 text-right">Meta</th>
+              <th className="px-3 py-2 text-right text-white">Real <span className="font-bold normal-case text-white/40">({mesAnteriorLabel})</span></th>
+              <th className="px-3 py-2 text-right">Meta <span className="font-bold normal-case text-white/40">({mesAnteriorLabel})</span></th>
               <th className="px-3 py-2 text-right">Cumpl.</th>
               {canEdit && <th className="px-3 py-2"></th>}
             </tr>
@@ -147,7 +153,7 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
               <Fragment key={group.label}>
                 {isEstrategico && (
                   <tr key={`${group.label}-header`}>
-                    <td colSpan={canEdit ? 12 : 11} className="px-3 py-1.5" style={{ background: `${group.color}14` }}>
+                    <td colSpan={colCount} className="px-3 py-1.5" style={{ background: `${group.color}14` }}>
                       <span className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest" style={{ color: group.color }}>
                         <span className="h-2 w-2 rounded-full" style={{ background: group.color }} />
                         {group.label}
@@ -158,46 +164,96 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
                 {group.items.map((kpi) => {
                   const { real, meta, cumplimiento } = computeCumplimiento(resultados, kpi.id, anio);
                   const status = getCumplimientoStatus(cumplimiento);
+                  const isOpen = openKpiId === kpi.id;
                   return (
-                    <tr key={kpi.id} className="border-b border-slate-50 transition hover:bg-slate-50/70">
-                      <td className="px-3 py-1.5" style={{ boxShadow: `inset 3px 0 0 ${group.color}` }}><EditableText value={kpi.objetivo_estrategico} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { objetivo_estrategico: v })} /></td>
-                      <td className="px-3 py-1.5 font-black text-slate-800"><EditableText value={kpi.nombre_indicador} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { nombre_indicador: v })} /></td>
-                      <td className="px-3 py-1.5 text-slate-500"><EditableText value={kpi.formula_texto} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { formula_texto: v })} /></td>
-                      <td className="px-3 py-1.5 text-slate-500"><EditableText value={kpi.fuente_datos} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { fuente_datos: v })} /></td>
-                      <td className="px-3 py-1.5"><EditableSelect value={kpi.periodicidad} options={PERIODICIDAD_OPTIONS} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { periodicidad: v })} /></td>
-                      <td className="px-3 py-1.5"><EditableSelect value={kpi.unidad_medida} options={UNIDAD_OPTIONS} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { unidad_medida: v })} /></td>
-                      <td className="px-3 py-1.5"><EditableText value={kpi.responsable_rol} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { responsable_rol: v })} /></td>
-                      <td className="px-3 py-1.5"><EditableSelect value={kpi.tipo_grafico} options={TIPO_GRAFICO_OPTIONS} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { tipo_grafico: v })} /></td>
-                      <td className="px-3 py-1.5 text-right font-black text-slate-800">{formatKpiValue(real, kpi.unidad_medida)}</td>
-                      <td className="px-3 py-1.5 text-right text-slate-500">{formatKpiValue(meta, kpi.unidad_medida)}</td>
-                      <td className="px-3 py-1.5 text-right"><span className="rounded-full px-2 py-0.5 text-[9px] font-black" style={{ backgroundColor: `${status.color}1f`, color: status.color }}>{cumplimiento === null ? "—" : `${cumplimiento}%`}</span></td>
-                      {canEdit && (
-                        <td className="px-3 py-1.5 text-right">
-                          <button type="button" onClick={() => onDeactivateKpi(kpi.id)} title="Quitar KPI" className="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition hover:bg-red-50 hover:text-red-500">×</button>
+                    <Fragment key={kpi.id}>
+                      <tr className="border-b border-slate-50 transition hover:bg-slate-50/70">
+                        <td className="px-3 py-1.5" style={{ boxShadow: `inset 3px 0 0 ${group.color}` }}>
+                          <button
+                            type="button"
+                            onClick={() => setOpenKpiId(isOpen ? null : kpi.id)}
+                            className="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left font-black text-slate-800 transition hover:bg-sky-50 hover:text-sky-700"
+                          >
+                            <span
+                              className="inline-block text-[9px] transition-transform"
+                              style={{ color: group.color, transform: isOpen ? "rotate(90deg)" : "rotate(0deg)" }}
+                            >
+                              ▸
+                            </span>
+                            {kpi.nombre_indicador}
+                          </button>
                         </td>
+                        <td className="px-3 py-1.5 text-right font-black text-slate-800">{formatKpiValue(real, kpi.unidad_medida)}</td>
+                        <td className="px-3 py-1.5 text-right text-slate-500">{formatKpiValue(meta, kpi.unidad_medida)}</td>
+                        <td className="px-3 py-1.5 text-right">
+                          <span className="rounded-full px-2 py-0.5 text-[9px] font-black" style={{ backgroundColor: `${status.color}1f`, color: status.color }}>
+                            {cumplimiento === null ? "—" : `${cumplimiento}%`}
+                          </span>
+                        </td>
+                        {canEdit && (
+                          <td className="px-3 py-1.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => onDeactivateKpi(kpi.id)}
+                              title="Eliminar KPI"
+                              className="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition hover:bg-red-50 hover:text-red-500"
+                            >
+                              ×
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                      {isOpen && (
+                        <tr className="border-b border-slate-100 bg-slate-50/50">
+                          <td colSpan={colCount} className="px-4 py-3">
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                              <DetailField label="Objetivo estratégico">
+                                <EditableText value={kpi.objetivo_estrategico} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { objetivo_estrategico: v })} className="text-slate-700" />
+                              </DetailField>
+                              <DetailField label="Fórmula">
+                                <EditableText value={kpi.formula_texto} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { formula_texto: v })} className="text-slate-700" />
+                              </DetailField>
+                              <DetailField label="Fuente">
+                                <EditableText value={kpi.fuente_datos} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { fuente_datos: v })} className="text-slate-700" />
+                              </DetailField>
+                              <DetailField label="Responsable">
+                                <EditableText value={kpi.responsable_rol} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { responsable_rol: v })} className="text-slate-700" />
+                              </DetailField>
+                              <DetailField label="Periodicidad">
+                                <EditableSelect value={kpi.periodicidad} options={PERIODICIDAD_OPTIONS} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { periodicidad: v })} />
+                              </DetailField>
+                              <DetailField label="Medida">
+                                <EditableSelect value={kpi.unidad_medida} options={UNIDAD_OPTIONS} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { unidad_medida: v })} />
+                              </DetailField>
+                              <DetailField label="Gráfico">
+                                <EditableSelect value={kpi.tipo_grafico} options={TIPO_GRAFICO_OPTIONS} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { tipo_grafico: v })} />
+                              </DetailField>
+                            </div>
+                            {canEdit && (
+                              <div className="mt-3 flex justify-end border-t border-slate-200 pt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => onDeactivateKpi(kpi.id)}
+                                  className="rounded-lg border border-red-200 px-3 py-1 text-[10px] font-black text-red-500 transition hover:bg-red-50"
+                                >
+                                  Eliminar KPI
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
                       )}
-                    </tr>
+                    </Fragment>
                   );
                 })}
               </Fragment>
             ))}
             {kpis.length === 0 && (
-              <tr><td colSpan={canEdit ? 12 : 11} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay KPIs para este tablero.</td></tr>
+              <tr><td colSpan={colCount} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay KPIs para este tablero.</td></tr>
             )}
           </tbody>
         </table>
         </div>
-        {canEdit && (
-          <div className="border-t border-slate-100 p-2">
-            <button
-              type="button"
-              onClick={() => onCreateKpi({ perspectiva: isEstrategico ? PERSPECTIVAS[0] : null, macroproceso: isEstrategico ? null : scope, ambito: isEstrategico ? "estrategico" : "tactico" })}
-              className="rounded-lg border border-dashed border-slate-300 px-3 py-1.5 text-[10px] font-black text-slate-500 transition hover:border-sky-300 hover:text-sky-600"
-            >
-              + Agregar KPI
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

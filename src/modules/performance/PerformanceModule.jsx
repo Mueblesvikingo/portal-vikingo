@@ -122,16 +122,27 @@ export default function PerformanceModule({ currentUser }) {
     <section className="space-y-3">
       <div className="rounded-[22px] border border-slate-200 bg-white/70 p-3 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-            Filtrar por tablero:
-            <select
-              value={scope}
-              onChange={(event) => setScope(event.target.value)}
-              className="ml-2 h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
-            >
-              {scopeOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-            </select>
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Filtrar por tablero:
+              <select
+                value={scope}
+                onChange={(event) => setScope(event.target.value)}
+                className="ml-2 h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+              >
+                {scopeOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+              </select>
+            </label>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => handleCreateKpi({ perspectiva: isEstrategico ? PERSPECTIVAS[0] : null, macroproceso: isEstrategico ? null : scope, ambito: isEstrategico ? "estrategico" : "tactico" })}
+                className="h-9 rounded-lg border border-dashed border-slate-300 px-3 text-[10px] font-black text-slate-500 transition hover:border-sky-300 hover:text-sky-600"
+              >
+                + Agregar KPI
+              </button>
+            )}
+          </div>
           {!canEdit && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold text-amber-700">Modo solo lectura</span>}
         </div>
 
@@ -165,7 +176,6 @@ export default function PerformanceModule({ currentUser }) {
                 scope={scope}
                 canEdit={canEdit}
                 onUpdateKpi={handleUpdateKpi}
-                onCreateKpi={handleCreateKpi}
                 onDeactivateKpi={handleDeactivateKpi}
               />
             ) : activeTab === "resultados" ? (

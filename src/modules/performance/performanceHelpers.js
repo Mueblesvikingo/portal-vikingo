@@ -15,11 +15,15 @@ export const CATEGORICAL_COLORS = [
   "#eb6834", // orange
 ];
 
+// Mismos colores oficiales de perspectiva usados en el mapa estratégico de
+// Despliegue Estratégico (StrategicDeploymentModule.jsx, const COLORS) —
+// se replican aquí en vez de la paleta categórica genérica para mantener
+// consistencia visual entre ambos módulos.
 export const PERSPECTIVA_COLOR = {
-  Financiera: CATEGORICAL_COLORS[0],
-  Clientes: CATEGORICAL_COLORS[1],
-  Procesos: CATEGORICAL_COLORS[2],
-  Desarrollo: CATEGORICAL_COLORS[7],
+  Financiera: "#b88a00",
+  Clientes: "#3f5f2f",
+  Procesos: "#203f73",
+  Desarrollo: "#c96d1a",
 };
 
 export const STATUS_COLORS = {
@@ -68,22 +72,26 @@ export function buildMonthlySeries(resultados, kpiId, anio) {
   }));
 }
 
-// Cumplimiento = último mes con valor Real capturado, contra su Meta del
-// mismo mes. Si no hay Real aún, cae al promedio de Meta vs Real disponibles.
+// El "mes anterior" es siempre el mes calendario previo al actual (no el
+// último mes con dato capturado) — así Real/Meta se muestran automáticamente
+// sin que el usuario tenga que buscar el mes correcto.
+export function getPreviousMonthInfo() {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentYear = now.getFullYear();
+  if (currentMonth === 1) return { mes: 12, anio: currentYear - 1, label: MESES[11] };
+  return { mes: currentMonth - 1, anio: currentYear, label: MESES[currentMonth - 2] };
+}
+
+// Real/Meta del mes anterior (calendario), contra ese mismo mes.
 export function computeCumplimiento(resultados, kpiId, anio) {
-  const serie = buildMonthlySeries(resultados, kpiId, anio);
-  let lastReal = null;
-  let lastMeta = null;
-  for (let i = serie.length - 1; i >= 0; i--) {
-    if (serie[i].real !== null) {
-      lastReal = serie[i].real;
-      lastMeta = serie[i].meta;
-      break;
-    }
-  }
-  if (lastReal === null || !lastMeta) return { real: lastReal, meta: lastMeta, cumplimiento: null };
-  const cumplimiento = Math.round((lastReal / lastMeta) * 100);
-  return { real: lastReal, meta: lastMeta, cumplimiento };
+  const { mes, anio: mesAnio, label } = getPreviousMonthInfo();
+  const targetAnio = mesAnio ?? anio;
+  const real = getResultadoValue(resultados, kpiId, targetAnio, mes, "real");
+  const meta = getResultadoValue(resultados, kpiId, targetAnio, mes, "meta");
+  if (real === null || !meta) return { real, meta, cumplimiento: null, mesLabel: label };
+  const cumplimiento = Math.round((real / meta) * 100);
+  return { real, meta, cumplimiento, mesLabel: label };
 }
 
 export function getCumplimientoStatus(cumplimiento) {
