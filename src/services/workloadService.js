@@ -613,6 +613,34 @@ export async function cancelAssignment(id) {
   return setAssignmentProjectState(id, "Cancelado");
 }
 
+export async function deleteAssignment(id) {
+  try {
+    const [weeklyResult, monthlyResult] = await Promise.all([
+      supabase
+        .from("workload_plan_semanal_detalle")
+        .update({ activo: false })
+        .eq("asignacion_id", id)
+        .eq("activo", true),
+      supabase
+        .from("workload_plan_mensual")
+        .update({ activo: false })
+        .eq("asignacion_id", id)
+        .eq("activo", true),
+    ]);
+
+    if (weeklyResult.error) return { ok: false, error: weeklyResult.error };
+    if (monthlyResult.error) return { ok: false, error: monthlyResult.error };
+
+    const { error } = await supabase.from("workload_asignaciones").delete().eq("id", id);
+    if (error) return { ok: false, error };
+
+    return { ok: true, error: null };
+  } catch (err) {
+    console.error("Error inesperado al eliminar la asignación:", err);
+    return { ok: false, error: err };
+  }
+}
+
 function cleanSavedPlanPayload(payload = {}) {
   return {
     tipo_plan: payload.tipo_plan,
