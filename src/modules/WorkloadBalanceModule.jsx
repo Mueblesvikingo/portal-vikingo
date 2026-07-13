@@ -325,6 +325,13 @@ function translateStatus(value) {
   return labels[normalized] || cleanText(value) || "Activa";
 }
 function isInactiveWorkloadActivity(activity) {
+  // Una actividad con override personal de Líder de proceso manda su propio
+  // estado/activo — no debe quedar atrapada por el activa=false del registro
+  // maestro (sourceRecord), que puede estar inactivo por otras razones ajenas
+  // a esta persona en particular.
+  if (activity?.hasLiderProcesoOverride) {
+    return activity?.activa === false;
+  }
   const status = normalizeText(activity?.estado || activity?.sourceRecord?.estado || activity?.estadoAgenda);
   return activity?.activa === false || activity?.sourceRecord?.activa === false || status === "inactive" || status === "inactiva";
 }
@@ -834,7 +841,7 @@ function PendingActivitiesView({ hasSelectedPerson, activities, totalHours, canE
     .filter((section) => section.activities.length > 0);
   const renderRows = (section) => section.activities.map((activity) => {
     const inactive = isInactiveWorkloadActivity(activity);
-    const statusValue = inactive ? "inactive" : activity.sourceRecord?.estado || activity.estado || activity.estadoAgenda;
+    const statusValue = inactive ? "inactive" : activity.estado || activity.sourceRecord?.estado || activity.estadoAgenda;
     const subprocess = getPendingActivitySubprocess(activity);
     const activityNumber = getPendingActivityNumber(activity);
     return <tr key={`${section.key}-${activity.id || getPendingActivityKey(activity)}`} className={`align-top hover:bg-slate-50/70 ${inactive ? "bg-gray-50 text-gray-400" : ""}`}><td className={`px-3 py-2 font-black leading-tight whitespace-normal ${inactive ? "text-gray-400" : "text-slate-800"}`}>{activity.actividad}</td><td className={`px-3 py-2 font-bold leading-tight whitespace-normal ${inactive ? "text-gray-400" : "text-slate-600"}`}><span className="block">{activity.proceso}</span>{subprocess && <span className={`mt-0.5 block text-[9px] font-bold ${inactive ? "text-gray-400" : "text-slate-400"}`}>{subprocess}{activityNumber ? ` · Act. ${activityNumber}` : ""}</span>}</td><td className={`px-3 py-2 font-bold leading-tight whitespace-normal ${inactive ? "text-gray-400" : "text-slate-600"}`}>{activity.rol}</td><td className={`px-3 py-2 font-bold ${inactive ? "text-gray-400" : "text-slate-500"}`}><span className="block">{translateFrequency(activity.frecuencia)}</span>{section.key === "radar" && <span className={`mt-0.5 block text-[8px] font-black ${inactive ? "text-gray-400" : "text-slate-400"}`}>Mes previsto: {getPendingActivityPlannedMonthLabel(activity)}</span>}</td><td className={`px-3 py-2 font-black ${inactive ? "text-gray-400" : "text-slate-600"}`}>{activity.duracionMinutos} min</td><td className="px-3 py-2"><span className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${inactive ? "border-gray-200 bg-gray-100 text-gray-500" : "border-emerald-100 bg-emerald-50 text-emerald-700"}`}>{translateStatus(statusValue)}</span></td><td className="px-3 py-2 text-right"><div className="flex justify-end gap-1">{canEditActivities && <button type="button" onClick={() => onEditActivity(activity)} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[9px] font-black text-slate-500 shadow-sm hover:bg-slate-50">Editar</button>}<button type="button" onClick={() => onOpenSchedule(activity)} className="rounded-lg bg-[#001225] px-2 py-1 text-[9px] font-black text-white shadow-sm hover:bg-slate-800">{section.key === "radar" ? "Mes previsto" : "Programar"}</button></div></td></tr>;
