@@ -8,12 +8,16 @@ const WORKLOAD_MANUAL_URL = "/manuales/Balance_de_Carga.pdf";
 // Video/manual específicos de la pestaña Asignaciones (independientes del
 // video/manual general del módulo). El equipo estratégico ve un recurso;
 // el resto de los usuarios ve otro (ver isStrategicTeamMember más abajo).
-// TODO: reemplazar los "_DEFAULT" cuando se compartan los archivos para
-// usuarios que no son equipo estratégico — hoy apuntan a los mismos.
 const ASSIGNMENTS_VIDEO_URL_STRATEGIC = "/videos/Planeacion_de_Iniciativas.mp4";
 const ASSIGNMENTS_MANUAL_URL_STRATEGIC = "/manuales/Strategic_Capacity_Execution.pdf";
-const ASSIGNMENTS_VIDEO_URL_DEFAULT = "/videos/Planeacion_de_Iniciativas.mp4";
-const ASSIGNMENTS_MANUAL_URL_DEFAULT = "/manuales/Strategic_Capacity_Execution.pdf";
+const ASSIGNMENTS_VIDEO_TITLE_STRATEGIC = "Planeación de Iniciativas";
+const ASSIGNMENTS_VIDEO_URL_DEFAULT =
+  "https://www.youtube.com/embed/vY0MAsijAys?autoplay=1&rel=0&modestbranding=1";
+const ASSIGNMENTS_MANUAL_URL_DEFAULT = "/manuales/Arquitectura_del_Tiempo.pdf";
+const ASSIGNMENTS_VIDEO_TITLE_DEFAULT = "Arquitectura del Tiempo";
+function isEmbeddedVideoUrl(url) {
+  return /^https?:\/\//.test(url || "");
+}
 
 const MONTHLY_CAPACITY_HOURS = 192;
 const WEEKLY_CAPACITY_HOURS = 48;
@@ -978,6 +982,7 @@ export default function WorkloadBalanceModule({
   };
   const assignmentsVideoUrl = isStrategicTeamMember(currentUser) ? ASSIGNMENTS_VIDEO_URL_STRATEGIC : ASSIGNMENTS_VIDEO_URL_DEFAULT;
   const assignmentsManualUrl = isStrategicTeamMember(currentUser) ? ASSIGNMENTS_MANUAL_URL_STRATEGIC : ASSIGNMENTS_MANUAL_URL_DEFAULT;
+  const assignmentsVideoTitle = isStrategicTeamMember(currentUser) ? ASSIGNMENTS_VIDEO_TITLE_STRATEGIC : ASSIGNMENTS_VIDEO_TITLE_DEFAULT;
   const [activities, setActivities] = useState(demoActivities);
   const [showWorkloadVideo, setShowWorkloadVideo] = useState(false);
   const [showAssignmentsVideo, setShowAssignmentsVideo] = useState(false);
@@ -3636,12 +3641,14 @@ function canReviewPlan() {
             <div className="flex items-center justify-between bg-[#001225] px-5 py-3 text-white">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">Video tutorial</p>
-                <h3 className="text-lg font-black">Planeación de Iniciativas</h3>
+                <h3 className="text-lg font-black">{assignmentsVideoTitle}</h3>
               </div>
               <button type="button" onClick={() => setShowAssignmentsVideo(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-lg font-black text-white hover:bg-red-700">×</button>
             </div>
             <div className="aspect-video w-full bg-black">
-              <video className="h-full w-full" src={assignmentsVideoUrl} controls autoPlay />
+              {isEmbeddedVideoUrl(assignmentsVideoUrl)
+                ? <iframe className="h-full w-full" src={assignmentsVideoUrl} title={assignmentsVideoTitle} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                : <video className="h-full w-full" src={assignmentsVideoUrl} controls autoPlay />}
             </div>
           </div>
         </div>
