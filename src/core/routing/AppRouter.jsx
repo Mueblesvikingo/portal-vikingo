@@ -45,7 +45,7 @@ export default function AppRouter({
 
 <Route
   path="/strategic-deployment"
-  element={<StrategicDeploymentModule />}
+  element={<StrategicDeploymentModule currentUser={currentUser} />}
 />
 
           <Route

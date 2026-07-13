@@ -1,4 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { isStrategicTeamMember } from "../services/permissionsService";
+import {
+  getObjetivos,
+  getKpisTacticos,
+  createObjetivo,
+  updateObjetivo,
+  deactivateObjetivo,
+  createKpiTactico,
+  updateKpiTactico,
+  deactivateKpiTactico,
+} from "../services/strategicDeploymentService";
 
 const COLORS = {
   Financiera: "#b88a00",
@@ -96,294 +107,102 @@ const strategicKpiNames = {
   "OBJ-14": "% operación digitalizada",
 };
 
-const objectives = [
-  {
-    id: "GLOBAL",
-    title: "Desempeño estratégico global ≥ 80%",
-    perspective: "Desarrollo",
-    owner: "Coordinador Estratégico/SIG",
-    risk: "Desalineación estratégica y falta de seguimiento integral del desempeño organizacional",
-    purpose: "Garantizar el monitoreo integral del desempeño estratégico y la alineación organizacional mediante seguimiento continuo de indicadores clave.",
-    chain: [
-      { element: "Seguimiento estratégico", meaning: "Monitorear periódicamente el comportamiento de los indicadores estratégicos organizacionales.", contribution: "Permite detectar desviaciones y priorizar acciones estratégicas." },
-      { element: "Control organizacional", meaning: "Mantener visibilidad integral del desempeño de los objetivos estratégicos.", contribution: "Favorece la toma de decisiones basada en información." },
-      { element: "Alineación estratégica", meaning: "Asegurar coherencia entre procesos, responsables y resultados estratégicos.", contribution: "Fortalece el cumplimiento organizacional." },
-      { element: "Desempeño estratégico global ≥80%", meaning: "Mantener un nivel global de cumplimiento estratégico organizacional igual o superior al 80%.", contribution: "Representa estabilidad y madurez del sistema de gestión estratégica." },
-    ],
-    deployment: [],
-  },
-  {
-    id: "OBJ-01", strategicStatus: "Sin atención",
-    title: "Rentabilidad ≥ 15%",
-    perspective: "Financiera",
-    owner: "Director general",
-    risk: "Variabilidad en costos operativos y reducción de márgenes comerciales",
-    purpose: "Garantizar sostenibilidad financiera mediante operaciones eficientes, controladas y orientadas a valor.",
-    chain: [
-      { element: "Gestión rentable de pedidos", meaning: "Asegurar que los pedidos generen margen y puedan cumplirse operativamente.", contribution: "Evita ventas no rentables y costos ocultos." },
-      { element: "Operación estandarizada", meaning: "Ejecutar procesos con orden, control y menor variabilidad operacional.", contribution: "Reduce errores, retrabajos y desperdicio." },
-      { element: "Clientes rentables", meaning: "Desarrollar relaciones comerciales sostenibles y rentables.", contribution: "Prioriza clientes que generan valor." },
-      { element: "Rentabilidad ≥15%", meaning: "Lograr una utilidad mínima del 15% para asegurar crecimiento, reinversión y estabilidad financiera.", contribution: "Resultado financiero esperado." },
-    ],
-    deployment: [
-      { process: "Ventas", impact: "Mejora alineación comercial y estabilidad operativa conforme a la demanda planificada.", kpi: "% cumplimiento plan comercial", goal: "≥90%", owner: "Director general" },
-      { process: "Compras", impact: "Reduce costos ocultos y asegura estabilidad operacional mediante abastecimiento planificado.", kpi: "Número de compras urgentes", goal: "≤5", owner: "Gerente Operaciones" },
-      { process: "Planeación y control producción", impact: "Reduce desviaciones operativas y costos ocultos mediante estabilidad en la ejecución productiva.", kpi: "% producción ejecutada sin desviaciones", goal: "≥90%", owner: "Gerente Operaciones" },
-      { process: "Gestión inventarios", impact: "Asegura disponibilidad confiable de materiales conforme a programación operativa.", kpi: "% materiales disponibles conforme programación", goal: "≥90%", owner: "Gerente Operaciones" },
-      { process: "Gestión calidad", impact: "Reduce desviaciones y costos operativos mediante detección, control y seguimiento de retrabajos.", kpi: "% productos sin retrabajo", goal: "≥95%", owner: "Coordinador de Calidad" },
-      { process: "Distribución", impact: "Reduce costos logísticos y reprocesos mediante entregas completas conforme a lo programado.", kpi: "% entregas completas", goal: "≥95%", owner: "Gerente Operaciones" },
-      { process: "Planeación financiera", impact: "Reduce desviaciones financieras mediante control y seguimiento de gastos operativos no contemplados en la planeación inicial.", kpi: "% gastos no planificados", goal: "≤5%", owner: "Finanzas" },
-    ],
-  },
-  {
-    id: "OBJ-02",strategicStatus: "En ejecución",
-    title: "Venta anual ≥ 74 MDP",
-    perspective: "Financiera",
-    owner: "Director general",
-    risk: "Disminución de demanda y baja capacidad comercial de colocación",
-    purpose: "Alcanzar el crecimiento comercial proyectado mediante una estrategia rentable y alineada a la capacidad operativa.",
-    chain: [
-      { element: "Capacidad productiva escalable", meaning: "Desarrollar una operación capaz de incrementar producción manteniendo control, cumplimiento y estabilidad operacional.", contribution: "Permite crecer sin generar saturación, retrasos ni desorden operativo." },
-      { element: "Clientes rentables", meaning: "Enfocar ventas en clientes que generan margen, volumen y continuidad comercial.", contribution: "Evita crecer con clientes que consumen recursos sin aportar rentabilidad." },
-      { element: "Confiabilidad de entrega", meaning: "Cumplir fechas y condiciones acordadas con el cliente.", contribution: "Fortalece recompra, confianza y relación comercial." },
-      { element: "Satisfacción del cliente", meaning: "Medir y mejorar la percepción del cliente sobre producto, servicio y cumplimiento.", contribution: "Aumenta fidelidad, recomendación y permanencia." },
-      { element: "Venta anual ≥74 MDP", meaning: "Alcanzar la meta anual de ventas definida por Dirección.", contribution: "Representa crecimiento comercial esperado para el año." },
-    ],
-    deployment: [
-      { process: "Planeación y control producción", impact: "Mantiene capacidad operativa disponible para responder al crecimiento comercial.", kpi: "% capacidad disponible para demanda comercial", goal: "≥90%", owner: "Gerente Operaciones" },
-      { process: "Gestión inventarios", impact: "Asegura disponibilidad operativa de producto terminado para cumplimiento de entregas programadas.", kpi: "% PT disponible para entrega", goal: "≥95%", owner: "Gerente Operaciones" },
-      { process: "Gestión calidad", impact: "Fortalece satisfacción y permanencia del cliente mediante liberación conforme de pedidos.", kpi: "% pedidos liberados sin observaciones", goal: "≥95%", owner: "Coordinador de Calidad" },
-      { process: "Distribución", impact: "Favorece confianza comercial mediante entregas correctas y sin devoluciones operativas.", kpi: "% entregas sin devolución", goal: "≥95%", owner: "Gerente Operaciones" },
-    ],
-  },
-  {
-    id: "OBJ-03",strategicStatus: "Sin atención",
-    title: "Liquidez ≥ 5% sobre ventas",
-    perspective: "Financiera",
-    owner: "Director general",
-    risk: "Incremento cartera vencida y baja recuperación de flujo",
-    purpose: "Mantener estabilidad financiera y capacidad de respuesta operativa mediante una adecuada gestión del flujo de efectivo.",
-    chain: [
-      { element: "Disciplina presupuestal", meaning: "Controlar gastos y ejecutar compras conforme al presupuesto autorizado.", contribution: "Reduce desviaciones y protege el flujo operativo." },
-      { element: "Control del flujo de efectivo", meaning: "Monitorear ingresos, egresos y disponibilidad financiera de manera continua.", contribution: "Permite anticipar riesgos de liquidez y tomar decisiones oportunas." },
-      { element: "Liquidez operativa", meaning: "Mantener capacidad financiera suficiente para sostener la operación diaria.", contribution: "Evita afectaciones operativas por falta de efectivo." },
-      { element: "Liquidez ≥5% sobre ventas", meaning: "Mantener un nivel mínimo de liquidez respecto al volumen de ventas.", contribution: "Asegura estabilidad financiera y capacidad de respuesta operativa." },
-    ],
-    deployment: [
-      { process: "Ventas", impact: "Favorece estabilidad financiera mediante control y reducción de cartera vencida.", kpi: "% cartera vencida", goal: "≤10%", owner: "Director general" },
-      { process: "Gestión inventarios", impact: "Favorece liquidez mediante reducción de producto terminado sin salida programada.", kpi: "N° PT sin salida programada", goal: "≤50", owner: "Gerente Operaciones" },
-      { process: "Planeación financiera", impact: "Favorece estabilidad financiera mediante seguimiento y control del flujo operativo y recuperación del efectivo.", kpi: "Ciclo de caja", goal: "≤Definir", owner: "Finanzas" },
-    ],
-  },
-  {
-    id: "OBJ-04",strategicStatus: "Sin atención",
-    title: "Disciplina presupuestal ≤ 5% desviación",
-    perspective: "Financiera",
-    owner: "Director general",
-    risk: "Ejecución operativa fuera del presupuesto autorizado",
-    purpose: "Asegurar el control y cumplimiento financiero mediante una administración basada en planeación y seguimiento presupuestal.",
-    chain: [
-      { element: "Operación estandarizada", meaning: "Ejecutar procesos con orden, control y menor variabilidad operacional.", contribution: "Reduce desperdicios, errores y desviaciones operativas." },
-      { element: "Planeación operativa", meaning: "Coordinar compras, producción y recursos conforme a la demanda y capacidad.", contribution: "Evita gastos no planificados y compras urgentes." },
-      { element: "Control presupuestal", meaning: "Dar seguimiento continuo al comportamiento financiero y contra el presupuesto definido.", contribution: "Permite detectar desviaciones y tomar acciones oportunas." },
-      { element: "Disciplina presupuestal ≤5%", meaning: "Mantener las desviaciones presupuestales dentro del límite definido por Dirección.", contribution: "Protege estabilidad financiera y sostenibilidad operativa." },
-    ],
-    deployment: [
-      { process: "Todos los procesos", impact: "Favorecen disciplina financiera mediante ejecución operativa conforme al presupuesto autorizado.", kpi: "% desviación presupuestal", goal: "≤5%", owner: "Director general" },
-    ],
-  },
-  {
-    id: "OBJ-05",strategicStatus: "Sin atención",
-    title: "Clientes ≥ 90% rentables",
-    perspective: "Clientes",
-    owner: "Ventas",
-    risk: "Ventas con baja rentabilidad y descuentos fuera de política",
-    purpose: "Priorizar relaciones comerciales sostenibles enfocadas en clientes con margen y estabilidad operativa.",
-    chain: [
-      { element: "Gestión rentable de pedidos", meaning: "Validar margen, capacidad y viabilidad operativa antes de aceptar pedidos.", contribution: "Evita ventas que generan pérdidas o desorden operacional." },
-      { element: "Confiabilidad de entrega", meaning: "Cumplir consistentemente fechas y condiciones acordadas con el cliente.", contribution: "Fortalece relaciones comerciales sostenibles." },
-      { element: "Satisfacción del cliente", meaning: "Mejorar percepción del cliente respecto al servicio y cumplimiento.", contribution: "Incrementa permanencia y recompra." },
-      { element: "Relación comercial sostenible", meaning: "Desarrollar relaciones comerciales estables, rentables y de largo plazo.", contribution: "Favorece crecimiento rentable y estabilidad financiera." },
-    ],
-    deployment: [
-      { process: "Gestión calidad", impact: "Favorece cumplimiento de entrega mediante liberación oportuna de pedidos conforme a especificación.", kpi: "% pedidos liberados en tiempo", goal: "≥95%", owner: "Coordinador de Calidad" },
-      { process: "Planeación y control producción", impact: "Favorece estabilidad de rentabilidad mediante reducción de desviaciones y costos extraordinarios posteriores a la venta.", kpi: "% pedidos sin costos extraordinarios", goal: "≥95%", owner: "Gerente Operaciones" },
-      { process: "Ventas", impact: "Favorece rentabilidad comercial mediante control de ventas realizadas fuera del margen objetivo definido.", kpi: "% ventas fuera margen objetivo", goal: "≤10%", owner: "Director general" },
-    ],
-  },
-  {
-    id: "OBJ-06",strategicStatus: "Sin atención",
-    title: "Confiabilidad de entregas ≥ 95%",
-    perspective: "Clientes",
-    owner: "Ventas",
-    risk: "Incumplimiento operativo y desviaciones en entrega de pedidos",
-    purpose: "Garantizar entregas completas y oportunas mediante procesos coordinados y controlados.",
-    chain: [
-      { element: "Alineación demanda-capacidad", meaning: "Coordinar ventas, producción y recursos conforme a la capacidad real de operación.", contribution: "Reduce saturación, urgencias y reprogramaciones." },
-      { element: "Capacidad productiva escalable", meaning: "Mantener una operación capaz de responder al crecimiento sin perder control operativo.", contribution: "Permite cumplir producción y entregas de manera estable." },
-      { element: "Operación estandarizada", meaning: "Ejecutar procesos bajo estándares definidos y controlados.", contribution: "Reduce errores, retrasos y variabilidad operacional." },
-      { element: "Cumplimiento operacional", meaning: "Ejecutar la operación de forma coordinada y conforme a lo planeado.", contribution: "Asegura entregas consistentes y fortalece la confianza del cliente." },
-    ],
-    deployment: [
-      { process: "Ventas", impact: "Favorece confiabilidad de entrega mediante captura correcta y completa de pedidos desde el inicio del proceso.", kpi: "% pedidos capturados correctamente", goal: "≥95%", owner: "Director general" },
-      { process: "Planeación y control producción", impact: "Favorece estabilidad de entrega mediante ejecución productiva conforme a la programación establecida.", kpi: "% producción conforme programación", goal: "≥90%", owner: "Gerente Operaciones" },
-      { process: "Gestión inventarios", impact: "Favorece confiabilidad de entrega mediante control y exactitud del inventario de producto terminado.", kpi: "% exactitud inventario PT", goal: "≥95%", owner: "Gerente Operaciones" },
-      { process: "Control de almacenes", impact: "Favorece confiabilidad del inventario mediante control y reducción de diferencias detectadas en conteos cíclicos.", kpi: "% diferencias inventario almacén", goal: "≤5%", owner: "Gerente Operaciones" },
-      { process: "Distribución", impact: "Favorece cumplimiento logístico mediante ejecución de rutas y entregas conforme a programación definida.", kpi: "% rutas ejecutadas conforme programación", goal: "≥95%", owner: "Gerente Operaciones" },
-      { process: "Distribución", impact: "Favorece confiabilidad de entrega mediante disponibilidad y mantenimiento oportuno de unidades de transporte conforme a la planeación establecida.", kpi: "% cumplimiento mantenimiento transporte", goal: "≥95%", owner: "Gerente Operaciones" },
-    ],
-  },
-  {
-    id: "OBJ-07",strategicStatus: "Sin atención",
-    title: "Satisfacción del 90% en CSAT",
-    perspective: "Clientes",
-    owner: "Ventas",
-    risk: "Incremento de incidencias y reclamaciones del cliente",
-    purpose: "Fortalecer la percepción y confianza del cliente mediante productos y servicios consistentes.",
-    chain: [
-      { element: "Operación estandarizada", meaning: "Ejecutar procesos bajo estándares definidos y controlados.", contribution: "Reduce errores, variabilidad y fallas percibidas por el cliente." },
-      { element: "Confiabilidad de entrega", meaning: "Cumplir fechas y condiciones acordadas de manera consistente.", contribution: "Genera confianza y estabilidad en la relación comercial." },
-      { element: "Atención y respuesta al cliente", meaning: "Dar seguimiento oportuno a necesidades, dudas y problemas del cliente.", contribution: "Mejora la experiencia y percepción del servicio." },
-      { element: "Experiencia positiva del cliente", meaning: "Lograr que el cliente perciba valor, cumplimiento y confianza en la empresa.", contribution: "Incrementa satisfacción, permanencia y recomendación comercial." },
-    ],
-    deployment: [
-      { process: "Gestión calidad", impact: "Favorece percepción positiva del cliente mediante reducción de incidencias y reclamaciones posteriores a la entrega.", kpi: "% clientes sin reclamaciones", goal: "≥95%", owner: "Coordinador de Calidad" },
-      { process: "Ventas", impact: "Favorece satisfacción del cliente mediante seguimiento y atención adecuada durante la gestión y experiencia del pedido.", kpi: "% pedidos sin incidencias comerciales", goal: "≥95%", owner: "Director general" },
-      { process: "Distribución", impact: "Favorece experiencia positiva de entrega mediante reducción de incidencias, malas maniobras u otros.", kpi: "% entregas sin incidencias", goal: "≥95%", owner: "Gerente Operaciones" },
-    ],
-  },
-  {
-    id: "OBJ-08",strategicStatus: "En ejecución",
-    title: "Producción anual ≥ 31,000 unidades",
-    perspective: "Procesos",
-    owner: "Planeación",
-    risk: "Saturación operativa y capacidad insuficiente de producción",
-    purpose: "Cumplir la demanda comercial mediante una capacidad productiva controlada, eficiente y escalable.",
-    chain: [
-      { element: "Validación comercial", meaning: "Revisar condiciones comerciales, margen y viabilidad antes de aceptar pedidos.", contribution: "Evita ventas no rentables o inviables operativamente." },
-      { element: "Alineación demanda-capacidad", meaning: "Coordinar pedidos con capacidad real de producción y entrega.", contribution: "Reduce saturación, urgencias y retrasos." },
-      { element: "Control operacional", meaning: "Ejecutar pedidos con seguimiento, control y coordinación entre procesos.", contribution: "Reduce desviaciones, errores y costos ocultos." },
-      { element: "Protección del margen", meaning: "Mantener equilibrio entre ventas, costos y capacidad operativa.", contribution: "Favorece estabilidad financiera y crecimiento rentable." },
-    ],
-    deployment: [
-      { process: "Ventas", impact: "Favorece gestión rentable de pedidos mediante control de excepciones comerciales durante el proceso de cotización.", kpi: "% cotizaciones con excepción comercial", goal: "≤10%", owner: "Director general" },
-    ],
-  },
-  {
-    id: "OBJ-09",strategicStatus: "Sin atención",
-    title: "Alineación demanda-capacidad ≥ 90%",
-    perspective: "Procesos",
-    owner: "Ventas",
-    risk: "Pedidos urgentes fuera de planeación comercial y operativa",
-    purpose: "Sincronizar ventas, planeación y operación para reducir sobrecargas, incumplimientos y desperdicios.",
-    chain: [
-      { element: "Integración comercial-operativa", meaning: "Coordinar ventas, producción y abastecimiento bajo una visión compartida de demanda y capacidad.", contribution: "Reduce decisiones aisladas y conflictos operativos." },
-      { element: "Planeación sincronizada", meaning: "Balancear demanda, materiales, capacidad y entregas conforme a prioridades del negocio.", contribution: "Evita saturación, urgencias y desabasto." },
-      { element: "Capacidad operativa controlada", meaning: "Mantener visibilidad y control sobre la capacidad real de operación.", contribution: "Permite responder al crecimiento sin perder estabilidad." },
-      { element: "Ejecución coordinada", meaning: "Ejecutar la operación conforme a lo planeado entre áreas clave.", contribution: "Mejora cumplimiento, estabilidad y eficiencia operacional." },
-    ],
-    deployment: [
-      { process: "Ventas", impact: "Favorece alineación demanda-capacidad mediante reducción de pedidos urgentes fuera de la planeación comercial establecida.", kpi: "% pedidos urgentes", goal: "≤5%", owner: "Director general" },
-      { process: "Planeación y control producción", impact: "Favorece alineación demanda-capacidad mediante cumplimiento del plan maestro de producción conforme a la capacidad operativa definida.", kpi: "% cumplimiento plan maestro producción", goal: "≥90%", owner: "Gerente Operaciones" },
-      { process: "Compras", impact: "Favorece alineación demanda-capacidad mediante cumplimiento del plan de compra conforme a la programación operativa definida.", kpi: "% cumplimiento plan de compra", goal: "≥95%", owner: "Gerente Operaciones" },
-      { process: "Recursos humanos", impact: "Favorece alineación demanda-capacidad mediante cobertura oportuna de vacantes y requerimientos operativos planificados.", kpi: "% cobertura vacantes planificadas", goal: "≥95%", owner: "Recursos humanos" },
-      { process: "Planeación y control producción", impact: "Favorece alineación demanda-capacidad mediante ejecución del mantenimiento conforme a la planeación operativa establecida.", kpi: "% cumplimiento mantenimiento planificado", goal: "≥95%", owner: "Gerente Operaciones" },
-    ],
-  },
-  {
-    id: "OBJ-10",strategicStatus: "Sin atención",
-    title: "Gestión rentable de pedidos ≥ 95%",
-    perspective: "Procesos",
-    owner: "Ventas",
-    risk: "Pedidos liberados con desviaciones de costo y margen",
-    purpose: "Asegurar que los pedidos procesados cumplan criterios de rentabilidad, viabilidad y control operativo.",
-    chain: [
-      { element: "Operación estandarizada", meaning: "Ejecutar procesos productivos bajo estándares definidos y controlados.", contribution: "Reduce variabilidad y facilita crecimiento ordenado." },
-      { element: "Planeación sincronizada", meaning: "Coordinar demanda, producción, materiales y capacidad operativa.", contribution: "Evita saturación y desbalance operativo." },
-      { element: "Recursos operativos disponibles", meaning: "Asegurar disponibilidad de personal, materiales, maquinaria y capacidad instalada.", contribution: "Permite sostener incremento de producción sin interrupciones." },
-      { element: "Escalabilidad operacional", meaning: "Incrementar capacidad manteniendo control, estabilidad y cumplimiento operacional.", contribution: "Favorece crecimiento sostenible y cumplimiento de producción." },
-    ],
-    deployment: [
-      { process: "Planeación y control producción", impact: "Favorece capacidad productiva escalable mediante aprovechamiento y balance adecuado de la capacidad operativa instalada.", kpi: "% utilización capacidad instalada", goal: "80%", owner: "Gerente Operaciones" },
-      { process: "Ingeniería/Desarrollo de productos", impact: "Favorece capacidad productiva escalable mediante estandarización y estabilidad de los procesos operativos.", kpi: "% procesos productivos estandarizados", goal: "≥80%", owner: "Ingeniero de producto" },
-      { process: "Ingeniería/Desarrollo de productos", impact: "Favorece escalabilidad operativa mediante validación y liberación de productos compatibles con la capacidad productiva definida.", kpi: "% productos validados para fabricación", goal: "≥80%", owner: "Ingeniero de producto" },
-    ],
-  },
-  {
-    id: "OBJ-11",strategicStatus: "En ejecución",
-    title: "Gestión estandarizada de procesos ≥ 90%",
-    perspective: "Desarrollo",
-    owner: "Coordinador Estratégico/SIG",
-    risk: "Procesos no documentados o ejecutados fuera de metodología SIG",
-    purpose: "Garantizar disciplina operativa y trazabilidad mediante procesos documentados, controlados y ejecutados de forma homogénea.",
-    chain: [
-      { element: "Gestión por procesos", meaning: "Definir y gestionar la operación mediante procesos claramente estructurados e interrelacionados.", contribution: "Permite controlar la organización de forma integral y alineada." },
-      { element: "Información documentada", meaning: "Mantener procesos, responsabilidades y controles formalmente documentados y disponibles.", contribution: "Facilita claridad, trazabilidad y continuidad operacional." },
-      { element: "Aplicación de estándares", meaning: "Ejecutar actividades conforme a lineamientos, procedimientos y controles definidos.", contribution: "Reduce variabilidad y fortalece estabilidad operacional." },
-      { element: "Institucionalización operacional", meaning: "Consolidar una operación basada en procesos, control y mejora continua organizacional.", contribution: "Favorece crecimiento sostenible, control y madurez organizacional." },
-    ],
-    deployment: [
-      { process: "Todos los procesos", impact: "Favorece gestión estandarizada mediante diagnóstico e implementación del SIG en los procesos de la organización.", kpi: "% diagnóstico implementación SIG", goal: "≥90%", owner: "Coordinador Estratégico/SIG", strategic: false },
-      { process: "Compras", impact: "Favorece gestión estandarizada mediante ejecución del plan de evaluación de proveedores definido por la organización.", kpi: "% cumplimiento plan evaluación proveedores", goal: "≥90%", owner: "Gerente Operaciones" },
-    ],
-  },
-  {
-    id: "OBJ-12",strategicStatus: "Sin atención",
-    title: "Compromiso organizacional ≥90%",
-    perspective: "Desarrollo",
-    owner: "Director general",
-    risk: "Baja ejecución de acciones y debilitamiento del compromiso organizacional",
-    purpose: "Fortalecer la participación y alineación del personal con la estrategia, cultura y objetivos organizacionales.",
-    chain: [
-      { element: "Disciplina operativa", meaning: "Fortalecer ejecución, seguimiento y cumplimiento dentro de la operación organizacional.", contribution: "Mejora alineación, estabilidad y control operativo." },
-      { element: "Participación organizacional", meaning: "Involucrar al personal en objetivos, procesos y mejora continua.", contribution: "Incrementa compromiso y sentido de pertenencia." },
-      { element: "Cultura de ejecución", meaning: "Promover disciplina, responsabilidad y cumplimiento en la operación diaria.", contribution: "Favorece estabilidad y desempeño organizacional." },
-      { element: "Alineación organizacional", meaning: "Mantener al personal orientado a los objetivos estratégicos y operativos de la empresa.", contribution: "Fortalece ejecución, coordinación y sostenibilidad organizacional." },
-    ],
-    deployment: [
-      { process: "Todos los procesos", impact: "Favorecen compromiso organizacional mediante cumplimiento oportuno de acciones y compromisos asignados dentro de la operación organizacional.", kpi: "% acciones ejecutadas en tiempo", goal: "≥90%", owner: "Project Manager", strategic: false },
-      { process: "Recursos humanos", impact: "Favorece estabilidad y compromiso organizacional mediante seguimiento de asistencia y permanencia del personal operativo y administrativo.", kpi: "% ausentismo operativo", goal: "≤3%", owner: "Recursos humanos" },
-      { process: "Recursos humanos", impact: "Favorece estabilidad organizacional mediante permanencia y continuidad del personal dentro de la operación organizacional.", kpi: "% rotación personal", goal: "≤10%", owner: "Recursos humanos" },
-      { process: "Recursos humanos", impact: "Favorece disciplina y cultura organizacional mediante control y seguimiento de incidencias relacionadas al cumplimiento interno.", kpi: "N° incidencias disciplinarias", goal: "≤5", owner: "Recursos humanos" },
-      { process: "SST", impact: "Favorece compromiso y estabilidad organizacional mediante prevención de accidentes y condiciones inseguras en la operación.", kpi: "N° accidentes incapacitantes", goal: "2", owner: "Coordinador SST" },
-    ],
-  },
-  {
-    id: "OBJ-13",strategicStatus: "Sin atención",
-    title: "Competencias validadas ≥ 80% global",
-    perspective: "Desarrollo",
-    owner: "Analista de talento",
-    risk: "Brechas de competencia y baja ejecución del plan de desarrollo",
-    purpose: "Asegurar que el personal cuente con las competencias necesarias para ejecutar eficazmente sus funciones y responsabilidades.",
-    chain: [
-      { element: "Competencias definidas", meaning: "Establecer conocimientos, habilidades y responsabilidades requeridas para cada proceso y puesto.", contribution: "Permite alinear capacidades con necesidades operativas y estratégicas." },
-      { element: "Desarrollo de competencias", meaning: "Fortalecer capacidades técnicas, operativas y de gestión conforme a los procesos organizacionales.", contribution: "Mejora desempeño y capacidad de ejecución." },
-      { element: "Evaluación del desempeño", meaning: "Verificar aplicación efectiva de competencias en la operación diaria.", contribution: "Permite detectar brechas y oportunidades de mejora." },
-      { element: "Capacidad organizacional", meaning: "Mantener personal competente y alineado a la estrategia del negocio.", contribution: "Sostiene crecimiento, estabilidad y mejora continua." },
-    ],
-    deployment: [
-      { process: "Todos los procesos", impact: "Favorecen desarrollo de competencias mediante cumplimiento del plan de desarrollo definido para el personal.", kpi: "% cumplimiento plan desarrollo", goal: "≥90%", owner: "Analista de talento", strategic: false },
-      { process: "Recursos humanos", impact: "Favorece desarrollo y fortalecimiento de competencias mediante ejecución del plan anual de capacitación del personal operativo.", kpi: "% cumplimiento plan anual capacitación", goal: "≥90%", owner: "Recursos humanos" },
-    ],
-  },
-  {
-    id: "OBJ-14",strategicStatus: "Sin atención",
-    title: "Operación digital integrada ≥ 90%",
-    perspective: "Desarrollo",
-    owner: "Analista de procesos",
-    risk: "Baja adopción de herramientas digitales y dependencia operativa manual",
-    purpose: "Integrar procesos, información y herramientas digitales para mejorar control, trazabilidad y toma de decisiones.",
-    chain: [
-      { element: "Captura digital de información", meaning: "Registrar datos operativos y estratégicos de forma digital y estructurada.", contribution: "Reduce errores, pérdida de información y retrabajos administrativos." },
-      { element: "Trazabilidad operacional", meaning: "Mantener seguimiento y visibilidad de la información a lo largo de los procesos.", contribution: "Facilita control, análisis y toma de decisiones." },
-      { element: "Integración de sistemas", meaning: "Conectar herramientas, procesos y fuentes de información organizacional.", contribution: "Evita duplicidad y mejora coordinación entre áreas." },
-      { element: "Gestión basada en datos", meaning: "Utilizar información confiable para seguimiento, control y toma de decisiones.", contribution: "Mejora capacidad de respuesta y control organizacional." },
-    ],
-    deployment: [
-      { process: "Todos los procesos", impact: "Favorece operación digital integrada mediante uso y adopción de herramientas digitales definidas para la ejecución y control de la operación.", kpi: "% uso herramientas digitales", goal: "≥90%", owner: "Analista de procesos", strategic: false },
-    ],
-  },
-];
+// La cadena causa-efecto no se hizo editable (no se pidió); sigue siendo
+// contenido estático por código de objetivo. Un objetivo nuevo creado desde
+// la app simplemente no tiene entrada aquí (la tarjeta muestra un estado vacío).
+const CHAIN_BY_CODE = {
+  GLOBAL: [
+    { element: "Seguimiento estratégico", meaning: "Monitorear periódicamente el comportamiento de los indicadores estratégicos organizacionales.", contribution: "Permite detectar desviaciones y priorizar acciones estratégicas." },
+    { element: "Control organizacional", meaning: "Mantener visibilidad integral del desempeño de los objetivos estratégicos.", contribution: "Favorece la toma de decisiones basada en información." },
+    { element: "Alineación estratégica", meaning: "Asegurar coherencia entre procesos, responsables y resultados estratégicos.", contribution: "Fortalece el cumplimiento organizacional." },
+    { element: "Desempeño estratégico global ≥80%", meaning: "Mantener un nivel global de cumplimiento estratégico organizacional igual o superior al 80%.", contribution: "Representa estabilidad y madurez del sistema de gestión estratégica." },
+  ],
+  "OBJ-01": [
+    { element: "Gestión rentable de pedidos", meaning: "Asegurar que los pedidos generen margen y puedan cumplirse operativamente.", contribution: "Evita ventas no rentables y costos ocultos." },
+    { element: "Operación estandarizada", meaning: "Ejecutar procesos con orden, control y menor variabilidad operacional.", contribution: "Reduce errores, retrabajos y desperdicio." },
+    { element: "Clientes rentables", meaning: "Desarrollar relaciones comerciales sostenibles y rentables.", contribution: "Prioriza clientes que generan valor." },
+    { element: "Rentabilidad ≥15%", meaning: "Lograr una utilidad mínima del 15% para asegurar crecimiento, reinversión y estabilidad financiera.", contribution: "Resultado financiero esperado." },
+  ],
+  "OBJ-02": [
+    { element: "Capacidad productiva escalable", meaning: "Desarrollar una operación capaz de incrementar producción manteniendo control, cumplimiento y estabilidad operacional.", contribution: "Permite crecer sin generar saturación, retrasos ni desorden operativo." },
+    { element: "Clientes rentables", meaning: "Enfocar ventas en clientes que generan margen, volumen y continuidad comercial.", contribution: "Evita crecer con clientes que consumen recursos sin aportar rentabilidad." },
+    { element: "Confiabilidad de entrega", meaning: "Cumplir fechas y condiciones acordadas con el cliente.", contribution: "Fortalece recompra, confianza y relación comercial." },
+    { element: "Satisfacción del cliente", meaning: "Medir y mejorar la percepción del cliente sobre producto, servicio y cumplimiento.", contribution: "Aumenta fidelidad, recomendación y permanencia." },
+    { element: "Venta anual ≥74 MDP", meaning: "Alcanzar la meta anual de ventas definida por Dirección.", contribution: "Representa crecimiento comercial esperado para el año." },
+  ],
+  "OBJ-03": [
+    { element: "Disciplina presupuestal", meaning: "Controlar gastos y ejecutar compras conforme al presupuesto autorizado.", contribution: "Reduce desviaciones y protege el flujo operativo." },
+    { element: "Control del flujo de efectivo", meaning: "Monitorear ingresos, egresos y disponibilidad financiera de manera continua.", contribution: "Permite anticipar riesgos de liquidez y tomar decisiones oportunas." },
+    { element: "Liquidez operativa", meaning: "Mantener capacidad financiera suficiente para sostener la operación diaria.", contribution: "Evita afectaciones operativas por falta de efectivo." },
+    { element: "Liquidez ≥5% sobre ventas", meaning: "Mantener un nivel mínimo de liquidez respecto al volumen de ventas.", contribution: "Asegura estabilidad financiera y capacidad de respuesta operativa." },
+  ],
+  "OBJ-04": [
+    { element: "Operación estandarizada", meaning: "Ejecutar procesos con orden, control y menor variabilidad operacional.", contribution: "Reduce desperdicios, errores y desviaciones operativas." },
+    { element: "Planeación operativa", meaning: "Coordinar compras, producción y recursos conforme a la demanda y capacidad.", contribution: "Evita gastos no planificados y compras urgentes." },
+    { element: "Control presupuestal", meaning: "Dar seguimiento continuo al comportamiento financiero y contra el presupuesto definido.", contribution: "Permite detectar desviaciones y tomar acciones oportunas." },
+    { element: "Disciplina presupuestal ≤5%", meaning: "Mantener las desviaciones presupuestales dentro del límite definido por Dirección.", contribution: "Protege estabilidad financiera y sostenibilidad operativa." },
+  ],
+  "OBJ-05": [
+    { element: "Gestión rentable de pedidos", meaning: "Validar margen, capacidad y viabilidad operativa antes de aceptar pedidos.", contribution: "Evita ventas que generan pérdidas o desorden operacional." },
+    { element: "Confiabilidad de entrega", meaning: "Cumplir consistentemente fechas y condiciones acordadas con el cliente.", contribution: "Fortalece relaciones comerciales sostenibles." },
+    { element: "Satisfacción del cliente", meaning: "Mejorar percepción del cliente respecto al servicio y cumplimiento.", contribution: "Incrementa permanencia y recompra." },
+    { element: "Relación comercial sostenible", meaning: "Desarrollar relaciones comerciales estables, rentables y de largo plazo.", contribution: "Favorece crecimiento rentable y estabilidad financiera." },
+  ],
+  "OBJ-06": [
+    { element: "Alineación demanda-capacidad", meaning: "Coordinar ventas, producción y recursos conforme a la capacidad real de operación.", contribution: "Reduce saturación, urgencias y reprogramaciones." },
+    { element: "Capacidad productiva escalable", meaning: "Mantener una operación capaz de responder al crecimiento sin perder control operativo.", contribution: "Permite cumplir producción y entregas de manera estable." },
+    { element: "Operación estandarizada", meaning: "Ejecutar procesos bajo estándares definidos y controlados.", contribution: "Reduce errores, retrasos y variabilidad operacional." },
+    { element: "Cumplimiento operacional", meaning: "Ejecutar la operación de forma coordinada y conforme a lo planeado.", contribution: "Asegura entregas consistentes y fortalece la confianza del cliente." },
+  ],
+  "OBJ-07": [
+    { element: "Operación estandarizada", meaning: "Ejecutar procesos bajo estándares definidos y controlados.", contribution: "Reduce errores, variabilidad y fallas percibidas por el cliente." },
+    { element: "Confiabilidad de entrega", meaning: "Cumplir fechas y condiciones acordadas de manera consistente.", contribution: "Genera confianza y estabilidad en la relación comercial." },
+    { element: "Atención y respuesta al cliente", meaning: "Dar seguimiento oportuno a necesidades, dudas y problemas del cliente.", contribution: "Mejora la experiencia y percepción del servicio." },
+    { element: "Experiencia positiva del cliente", meaning: "Lograr que el cliente perciba valor, cumplimiento y confianza en la empresa.", contribution: "Incrementa satisfacción, permanencia y recomendación comercial." },
+  ],
+  "OBJ-08": [
+    { element: "Validación comercial", meaning: "Revisar condiciones comerciales, margen y viabilidad antes de aceptar pedidos.", contribution: "Evita ventas no rentables o inviables operativamente." },
+    { element: "Alineación demanda-capacidad", meaning: "Coordinar pedidos con capacidad real de producción y entrega.", contribution: "Reduce saturación, urgencias y retrasos." },
+    { element: "Control operacional", meaning: "Ejecutar pedidos con seguimiento, control y coordinación entre procesos.", contribution: "Reduce desviaciones, errores y costos ocultos." },
+    { element: "Protección del margen", meaning: "Mantener equilibrio entre ventas, costos y capacidad operativa.", contribution: "Favorece estabilidad financiera y crecimiento rentable." },
+  ],
+  "OBJ-09": [
+    { element: "Integración comercial-operativa", meaning: "Coordinar ventas, producción y abastecimiento bajo una visión compartida de demanda y capacidad.", contribution: "Reduce decisiones aisladas y conflictos operativos." },
+    { element: "Planeación sincronizada", meaning: "Balancear demanda, materiales, capacidad y entregas conforme a prioridades del negocio.", contribution: "Evita saturación, urgencias y desabasto." },
+    { element: "Capacidad operativa controlada", meaning: "Mantener visibilidad y control sobre la capacidad real de operación.", contribution: "Permite responder al crecimiento sin perder estabilidad." },
+    { element: "Ejecución coordinada", meaning: "Ejecutar la operación conforme a lo planeado entre áreas clave.", contribution: "Mejora cumplimiento, estabilidad y eficiencia operacional." },
+  ],
+  "OBJ-10": [
+    { element: "Operación estandarizada", meaning: "Ejecutar procesos productivos bajo estándares definidos y controlados.", contribution: "Reduce variabilidad y facilita crecimiento ordenado." },
+    { element: "Planeación sincronizada", meaning: "Coordinar demanda, producción, materiales y capacidad operativa.", contribution: "Evita saturación y desbalance operativo." },
+    { element: "Recursos operativos disponibles", meaning: "Asegurar disponibilidad de personal, materiales, maquinaria y capacidad instalada.", contribution: "Permite sostener incremento de producción sin interrupciones." },
+    { element: "Escalabilidad operacional", meaning: "Incrementar capacidad manteniendo control, estabilidad y cumplimiento operacional.", contribution: "Favorece crecimiento sostenible y cumplimiento de producción." },
+  ],
+  "OBJ-11": [
+    { element: "Gestión por procesos", meaning: "Definir y gestionar la operación mediante procesos claramente estructurados e interrelacionados.", contribution: "Permite controlar la organización de forma integral y alineada." },
+    { element: "Información documentada", meaning: "Mantener procesos, responsabilidades y controles formalmente documentados y disponibles.", contribution: "Facilita claridad, trazabilidad y continuidad operacional." },
+    { element: "Aplicación de estándares", meaning: "Ejecutar actividades conforme a lineamientos, procedimientos y controles definidos.", contribution: "Reduce variabilidad y fortalece estabilidad operacional." },
+    { element: "Institucionalización operacional", meaning: "Consolidar una operación basada en procesos, control y mejora continua organizacional.", contribution: "Favorece crecimiento sostenible, control y madurez organizacional." },
+  ],
+  "OBJ-12": [
+    { element: "Disciplina operativa", meaning: "Fortalecer ejecución, seguimiento y cumplimiento dentro de la operación organizacional.", contribution: "Mejora alineación, estabilidad y control operativo." },
+    { element: "Participación organizacional", meaning: "Involucrar al personal en objetivos, procesos y mejora continua.", contribution: "Incrementa compromiso y sentido de pertenencia." },
+    { element: "Cultura de ejecución", meaning: "Promover disciplina, responsabilidad y cumplimiento en la operación diaria.", contribution: "Favorece estabilidad y desempeño organizacional." },
+    { element: "Alineación organizacional", meaning: "Mantener al personal orientado a los objetivos estratégicos y operativos de la empresa.", contribution: "Fortalece ejecución, coordinación y sostenibilidad organizacional." },
+  ],
+  "OBJ-13": [
+    { element: "Competencias definidas", meaning: "Establecer conocimientos, habilidades y responsabilidades requeridas para cada proceso y puesto.", contribution: "Permite alinear capacidades con necesidades operativas y estratégicas." },
+    { element: "Desarrollo de competencias", meaning: "Fortalecer capacidades técnicas, operativas y de gestión conforme a los procesos organizacionales.", contribution: "Mejora desempeño y capacidad de ejecución." },
+    { element: "Evaluación del desempeño", meaning: "Verificar aplicación efectiva de competencias en la operación diaria.", contribution: "Permite detectar brechas y oportunidades de mejora." },
+    { element: "Capacidad organizacional", meaning: "Mantener personal competente y alineado a la estrategia del negocio.", contribution: "Sostiene crecimiento, estabilidad y mejora continua." },
+  ],
+  "OBJ-14": [
+    { element: "Captura digital de información", meaning: "Registrar datos operativos y estratégicos de forma digital y estructurada.", contribution: "Reduce errores, pérdida de información y retrabajos administrativos." },
+    { element: "Trazabilidad operacional", meaning: "Mantener seguimiento y visibilidad de la información a lo largo de los procesos.", contribution: "Facilita control, análisis y toma de decisiones." },
+    { element: "Integración de sistemas", meaning: "Conectar herramientas, procesos y fuentes de información organizacional.", contribution: "Evita duplicidad y mejora coordinación entre áreas." },
+    { element: "Gestión basada en datos", meaning: "Utilizar información confiable para seguimiento, control y toma de decisiones.", contribution: "Mejora capacidad de respuesta y control organizacional." },
+  ],
+};
 
 function safeGetBoolean(key, fallback = false) {
   if (typeof window === "undefined") return fallback;
@@ -423,23 +242,6 @@ function statusClasses(status) {
   return "bg-green-100 text-green-700";
 }
 
-function runDataChecks() {
-  console.assert(objectives.length === 15, "Debe haber 15 objetivos estratégicos");
-  console.assert(Object.keys(strategicKpiNames).length === 15, "Debe existir nombre de KPI estratégico para cada objetivo");
-  console.assert(Object.keys(objectiveVideos).includes("OBJ-01"), "OBJ-01 debe tener video vinculado");
-  console.assert(objectives.every((o) => o.id && o.title && o.perspective), "Cada objetivo debe tener id, título y perspectiva");
-  console.assert(objectives.every((o) => Array.isArray(o.chain) && o.chain.length > 0), "Cada objetivo debe tener cadena causa-efecto");
-  console.assert(objectives.every((o) => Array.isArray(o.deployment) && (o.id === "GLOBAL" || o.deployment.length > 0)), "Cada objetivo operativo debe tener despliegue estratégico");
-  console.assert(strategicKpiNames.GLOBAL === "% desempeño estratégico", "Debe existir KPI global de desempeño estratégico");
-  console.assert(objectives.some((o) => o.id === "OBJ-11" && o.owner === "Coordinador Estratégico/SIG"), "OBJ-11 debe pertenecer al Coordinador Estratégico/SIG");
-  console.assert(objectives.find((o) => o.id === "GLOBAL")?.deployment.length === 0, "El KPI global no debe aparecer como KPI de todos los procesos");
-  console.assert(processMap.flatMap((group) => group.processes).some((p) => p.name === "Ingeniería / Desarrollo de productos" && p.owner === "Ingeniero de producto"), "Desarrollo de productos debe tener dueño Ingeniero de producto");
-  console.assert(processMap.flatMap((group) => group.processes).some((p) => p.name === "Gestión de calidad" && p.owner === "Coordinador de Calidad"), "Calidad debe tener dueño Coordinador de Calidad");
-  console.assert(getProcessNamesForMatch("Gestión de inventarios").includes("Gestión inventarios"), "La vista proceso debe reconocer alias de procesos reales");
-}
-
-runDataChecks();
-
 function Badge({ children, className = "" }) {
   return <span className={`px-3 py-1 rounded-full text-xs font-black ${className}`}>{children}</span>;
 }
@@ -459,32 +261,114 @@ function RelationBadge({ relation }) {
   return <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${styles[relation] || "bg-gray-100 text-gray-700"}`}>{relation}</span>;
 }
 
+function EditableText({ value, onSave, canEdit, darkMode, className = "", placeholder = "" }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value || "");
+
+  if (!canEdit) {
+    return <span className={className}>{value || <span className="text-gray-400">{placeholder}</span>}</span>;
+  }
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => { setDraft(value || ""); setEditing(true); }}
+        className={`w-full rounded px-1 text-left transition ${darkMode ? "hover:bg-white/10" : "hover:bg-sky-50"} ${className}`}
+      >
+        {value || <span className="text-gray-400">{placeholder || "Clic para editar"}</span>}
+      </button>
+    );
+  }
+
+  return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => { setEditing(false); if (draft !== value) onSave(draft); }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Escape") { setDraft(value || ""); setEditing(false); }
+      }}
+      className={`w-full rounded border px-1 outline-none ${className} ${darkMode ? "bg-[#0b1120] border-white/20 text-white" : "bg-white border-sky-300 text-gray-800"}`}
+    />
+  );
+}
+
+function EditableSelect({ value, options, onSave, canEdit, darkMode, className = "" }) {
+  if (!canEdit) return <span className={className}>{value}</span>;
+  return (
+    <select
+      value={value || ""}
+      onChange={(event) => onSave(event.target.value)}
+      className={`rounded border px-1 py-0.5 outline-none ${className} ${darkMode ? "bg-[#0b1120] border-white/20 text-white" : "bg-white border-sky-300 text-gray-700"}`}
+    >
+      {options.map((opt) => (
+        <option key={opt} value={opt}>{opt}</option>
+      ))}
+    </select>
+  );
+}
+
 function getYouTubeEmbedUrl(url) {
   const match = url.match(/(?:youtu\.be\/|v=)([^&]+)/);
   const id = match ? match[1] : "";
   return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&rel=0&modestbranding=1&playsinline=1&vq=hd720`;
 }
-function KpiCard({ dep, darkMode, strong, muted, relation }) {
+function KpiCard({ dep, darkMode, strong, muted, relation, canEdit, onUpdate, onDelete, processOptions }) {
   const isGlobal = dep.kpi === "% desempeño estratégico";
   const strategic = dep.strategic !== undefined ? dep.strategic : dep.process === "Todos los procesos";
 
   return (
     <div className={`${darkMode ? "bg-[#0b1120]" : "bg-gray-50"} rounded-2xl p-4`}>
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="text-xs uppercase font-black text-gray-400">KPI {dep.process}</div>
-        <KpiTypeBadge strategic={strategic} global={isGlobal} />
-        {relation && <RelationBadge relation={relation} />}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="text-xs uppercase font-black text-gray-400">KPI</div>
+          {canEdit ? (
+            <EditableSelect
+              value={dep.process}
+              options={processOptions}
+              canEdit={canEdit}
+              darkMode={darkMode}
+              className="text-xs font-black"
+              onSave={(v) => onUpdate({ proceso: v })}
+            />
+          ) : (
+            <div className="text-xs uppercase font-black text-gray-400">{dep.process}</div>
+          )}
+          <KpiTypeBadge strategic={strategic} global={isGlobal} />
+          {relation && <RelationBadge relation={relation} />}
+        </div>
+        {canEdit && onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            title="Eliminar KPI táctico"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-gray-400 transition hover:bg-red-100 hover:text-red-600"
+          >
+            ×
+          </button>
+        )}
       </div>
-      <div className={`mt-2 font-black ${strong}`}>{dep.kpi}</div>
-      <div className={`mt-2 text-xs ${muted}`}>{dep.impact}</div>
+      <div className={`mt-2 font-black ${strong}`}>
+        <EditableText value={dep.kpi} canEdit={canEdit} darkMode={darkMode} onSave={(v) => onUpdate({ kpi: v })} />
+      </div>
+      <div className={`mt-2 text-xs ${muted}`}>
+        <EditableText value={dep.impact} canEdit={canEdit} darkMode={darkMode} onSave={(v) => onUpdate({ impacto: v })} />
+      </div>
       <div className="grid grid-cols-2 gap-3 mt-3">
         <div>
           <div className="text-xs uppercase font-black text-gray-400">Meta 2026</div>
-          <div className={`font-bold ${strong}`}>{dep.goal}</div>
+          <div className={`font-bold ${strong}`}>
+            <EditableText value={dep.goal} canEdit={canEdit} darkMode={darkMode} onSave={(v) => onUpdate({ meta: v })} />
+          </div>
         </div>
         <div>
           <div className="text-xs uppercase font-black text-gray-400">Responsable</div>
-          <div className={`font-bold ${strong}`}>{dep.owner}</div>
+          <div className={`font-bold ${strong}`}>
+            <EditableText value={dep.owner} canEdit={canEdit} darkMode={darkMode} onSave={(v) => onUpdate({ responsable: v })} />
+          </div>
         </div>
       </div>
     </div>
@@ -492,8 +376,11 @@ function KpiCard({ dep, darkMode, strong, muted, relation }) {
 }
 
 
-export default function StrategicDeploymentModule() {
-  const strategicObjectives = useMemo(() => objectives.filter((item) => item.id !== "GLOBAL"), []);
+export default function StrategicDeploymentModule({ currentUser }) {
+  const canEdit = isStrategicTeamMember(currentUser);
+  const [objetivosRaw, setObjetivosRaw] = useState([]);
+  const [kpisTacticosRaw, setKpisTacticosRaw] = useState([]);
+  const [loadingData, setLoadingData] = useState(true);
   const [darkMode, setDarkMode] = useState(() => safeGetBoolean(STORAGE.darkMode));
   const [isAdmin, setIsAdmin] = useState(() => safeGetBoolean(STORAGE.admin));
   const [showLogin, setShowLogin] = useState(false);
@@ -513,11 +400,51 @@ const [activePdfTitle, setActivePdfTitle] = useState("");
   const [sitePassword, setSitePassword] = useState("");
   const [siteAccessError, setSiteAccessError] = useState("");
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadData() {
+      setLoadingData(true);
+      const [objetivosData, kpisData] = await Promise.all([getObjetivos(), getKpisTacticos()]);
+      if (cancelled) return;
+      setObjetivosRaw(objetivosData);
+      setKpisTacticosRaw(kpisData);
+      setLoadingData(false);
+    }
+    loadData();
+    return () => { cancelled = true; };
+  }, []);
+
+  const objectives = useMemo(() => {
+    return objetivosRaw.map((o) => ({
+      id: o.codigo,
+      dbId: o.id,
+      title: o.titulo,
+      perspective: o.perspectiva,
+      owner: o.responsable,
+      risk: o.riesgo,
+      purpose: o.proposito,
+      strategicStatus: o.estado_estrategico,
+      chain: CHAIN_BY_CODE[o.codigo] || [],
+      deployment: kpisTacticosRaw
+        .filter((k) => k.objetivo_id === o.id)
+        .map((k) => ({
+          dbId: k.id,
+          process: k.proceso,
+          kpi: k.kpi,
+          goal: k.meta,
+          impact: k.impacto,
+          owner: k.responsable,
+          strategic: k.estrategico,
+        })),
+    }));
+  }, [objetivosRaw, kpisTacticosRaw]);
+
+  const strategicObjectives = useMemo(() => objectives.filter((item) => item.id !== "GLOBAL"), [objectives]);
   const perspectiveGroups = useMemo(() => groupByPerspective(strategicObjectives), [strategicObjectives]);
   const responsibleCards = useMemo(() => {
     const owners = objectives.flatMap((item) => [item.owner, ...item.deployment.map((dep) => dep.owner)]);
     return [...new Set(owners.filter((owner) => owner && owner !== "Ventas" && owner !== "Planeación"))];
-  }, []);
+  }, [objectives]);
   const processCards = useMemo(() => {
     return processMap
       .flatMap((group) => group.processes.map((process) => process.name))
@@ -542,7 +469,7 @@ const [activePdfTitle, setActivePdfTitle] = useState("");
         (dep) => dep.owner === selectedResponsible || (dep.process === "Todos los procesos" && selectedResponsible !== "Finanzas")
       )
     );
-  }, [selectedResponsible]);
+  }, [selectedResponsible, objectives]);
 
   const processObjectives = useMemo(() => {
     const processNames = getProcessNamesForMatch(selectedProcess);
@@ -640,6 +567,52 @@ const [activePdfTitle, setActivePdfTitle] = useState("");
   setActivePdf(url);
 };
 
+  async function handleUpdateObjetivo(dbId, updates) {
+    const result = await updateObjetivo(dbId, updates);
+    if (!result?.ok) { console.error(result?.error); return; }
+    setObjetivosRaw((current) => current.map((o) => (o.id === dbId ? { ...o, ...result.data } : o)));
+  }
+
+  async function handleCreateObjetivo() {
+    const usedNumbers = objetivosRaw
+      .map((o) => Number(o.codigo?.match(/^OBJ-(\d+)$/)?.[1]))
+      .filter((n) => Number.isFinite(n));
+    const nextNumber = (usedNumbers.length ? Math.max(...usedNumbers) : 0) + 1;
+    const codigo = `OBJ-${String(nextNumber).padStart(2, "0")}`;
+    const result = await createObjetivo({ codigo, orden: objetivosRaw.length + 1 });
+    if (!result?.ok) { console.error(result?.error); return; }
+    setObjetivosRaw((current) => [...current, result.data]);
+    setActiveId(result.data.codigo);
+  }
+
+  async function handleDeleteObjetivo(dbId, codigo) {
+    if (!window.confirm("¿Eliminar este objetivo estratégico?")) return;
+    const result = await deactivateObjetivo(dbId);
+    if (!result?.ok) { console.error(result?.error); return; }
+    setObjetivosRaw((current) => current.filter((o) => o.id !== dbId));
+    if (activeId === codigo) setActiveId("OBJ-05");
+  }
+
+  async function handleUpdateKpiTactico(dbId, updates) {
+    const result = await updateKpiTactico(dbId, updates);
+    if (!result?.ok) { console.error(result?.error); return; }
+    setKpisTacticosRaw((current) => current.map((k) => (k.id === dbId ? { ...k, ...result.data } : k)));
+  }
+
+  async function handleCreateKpiTactico(objetivoDbId) {
+    const orden = kpisTacticosRaw.filter((k) => k.objetivo_id === objetivoDbId).length + 1;
+    const result = await createKpiTactico({ objetivoId: objetivoDbId, orden });
+    if (!result?.ok) { console.error(result?.error); return; }
+    setKpisTacticosRaw((current) => [...current, result.data]);
+  }
+
+  async function handleDeleteKpiTactico(dbId) {
+    if (!window.confirm("¿Eliminar este KPI táctico?")) return;
+    const result = await deactivateKpiTactico(dbId);
+    if (!result?.ok) { console.error(result?.error); return; }
+    setKpisTacticosRaw((current) => current.filter((k) => k.id !== dbId));
+  }
+
   const visibleDeploymentsForResponsible = (objective) =>
     objective.deployment.filter((dep) => {
       const appliesByOwner = dep.owner === selectedResponsible;
@@ -692,6 +665,14 @@ const [activePdfTitle, setActivePdfTitle] = useState("");
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (loadingData || !activeObjective) {
+    return (
+      <div className={`w-full min-h-[60vh] flex items-center justify-center ${darkMode ? "bg-[#0b1120] text-white" : "bg-[#f4f5f7] text-gray-800"}`}>
+        <div className="text-sm font-bold text-gray-400">Cargando despliegue estratégico…</div>
       </div>
     );
   }
@@ -864,11 +845,36 @@ const [activePdfTitle, setActivePdfTitle] = useState("");
                         </button>
                       )}
                     </div>
-                    <select value={activeId} onChange={(event) => setActiveId(event.target.value)} className={`mt-2 w-full text-xl lg:text-2xl font-black rounded-2xl border px-4 py-3 outline-none ${darkMode ? "bg-[#0b1120] border-white/10 text-white" : "bg-white border-gray-200 text-gray-800"}`}>
-                      {strategicObjectives.map((item) => (
-                        <option key={item.id} value={item.id}>{item.id} | {item.title}</option>
-                      ))}
-                    </select>
+                    <div className="mt-2 flex items-center gap-2">
+                      <select value={activeId} onChange={(event) => setActiveId(event.target.value)} className={`flex-1 text-xl lg:text-2xl font-black rounded-2xl border px-4 py-3 outline-none ${darkMode ? "bg-[#0b1120] border-white/10 text-white" : "bg-white border-gray-200 text-gray-800"}`}>
+                        {strategicObjectives.map((item) => (
+                          <option key={item.id} value={item.id}>{item.id} | {item.title}</option>
+                        ))}
+                      </select>
+                      {!canEdit && (
+                        <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-black text-amber-700">Modo solo lectura</span>
+                      )}
+                      {canEdit && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleCreateObjetivo}
+                            title="Nuevo objetivo"
+                            className="shrink-0 rounded-2xl border border-dashed border-sky-300 px-4 py-3 text-xs font-black text-sky-600 transition hover:bg-sky-50"
+                          >
+                            + Nuevo objetivo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteObjetivo(activeObjective.dbId, activeObjective.id)}
+                            title="Eliminar objetivo"
+                            className="shrink-0 flex h-11 w-11 items-center justify-center rounded-2xl border border-red-200 text-red-500 transition hover:bg-red-50"
+                          >
+                            ×
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div className="rounded-2xl p-4" style={{ backgroundColor: `${activeColor}18` }}>
                     <div className={`text-xs uppercase font-black ${muted}`}>Perspectiva estratégica</div>
@@ -882,19 +888,40 @@ const [activePdfTitle, setActivePdfTitle] = useState("");
                   <div className="h-14 flex items-center px-6 text-white font-black" style={{ backgroundColor: activeColor }}>OBJETIVO</div>
                   <div className="p-7 space-y-6">
                     <div className="flex items-start justify-between gap-4">
-                      <div>
+                      <div className="flex-1">
                         <div className={`text-sm font-black ${muted}`}>{activeObjective.id}</div>
-                        <h2 className={`text-2xl font-black mt-1 ${strong}`}>{activeObjective.title}</h2>
+                        <h2 className={`text-2xl font-black mt-1 ${strong}`}>
+                          <EditableText
+                            value={activeObjective.title}
+                            canEdit={canEdit}
+                            darkMode={darkMode}
+                            onSave={(v) => handleUpdateObjetivo(activeObjective.dbId, { titulo: v })}
+                          />
+                        </h2>
                       </div>
                       <Badge className={statusClasses(activeObjective.status || "Activo")}>{activeObjective.status || "Activo"}</Badge>
                     </div>
                     <div>
                       <h3 className={`font-black mb-2 ${strong}`}>Propósito</h3>
-                      <p className={`${muted} leading-relaxed`}>{activeObjective.purpose}</p>
+                      <p className={`${muted} leading-relaxed`}>
+                        <EditableText
+                          value={activeObjective.purpose}
+                          canEdit={canEdit}
+                          darkMode={darkMode}
+                          onSave={(v) => handleUpdateObjetivo(activeObjective.dbId, { proposito: v })}
+                        />
+                      </p>
                     </div>
                     <div>
                       <h3 className={`font-black mb-2 ${strong}`}>Riesgo crítico</h3>
-                      <p className={`${muted} leading-relaxed`}>{activeObjective.risk}</p>
+                      <p className={`${muted} leading-relaxed`}>
+                        <EditableText
+                          value={activeObjective.risk}
+                          canEdit={canEdit}
+                          darkMode={darkMode}
+                          onSave={(v) => handleUpdateObjetivo(activeObjective.dbId, { riesgo: v })}
+                        />
+                      </p>
                     <div className="mt-4">
   <div className={`text-[11px] uppercase tracking-wide font-black mb-2 ${strong}`}>
     Estado
@@ -927,16 +954,28 @@ const [activePdfTitle, setActivePdfTitle] = useState("");
 
     {activeObjective.strategicStatus}
   </div>
+  {canEdit && (
+    <select
+      value={activeObjective.strategicStatus || ""}
+      onChange={(event) => handleUpdateObjetivo(activeObjective.dbId, { estado_estrategico: event.target.value })}
+      className={`ml-2 rounded-lg border px-2 py-1.5 text-xs font-bold outline-none ${darkMode ? "bg-[#0b1120] border-white/20 text-white" : "bg-white border-gray-200 text-gray-700"}`}
+    >
+      {["Sin atención", "En ejecución", "Consolidado"].map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+    </select>
+  )}
 </div>
-                    
+
                     </div>
-                    
+
                   </div>
                 </div>
 
                 <div className={`${card} xl:col-span-4 rounded-3xl shadow-sm border overflow-hidden`}>
                   <div className="h-14 bg-[#203f73] flex items-center px-6 text-white font-black">CADENA CAUSA-EFECTO</div>
                   <div className="p-6 flex flex-col gap-3">
+                    {activeObjective.chain.length === 0 && (
+                      <div className={`text-xs italic ${muted}`}>Cadena causa-efecto no definida todavía para este objetivo.</div>
+                    )}
                     {activeObjective.chain.map((node, index) => (
                       <div key={`${node.element}-${index}`} className="flex flex-col items-center gap-3">
                         <div className={`w-full rounded-2xl p-4 border ${index === activeObjective.chain.length - 1 ? "text-white" : darkMode ? "bg-white/5 border-white/10" : "bg-gray-50 border-gray-200"}`} style={index === activeObjective.chain.length - 1 ? { backgroundColor: activeColor, borderColor: activeColor } : undefined}>
@@ -953,11 +992,29 @@ const [activePdfTitle, setActivePdfTitle] = useState("");
                 <div className={`${card} xl:col-span-4 rounded-3xl shadow-sm border overflow-hidden`}>
                   <div className="h-14 bg-[#111827] flex items-center px-6 text-white font-black">DESPLIEGUE ESTRATÉGICO</div>
                   <div className="p-6 space-y-4 max-h-[720px] overflow-auto">
-                    {activeObjective.deployment.map((item, index) => (
-                      <div key={`${item.process}-${item.kpi}-${index}`} className={`${darkMode ? "border-white/10 bg-white/5" : "border-gray-200 bg-white"} border rounded-3xl p-5 shadow-sm`}>
-                        <KpiCard dep={item} darkMode={darkMode} strong={strong} muted={muted} />
+                    {activeObjective.deployment.map((item) => (
+                      <div key={item.dbId} className={`${darkMode ? "border-white/10 bg-white/5" : "border-gray-200 bg-white"} border rounded-3xl p-5 shadow-sm`}>
+                        <KpiCard
+                          dep={item}
+                          darkMode={darkMode}
+                          strong={strong}
+                          muted={muted}
+                          canEdit={canEdit}
+                          processOptions={["Todos los procesos", ...processCards]}
+                          onUpdate={(updates) => handleUpdateKpiTactico(item.dbId, updates)}
+                          onDelete={() => handleDeleteKpiTactico(item.dbId)}
+                        />
                       </div>
                     ))}
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => handleCreateKpiTactico(activeObjective.dbId)}
+                        className={`w-full rounded-2xl border border-dashed px-4 py-3 text-xs font-black transition ${darkMode ? "border-white/20 text-white/60 hover:border-white/40" : "border-gray-300 text-gray-500 hover:border-sky-300 hover:text-sky-600"}`}
+                      >
+                        + Agregar KPI táctico
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
