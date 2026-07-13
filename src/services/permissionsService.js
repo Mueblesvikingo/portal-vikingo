@@ -253,6 +253,14 @@ function isProcessOwner(user, process) {
   return candidateNames.includes(ownerName);
 }
 
+// Pertenencia al equipo estratégico (PM, Coordinador SIG, Analista de
+// Procesos, Director General), sin overrides — para decisiones simples como
+// qué recurso (video/manual) mostrarle a un usuario según su rol.
+export function isStrategicTeamMember(user) {
+  const roles = getApplicableRoles(user);
+  return roles.some((role) => STRATEGIC_TEAM_ROLES.includes(role));
+}
+
 export function hasWorkloadFullAccess(user) {
   const userOverride = getUserModuleOverride(user, "workload-balance");
   if (userOverride && typeof userOverride.editar === "boolean") return userOverride.editar;
