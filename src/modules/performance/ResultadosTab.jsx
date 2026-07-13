@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react";
-import { MESES, PERSPECTIVAS, formatKpiValue, getResultadoValue } from "./performanceHelpers";
+import { MESES, PERSPECTIVAS, PERSPECTIVA_COLOR, formatKpiValue, getResultadoValue } from "./performanceHelpers";
 
 function EditableValue({ kpi, mesIndex, tipo, resultados, anio, canEdit, onSave }) {
   const [editing, setEditing] = useState(false);
@@ -58,24 +58,31 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
       <table className="w-full min-w-[1100px] border-collapse text-[10px]">
         <thead>
-          <tr className="border-b border-slate-100 bg-slate-50 text-left text-[9px] font-black uppercase tracking-widest text-slate-400">
-            <th className="sticky left-0 bg-slate-50 px-3 py-2">KPI</th>
+          <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
+            <th className="sticky left-0 bg-[#001225] px-3 py-2 text-white">KPI</th>
             <th className="px-2 py-2">Tipo</th>
             {MESES.map((m) => <th key={m} className="px-2 py-2 text-right">{m}</th>)}
           </tr>
         </thead>
         <tbody>
-          {groups.map((group) => (
+          {groups.map((group) => {
+            const groupColor = PERSPECTIVA_COLOR[group.label] || PERSPECTIVA_COLOR.Financiera;
+            return (
             <Fragment key={group.label}>
               {isEstrategico && (
                 <tr>
-                  <td colSpan={14} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-500">{group.label}</td>
+                  <td colSpan={14} className="px-3 py-1.5" style={{ background: `${groupColor}14` }}>
+                    <span className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest" style={{ color: groupColor }}>
+                      <span className="h-2 w-2 rounded-full" style={{ background: groupColor }} />
+                      {group.label}
+                    </span>
+                  </td>
                 </tr>
               )}
               {group.items.map((kpi) => (
                 <Fragment key={kpi.id}>
-                  <tr className="border-b border-slate-50">
-                    <td rowSpan={2} className="sticky left-0 bg-white px-3 py-1.5 align-top font-black text-slate-800">{kpi.nombre_indicador}</td>
+                  <tr className="border-b border-slate-50 transition hover:bg-slate-50/70">
+                    <td rowSpan={2} className="sticky left-0 bg-white px-3 py-1.5 align-top font-black text-slate-800" style={{ boxShadow: `inset 3px 0 0 ${groupColor}` }}>{kpi.nombre_indicador}</td>
                     <td className="px-2 py-1 text-slate-400">Meta</td>
                     {MESES.map((_, i) => (
                       <td key={i} className="px-2 py-1">
@@ -94,7 +101,8 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
                 </Fragment>
               ))}
             </Fragment>
-          ))}
+            );
+          })}
           {kpis.length === 0 && (
             <tr><td colSpan={14} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay KPIs para capturar resultados.</td></tr>
           )}

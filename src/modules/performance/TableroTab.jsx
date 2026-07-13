@@ -66,20 +66,39 @@ function GaugeCard({ label, cumplimiento, color }) {
   const value = cumplimiento === null || cumplimiento === undefined ? 0 : Math.min(cumplimiento, 100);
   const data = [{ name: "avance", value }, { name: "resto", value: Math.max(0, 100 - value) }];
   return (
-    <div className="flex flex-col items-center rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="relative">
-        <PieChart width={120} height={80}>
-          <Pie data={data} startAngle={180} endAngle={0} innerRadius={38} outerRadius={54} dataKey="value" stroke="none">
+    <div
+      className="flex flex-col items-center rounded-2xl border p-3 shadow-sm"
+      style={{ borderColor: `${color}3d`, background: `linear-gradient(180deg, ${color}14 0%, #ffffff 70%)` }}
+    >
+      <div className="relative" style={{ width: 132, height: 96 }}>
+        <PieChart width={132} height={96}>
+          <Pie
+            data={data}
+            cx="50%"
+            cy={80}
+            startAngle={180}
+            endAngle={0}
+            innerRadius={44}
+            outerRadius={64}
+            dataKey="value"
+            stroke="none"
+            cornerRadius={6}
+          >
             <Cell fill={color} />
-            <Cell fill="#e1e0d9" />
+            <Cell fill="#e7e5df" />
           </Pie>
         </PieChart>
-        <div className="pointer-events-none absolute inset-x-0 top-[38px] text-center">
-          <p className="text-lg font-black" style={{ color: status.color }}>{cumplimiento === null ? "—" : `${cumplimiento}%`}</p>
+        <div className="pointer-events-none absolute inset-x-0 text-center" style={{ top: 46 }}>
+          <p className="text-xl font-black leading-none" style={{ color: status.color }}>{cumplimiento === null ? "—" : `${cumplimiento}%`}</p>
         </div>
       </div>
-      <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
-      <p className="text-[9px] font-bold" style={{ color: status.color }}>{status.label}</p>
+      <p className="mt-1 text-[10px] font-black uppercase tracking-widest" style={{ color }}>{label}</p>
+      <span
+        className="mt-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide"
+        style={{ backgroundColor: `${status.color}1f`, color: status.color }}
+      >
+        {status.label}
+      </span>
     </div>
   );
 }
@@ -104,12 +123,13 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
         })}
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
         <table className="w-full min-w-[1000px] border-collapse text-[11px]">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50 text-left text-[9px] font-black uppercase tracking-widest text-slate-400">
-              <th className="px-3 py-2">Objetivo estratégico</th>
-              <th className="px-3 py-2">Indicador</th>
+            <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
+              <th className="px-3 py-2 text-white">Objetivo estratégico</th>
+              <th className="px-3 py-2 text-white">Indicador</th>
               <th className="px-3 py-2">Fórmula</th>
               <th className="px-3 py-2">Fuente</th>
               <th className="px-3 py-2">Periodicidad</th>
@@ -126,9 +146,12 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
             {groups.map((group) => (
               <Fragment key={group.label}>
                 {isEstrategico && (
-                  <tr key={`${group.label}-header`} className="bg-slate-50/60">
-                    <td colSpan={canEdit ? 12 : 11} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest" style={{ color: group.color }}>
-                      {group.label}
+                  <tr key={`${group.label}-header`}>
+                    <td colSpan={canEdit ? 12 : 11} className="px-3 py-1.5" style={{ background: `${group.color}14` }}>
+                      <span className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest" style={{ color: group.color }}>
+                        <span className="h-2 w-2 rounded-full" style={{ background: group.color }} />
+                        {group.label}
+                      </span>
                     </td>
                   </tr>
                 )}
@@ -136,8 +159,8 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
                   const { real, meta, cumplimiento } = computeCumplimiento(resultados, kpi.id, anio);
                   const status = getCumplimientoStatus(cumplimiento);
                   return (
-                    <tr key={kpi.id} className="border-b border-slate-50 hover:bg-slate-50/40">
-                      <td className="px-3 py-1.5"><EditableText value={kpi.objetivo_estrategico} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { objetivo_estrategico: v })} /></td>
+                    <tr key={kpi.id} className="border-b border-slate-50 transition hover:bg-slate-50/70">
+                      <td className="px-3 py-1.5" style={{ boxShadow: `inset 3px 0 0 ${group.color}` }}><EditableText value={kpi.objetivo_estrategico} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { objetivo_estrategico: v })} /></td>
                       <td className="px-3 py-1.5 font-black text-slate-800"><EditableText value={kpi.nombre_indicador} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { nombre_indicador: v })} /></td>
                       <td className="px-3 py-1.5 text-slate-500"><EditableText value={kpi.formula_texto} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { formula_texto: v })} /></td>
                       <td className="px-3 py-1.5 text-slate-500"><EditableText value={kpi.fuente_datos} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { fuente_datos: v })} /></td>
@@ -147,7 +170,7 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
                       <td className="px-3 py-1.5"><EditableSelect value={kpi.tipo_grafico} options={TIPO_GRAFICO_OPTIONS} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { tipo_grafico: v })} /></td>
                       <td className="px-3 py-1.5 text-right font-black text-slate-800">{formatKpiValue(real, kpi.unidad_medida)}</td>
                       <td className="px-3 py-1.5 text-right text-slate-500">{formatKpiValue(meta, kpi.unidad_medida)}</td>
-                      <td className="px-3 py-1.5 text-right"><span className="rounded-full border px-2 py-0.5 text-[9px] font-black" style={{ borderColor: status.color, color: status.color }}>{cumplimiento === null ? "—" : `${cumplimiento}%`}</span></td>
+                      <td className="px-3 py-1.5 text-right"><span className="rounded-full px-2 py-0.5 text-[9px] font-black" style={{ backgroundColor: `${status.color}1f`, color: status.color }}>{cumplimiento === null ? "—" : `${cumplimiento}%`}</span></td>
                       {canEdit && (
                         <td className="px-3 py-1.5 text-right">
                           <button type="button" onClick={() => onDeactivateKpi(kpi.id)} title="Quitar KPI" className="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition hover:bg-red-50 hover:text-red-500">×</button>
@@ -163,6 +186,7 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
             )}
           </tbody>
         </table>
+        </div>
         {canEdit && (
           <div className="border-t border-slate-100 p-2">
             <button
