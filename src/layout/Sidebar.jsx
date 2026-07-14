@@ -3,11 +3,11 @@ import { canViewModule } from "../services/permissionsService";
 
 const menuItems = [
   { label: "Inicio Ejecutivo", route: "/", moduleKey: "home" },
-  { label: "Desempeño Organizacional", route: "/performance", moduleKey: "performance" },
-  { label: "Seguimiento Estratégico", route: "/strategic-followup", moduleKey: "strategic-followup" },
   { label: "Despliegue Estratégico", route: "/strategic-deployment", moduleKey: "strategic-deployment" },
+  { label: "Desempeño Organizacional", route: "/performance", moduleKey: "performance" },
   { label: "Diseño organizacional", route: "/capacity", moduleKey: "capacity" },
   { label: "Balance de Carga", route: "/workload-balance", moduleKey: "workload-balance" },
+  { label: "Seguimiento Estratégico", route: "/strategic-followup", moduleKey: "strategic-followup" },
   { label: "Centro de Decisiones", route: "/decision-center", moduleKey: "decision-center" },
   { label: "Madurez Organizacional", route: "/maturity", moduleKey: "maturity" },
   { label: "Diagnóstico SIG", route: "/sig", moduleKey: "sig" },
