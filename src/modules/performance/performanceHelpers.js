@@ -1,5 +1,10 @@
 export const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
+export function formatDateTime(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleString("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 export const PERSPECTIVAS = ["Financiera", "Clientes", "Procesos", "Desarrollo"];
 
 // Paleta categórica validada (dataviz skill), orden fijo — nunca se reasigna
@@ -57,10 +62,14 @@ export function formatAxisValue(valor, unidad) {
   return num.toLocaleString("es-MX", { maximumFractionDigits: 0 });
 }
 
-export function getResultadoValue(resultados, kpiId, anio, mes, tipo) {
-  const row = resultados.find(
+export function getResultadoRow(resultados, kpiId, anio, mes, tipo) {
+  return resultados.find(
     (r) => Number(r.kpi_id) === Number(kpiId) && Number(r.anio) === Number(anio) && Number(r.mes) === Number(mes) && r.tipo === tipo
-  );
+  ) || null;
+}
+
+export function getResultadoValue(resultados, kpiId, anio, mes, tipo) {
+  const row = getResultadoRow(resultados, kpiId, anio, mes, tipo);
   return row ? Number(row.valor) : null;
 }
 

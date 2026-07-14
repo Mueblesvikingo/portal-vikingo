@@ -262,6 +262,16 @@ export function isStrategicTeamMember(user) {
   return roles.some((role) => STRATEGIC_TEAM_ROLES.includes(role));
 }
 
+// Edición del tablero Estratégico de Desempeño Organizacional: decisión
+// explícita del usuario de restringirla a estas dos personas puntuales
+// (Alejandro García Hernández y Cristian García Hernández), no a un rol —
+// el resto del equipo estratégico conserva acceso de solo lectura.
+const STRATEGIC_KPI_EDITOR_PERSONA_IDS = [14, 15];
+
+export function canEditStrategicKpis(user) {
+  return STRATEGIC_KPI_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
+}
+
 export function hasWorkloadFullAccess(user) {
   const userOverride = getUserModuleOverride(user, "workload-balance");
   if (userOverride && typeof userOverride.editar === "boolean") return userOverride.editar;

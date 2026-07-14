@@ -10,6 +10,7 @@ import {
   getCumplimientoStatus,
   getPreviousMonthInfo,
   formatKpiValue,
+  formatDateTime,
 } from "./performanceHelpers";
 
 function EditableText({ value, onSave, canEdit, className = "", placeholder = "" }) {
@@ -229,8 +230,11 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
                                 <EditableSelect value={kpi.tipo_grafico} options={TIPO_GRAFICO_OPTIONS} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { tipo_grafico: v })} />
                               </DetailField>
                             </div>
-                            {canEdit && (
-                              <div className="mt-3 flex justify-end border-t border-slate-200 pt-2">
+                            <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-2">
+                              <p className="text-[9px] font-bold text-slate-400">
+                                {kpi.updated_by_nombre ? `Última edición: ${kpi.updated_by_nombre} · ${formatDateTime(kpi.updated_at)}` : "Sin ediciones registradas"}
+                              </p>
+                              {canEdit && (
                                 <button
                                   type="button"
                                   onClick={() => onDeactivateKpi(kpi.id)}
@@ -238,8 +242,8 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
                                 >
                                   Eliminar KPI
                                 </button>
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )}

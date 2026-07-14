@@ -4,18 +4,87 @@ import {
   getResultados,
   getMacroprocesos,
   getPersonaMacroprocesosLiderProceso,
+  getHistorialByKpiIds,
   createKpi,
   updateKpi,
   deactivateKpi,
   upsertResultado,
 } from "../../services/performanceService";
-import { isStrategicTeamMember } from "../../services/permissionsService";
-import { PERSPECTIVAS, ESTRATEGICO_SCOPE } from "./performanceHelpers";
+import { isStrategicTeamMember, canEditStrategicKpis } from "../../services/permissionsService";
+import { PERSPECTIVAS, ESTRATEGICO_SCOPE, MESES, getResultadoValue, formatDateTime } from "./performanceHelpers";
 import TableroTab from "./TableroTab";
 import ResultadosTab from "./ResultadosTab";
 import PerspectivaChartsTab from "./PerspectivaChartsTab";
 
 const CURRENT_YEAR = new Date().getFullYear();
+
+const KPI_FIELD_LABELS = {
+  nombre_indicador: "Indicador",
+  objetivo_estrategico: "Objetivo estratégico",
+  formula_texto: "Fórmula",
+  fuente_datos: "Fuente",
+  periodicidad: "Periodicidad",
+  unidad_medida: "Medida",
+  responsable_rol: "Responsable",
+  tipo_grafico: "Gráfico",
+  perspectiva: "Perspectiva",
+  activo: "Estado",
+  creado: "Creación del KPI",
+};
+
+function formatHistorialReferencia(entry) {
+  if (entry.tipo_registro === "resultado") {
+    const [anio, mes, tipo] = String(entry.referencia || "").split("-");
+    const mesLabel = MESES[Number(mes) - 1] || mes;
+    return `${tipo === "real" ? "Real" : "Meta"} · ${mesLabel} ${anio}`;
+  }
+  return KPI_FIELD_LABELS[entry.referencia] || entry.referencia;
+}
+
+function HistorialModal({ open, onClose, loading, entries, kpisById }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest">Historial de captura</p>
+            <p className="text-[10px] font-bold text-slate-300">Quién y cuándo editó cada dato de este tablero</p>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
+        </div>
+        <div className="max-h-[70vh] overflow-auto p-4">
+          {loading ? (
+            <div className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
+          ) : entries.length === 0 ? (
+            <div className="py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay ediciones registradas.</div>
+          ) : (
+            <div className="space-y-2">
+              {entries.map((entry) => (
+                <div key={entry.id} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-[11px]">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-black text-slate-800">{kpisById[entry.kpi_id]?.nombre_indicador || `KPI #${entry.kpi_id}`}</span>
+                    <span className="text-[9px] font-bold text-slate-400">{formatDateTime(entry.created_at)}</span>
+                  </div>
+                  <div className="mt-1 text-[10px] font-bold text-slate-500">
+                    {formatHistorialReferencia(entry)} · {entry.usuario_nombre || "Usuario desconocido"}
+                  </div>
+                  {(entry.valor_anterior || entry.valor_nuevo) && (
+                    <div className="mt-1 text-[10px] text-slate-600">
+                      <span className="text-slate-400 line-through">{entry.valor_anterior || "—"}</span>
+                      {" → "}
+                      <span className="font-bold text-slate-800">{entry.valor_nuevo || "—"}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function PerformanceModule({ currentUser }) {
   const [kpis, setKpis] = useState([]);
@@ -27,6 +96,9 @@ export default function PerformanceModule({ currentUser }) {
   const [scopeInitialized, setScopeInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState("tablero");
   const [message, setMessage] = useState("");
+  const [historialOpen, setHistorialOpen] = useState(false);
+  const [historialLoading, setHistorialLoading] = useState(false);
+  const [historialEntries, setHistorialEntries] = useState([]);
 
   const isStrategic = isStrategicTeamMember(currentUser);
 
@@ -65,7 +137,7 @@ export default function PerformanceModule({ currentUser }) {
     [kpis, scope, isEstrategico]
   );
 
-  const canEdit = isEstrategico ? isStrategic : ownMacroprocesos.includes(scope);
+  const canEdit = isEstrategico ? canEditStrategicKpis(currentUser) : ownMacroprocesos.includes(scope);
 
   const tabs = isEstrategico
     ? [
@@ -84,26 +156,29 @@ export default function PerformanceModule({ currentUser }) {
   }, [scope]);
 
   async function handleUpdateKpi(id, updates) {
-    const result = await updateKpi(id, updates);
+    const previous = kpis.find((k) => k.id === id);
+    const result = await updateKpi(id, updates, { actor: currentUser, previous });
     if (!result?.ok) { console.error(result?.error); setMessage("No fue posible actualizar el KPI."); return; }
     setKpis((current) => current.map((k) => (k.id === id ? { ...k, ...result.data } : k)));
   }
 
   async function handleCreateKpi(defaults) {
-    const result = await createKpi({ ...defaults, orden: scopedKpis.length + 1 });
+    const result = await createKpi({ ...defaults, orden: scopedKpis.length + 1 }, currentUser);
     if (!result?.ok) { console.error(result?.error); setMessage("No fue posible crear el KPI."); return; }
     setKpis((current) => [...current, result.data]);
   }
 
   async function handleDeactivateKpi(id) {
     if (!window.confirm("¿Quitar este KPI del tablero?")) return;
-    const result = await deactivateKpi(id);
+    const previous = kpis.find((k) => k.id === id);
+    const result = await deactivateKpi(id, { actor: currentUser, previous });
     if (!result?.ok) { console.error(result?.error); setMessage("No fue posible quitar el KPI."); return; }
     setKpis((current) => current.filter((k) => k.id !== id));
   }
 
   async function handleSaveResultado(payload) {
-    const result = await upsertResultado(payload);
+    const previousValor = getResultadoValue(resultados, payload.kpiId, payload.anio, payload.mes, payload.tipo);
+    const result = await upsertResultado(payload, { actor: currentUser, previousValor });
     if (!result?.ok) { console.error(result?.error); setMessage("No fue posible guardar el resultado."); return; }
     setResultados((current) => {
       const filtered = current.filter(
@@ -112,6 +187,16 @@ export default function PerformanceModule({ currentUser }) {
       return [...filtered, result.data];
     });
   }
+
+  async function openHistorial() {
+    setHistorialOpen(true);
+    setHistorialLoading(true);
+    const entries = await getHistorialByKpiIds(scopedKpis.map((k) => k.id));
+    setHistorialEntries(entries);
+    setHistorialLoading(false);
+  }
+
+  const kpisById = useMemo(() => Object.fromEntries(kpis.map((k) => [k.id, k])), [kpis]);
 
   const scopeOptions = [
     { value: ESTRATEGICO_SCOPE, label: "Estratégico" },
@@ -142,6 +227,13 @@ export default function PerformanceModule({ currentUser }) {
                 + Agregar KPI
               </button>
             )}
+            <button
+              type="button"
+              onClick={openHistorial}
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+            >
+              Ver historial
+            </button>
           </div>
           {!canEdit && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold text-amber-700">Modo solo lectura</span>}
         </div>
@@ -198,6 +290,13 @@ export default function PerformanceModule({ currentUser }) {
           </div>
         </div>
       </div>
+      <HistorialModal
+        open={historialOpen}
+        onClose={() => setHistorialOpen(false)}
+        loading={historialLoading}
+        entries={historialEntries}
+        kpisById={kpisById}
+      />
     </section>
   );
 }

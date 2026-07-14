@@ -1,19 +1,22 @@
 import { Fragment, useState } from "react";
-import { MESES, PERSPECTIVAS, PERSPECTIVA_COLOR, formatKpiValue, getResultadoValue } from "./performanceHelpers";
+import { MESES, PERSPECTIVAS, PERSPECTIVA_COLOR, formatKpiValue, getResultadoRow, formatDateTime } from "./performanceHelpers";
 
 function EditableValue({ kpi, mesIndex, tipo, resultados, anio, canEdit, onSave }) {
   const [editing, setEditing] = useState(false);
-  const rawValue = getResultadoValue(resultados, kpi.id, anio, mesIndex + 1, tipo);
+  const row = getResultadoRow(resultados, kpi.id, anio, mesIndex + 1, tipo);
+  const rawValue = row ? Number(row.valor) : null;
   const [draft, setDraft] = useState(rawValue === null ? "" : String(kpi.unidad_medida === "porcentaje" ? rawValue * 100 : rawValue));
+  const traceTitle = row?.updated_by_nombre ? `Capturado por ${row.updated_by_nombre} · ${formatDateTime(row.updated_at)}` : "Sin captura manual registrada";
 
   if (!canEdit) {
-    return <span className="text-[10px] font-bold text-slate-600">{formatKpiValue(rawValue, kpi.unidad_medida)}</span>;
+    return <span title={traceTitle} className="text-[10px] font-bold text-slate-600">{formatKpiValue(rawValue, kpi.unidad_medida)}</span>;
   }
 
   if (!editing) {
     return (
       <button
         type="button"
+        title={traceTitle}
         onClick={() => {
           setDraft(rawValue === null ? "" : String(kpi.unidad_medida === "porcentaje" ? rawValue * 100 : rawValue));
           setEditing(true);
