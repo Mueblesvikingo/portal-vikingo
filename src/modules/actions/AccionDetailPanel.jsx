@@ -108,7 +108,10 @@ export default function AccionDetailPanel({
       setLoadingSub(false);
     }
     load();
-  }, [accion.id]);
+    // Recarga también cuando `accion` se actualiza (ej. cambio de estado)
+    // para que Historial refleje el cambio sin tener que cerrar y reabrir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accion.id, accion.updated_at]);
 
   const analisisActual = analisisList.find((a) => a.herramienta === herramienta) || null;
 
