@@ -31,7 +31,7 @@ const DAY_CAPACITY_FIELD_MAP = {
   Jueves: "horas_jueves",
   Viernes: "horas_viernes",
 };
-const SOURCE_TYPES = ["Proceso", "Proyecto", "Mejora", "Formación", "Eventual", "Reunión"];
+const SOURCE_TYPES = ["Proceso", "Proyecto", "Mejora", "Formación", "Eventual", "Reunión", "Tarea"];
 const SOURCE_CHART_COLORS = {
   Proceso: "#8ECDF8",
   Proyecto: "#B9A7F5",
@@ -39,6 +39,7 @@ const SOURCE_CHART_COLORS = {
   Formación: "#FDBA8C",
   Eventual: "#CBD5E1",
   Reunión: "#FCA5A5",
+  Tarea: "#FCD34D",
 };
 const SOURCE_TEXT_COLORS = {
   Proceso: "#075985",
@@ -47,6 +48,7 @@ const SOURCE_TEXT_COLORS = {
   Formación: "#C2410C",
   Eventual: "#475569",
   Reunión: "#B91C1C",
+  Tarea: "#B45309",
 };
 const WEEK_VISIBLE_TYPES = ["Proceso", "Proyecto", "Formación", "Tarea", "Reunión"];
 const MONTH_MATRIX_ROWS = ["Procesos", "Proyectos", "Formación"];
@@ -704,6 +706,32 @@ function getManualSourceType(item) {
 function isManualReservationActivity(activity) {
   return normalizeText(activity?.proceso).endsWith("manual");
 }
+function applyLiderProcesoOverrideToActivity(activity, override) {
+  if (!override) return activity;
+  const overrideActive = override.activo !== false;
+  const overrideFrequency = override.frecuencia || activity.frecuencia;
+  return {
+    ...activity,
+    duracionMinutos: Number(override.duracion_minutos),
+    cargaSemanal: Number(override.carga_horas),
+    cargaMensual: Number((Number(override.carga_horas) * getActivityMonthlyOccurrences(overrideFrequency)).toFixed(2)),
+    estado: overrideActive ? "Activa" : "Inactiva",
+    activa: overrideActive,
+    frecuencia: overrideFrequency,
+    hasLiderProcesoOverride: true,
+    excluidoPersonal: override.excluido === true,
+    excluidoEn: override.updated_at || null,
+  };
+}
+function getPersonAdjustedActivities(activities, liderProcesoOverrides, personId) {
+  return safeArray(activities).map((activity) => {
+    if (!isLiderDeProcesoActivity(activity)) return activity;
+    const override = safeArray(liderProcesoOverrides).find(
+      (item) => String(item.persona_id) === String(personId) && String(item.actividad_id) === String(activity.id)
+    );
+    return applyLiderProcesoOverrideToActivity(activity, override);
+  });
+}
 function isLiderDeProcesoActivity(activity) {
   const rol = normalizeText(activity?.rol);
   return rol === "lider de proceso" || rol === "líder de proceso";
@@ -811,6 +839,38 @@ function FilterSelect({ label, value, onChange, children }) {
 function ViewTab({ active, children, onClick }) { return <button type="button" onClick={onClick} className={`rounded-lg px-3 py-1 text-[10px] font-black uppercase tracking-widest transition ${active ? "bg-[#001225] text-white shadow-sm" : "bg-white text-slate-500 hover:bg-slate-50"}`}>{children}</button>; }
 function StatusPill({ status }) { const resolvedStatus = status || getWorkloadStatus(0); return <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full border ${resolvedStatus.pill}`} title={resolvedStatus.label}><span className={`h-2 w-2 rounded-full ${resolvedStatus.dot}`} /></span>; }
 function SourcePill({ source }) { return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black ${getSourceStyle(source)}`}>{source || "Sin origen"}</span>; }
+function TeamCapacityOverview({ team, onSelectPerson }) {
+  if (team.length === 0) {
+    return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm font-bold text-slate-400">No hay personas registradas.</div>;
+  }
+  const criticalCount = team.filter((person) => person.utilization > 90).length;
+  const attentionCount = team.filter((person) => person.utilization >= 75 && person.utilization <= 90).length;
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-widest text-slate-800">Estado de capacidad del equipo</p>
+          <p className="text-[10px] font-bold text-slate-400">Utilización mensual por persona. Clic en una fila para ver su detalle.</p>
+        </div>
+        <div className="flex gap-1.5">
+          {criticalCount > 0 && <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[9px] font-black text-red-600">{criticalCount} en crítico</span>}
+          {attentionCount > 0 && <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[9px] font-black text-orange-600">{attentionCount} en atención</span>}
+        </div>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {team.map((person) => (
+          <button key={person.id} type="button" onClick={() => onSelectPerson(person.id)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50">
+            <span className={`h-2 w-2 shrink-0 rounded-full ${person.signal.dot}`} />
+            <span className="min-w-0 flex-1 truncate text-[11px] font-black text-slate-800">{person.name}</span>
+            <span className="hidden shrink-0 text-[9px] font-bold text-slate-400 sm:block">{formatHours(person.pendingHours)} pend.</span>
+            <div className="hidden w-28 shrink-0 md:block"><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${person.signal.bar}`} style={{ width: `${Math.min(person.utilization, 100)}%` }} /></div></div>
+            <span className={`w-12 shrink-0 text-right text-[11px] font-black ${person.signal.text}`}>{person.utilization.toFixed(0)}%</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 function CapacityAvailabilityPopover({ hasSelectedPerson, pendingHours, weeklyCapacityHours, weeklyScheduledHours, days, onGoToPending, onGoToWeek }) {
   const [open, setOpen] = useState(false);
   if (!hasSelectedPerson) return null;
@@ -1572,27 +1632,7 @@ export default function WorkloadBalanceModule({
   }, [roleFilter, roleOptions]);
   const visibleActivities = useMemo(() => {
     if (effectivePersonFilter === "all") return normalizedActivities;
-    return normalizedActivities.map((activity) => {
-      if (!isLiderDeProcesoActivity(activity)) return activity;
-      const override = liderProcesoOverrides.find(
-        (item) => String(item.persona_id) === String(effectivePersonFilter) && String(item.actividad_id) === String(activity.id)
-      );
-      if (!override) return activity;
-      const overrideActive = override.activo !== false;
-      const overrideFrequency = override.frecuencia || activity.frecuencia;
-      return {
-        ...activity,
-        duracionMinutos: Number(override.duracion_minutos),
-        cargaSemanal: Number(override.carga_horas),
-        cargaMensual: Number((Number(override.carga_horas) * getActivityMonthlyOccurrences(overrideFrequency)).toFixed(2)),
-        estado: overrideActive ? "Activa" : "Inactiva",
-        activa: overrideActive,
-        frecuencia: overrideFrequency,
-        hasLiderProcesoOverride: true,
-        excluidoPersonal: override.excluido === true,
-        excluidoEn: override.updated_at || null,
-      };
-    });
+    return getPersonAdjustedActivities(normalizedActivities, liderProcesoOverrides, effectivePersonFilter);
   }, [normalizedActivities, liderProcesoOverrides, effectivePersonFilter]);
   const filteredActivities = useMemo(() => {
     const roleLinks = roleFilter === "all"
@@ -1619,6 +1659,46 @@ export default function WorkloadBalanceModule({
     },
     [weeklyPlansCatalog, monthlyPlansCatalog, effectivePersonFilter]
   );
+  // Vista de equipo para Coordinador SIG/PM/Director: cuando el filtro de
+  // persona está en "Todas las personas", se calcula la utilización mensual
+  // de cada persona (mismo criterio que el gráfico de un solo integrante)
+  // para que puedan ver de un vistazo quién está sobrecargado.
+  const teamCapacityOverview = useMemo(() => {
+    if (effectivePersonFilter !== "all") return [];
+    return peopleOptions.map((person) => {
+      const personRoleLinks = activePersonRoleLinks.filter(
+        (link) => String(link.persona_id ?? link.person_id ?? "") === String(person.id)
+      );
+      const personActivities = getPersonAdjustedActivities(normalizedActivities, liderProcesoOverrides, person.id);
+      const relevantActivities = personActivities.filter((activity) => {
+        if (isManualReservationActivity(activity)) return normalizeText(activity.responsable) === normalizeText(person.name);
+        return personRoleLinks.some((link) => activityMatchesRoleLink(activity, link, { strictLiderProceso: true }));
+      });
+      // Igual criterio que sourceSummary/SourceDistributionPie para el
+      // integrante seleccionado: la utilización mensual no descuenta las
+      // actividades "quitadas" (excluidoPersonal), para que el % coincida
+      // con el que ve la propia persona en su vista individual.
+      const monthlyTotal = relevantActivities.reduce((sum, activity) => sum + Number(activity.cargaMensual || 0), 0);
+      const monthlyCapacity = getPersonMonthlyCapacityHours(person);
+      const utilization = monthlyCapacity > 0 ? (monthlyTotal / monthlyCapacity) * 100 : 0;
+      const personScheduledIds = new Set([
+        ...collectScheduledActivityIds(safeArray(weeklyPlansCatalog).filter((plan) => getPlanPersonId(plan) === String(person.id))),
+        ...collectScheduledActivityIds(safeArray(monthlyPlansCatalog).filter((plan) => getPlanPersonId(plan) === String(person.id))),
+      ]);
+      const pendingHours = relevantActivities
+        .filter((activity) => !isManualReservationActivity(activity) && !activity.excluidoPersonal && !personScheduledIds.has(String(activity.id)))
+        .reduce((sum, activity) => sum + getDurationMinutes(activity) / 60, 0);
+      return {
+        id: person.id,
+        name: person.name,
+        monthlyTotal,
+        monthlyCapacity,
+        utilization,
+        pendingHours,
+        signal: getUtilizationSignal(utilization),
+      };
+    }).sort((a, b) => b.utilization - a.utilization);
+  }, [effectivePersonFilter, peopleOptions, activePersonRoleLinks, normalizedActivities, liderProcesoOverrides, weeklyPlansCatalog, monthlyPlansCatalog]);
   const pendingActivities = useMemo(() => {
     if (effectivePersonFilter === "all") return [];
 
@@ -4115,7 +4195,7 @@ function canReviewPlan() {
             {!canEditSelectedPerson && <div className="mx-3 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-700">Modo solo lectura: estás viendo la carga de {selectedPersonName || "otra persona"}. Solo puedes editar tu propia carga.</div>}
             <div className={!canEditSelectedPerson ? "pointer-events-none select-none opacity-60" : ""}>
 
-{viewMode === "capacity" && <div className="p-3"><SourceDistributionPie items={sourceSummary} weeklyPlanKpi={allWeeksPlanKpi} monthlyCapacityHours={selectedPersonCapacity.monthlyHours} hasSelectedPerson={effectivePersonFilter !== "all"} /></div>}
+{viewMode === "capacity" && <div className="p-3">{effectivePersonFilter === "all" ? <TeamCapacityOverview team={teamCapacityOverview} onSelectPerson={setPersonFilter} /> : <SourceDistributionPie items={sourceSummary} weeklyPlanKpi={allWeeksPlanKpi} monthlyCapacityHours={selectedPersonCapacity.monthlyHours} hasSelectedPerson={effectivePersonFilter !== "all"} />}</div>}
             {scheduleMessage && <div className="mx-3 mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[10px] font-bold text-emerald-700">{scheduleMessage}</div>}
             {viewMode === "pending" && <PendingActivitiesView hasSelectedPerson={effectivePersonFilter !== "all"} activities={filteredPendingActivities} excludedActivities={excludedPendingActivities} totalHours={pendingTotalHours} canEditActivities={canEditPendingActivities()} onOpenSchedule={openScheduleModal} onEditActivity={openPendingActivityEditModal} onRestoreExcludedActivity={restoreExcludedActivity} />}
 
