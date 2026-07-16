@@ -2986,7 +2986,14 @@ export default function CapacityModule({ currentUser } = {}) {
   const nextLaneOrder = selectedProcessLanes.length;
   const nextBlockOrder = (selectedProcess?.activities || []).length;
 
-  const addSupabaseRole = async (laneName, order) => {
+  // assignOrder=true (macro): el carril recibe un "orden" explícito, lo que
+  // lo marca como carril visible del flujo del macroproceso (isExplicitLane
+  // en selectedProcessLanes). assignOrder=false (subproceso): el rol se
+  // crea/reactiva SIN orden, para que "+ Carril" dentro de un subproceso no
+  // agregue un carril vacío al macroproceso — solo queda disponible como
+  // opción de rol para actividades de ese subproceso (ver
+  // selectedSubprocessLanes, que no depende de "orden").
+  const addSupabaseRole = async (laneName, order, { assignOrder = true } = {}) => {
     if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return null; }
     if (!selectedProcessName) return null;
 
@@ -3003,7 +3010,8 @@ export default function CapacityModule({ currentUser } = {}) {
       if (existingLane) {
         const existingOrder = firstValue(existingLane, ["orden", "order"], null);
         const needsActivation = existingLane.activo === false || existingLane.active === false;
-        const needsOrder = existingOrder === null || existingOrder === undefined || String(existingOrder).trim() === "";
+        const existingHasNoOrder = existingOrder === null || existingOrder === undefined || String(existingOrder).trim() === "";
+        const needsOrder = assignOrder && existingHasNoOrder;
         let savedLane = existingLane;
 
         if (needsActivation || needsOrder) {
@@ -3030,13 +3038,13 @@ export default function CapacityModule({ currentUser } = {}) {
         proceso: selectedProcessName,
         rol: finalLaneName,
         responsable: finalLaneName,
-        orden: nextOrder,
+        orden: assignOrder ? nextOrder : null,
       });
 
       const createdLane = {
         lane: created.rol || finalLaneName,
         roleId: created.id,
-        orden: created.orden ?? nextOrder,
+        orden: created.orden ?? (assignOrder ? nextOrder : null),
         active: created.activo !== false,
         blocks: [],
       };
@@ -3050,6 +3058,7 @@ export default function CapacityModule({ currentUser } = {}) {
       return null;
     }
   };
+  const addSupabaseRoleForSubprocess = (laneName, order) => addSupabaseRole(laneName, order, { assignOrder: false });
 
   const saveSupabaseRole = async (draft) => {
     if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
@@ -3410,7 +3419,7 @@ export default function CapacityModule({ currentUser } = {}) {
                 benefit: "",
                 aiAutomation: "",
               })}
-              onAddLane={addSupabaseRole}
+              onAddLane={addSupabaseRoleForSubprocess}
               onAddBlock={addSupabaseActivity}
               onUpdateBlock={updateSupabaseActivityInline}
               onRemoveBlock={removeSupabaseActivity}

@@ -236,7 +236,10 @@ export async function createRole(payload) {
         proceso: payload.proceso || payload.processName || null,
         rol: payload.rol || payload.lane || "Nuevo carril",
         responsable: payload.responsable || null,
-        orden: payload.orden ?? 0,
+        // undefined => sin orden explícito (default 0); null se respeta tal
+        // cual (carril agregado desde un subproceso, no debe aparecer como
+        // carril explícito del macroproceso hasta que se le asigne un orden).
+        orden: payload.orden === undefined ? 0 : payload.orden,
         activo: true,
       },
     ])
