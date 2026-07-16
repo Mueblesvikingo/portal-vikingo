@@ -427,7 +427,7 @@ export async function recalculateAssignmentHours(assignmentId) {
 
     if (fetchError || !assignment) return { ok: false, error: fetchError, data: null };
 
-    const [weeklyResult, monthlyResult] = await Promise.all([
+    const [weeklyResult, monthlyResult, savedPlansResult] = await Promise.all([
       supabase
         .from("workload_plan_semanal_detalle")
         .select("horas_planificadas")
@@ -438,13 +438,31 @@ export async function recalculateAssignmentHours(assignmentId) {
         .select("horas_planificadas")
         .eq("asignacion_id", assignmentId)
         .eq("activo", true),
+      // Las horas programadas como bloque "extraordinario" en Planificación
+      // (semana específica, no recurrente) no viven en las tablas de arriba,
+      // sino dentro del jsonb `bloques` del plan guardado de esa semana.
+      supabase
+        .from("workload_planes_guardados")
+        .select("bloques")
+        .eq("activo", true)
+        .eq("tipo_plan", "semanal")
+        .eq("persona_id", String(assignment.persona_id)),
     ]);
 
     if (weeklyResult.error) console.error("Error al sumar horas semanales de la asignación:", weeklyResult.error);
     if (monthlyResult.error) console.error("Error al sumar horas mensuales de la asignación:", monthlyResult.error);
+    if (savedPlansResult.error) console.error("Error al sumar horas de Planificación de la asignación:", savedPlansResult.error);
 
-    const horasProgramadas = [...(weeklyResult.data || []), ...(monthlyResult.data || [])]
+    const horasPlanTipico = [...(weeklyResult.data || []), ...(monthlyResult.data || [])]
       .reduce((sum, row) => sum + Number(row.horas_planificadas || 0), 0);
+
+    const horasPlanificacion = (savedPlansResult.data || []).reduce((sum, plan) => {
+      const bloques = Array.isArray(plan.bloques) ? plan.bloques : [];
+      const bloque = bloques.find((item) => String(item?.assignmentId || "") === String(assignmentId));
+      return sum + (bloque ? Number(bloque.duracionMinutos || 0) / 60 : 0);
+    }, 0);
+
+    const horasProgramadas = horasPlanTipico + horasPlanificacion;
 
     const horasTotales = Number(assignment.horas_totales || assignment.carga_horas || 0);
     const horasEjecutadas = Number(assignment.horas_ejecutadas || 0);
@@ -552,6 +570,29 @@ export async function programAssignmentHours({ assignmentId, personaId, type, ho
 
     const table = type === "weekly" ? "workload_plan_semanal_detalle" : "workload_plan_mensual";
     const groupFilter = type === "weekly" ? { dia_semana: dayName || "Lunes" } : { semana_mes: Number(weekNumber || 1) };
+
+    // Si ya existe una fila activa para esta asignación en el mismo día/semana,
+    // suma las horas ahí en vez de insertar una fila nueva (evita duplicados
+    // cuando se vuelve a programar la misma asignación en el mismo destino).
+    const { data: existingRow, error: existingRowError } = await supabase
+      .from(table)
+      .select("id, horas_planificadas")
+      .eq("persona_id", personaId)
+      .eq("asignacion_id", assignmentId)
+      .match(groupFilter)
+      .eq("activo", true)
+      .limit(1)
+      .maybeSingle();
+    if (existingRowError) console.error("Error al validar programación existente de la asignación:", existingRowError);
+
+    if (existingRow) {
+      const { error: updateRowError } = await supabase
+        .from(table)
+        .update({ horas_planificadas: Number(existingRow.horas_planificadas || 0) + horasAProgramar })
+        .eq("id", existingRow.id);
+      if (updateRowError) return { ok: false, error: updateRowError };
+      return await recalculateAssignmentHours(assignmentId);
+    }
 
     const { data: currentGroup, error: orderError } = await supabase
       .from(table)
