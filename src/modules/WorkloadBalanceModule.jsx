@@ -1038,10 +1038,12 @@ function NewAssignmentModal({ open, draft, setDraft, onSave, onClose, error, pue
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl" style={{ maxHeight: "90vh" }}><div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-widest text-slate-900">Nueva asignación</p><p className="text-[10px] font-bold text-slate-400">Proyecto o iniciativa aprobada para el backlog de capacidad.</p></div><button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-sm font-black text-slate-400 hover:bg-slate-50">×</button></div><div className="grid gap-2 md:grid-cols-2"><label className="md:col-span-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Nombre de la iniciativa/proyecto<input value={draft.nombre} onChange={(event) => setDraft((current) => ({ ...current, nombre: event.target.value }))} placeholder="Ej. Implementación de tablero de control" className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="md:col-span-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Descripción breve<textarea value={draft.descripcion} onChange={(event) => setDraft((current) => ({ ...current, descripcion: event.target.value }))} rows={2} placeholder="Describe el objetivo o alcance general de la iniciativa." className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Origen<select value={draft.origenEstrategico} onChange={(event) => setDraft((current) => ({ ...current, origenEstrategico: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_STRATEGIC_ORIGINS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tipo<select value={draft.tipo} onChange={(event) => setDraft((current) => ({ ...current, tipo: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Responsable asignado<select value={draft.responsable} onChange={(event) => setDraft((current) => ({ ...current, responsable: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"><option value="">Seleccionar puesto</option>{puestoOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prioridad<select value={draft.prioridad} onChange={(event) => setDraft((current) => ({ ...current, prioridad: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_PRIORITIES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Revisará<select value={draft.revisara} onChange={(event) => setDraft((current) => ({ ...current, revisara: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"><option value="">Seleccionar puesto</option>{puestoOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Aprobará<select value={draft.aprobara} onChange={(event) => setDraft((current) => ({ ...current, aprobara: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"><option value="">Seleccionar puesto</option>{puestoOptions.map((item) => <option key={item} value={item}>{item}</option>)}<option value="No requiere aprobación">No requiere aprobación</option></select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dará seguimiento<select value={draft.seguimiento} onChange={(event) => setDraft((current) => ({ ...current, seguimiento: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"><option value="PMO">PMO</option>{puestoOptions.map((item) => <option key={item} value={item}>{item}</option>)}<option value="Ninguno">Ninguno</option></select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Herramienta de gestión<select value={draft.gestionarEn} onChange={(event) => setDraft((current) => ({ ...current, gestionarEn: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_CHANNELS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">URL o referencia externa<input value={draft.urlExterna} onChange={(event) => setDraft((current) => ({ ...current, urlExterna: event.target.value }))} placeholder="https://..." className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Horas totales estimadas<input type="number" min="0.5" step="0.5" value={draft.horas} onChange={(event) => setDraft((current) => ({ ...current, horas: Number(event.target.value) }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Fecha inicio estimada<input type="date" value={draft.fechaInicio} onChange={(event) => setDraft((current) => ({ ...current, fechaInicio: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Fecha límite / compromiso<input type="date" value={draft.fechaLimite} onChange={(event) => setDraft((current) => ({ ...current, fechaLimite: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label></div>{error && <div className="mt-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{error}</div>}<div className="mt-3 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-2"><span className="text-[10px] font-bold text-slate-400">Asignará: {currentUserLabel}</span><div className="flex gap-2"><button type="button" onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Guardar asignación</button><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button></div></div></div></div>;
 }
-function EditMeetingModal({ assignment, draft, setDraft, onSave, onClose, error }) {
+function EditMeetingModal({ assignment, draft, setDraft, onSave, onClose, error, peopleOptions = [], onToggleParticipant }) {
   if (!assignment) return null;
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"><div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-widest text-slate-900">Editar reunión</p><p className="text-[10px] font-bold text-slate-400">Actualiza los datos generales; aplica a todos los participantes.</p></div><button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-sm font-black text-slate-400 hover:bg-slate-50">×</button></div><div className="grid gap-2 md:grid-cols-2"><label className="md:col-span-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Título<input value={draft.titulo} onChange={(event) => setDraft((current) => ({ ...current, titulo: event.target.value }))} placeholder="Ej. Revisión semanal de ventas" className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prioridad<select value={draft.prioridad} onChange={(event) => setDraft((current) => ({ ...current, prioridad: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_PRIORITIES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Gestionar en<select value={draft.gestionarEn} onChange={(event) => setDraft((current) => ({ ...current, gestionarEn: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_CHANNELS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Duración estimada (horas)<input type="number" min="0.25" step="0.25" value={draft.horas} onChange={(event) => setDraft((current) => ({ ...current, horas: Number(event.target.value) }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Fecha tentativa<input type="date" value={draft.fechaLimite} onChange={(event) => setDraft((current) => ({ ...current, fechaLimite: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Hora tentativa<input type="time" value={draft.horaLimite} onChange={(event) => setDraft((current) => ({ ...current, horaLimite: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label></div>{error && <div className="mt-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{error}</div>}<div className="mt-3 flex items-center justify-end gap-2 rounded-xl border border-slate-100 bg-slate-50 p-2"><button type="button" onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Guardar cambios</button><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button></div></div></div>;
+  const participantIds = safeArray(draft.participantIds);
+
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"><div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-widest text-slate-900">Editar reunión</p><p className="text-[10px] font-bold text-slate-400">Actualiza los datos generales; aplica a todos los participantes.</p></div><button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-sm font-black text-slate-400 hover:bg-slate-50">×</button></div><div className="grid gap-2 md:grid-cols-2"><label className="md:col-span-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Título<input value={draft.titulo} onChange={(event) => setDraft((current) => ({ ...current, titulo: event.target.value }))} placeholder="Ej. Revisión semanal de ventas" className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prioridad<select value={draft.prioridad} onChange={(event) => setDraft((current) => ({ ...current, prioridad: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_PRIORITIES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Gestionar en<select value={draft.gestionarEn} onChange={(event) => setDraft((current) => ({ ...current, gestionarEn: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{ASSIGNMENT_CHANNELS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Duración estimada (horas)<input type="number" min="0.25" step="0.25" value={draft.horas} onChange={(event) => setDraft((current) => ({ ...current, horas: Number(event.target.value) }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Fecha tentativa<input type="date" value={draft.fechaLimite} onChange={(event) => setDraft((current) => ({ ...current, fechaLimite: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Hora tentativa<input type="time" value={draft.horaLimite} onChange={(event) => setDraft((current) => ({ ...current, horaLimite: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><div className="md:col-span-2"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Participantes ({participantIds.length})</p><div className="mt-1 max-h-40 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-2"><div className="grid gap-1 md:grid-cols-2">{peopleOptions.map((person) => <label key={person.id} className="flex items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-[11px] font-bold normal-case tracking-normal text-slate-700 hover:border-slate-200 hover:bg-white"><input type="checkbox" checked={participantIds.includes(person.id)} onChange={() => onToggleParticipant(person.id)} />{person.name}</label>)}</div></div></div></div>{error && <div className="mt-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{error}</div>}<div className="mt-3 flex items-center justify-end gap-2 rounded-xl border border-slate-100 bg-slate-50 p-2"><button type="button" onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Guardar cambios</button><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button></div></div></div>;
 }
 function AssignmentEditModal({ assignment, draft, setDraft, onSave, onClose, error, puestoOptions = [] }) {
   if (!assignment) return null;
@@ -2700,6 +2702,14 @@ function canCreateAssignments() {
         : [...draft.participantIds, personId],
     }));
   }
+  function toggleMeetingEditParticipant(personId) {
+    setMeetingEditDraft((draft) => ({
+      ...draft,
+      participantIds: safeArray(draft.participantIds).includes(personId)
+        ? draft.participantIds.filter((id) => id !== personId)
+        : [...safeArray(draft.participantIds), personId],
+    }));
+  }
   async function createMeeting() {
     if (!canCreateAssignments()) return;
     const title = cleanText(meetingDraft.titulo);
@@ -2748,6 +2758,9 @@ function canCreateAssignments() {
   function openAssignmentEditModal(assignment) {
     if (!assignment?.id) return;
     if (isMeetingAssignment(assignment)) {
+      const participantIds = assignment.grupoReunion
+        ? assignments.filter((item) => item.grupoReunion === assignment.grupoReunion).map((item) => item.personaId)
+        : [assignment.personaId];
       setEditingMeetingAssignment(assignment);
       setMeetingEditError("");
       setMeetingEditDraft({
@@ -2757,6 +2770,7 @@ function canCreateAssignments() {
         horas: Number(assignment.horasTotales || assignment.horas || 1),
         fechaLimite: assignment.fechaLimite || currentWorkWeek.end,
         horaLimite: assignment.horaLimite || "",
+        participantIds,
       });
       return;
     }
@@ -2872,6 +2886,10 @@ function canCreateAssignments() {
       setMeetingEditError("La duración estimada debe ser mayor a 0.");
       return;
     }
+    if (safeArray(meetingEditDraft.participantIds).length === 0) {
+      setMeetingEditError("Selecciona al menos un participante.");
+      return;
+    }
 
     const payload = {
       prioridad: meetingEditDraft.prioridad,
@@ -2893,12 +2911,42 @@ function canCreateAssignments() {
     }
 
     // Propaga los datos generales al resto de participantes de la misma reunión.
-    if (editingMeetingAssignment.grupoReunion) {
-      const siblings = assignments.filter(
-        (item) => item.grupoReunion === editingMeetingAssignment.grupoReunion && item.id !== editingMeetingAssignment.id
-      );
-      await Promise.all(siblings.map((sibling) => updateWorkloadAssignment(sibling.id, payload)));
-    }
+    const siblings = editingMeetingAssignment.grupoReunion
+      ? assignments.filter((item) => item.grupoReunion === editingMeetingAssignment.grupoReunion && item.id !== editingMeetingAssignment.id)
+      : [];
+    await Promise.all(siblings.map((sibling) => updateWorkloadAssignment(sibling.id, payload)));
+
+    // Ajusta participantes: quita las filas deseleccionadas y crea filas nuevas
+    // (mismo grupo_reunion) para los participantes recién agregados.
+    const currentRows = [editingMeetingAssignment, ...siblings];
+    const currentParticipantIds = currentRows.map((row) => String(row.personaId));
+    const nextParticipantIds = safeArray(meetingEditDraft.participantIds).map(String);
+    const rowsToRemove = currentRows.filter((row) => !nextParticipantIds.includes(String(row.personaId)));
+    const idsToAdd = nextParticipantIds.filter((id) => !currentParticipantIds.includes(id));
+
+    await Promise.all(rowsToRemove.map((row) => deleteAssignment(row.id)));
+    await Promise.all(idsToAdd.map((personId) => {
+      const person = peopleOptions.find((option) => String(option.id) === String(personId));
+      const personRole = activePersonRoleLinks.find((link) => String(link.persona_id ?? link.person_id ?? "") === String(personId));
+      return createWorkloadAssignment({
+        persona_id: personId,
+        responsable: person?.name || "",
+        rol: personRole ? getPersonRoleName(personRole) : "Reunión",
+        tipo: "Reunión",
+        prioridad: meetingEditDraft.prioridad,
+        gestion: meetingEditDraft.gestionarEn,
+        titulo: title,
+        carga_horas: hours,
+        duracion_minutos: Math.round(hours * 60),
+        fecha_limite: meetingEditDraft.fechaLimite,
+        hora_limite: meetingEditDraft.horaLimite || null,
+        estado: "Pendiente",
+        asigna: currentUser?.name || "Usuario",
+        asigna_rol: getPrimaryUserRole(),
+        activo: true,
+        grupo_reunion: editingMeetingAssignment.grupoReunion,
+      });
+    }));
 
     await recalculateAssignmentHours(editingMeetingAssignment.id);
     closeMeetingEditModal();
@@ -3933,6 +3981,8 @@ function canReviewPlan() {
         onSave={saveMeetingEdit}
         onClose={closeMeetingEditModal}
         error={meetingEditError}
+        peopleOptions={peopleOptions}
+        onToggleParticipant={toggleMeetingEditParticipant}
       />
       <AssignmentScheduleModal
         assignment={assignmentScheduleModal}
