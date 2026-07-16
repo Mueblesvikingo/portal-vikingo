@@ -3581,8 +3581,16 @@ function canReviewPlan() {
   function showAgendaDropIndicator(dayName, targetIndex) { if (!agendaDraggedBlock) return; setAgendaDropIndicator({ day: dayName, index: targetIndex }); }
   function isAgendaDropIndicatorActive(dayName, targetIndex) { return agendaDropIndicator?.day === dayName && agendaDropIndicator?.index === targetIndex; }
   function renderAgendaInsertLine(dayName, targetIndex) { const active = isAgendaDropIndicatorActive(dayName, targetIndex); return <div onDragOver={(event) => { event.preventDefault(); showAgendaDropIndicator(dayName, targetIndex); }} onDragEnter={(event) => { event.preventDefault(); showAgendaDropIndicator(dayName, targetIndex); }} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); reorderAgendaBlock(agendaDraggedBlock, dayName, targetIndex); }} className="relative h-3"><div className={`absolute left-0 right-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full transition ${active ? "bg-sky-500 opacity-100 shadow-sm" : "bg-transparent opacity-0"}`} /><div className={`absolute left-0 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full transition ${active ? "bg-sky-500 opacity-100" : "bg-transparent opacity-0"}`} /></div>; }
-  function canRemoveAgendaBlock(activity) { return activity?.origen !== "Proceso"; }
-  function removeAgendaBlock(activity) { if (!canRemoveAgendaBlock(activity)) return; if (activity?.isManualProject && String(activity.id).startsWith("agenda-manual-")) { setAgendaManualBlocks((currentBlocks) => currentBlocks.filter((block) => block.id !== activity.id)); return; } setAgendaRemovedBlockIds((currentIds) => [...new Set([...currentIds, activity.occurrenceId])]); }
+  function canRemoveAgendaBlock() { return true; }
+  // isManualProject (no el prefijo del id) es la señal correcta de "vive en
+  // agendaManualBlocks": se pone en true tanto para bloques agregados con
+  // "+ Bloque" (id agenda-manual-…) como para una ocurrencia de Semana
+  // típica ya movida/editada dentro de Planificación (id agenda-moved-…) o
+  // cargada desde una semana guardada (id original o saved-block-…). Filtrar
+  // solo por el prefijo "agenda-manual-" dejaba fuera estos dos últimos
+  // casos: el "Quitar" no hacía nada porque intentaba excluirlos de
+  // weekOccurrences, de donde ya no provienen.
+  function removeAgendaBlock(activity) { if (!canRemoveAgendaBlock(activity)) return; if (activity?.isManualProject) { setAgendaManualBlocks((currentBlocks) => currentBlocks.filter((block) => block.id !== activity.id)); return; } setAgendaRemovedBlockIds((currentIds) => [...new Set([...currentIds, activity.occurrenceId])]); }
   // Subir/Bajar/Mover/Editar de Planificación (borrador local): reutilizan
   // reorderAgendaBlock, la misma función que ya usa el drag-and-drop de esta
   // pestaña, para que el menú se comporte exactamente igual que ya se
