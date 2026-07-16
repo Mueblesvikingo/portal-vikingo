@@ -1409,7 +1409,17 @@ function LaneInsightModal({ lane, onClose }) {
   );
 }
 
-function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBlock, addBlockLabel, createBlock, onAddLane, onAddBlock, onUpdateBlock, onRemoveBlock, onMoveBlock, onRemoveLane, onUpdateLane, onSaveLaneOrder, availableRoles = [], roleCatalogError = null }) {
+// Identidad estable de un carril para persistir su orden en localStorage,
+// independiente de cualquier función de instancia (usable antes de que
+// existan los helpers internos de VisualGridMap, p. ej. en el initializer
+// del estado de carriles).
+function getLaneOrderKey(lane) {
+  const laneId = lane?.roleId || lane?.id;
+  if (laneId) return `id:${laneId}`;
+  const laneName = String(lane?.lane || lane?.rol || lane?.roleName || lane?.name || lane?.responsable || "").trim().toLowerCase();
+  return laneName ? `name:${laneName}` : "";
+}
+function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBlock, addBlockLabel, createBlock, onAddLane, onAddBlock, onUpdateBlock, onRemoveBlock, onMoveBlock, onRemoveLane, onUpdateLane, onSaveLaneOrder, availableRoles = [], roleCatalogError = null, persistLaneOrderLocally = false }) {
   const laneHeight = 84;
   const roleColumnWidth = 176;
   const blockHeight = 84;
@@ -1433,7 +1443,43 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
   const [columnCount, setColumnCount] = useState(() => getStoredColumnCount());
   const [dragging, setDragging] = useState(null);
   const [selectedLaneInsight, setSelectedLaneInsight] = useState(null);
-  const [lanes, setLanes] = useState(() => initialLanes.map((lane) => ({ ...lane, active: lane.active !== false })));
+  // El orden de carril en Supabase (proceso_roles.orden) es compartido por
+  // TODO el macroproceso. Reordenar carriles dentro de un subproceso no debe
+  // reescribir ese campo (pisaría el orden de otros subprocesos y del propio
+  // macro) — cuando persistLaneOrderLocally es true, el orden elegido aquí
+  // se guarda solo en localStorage, igual que ya se hace con posiciones.
+  const laneOrderStorageKey = `${storageKey}_lane_order`;
+  const readLaneOrder = () => {
+    if (typeof window === "undefined") return [];
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(laneOrderStorageKey) || "[]");
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  };
+  const saveLaneOrderLocally = (orderedLanes) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        laneOrderStorageKey,
+        JSON.stringify(orderedLanes.map((lane) => getLaneOrderKey(lane)).filter(Boolean))
+      );
+    } catch {
+      // localStorage no disponible: el orden solo vive en el estado en memoria.
+    }
+  };
+  const applyLocalLaneOrder = (list) => {
+    if (!persistLaneOrderLocally) return list;
+    const savedOrder = readLaneOrder();
+    if (savedOrder.length === 0) return list;
+    const keyed = list.map((lane, index) => ({ lane, key: getLaneOrderKey(lane) || `__idx_${index}` }));
+    const known = keyed.filter((item) => savedOrder.includes(item.key));
+    const unknown = keyed.filter((item) => !savedOrder.includes(item.key));
+    known.sort((a, b) => savedOrder.indexOf(a.key) - savedOrder.indexOf(b.key));
+    return [...known, ...unknown].map((item) => item.lane);
+  };
+  const [lanes, setLanes] = useState(() => applyLocalLaneOrder(initialLanes).map((lane) => ({ ...lane, active: lane.active !== false })));
   const [editingLane, setEditingLane] = useState(null);
   const [showRolePicker, setShowRolePicker] = useState(false);
   const [rolePickerValue, setRolePickerValue] = useState("");
@@ -1680,7 +1726,7 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
   };
 
   useEffect(() => {
-    setLanes(initialLanes.map((lane) => ({ ...lane, active: lane.active !== false })));
+    setLanes(applyLocalLaneOrder(initialLanes).map((lane) => ({ ...lane, active: lane.active !== false })));
     const nextPositions = mergeSavedPositions(defaultPositions);
     setPositions(nextPositions);
     savePositions(nextPositions);
@@ -1995,7 +2041,9 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
       return next;
     });
 
-    if (onSaveLaneOrder) {
+    if (persistLaneOrderLocally) {
+      saveLaneOrderLocally(nextLanes);
+    } else if (onSaveLaneOrder) {
       console.log("Guardando orden carriles:", nextLanes.map((lane, index) => ({
         id: lane.id,
         rol: lane.lane || lane.rol || lane.name,
@@ -3427,6 +3475,7 @@ export default function CapacityModule({ currentUser } = {}) {
               onRemoveLane={undefined}
               onUpdateLane={updateSupabaseRoleInline}
               onSaveLaneOrder={saveSupabaseLaneOrder}
+              persistLaneOrderLocally
               availableRoles={selectedAvailableRoles}
               roleCatalogError={roleCatalogError}
             />
