@@ -733,6 +733,20 @@ export async function updateSavedWorkloadPlan(id, payload) {
   }
 }
 
+export async function deleteSavedWorkloadPlan(id) {
+  try {
+    const { error } = await supabase
+      .from("workload_planes_guardados")
+      .update({ activo: false, updated_at: new Date().toISOString() })
+      .eq("id", id);
+
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+
 export async function findExistingSavedWeek({ personaId, fechaInicio, fechaFin }) {
   try {
     const { data, error } = await supabase
