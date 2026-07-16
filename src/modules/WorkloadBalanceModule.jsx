@@ -811,6 +811,60 @@ function FilterSelect({ label, value, onChange, children }) {
 function ViewTab({ active, children, onClick }) { return <button type="button" onClick={onClick} className={`rounded-lg px-3 py-1 text-[10px] font-black uppercase tracking-widest transition ${active ? "bg-[#001225] text-white shadow-sm" : "bg-white text-slate-500 hover:bg-slate-50"}`}>{children}</button>; }
 function StatusPill({ status }) { const resolvedStatus = status || getWorkloadStatus(0); return <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full border ${resolvedStatus.pill}`} title={resolvedStatus.label}><span className={`h-2 w-2 rounded-full ${resolvedStatus.dot}`} /></span>; }
 function SourcePill({ source }) { return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black ${getSourceStyle(source)}`}>{source || "Sin origen"}</span>; }
+function CapacityInsightsBar({ hasSelectedPerson, pendingHours, weeklyCapacityHours, weeklyScheduledHours, days, onGoToPending, onGoToWeek }) {
+  const [showSaturationDetail, setShowSaturationDetail] = useState(false);
+  if (!hasSelectedPerson) return null;
+  const weeklyAvailable = weeklyCapacityHours - weeklyScheduledHours;
+  const fitsPending = pendingHours <= Math.max(weeklyAvailable, 0);
+  const saturatedDays = days.filter((day) => day.capacityHours > 0 && day.scheduledHours > day.capacityHours);
+  return (
+    <div className="mb-3 flex flex-wrap items-stretch gap-2">
+      <button type="button" onClick={onGoToPending} title="Ir a Pendientes" className="flex min-w-[190px] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition hover:border-sky-300 hover:bg-sky-50/40">
+        <span className={`h-2 w-2 shrink-0 rounded-full ${fitsPending ? "bg-emerald-500" : "bg-red-500"}`} />
+        <span className="min-w-0">
+          <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Por programar vs. libre/sem.</span>
+          <span className="block truncate text-[12px] font-semibold text-[#001225]">{formatHours(pendingHours)} <span className="font-normal text-slate-400">de {formatHours(Math.max(weeklyAvailable, 0))} disponibles</span></span>
+        </span>
+      </button>
+      <div className="flex min-w-[240px] flex-1 items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
+        <span className="mr-1 shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-400">Libre por día</span>
+        {days.map((day) => {
+          const available = day.capacityHours - day.scheduledHours;
+          const occupation = day.capacityHours > 0 ? (day.scheduledHours / day.capacityHours) * 100 : 0;
+          const status = getWorkloadStatus(occupation);
+          return (
+            <button
+              key={day.name}
+              type="button"
+              onClick={onGoToWeek}
+              title={`${day.name}: ${formatHours(day.scheduledHours)} programadas de ${formatHours(day.capacityHours)} de capacidad`}
+              className={`flex flex-1 flex-col items-center rounded-lg border px-1 py-1 text-[9px] font-black transition hover:brightness-95 ${status.pill}`}
+            >
+              <span>{day.name.slice(0, 3).toUpperCase()}</span>
+              <span>{formatHours(Math.max(available, 0))}</span>
+            </button>
+          );
+        })}
+      </div>
+      {saturatedDays.length > 0 && (
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowSaturationDetail((value) => !value)}
+            className="flex h-full items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-red-600 shadow-sm transition hover:bg-red-100"
+          >
+            ⚠ {saturatedDays.length} día{saturatedDays.length > 1 ? "s" : ""} saturado{saturatedDays.length > 1 ? "s" : ""}
+          </button>
+          {showSaturationDetail && (
+            <div className="absolute right-0 top-full z-10 mt-1 w-60 space-y-1 rounded-xl border border-slate-200 bg-white p-2.5 text-[10px] font-semibold text-slate-600 shadow-lg">
+              {saturatedDays.map((day) => <p key={day.name}>{day.name}: {formatHours(day.scheduledHours)} programadas / {formatHours(day.capacityHours)} de capacidad ({formatHours(day.scheduledHours - day.capacityHours)} de más)</p>)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 function SourceDistributionPie({ items, weeklyPlanKpi, monthlyCapacityHours = MONTHLY_CAPACITY_HOURS, hasSelectedPerson = true }) {
   const effectiveItems = hasSelectedPerson ? items : [];
   const total = safeArray(effectiveItems).reduce((sum, item) => sum + Number(item.monthly || 0), 0);
@@ -1749,6 +1803,21 @@ export default function WorkloadBalanceModule({
     [visibleAssignments]
   );
   const weekOccurrences = useMemo(() => expandWeeklyOccurrences(scheduledWeeklyActivities).filter((activity) => WEEK_VISIBLE_TYPES.includes(activity.origen)).concat(scheduledAssignmentWeeklyActivities, manualProjects).sort(compareOrderCreated), [scheduledWeeklyActivities, scheduledAssignmentWeeklyActivities, manualProjects]);
+  const capacityInsightDays = useMemo(() => {
+    const scheduledByDay = WEEK_DAYS.reduce((acc, day) => { acc[day] = 0; return acc; }, {});
+    weekOccurrences.forEach((activity) => {
+      if (scheduledByDay[activity.diaTipico] !== undefined) scheduledByDay[activity.diaTipico] += Number(activity.duracionMinutos || 0) / 60;
+    });
+    return WEEK_DAYS.map((day) => ({
+      name: day,
+      capacityHours: selectedPersonCapacity.days[day]?.hours || 0,
+      scheduledHours: scheduledByDay[day],
+    }));
+  }, [weekOccurrences, selectedPersonCapacity]);
+  const capacityInsightWeeklyScheduledHours = useMemo(
+    () => capacityInsightDays.reduce((sum, day) => sum + day.scheduledHours, 0),
+    [capacityInsightDays]
+  );
   const planningMonthlyBlocks = monthlySnapshotMode ? monthlyBlocks : scheduledMonthlyBlocks.concat(scheduledAssignmentMonthlyBlocks, monthlyBlocks);
   const monthlyMatrix = useMemo(() => buildMonthlyMatrix({ weekOccurrences: [], monthlyBlocks: planningMonthlyBlocks }), [planningMonthlyBlocks]);
   const monthlyPlanningBaseBlocks = useMemo(() => monthlyMatrix.flatMap((row) =>
@@ -4043,7 +4112,7 @@ function canReviewPlan() {
             {!canEditSelectedPerson && <div className="mx-3 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-700">Modo solo lectura: estás viendo la carga de {selectedPersonName || "otra persona"}. Solo puedes editar tu propia carga.</div>}
             <div className={!canEditSelectedPerson ? "pointer-events-none select-none opacity-60" : ""}>
 
-{viewMode === "capacity" && <div className="p-3"><SourceDistributionPie items={sourceSummary} weeklyPlanKpi={allWeeksPlanKpi} monthlyCapacityHours={selectedPersonCapacity.monthlyHours} hasSelectedPerson={effectivePersonFilter !== "all"} /></div>}
+{viewMode === "capacity" && <div className="p-3"><CapacityInsightsBar hasSelectedPerson={effectivePersonFilter !== "all"} pendingHours={pendingTotalHours} weeklyCapacityHours={selectedPersonCapacity.weeklyHours} weeklyScheduledHours={capacityInsightWeeklyScheduledHours} days={capacityInsightDays} onGoToPending={() => setViewMode("pending")} onGoToWeek={() => setViewMode("week")} /><SourceDistributionPie items={sourceSummary} weeklyPlanKpi={allWeeksPlanKpi} monthlyCapacityHours={selectedPersonCapacity.monthlyHours} hasSelectedPerson={effectivePersonFilter !== "all"} /></div>}
             {scheduleMessage && <div className="mx-3 mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[10px] font-bold text-emerald-700">{scheduleMessage}</div>}
             {viewMode === "pending" && <PendingActivitiesView hasSelectedPerson={effectivePersonFilter !== "all"} activities={filteredPendingActivities} excludedActivities={excludedPendingActivities} totalHours={pendingTotalHours} canEditActivities={canEditPendingActivities()} onOpenSchedule={openScheduleModal} onEditActivity={openPendingActivityEditModal} onRestoreExcludedActivity={restoreExcludedActivity} />}
 
