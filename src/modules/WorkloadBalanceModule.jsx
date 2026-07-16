@@ -811,56 +811,58 @@ function FilterSelect({ label, value, onChange, children }) {
 function ViewTab({ active, children, onClick }) { return <button type="button" onClick={onClick} className={`rounded-lg px-3 py-1 text-[10px] font-black uppercase tracking-widest transition ${active ? "bg-[#001225] text-white shadow-sm" : "bg-white text-slate-500 hover:bg-slate-50"}`}>{children}</button>; }
 function StatusPill({ status }) { const resolvedStatus = status || getWorkloadStatus(0); return <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full border ${resolvedStatus.pill}`} title={resolvedStatus.label}><span className={`h-2 w-2 rounded-full ${resolvedStatus.dot}`} /></span>; }
 function SourcePill({ source }) { return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black ${getSourceStyle(source)}`}>{source || "Sin origen"}</span>; }
-function CapacityInsightsBar({ hasSelectedPerson, pendingHours, weeklyCapacityHours, weeklyScheduledHours, days, onGoToPending, onGoToWeek }) {
-  const [showSaturationDetail, setShowSaturationDetail] = useState(false);
+function CapacityAvailabilityPopover({ hasSelectedPerson, pendingHours, weeklyCapacityHours, weeklyScheduledHours, days, onGoToPending, onGoToWeek }) {
+  const [open, setOpen] = useState(false);
   if (!hasSelectedPerson) return null;
   const weeklyAvailable = weeklyCapacityHours - weeklyScheduledHours;
   const fitsPending = pendingHours <= Math.max(weeklyAvailable, 0);
   const saturatedDays = days.filter((day) => day.capacityHours > 0 && day.scheduledHours > day.capacityHours);
   return (
-    <div className="mb-3 flex flex-wrap items-stretch gap-2">
-      <button type="button" onClick={onGoToPending} title="Ir a Pendientes" className="flex min-w-[190px] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition hover:border-sky-300 hover:bg-sky-50/40">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${fitsPending ? "bg-emerald-500" : "bg-red-500"}`} />
-        <span className="min-w-0">
-          <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Por programar vs. libre/sem.</span>
-          <span className="block truncate text-[12px] font-semibold text-[#001225]">{formatHours(pendingHours)} <span className="font-normal text-slate-400">de {formatHours(Math.max(weeklyAvailable, 0))} disponibles</span></span>
-        </span>
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className={`flex items-center gap-1 rounded-lg border px-3 py-1 text-[10px] font-black uppercase tracking-wide shadow-sm transition ${saturatedDays.length > 0 ? "border-red-300 bg-red-50 text-red-600 hover:bg-red-100" : "border-white/20 bg-white text-[#001225] hover:bg-slate-100"}`}
+      >
+        {saturatedDays.length > 0 ? "⚠" : "ⓘ"} Disponibilidad
       </button>
-      <div className="flex min-w-[240px] flex-1 items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
-        <span className="mr-1 shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-400">Libre por día</span>
-        {days.map((day) => {
-          const available = day.capacityHours - day.scheduledHours;
-          const occupation = day.capacityHours > 0 ? (day.scheduledHours / day.capacityHours) * 100 : 0;
-          const status = getWorkloadStatus(occupation);
-          return (
-            <button
-              key={day.name}
-              type="button"
-              onClick={onGoToWeek}
-              title={`${day.name}: ${formatHours(day.scheduledHours)} programadas de ${formatHours(day.capacityHours)} de capacidad`}
-              className={`flex flex-1 flex-col items-center rounded-lg border px-1 py-1 text-[9px] font-black transition hover:brightness-95 ${status.pill}`}
-            >
-              <span>{day.name.slice(0, 3).toUpperCase()}</span>
-              <span>{formatHours(Math.max(available, 0))}</span>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-20 mt-1 w-72 space-y-2.5 rounded-xl border border-slate-200 bg-white p-3 text-slate-700 shadow-xl">
+            <button type="button" onClick={() => { setOpen(false); onGoToPending(); }} className="block w-full rounded-lg border border-slate-100 bg-slate-50/70 px-2.5 py-2 text-left transition hover:border-sky-200 hover:bg-sky-50">
+              <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className={`h-1.5 w-1.5 rounded-full ${fitsPending ? "bg-emerald-500" : "bg-red-500"}`} />Por programar vs. libre esta semana</span>
+              <span className="mt-0.5 block text-[12px] font-semibold text-[#001225]">{formatHours(pendingHours)} <span className="font-normal text-slate-400">de {formatHours(Math.max(weeklyAvailable, 0))} disponibles</span></span>
             </button>
-          );
-        })}
-      </div>
-      {saturatedDays.length > 0 && (
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowSaturationDetail((value) => !value)}
-            className="flex h-full items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-red-600 shadow-sm transition hover:bg-red-100"
-          >
-            ⚠ {saturatedDays.length} día{saturatedDays.length > 1 ? "s" : ""} saturado{saturatedDays.length > 1 ? "s" : ""}
-          </button>
-          {showSaturationDetail && (
-            <div className="absolute right-0 top-full z-10 mt-1 w-60 space-y-1 rounded-xl border border-slate-200 bg-white p-2.5 text-[10px] font-semibold text-slate-600 shadow-lg">
-              {saturatedDays.map((day) => <p key={day.name}>{day.name}: {formatHours(day.scheduledHours)} programadas / {formatHours(day.capacityHours)} de capacidad ({formatHours(day.scheduledHours - day.capacityHours)} de más)</p>)}
+            <div className="rounded-lg border border-slate-100 px-2.5 py-2">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Libre por día</p>
+              <div className="mt-1.5 space-y-1">
+                {days.map((day) => {
+                  const available = day.capacityHours - day.scheduledHours;
+                  const occupation = day.capacityHours > 0 ? (day.scheduledHours / day.capacityHours) * 100 : 0;
+                  const status = getWorkloadStatus(occupation);
+                  return (
+                    <button
+                      key={day.name}
+                      type="button"
+                      onClick={() => { setOpen(false); onGoToWeek(); }}
+                      className="flex w-full items-center justify-between rounded-md px-1.5 py-0.5 text-left transition hover:bg-slate-50"
+                    >
+                      <span className="text-[10px] font-bold text-slate-600">{day.name}</span>
+                      <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-black ${status.pill}`}>{formatHours(Math.max(available, 0))} libres</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          )}
-        </div>
+            {saturatedDays.length > 0 && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[10px] font-semibold text-red-700">
+                <p className="text-[9px] font-black uppercase tracking-widest text-red-500">⚠ Días saturados</p>
+                {saturatedDays.map((day) => <p key={day.name} className="mt-0.5">{day.name}: {formatHours(day.scheduledHours)} / {formatHours(day.capacityHours)} ({formatHours(day.scheduledHours - day.capacityHours)} de más)</p>)}
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -4105,6 +4107,7 @@ function canReviewPlan() {
                 <h2 className="text-[13px] font-black uppercase tracking-tight">Gestión de Carga y Capacidad</h2>
                 <button type="button" onClick={() => setShowWorkloadVideo(true)} className="rounded-lg bg-red-600 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-red-700">▶ Ver video</button>
                 <button type="button" onClick={() => window.open(WORKLOAD_MANUAL_URL, "_blank")} className="rounded-lg border border-white/20 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-wide text-[#001225] shadow-sm transition hover:bg-slate-100">📄 Manual</button>
+                {viewMode === "capacity" && <CapacityAvailabilityPopover hasSelectedPerson={effectivePersonFilter !== "all"} pendingHours={pendingTotalHours} weeklyCapacityHours={selectedPersonCapacity.weeklyHours} weeklyScheduledHours={capacityInsightWeeklyScheduledHours} days={capacityInsightDays} onGoToPending={() => setViewMode("pending")} onGoToWeek={() => setViewMode("week")} />}
               </div>
               <div className="flex gap-1 rounded-xl bg-white/10 p-0.5"><ViewTab active={viewMode === "capacity"} onClick={() => setViewMode("capacity")}>Capacidad</ViewTab><ViewTab active={viewMode === "assignments"} onClick={() => setViewMode("assignments")}>Asignaciones</ViewTab><ViewTab active={viewMode === "pending"} onClick={() => setViewMode("pending")}>Pendientes</ViewTab><ViewTab active={viewMode === "agenda"} onClick={() => setViewMode("agenda")}>Planificación</ViewTab><ViewTab active={viewMode === "week"} onClick={() => setViewMode("week")}>Semana</ViewTab><ViewTab active={viewMode === "month"} onClick={() => setViewMode("month")}>Mes</ViewTab></div>
             </div>
@@ -4112,7 +4115,7 @@ function canReviewPlan() {
             {!canEditSelectedPerson && <div className="mx-3 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-700">Modo solo lectura: estás viendo la carga de {selectedPersonName || "otra persona"}. Solo puedes editar tu propia carga.</div>}
             <div className={!canEditSelectedPerson ? "pointer-events-none select-none opacity-60" : ""}>
 
-{viewMode === "capacity" && <div className="p-3"><CapacityInsightsBar hasSelectedPerson={effectivePersonFilter !== "all"} pendingHours={pendingTotalHours} weeklyCapacityHours={selectedPersonCapacity.weeklyHours} weeklyScheduledHours={capacityInsightWeeklyScheduledHours} days={capacityInsightDays} onGoToPending={() => setViewMode("pending")} onGoToWeek={() => setViewMode("week")} /><SourceDistributionPie items={sourceSummary} weeklyPlanKpi={allWeeksPlanKpi} monthlyCapacityHours={selectedPersonCapacity.monthlyHours} hasSelectedPerson={effectivePersonFilter !== "all"} /></div>}
+{viewMode === "capacity" && <div className="p-3"><SourceDistributionPie items={sourceSummary} weeklyPlanKpi={allWeeksPlanKpi} monthlyCapacityHours={selectedPersonCapacity.monthlyHours} hasSelectedPerson={effectivePersonFilter !== "all"} /></div>}
             {scheduleMessage && <div className="mx-3 mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[10px] font-bold text-emerald-700">{scheduleMessage}</div>}
             {viewMode === "pending" && <PendingActivitiesView hasSelectedPerson={effectivePersonFilter !== "all"} activities={filteredPendingActivities} excludedActivities={excludedPendingActivities} totalHours={pendingTotalHours} canEditActivities={canEditPendingActivities()} onOpenSchedule={openScheduleModal} onEditActivity={openPendingActivityEditModal} onRestoreExcludedActivity={restoreExcludedActivity} />}
 
