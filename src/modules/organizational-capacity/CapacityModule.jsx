@@ -1530,11 +1530,14 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     if (hiddenLaneKeys.includes(getLaneRemovalKey(lane))) return false;
     if (Array.isArray(lane?.[blockKey]) && lane[blockKey].length > 0) return true;
 
+    // Un carril "explícito" (con orden en proceso_roles) ya NO basta por sí
+    // solo para mostrarse vacío en el macroproceso: un rol puede estar en el
+    // catálogo del proceso sin ser responsable de ningún subproceso completo
+    // (p. ej. participa en actividades dentro de un subproceso, pero no lo
+    // "posee"). Solo se muestra vacío si el usuario lo acaba de agregar en
+    // esta sesión (visibleEmptyLaneIds), para poder asignarle un subproceso.
     const laneId = lane?.roleId || lane?.id;
     if (laneId && visibleEmptyLaneIds.includes(String(laneId))) return true;
-    if (lane?.isExplicitLane === true) return true;
-    if (lane?.orden !== null && lane?.orden !== undefined && String(lane.orden).trim() !== "") return true;
-    if (lane?.order !== null && lane?.order !== undefined && String(lane.order).trim() !== "") return true;
 
     return false;
   };
