@@ -520,6 +520,23 @@ function compareOrderCreated(a, b) {
   if (dateDiff !== 0) return dateDiff;
   return Number(a?.id || 0) - Number(b?.id || 0);
 }
+// Resuelve en qué posición del arreglo SIN el elemento arrastrado debe
+// insertarse, a partir de un índice expresado sobre el arreglo CON el
+// elemento arrastrado todavía en su lugar (que es como los onDrop/menú
+// calculan targetIndex hoy). En vez de sumar/restar 1 a mano (fuente del
+// bug de "cae una posición más adelante de donde se soltó"), busca por
+// identidad cuál es el elemento de referencia y localiza su posición real
+// en el arreglo ya sin el elemento arrastrado — así funciona igual de bien
+// para moverse dentro del mismo día/semana que para cruzar a otro.
+function resolveInsertIndexExcludingSelf(includingSelfList, draggedKey, targetIndex, getKey = (item) => item?.id) {
+  const list = safeArray(includingSelfList);
+  const clampedTarget = Math.max(0, Math.min(Number(targetIndex) || 0, list.length));
+  const withoutSelf = list.filter((item) => getKey(item) !== draggedKey);
+  const referenceItem = clampedTarget < list.length ? list[clampedTarget] : null;
+  if (!referenceItem || getKey(referenceItem) === draggedKey) return withoutSelf.length;
+  const resolvedIndex = withoutSelf.findIndex((item) => getKey(item) === getKey(referenceItem));
+  return resolvedIndex === -1 ? withoutSelf.length : resolvedIndex;
+}
 function sortByOrderCreated(items) {
   return safeArray(items).map((item, index) => ({ ...item, __sortIndex: index })).sort((a, b) => compareOrderCreated(a, b) || a.__sortIndex - b.__sortIndex);
 }
@@ -1660,8 +1677,9 @@ export default function WorkloadBalanceModule({
   async function persistDraggedWeeklyPlan(activity, targetDay, targetIndex) {
     if (!activity?.planId || !targetDay) return false;
     const sourceDay = activity.diaTipico;
+    const targetGroupIncludingSelf = getWeeklyPlanGroup(targetDay);
     const targetGroup = getWeeklyPlanGroup(targetDay, activity.planId);
-    const insertIndex = Math.max(0, Math.min(Number(targetIndex) || 0, targetGroup.length));
+    const insertIndex = resolveInsertIndexExcludingSelf(targetGroupIncludingSelf, String(activity.planId), targetIndex, (plan) => String(plan.id));
     const nextGroup = [...targetGroup];
     nextGroup.splice(insertIndex, 0, { id: activity.planId, orden: insertIndex + 1, created_at: activity.planCreatedAt });
 
@@ -1694,15 +1712,19 @@ export default function WorkloadBalanceModule({
   }
   async function moveActivityToDay(dragged, day) {
     if (!dragged?.activityId || !day) return;
-    if (await persistDraggedWeeklyPlan(dragged, day, getWeeklyPlanGroup(day, dragged.planId).length)) return;
+    if (await persistDraggedWeeklyPlan(dragged, day, getWeeklyPlanGroup(day).length)) return;
     updateDraggedSchedule(dragged, (schedule) => ({ ...schedule, diaTipico: day, orden: getLastOrderForDay(day) + 10 }));
   }
   async function moveActivityToDayPosition(dragged, dayName, targetIndex) {
     if (!dragged?.activityId || !dayName) return;
     if (await persistDraggedWeeklyPlan(dragged, dayName, targetIndex)) return;
     const dayData = dayCapacitySummary.find((item) => item.day === dayName);
-    const cleanActivities = safeArray(dayData?.activities).filter((activity) => !(activity.id === dragged.activityId && activity.occurrenceIndex === dragged.occurrenceIndex));
-    const previousActivity = cleanActivities[targetIndex - 1]; const nextActivity = cleanActivities[targetIndex];
+    const rawActivities = safeArray(dayData?.activities);
+    const draggedKey = `${dragged.activityId}:${dragged.occurrenceIndex}`;
+    const getActivityKey = (activity) => `${activity.id}:${activity.occurrenceIndex}`;
+    const adjustedIndex = resolveInsertIndexExcludingSelf(rawActivities, draggedKey, targetIndex, getActivityKey);
+    const cleanActivities = rawActivities.filter((activity) => !(activity.id === dragged.activityId && activity.occurrenceIndex === dragged.occurrenceIndex));
+    const previousActivity = cleanActivities[adjustedIndex - 1]; const nextActivity = cleanActivities[adjustedIndex];
     let calculatedOrder = 10;
     if (previousActivity && nextActivity) calculatedOrder = (Number(previousActivity.orden || 0) + Number(nextActivity.orden || 0)) / 2;
     else if (previousActivity) calculatedOrder = Number(previousActivity.orden || 0) + 10;
@@ -1841,9 +1863,11 @@ function canCreatePersonScopedBlock() {
     setScheduleMessage("Bloque manual guardado correctamente.");
   }
   function getMonthlyInsertOrder(currentBlocks, targetRow, targetWeekNumber, targetIndex, draggedId) {
-    const orderedBlocks = safeArray(currentBlocks).filter((block) => block.id !== draggedId && block.origen === targetRow && getMonthlyBlockWeeks(block).includes(targetWeekNumber)).sort((a, b) => Number(a.monthlyOrder || 0) - Number(b.monthlyOrder || 0));
     if (!Number.isFinite(Number(targetIndex))) return Date.now();
-    const previousBlock = orderedBlocks[targetIndex - 1]; const nextBlock = orderedBlocks[targetIndex];
+    const groupIncludingSelf = safeArray(currentBlocks).filter((block) => block.origen === targetRow && getMonthlyBlockWeeks(block).includes(targetWeekNumber)).sort((a, b) => Number(a.monthlyOrder || 0) - Number(b.monthlyOrder || 0));
+    const adjustedIndex = resolveInsertIndexExcludingSelf(groupIncludingSelf, draggedId, targetIndex, (block) => block.id);
+    const orderedBlocks = groupIncludingSelf.filter((block) => block.id !== draggedId);
+    const previousBlock = orderedBlocks[adjustedIndex - 1]; const nextBlock = orderedBlocks[adjustedIndex];
     if (previousBlock && nextBlock) return (Number(previousBlock.monthlyOrder || 0) + Number(nextBlock.monthlyOrder || 0)) / 2;
     if (previousBlock) return Number(previousBlock.monthlyOrder || 0) + 10;
     if (nextBlock) return Number(nextBlock.monthlyOrder || 0) - 10;
@@ -1852,8 +1876,9 @@ function canCreatePersonScopedBlock() {
   async function moveMonthlyBlock(blockId, targetRow, targetWeekNumber, targetIndex) {
     if (draggedMonthlyBlock?.planId) {
       const sourceWeek = draggedMonthlyBlock.semanaMes || safeArray(draggedMonthlyBlock.targetWeeks)[0] || 1;
+      const targetGroupIncludingSelf = getMonthlyPlanGroup(targetWeekNumber);
       const targetGroup = getMonthlyPlanGroup(targetWeekNumber, draggedMonthlyBlock.planId);
-      const insertIndex = Math.max(0, Math.min(Number(targetIndex) || 0, targetGroup.length));
+      const insertIndex = resolveInsertIndexExcludingSelf(targetGroupIncludingSelf, String(draggedMonthlyBlock.planId), targetIndex, (plan) => String(plan.id));
       const nextGroup = [...targetGroup];
       nextGroup.splice(insertIndex, 0, { id: draggedMonthlyBlock.planId, orden: insertIndex + 1, created_at: draggedMonthlyBlock.monthlyCreatedAt });
       const moveResult = await moveMonthlyPlanActivity({
@@ -1937,10 +1962,12 @@ function canCreatePersonScopedBlock() {
     resetAgendaMonthlyBlockForm();
   }
   function getAgendaMonthlyInsertOrder(currentBlocks, targetRow, targetWeekNumber, targetIndex, draggedId) {
-    const orderedBlocks = safeArray(currentBlocks).filter((block) => block.id !== draggedId && block.origen === targetRow && getMonthlyBlockWeeks(block).includes(targetWeekNumber)).sort(compareOrderCreated);
     if (!Number.isFinite(Number(targetIndex))) return Date.now();
-    const previousBlock = orderedBlocks[targetIndex - 1];
-    const nextBlock = orderedBlocks[targetIndex];
+    const groupIncludingSelf = safeArray(currentBlocks).filter((block) => block.origen === targetRow && getMonthlyBlockWeeks(block).includes(targetWeekNumber)).sort(compareOrderCreated);
+    const adjustedIndex = resolveInsertIndexExcludingSelf(groupIncludingSelf, draggedId, targetIndex, (block) => block.id);
+    const orderedBlocks = groupIncludingSelf.filter((block) => block.id !== draggedId);
+    const previousBlock = orderedBlocks[adjustedIndex - 1];
+    const nextBlock = orderedBlocks[adjustedIndex];
     if (previousBlock && nextBlock) return (Number(previousBlock.monthlyOrder || 0) + Number(nextBlock.monthlyOrder || 0)) / 2;
     if (previousBlock) return Number(previousBlock.monthlyOrder || 0) + 10;
     if (nextBlock) return Number(nextBlock.monthlyOrder || 0) - 10;
@@ -3054,8 +3081,9 @@ function canReviewPlan() {
 
     if (activity.planId && activity.planType === "weekly") {
       const sourceDay = activity.diaTipico;
+      const targetGroupIncludingSelf = getWeeklyPlanGroup(targetDay);
       const targetGroup = getWeeklyPlanGroup(targetDay, activity.planId);
-      const insertIndex = Math.max(0, Math.min(Number(targetIndex) || 0, targetGroup.length));
+      const insertIndex = resolveInsertIndexExcludingSelf(targetGroupIncludingSelf, String(activity.planId), targetIndex, (plan) => String(plan.id));
       const nextGroup = [...targetGroup];
       nextGroup.splice(insertIndex, 0, { id: activity.planId, orden: insertIndex + 1, created_at: activity.planCreatedAt });
       const moveResult = await moveWeeklyPlanActivity({
@@ -3086,9 +3114,11 @@ function canReviewPlan() {
       return;
     }
 
-    const currentBlocks = activeAgendaBlocks.filter((block) => getAgendaBlockKey(block) !== activityKey && block.diaTipico === targetDay);
-    const previousBlock = currentBlocks[targetIndex - 1];
-    const nextBlock = currentBlocks[targetIndex];
+    const dayGroupIncludingSelf = activeAgendaBlocks.filter((block) => block.diaTipico === targetDay);
+    const adjustedIndex = resolveInsertIndexExcludingSelf(dayGroupIncludingSelf, activityKey, targetIndex, (block) => getAgendaBlockKey(block));
+    const currentBlocks = dayGroupIncludingSelf.filter((block) => getAgendaBlockKey(block) !== activityKey);
+    const previousBlock = currentBlocks[adjustedIndex - 1];
+    const nextBlock = currentBlocks[adjustedIndex];
     let nextOrder = 10;
     if (previousBlock && nextBlock) nextOrder = (Number(previousBlock.orden || 0) + Number(nextBlock.orden || 0)) / 2;
     else if (previousBlock) nextOrder = Number(previousBlock.orden || 0) + 10;
@@ -3150,9 +3180,19 @@ function canReviewPlan() {
     const day = activity.diaTipico;
     const group = activeAgendaBlocks.filter((block) => block.diaTipico === day);
     const currentIndex = group.findIndex((block) => getAgendaBlockKey(block) === getAgendaBlockKey(activity));
-    const nextIndex = currentIndex + direction;
-    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= group.length) return;
-    reorderAgendaBlock(activity, day, nextIndex);
+    if (currentIndex < 0) return;
+    // reorderAgendaBlock espera "índice, dentro del arreglo con el elemento
+    // todavía en su lugar, del elemento que debe quedar justo después" — para
+    // subir es el que está una posición antes; para bajar hay que saltar al
+    // que está DOS posiciones después (el vecino inmediato ya no sirve de
+    // referencia una vez que el elemento arrastrado se quita de en medio).
+    if (direction < 0) {
+      if (currentIndex === 0) return;
+      reorderAgendaBlock(activity, day, currentIndex - 1);
+    } else {
+      if (currentIndex >= group.length - 1) return;
+      reorderAgendaBlock(activity, day, currentIndex + 2);
+    }
   }
   function handleAgendaScheduledAction(activity, action) {
     if (!action) return;
@@ -3172,10 +3212,10 @@ function canReviewPlan() {
   function closeAgendaMoveModal() { setAgendaMoveModal(null); setAgendaMoveTarget(""); }
   function saveAgendaMove() {
     if (!agendaMoveModal?.activity || !agendaMoveTarget) return;
-    const activity = agendaMoveModal.activity;
-    const activityKey = getAgendaBlockKey(activity);
-    const targetCount = activeAgendaBlocks.filter((block) => block.diaTipico === agendaMoveTarget && getAgendaBlockKey(block) !== activityKey).length;
-    reorderAgendaBlock(activity, agendaMoveTarget, targetCount);
+    // Number.MAX_SAFE_INTEGER siempre se recorta al final de la lista
+    // destino dentro de resolveInsertIndexExcludingSelf, sin importar si el
+    // día destino es el mismo u otro.
+    reorderAgendaBlock(agendaMoveModal.activity, agendaMoveTarget, Number.MAX_SAFE_INTEGER);
     closeAgendaMoveModal();
   }
   function closeAgendaEditModal() { setAgendaEditModal(null); setAgendaEditDraft({ name: "", minutes: "" }); }
@@ -3218,9 +3258,14 @@ function canReviewPlan() {
       .filter((item) => item.origen === block.origen && getMonthlyBlockWeeks(item).includes(weekNumber))
       .sort(compareOrderCreated);
     const currentIndex = siblings.findIndex((item) => String(item.id) === String(block.id));
-    const nextIndex = currentIndex + direction;
-    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= siblings.length) return;
-    moveAgendaMonthlyBlock(block.id, block.origen, weekNumber, nextIndex);
+    if (currentIndex < 0) return;
+    if (direction < 0) {
+      if (currentIndex === 0) return;
+      moveAgendaMonthlyBlock(block.id, block.origen, weekNumber, currentIndex - 1);
+    } else {
+      if (currentIndex >= siblings.length - 1) return;
+      moveAgendaMonthlyBlock(block.id, block.origen, weekNumber, currentIndex + 2);
+    }
   }
   function handleAgendaMonthlyScheduledAction(block, action) {
     if (!action) return;
@@ -3242,8 +3287,7 @@ function canReviewPlan() {
     if (!agendaMonthlyMoveModal?.block || !agendaMonthlyMoveTarget.rowType || !agendaMonthlyMoveTarget.weekNumber) return;
     const block = agendaMonthlyMoveModal.block;
     const weekNumber = Number(agendaMonthlyMoveTarget.weekNumber);
-    const targetCount = agendaMonthlyBlocks.filter((item) => item.id !== block.id && item.origen === agendaMonthlyMoveTarget.rowType && getMonthlyBlockWeeks(item).includes(weekNumber)).length;
-    moveAgendaMonthlyBlock(block.id, agendaMonthlyMoveTarget.rowType, weekNumber, targetCount);
+    moveAgendaMonthlyBlock(block.id, agendaMonthlyMoveTarget.rowType, weekNumber, Number.MAX_SAFE_INTEGER);
     closeAgendaMonthlyMoveModal();
   }
   function closeAgendaMonthlyEditModal() { setAgendaMonthlyEditModal(null); setAgendaMonthlyEditDraft({ name: "", minutes: "" }); }
