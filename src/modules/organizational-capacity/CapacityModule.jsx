@@ -717,7 +717,8 @@ function ActivityModal({ activity, onSave, onClose, availableRoles = [] }) {
         if (!roleName || seen.has(roleName)) return false;
         seen.add(roleName);
         return true;
-      });
+      })
+      .sort((a, b) => a.localeCompare(b));
   }, [availableRoles]);
 
   const [draft, setDraft] = useState({
@@ -980,7 +981,8 @@ function GeneralDataModal({ process, onSave, onClose, traceability = [], availab
         if (!roleName || seen.has(roleName)) return false;
         seen.add(roleName);
         return true;
-      });
+      })
+      .sort((a, b) => a.localeCompare(b));
   }, [availableRoles]);
   const [draft, setDraft] = useState({
   code: process.code || process.codigo || process.codigo_subproceso || "",
@@ -1628,7 +1630,8 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
         if (!role.roleName || seen.has(role.roleName)) return false;
         seen.add(role.roleName);
         return true;
-      });
+      })
+      .sort((a, b) => a.roleName.localeCompare(b.roleName));
   }, [availableRoles, lanes]);
 
   const roleOptions = roleCatalogOptions.map((role) => role.roleName);
