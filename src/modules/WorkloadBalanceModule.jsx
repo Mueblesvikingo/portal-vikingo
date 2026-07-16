@@ -824,7 +824,7 @@ function SourceDistributionPie({ items, weeklyPlanKpi, monthlyCapacityHours = MO
     const radians = (Math.PI / 180) * angle;
     return { x: centerX + distance * Math.cos(radians), y: centerY + distance * Math.sin(radians) };
   };
-  const slices = safeArray(effectiveItems).filter((item) => Number(item.monthly || 0) > 0).map((item) => {
+  const rawSlices = safeArray(effectiveItems).filter((item) => Number(item.monthly || 0) > 0).map((item) => {
     const value = Number(item.monthly || 0);
     const percentage = total > 0 ? (value / total) * 100 : 0;
     const startAngle = currentAngle;
@@ -833,17 +833,45 @@ function SourceDistributionPie({ items, weeklyPlanKpi, monthlyCapacityHours = MO
     const start = polarPoint(startAngle, radius);
     const end = polarPoint(endAngle, radius);
     const largeArc = endAngle - startAngle > 180 ? 1 : 0;
-    const label = polarPoint(middleAngle, 168);
     currentAngle = endAngle;
     return {
       ...item,
       value,
       percentage,
       middleAngle,
-      label,
       path: `M ${centerX} ${centerY} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y} Z`,
     };
   });
+  // Cuando varias rebanadas pequeñas quedan muy juntas en ángulo (ej. Proyecto
+  // y Reunión arriba del donut), sus etiquetas con línea guía se encimarían.
+  // Se agrupan y se reparten en abanico alrededor del ángulo promedio del
+  // grupo -la línea guía sigue naciendo en el punto real del arco- para que
+  // el texto quede separado sin mover las rebanadas.
+  const LABEL_RADIUS = 168;
+  const CLUSTER_ANGLE_GAP = 26;
+  const clusters = [];
+  rawSlices.forEach((item, index) => {
+    const previousCluster = clusters[clusters.length - 1];
+    const previousIndex = previousCluster?.[previousCluster.length - 1];
+    if (previousCluster && item.middleAngle - rawSlices[previousIndex].middleAngle < CLUSTER_ANGLE_GAP) {
+      previousCluster.push(index);
+    } else {
+      clusters.push([index]);
+    }
+  });
+  const labelAngleByIndex = new Array(rawSlices.length);
+  clusters.forEach((cluster) => {
+    if (cluster.length === 1) {
+      labelAngleByIndex[cluster[0]] = rawSlices[cluster[0]].middleAngle;
+      return;
+    }
+    const avgAngle = cluster.reduce((sum, idx) => sum + rawSlices[idx].middleAngle, 0) / cluster.length;
+    const span = CLUSTER_ANGLE_GAP * (cluster.length - 1);
+    cluster.forEach((idx, order) => {
+      labelAngleByIndex[idx] = avgAngle - span / 2 + order * CLUSTER_ANGLE_GAP;
+    });
+  });
+  const slices = rawSlices.map((item, index) => ({ ...item, label: polarPoint(labelAngleByIndex[index], LABEL_RADIUS) }));
 
   return <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_205px]"><div className="overflow-hidden rounded-2xl border border-slate-100 bg-slate-50/60"><svg viewBox="0 0 520 360" role="img" aria-label="Diagrama de pastel de distribución mensual" className="h-[440px] w-full"><rect x="0" y="0" width="520" height="360" fill="#f8fafc" /><circle cx={centerX} cy={centerY} r="128" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1" />{slices.map((item) => <path key={item.source} d={item.path} fill={getSourceChartColor(item.source)} stroke="#ffffff" strokeWidth="3" />)}<circle cx={centerX} cy={centerY} r={radius} fill="none" stroke="#cbd5e1" strokeWidth="1" />{slices.map((item) => { const anchor = item.label.x < centerX - 8 ? "end" : item.label.x > centerX + 8 ? "start" : "middle"; const lineEnd = polarPoint(item.middleAngle, 138); return <g key={`${item.source}-label`}><line x1={lineEnd.x} y1={lineEnd.y} x2={item.label.x} y2={item.label.y} stroke="#cbd5e1" strokeWidth="1" /><circle cx={lineEnd.x} cy={lineEnd.y} r="3" fill={getSourceTextColor(item.source)} /><text x={item.label.x} y={item.label.y - 8} textAnchor={anchor} fill="#0f172a" fontSize="13" fontWeight="500"><tspan>{item.source}</tspan></text><text x={item.label.x} y={item.label.y + 10} textAnchor={anchor} fill={getSourceTextColor(item.source)} fontSize="13" fontWeight="500"><tspan>{formatHours(item.value)}</tspan><tspan dx="4">({item.percentage.toFixed(0)}%)</tspan></text></g>; })}{slices.length === 0 && <text x={centerX} y={centerY} textAnchor="middle" dominantBaseline="middle" fill="#94a3b8" fontSize="16" fontWeight="500">{hasSelectedPerson ? "Sin carga registrada" : "Selecciona una persona"}</text>}</svg></div><div className="flex flex-col justify-start gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3"><div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"><span className="absolute inset-y-0 left-0 w-1 bg-sky-300" /><p className="text-[9px] font-medium uppercase tracking-widest text-slate-400">Capacidad estándar</p><p className="mt-1 text-2xl font-semibold text-[#001225]">{hasSelectedPerson ? formatHours(monthlyCapacityHours) : "—"}</p><p className="mt-1 text-[10px] font-normal text-slate-400">Base mensual disponible</p></div><div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"><span className="absolute inset-y-0 left-0 w-1 bg-violet-300" /><p className="text-[9px] font-medium uppercase tracking-widest text-slate-400">Total mensual</p><p className="mt-1 text-2xl font-semibold text-[#001225]">{hasSelectedPerson ? formatHours(total) : "—"}</p><p className="mt-1 text-[10px] font-normal text-slate-400">Carga planificada</p></div><div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"><span className={`absolute inset-y-0 left-0 w-1 ${hasSelectedPerson ? utilizationSignal.accent : "bg-slate-200"}`} /><div className="flex items-start justify-between gap-2"><div><p className="text-[9px] font-medium uppercase tracking-widest text-slate-400">Utilización</p><p className={`mt-1 text-2xl font-semibold ${hasSelectedPerson ? utilizationSignal.text : "text-slate-300"}`}>{hasSelectedPerson ? `${utilization.toFixed(0)}%` : "—"}</p></div>{hasSelectedPerson && <span className={`mt-1 h-2.5 w-2.5 rounded-full ${utilizationSignal.dot}`} />}</div><p className={`mt-1 text-[10px] font-medium ${hasSelectedPerson ? utilizationSignal.text : "text-slate-400"}`}>{hasSelectedPerson ? utilizationSignal.label : "Selecciona una persona"}</p><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">{hasSelectedPerson && <div className={`h-full rounded-full ${utilizationSignal.bar}`} style={{ width: `${Math.min(utilization, 100)}%` }} />}</div></div><div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"><span className={`absolute inset-y-0 left-0 w-1 ${hasSelectedPerson ? "bg-emerald-300" : "bg-slate-200"}`} /><p className="text-[9px] font-medium uppercase tracking-widest text-slate-400">Cumplimiento acumulado</p><p className={`mt-1 text-2xl font-semibold ${hasSelectedPerson ? "text-[#001225]" : "text-slate-300"}`}>{hasSelectedPerson ? `${weeklyPlanKpi?.completion || 0}%` : "—"}</p><p className="mt-1 text-[10px] font-normal text-slate-400">{hasSelectedPerson ? `${weeklyPlanKpi?.completed || 0} de ${weeklyPlanKpi?.planned || 0} actividades · ${weeklyPlanKpi?.weeks || 0} semanas` : "Selecciona una persona"}</p><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">{hasSelectedPerson && <div className="h-full rounded-full bg-emerald-300" style={{ width: `${Math.min(weeklyPlanKpi?.completion || 0, 100)}%` }} />}</div></div></div></div></div>;
 }
