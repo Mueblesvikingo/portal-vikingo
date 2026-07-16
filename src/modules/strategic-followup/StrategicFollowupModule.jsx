@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 // Ajusta esta ruta si tu proyecto exporta supabase desde otra ubicación.
 // Usa la misma ruta que ya te funcionó en la versión anterior.
 import { supabase } from "../../services/supabase";
+import { createAccion, getTiposFlujo } from "../../services/accionesService";
+import { getFlujoConfig } from "../actions/actionsHelpers";
 
 const tabs = ["ENFOQUE", "INSUMOS", "SESIÓN"];
 
@@ -136,6 +138,20 @@ function DeleteButton({ onClick }) {
   );
 }
 
+function CreateAccionButton({ onClick, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={disabled ? "Guarda la semana antes de crear una acción" : "Crear Acción en el Centro de Gestión de Acciones"}
+      className="text-sm font-black leading-none text-slate-300 transition hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-30"
+    >
+      ▸
+    </button>
+  );
+}
+
 function Th({ children, className = "" }) {
   return (
     <th
@@ -161,7 +177,7 @@ function getWeekStatusLabel(status) {
   return value === "abierta" ? "Abierta" : status;
 }
 
-export default function StrategicFollowupModule() {
+export default function StrategicFollowupModule({ currentUser }) {
   const initialStart = getMonday();
   const initialEnd = addDays(initialStart, 6);
 
@@ -204,11 +220,46 @@ export default function StrategicFollowupModule() {
   });
 
   const activeRows = data[activeTab];
+  const [tiposFlujoAcciones, setTiposFlujoAcciones] = useState([]);
 
   useEffect(() => {
     loadPeople();
     loadWeeks();
+    getTiposFlujo().then(setTiposFlujoAcciones);
   }, []);
+
+  async function handleCrearAccionEnfoque(row) {
+    if (!row.id) {
+      alert("Guarda la semana primero para poder crear una acción a partir de este tema.");
+      return;
+    }
+    if (!window.confirm(`¿Crear una acción en el Centro de Gestión de Acciones a partir de "${row.tema}"?`)) return;
+
+    const flujo = getFlujoConfig(tiposFlujoAcciones, "Acuerdo Directivo");
+    const result = await createAccion(
+      {
+        tipo: "Acuerdo Directivo",
+        nivel: "Estratégica",
+        origenModulo: "Seguimiento Estratégico",
+        origenTabla: "seguimiento_enfoque",
+        origenId: row.id,
+        titulo: row.tema,
+        descripcion: row.resultado || "",
+        responsablePersonaId: row.responsableId || null,
+        requiereAnalisisCausa: flujo.requiere_analisis_causa,
+        requiereVerificacionEficacia: flujo.requiere_verificacion_eficacia,
+        requiereAprobacion: flujo.requiere_aprobacion,
+      },
+      currentUser
+    );
+
+    if (!result?.ok) {
+      console.error(result?.error);
+      alert("No fue posible crear la acción.");
+      return;
+    }
+    alert(`Acción ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
+  }
 
   async function loadPeople() {
     const { data: peopleData, error } = await supabase
@@ -566,7 +617,7 @@ export default function StrategicFollowupModule() {
                 <Th className="min-w-[260px]">Resultado esperado</Th>
                 <Th className="min-w-[240px]">Responsable</Th>
                 <Th className="w-[80px]">Min</Th>
-                <Th className="w-[36px]" />
+                <Th className="w-[56px]" />
               </tr>
             </thead>
             <tbody>
@@ -617,8 +668,11 @@ export default function StrategicFollowupModule() {
                       className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-300 focus:border-red-200 focus:bg-white"
                     />
                   </Td>
-                  <Td className="w-[36px] px-2 text-center">
-                    <DeleteButton onClick={() => deleteRow(index)} />
+                  <Td className="w-[56px] px-2 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <CreateAccionButton onClick={() => handleCrearAccionEnfoque(row)} disabled={!row.id} />
+                      <DeleteButton onClick={() => deleteRow(index)} />
+                    </div>
                   </Td>
                 </tr>
               ))}

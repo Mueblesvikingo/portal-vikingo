@@ -5,6 +5,15 @@ import {
   getStrategicDecisions,
   updateStrategicDecision,
 } from "../../services/decisionService";
+import { createAccion, getTiposFlujo } from "../../services/accionesService";
+import { getFlujoConfig } from "../actions/actionsHelpers";
+
+const EXECUTION_TYPE_TO_ACCION_TIPO = {
+  "Acción puntual": "Acción Operativa",
+  "Seguimiento ejecutivo": "Acuerdo Directivo",
+  "Iniciativa estratégica": "Proyecto Estratégico",
+  "Proyecto PM": "Proyecto Estratégico",
+};
 
 const emptyWrap = {
   options: [""],
@@ -36,7 +45,7 @@ const statusOptions = [
   "Cerrada",
 ];
 
-export default function DecisionCenterModule() {
+export default function DecisionCenterModule({ currentUser }) {
   const [decisions, setDecisions] = useState([]);
   const [editingDecision, setEditingDecision] = useState(null);
   const [selectedDecision, setSelectedDecision] = useState(null);
@@ -44,9 +53,12 @@ export default function DecisionCenterModule() {
   const [showWrapInfo, setShowWrapInfo] = useState(false);
   const [wrapForm, setWrapForm] = useState(emptyWrap);
   const [decisionView, setDecisionView] = useState("resultados");
+  const [tiposFlujoAcciones, setTiposFlujoAcciones] = useState([]);
+  const [generandoAccion, setGenerandoAccion] = useState(false);
 
   useEffect(() => {
     loadDecisions();
+    getTiposFlujo().then(setTiposFlujoAcciones);
   }, []);
 
   useEffect(() => {
@@ -251,6 +263,45 @@ export default function DecisionCenterModule() {
       console.error(error);
       alert("Error actualizando decisión documentada.");
     }
+  };
+
+  const puedeGenerarAccion = (decision) =>
+    Boolean(decision?.executionType) || ["Decidida", "Escalada a PM"].includes(decision?.status);
+
+  const handleGenerarAccion = async (decision) => {
+    if (!window.confirm(`¿Generar una acción en el Centro de Gestión de Acciones a partir de "${decision.decision}"?`)) return;
+
+    setGenerandoAccion(true);
+    const tipo = EXECUTION_TYPE_TO_ACCION_TIPO[decision.executionType] || "Acción Operativa";
+    const flujo = getFlujoConfig(tiposFlujoAcciones, tipo);
+    const result = await createAccion(
+      {
+        tipo,
+        nivel: "Estratégica",
+        origenModulo: "Centro de Decisiones",
+        origenTabla: "decisiones_estrategicas",
+        origenId: decision.id,
+        titulo: decision.decision,
+        descripcion: [decision.recommendation, decision.owner ? `Responsable sugerido: ${decision.owner}` : null]
+          .filter(Boolean)
+          .join("\n\n"),
+        prioridad: decision.risk === "Alto" ? "Crítica" : decision.risk === "Bajo" ? "Media" : "Alta",
+        fechaCompromiso: decision.dueDate || null,
+        requiereAnalisisCausa: flujo.requiere_analisis_causa,
+        requiereVerificacionEficacia: flujo.requiere_verificacion_eficacia,
+        requiereAprobacion: flujo.requiere_aprobacion,
+      },
+      currentUser
+    );
+    setGenerandoAccion(false);
+
+    if (!result?.ok) {
+      console.error(result?.error);
+      alert("No fue posible generar la acción.");
+      return;
+    }
+    alert(`Acción ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
+    setSelectedDecision(null);
   };
 
   const openWrap = (decision) => {
@@ -602,20 +653,33 @@ export default function DecisionCenterModule() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => openWrap(selectedDecision)}
-                className="w-full rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-700"
-              >
-                {selectedDecision.wrap &&
-                (selectedDecision.wrap.options ||
-                  selectedDecision.wrap.evidence ||
-                  selectedDecision.wrap.distance ||
-                  selectedDecision.wrap.prevention ||
-                  selectedDecision.wrap.finalDecision)
-                  ? "Consultar / editar decisión documentada"
-                  : "Documentar decisión estratégica"}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => openWrap(selectedDecision)}
+                  className="flex-1 rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-700"
+                >
+                  {selectedDecision.wrap &&
+                  (selectedDecision.wrap.options ||
+                    selectedDecision.wrap.evidence ||
+                    selectedDecision.wrap.distance ||
+                    selectedDecision.wrap.prevention ||
+                    selectedDecision.wrap.finalDecision)
+                    ? "Consultar / editar decisión documentada"
+                    : "Documentar decisión estratégica"}
+                </button>
+
+                {puedeGenerarAccion(selectedDecision) && (
+                  <button
+                    type="button"
+                    disabled={generandoAccion}
+                    onClick={() => handleGenerarAccion(selectedDecision)}
+                    className="flex-1 rounded-2xl border border-[#001225] bg-white px-5 py-3 text-sm font-black text-[#001225] transition-all hover:bg-[#001225] hover:text-white disabled:opacity-50"
+                  >
+                    {generandoAccion ? "Generando…" : "Generar Acción"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

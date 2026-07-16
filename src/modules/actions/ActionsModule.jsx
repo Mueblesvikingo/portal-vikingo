@@ -1,0 +1,222 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  getAcciones,
+  getTiposFlujo,
+  createAccion,
+  updateAccion,
+  deactivateAccion,
+} from "../../services/accionesService";
+import { getMacroprocesos } from "../../services/performanceService";
+import { getPersonas } from "../../services/organizationCatalogService";
+import { getObjetivos } from "../../services/strategicDeploymentService";
+import { NIVELES_ACCION, TIPOS_ACCION, ESTADOS_ACCION, getFlujoConfig } from "./actionsHelpers";
+import DashboardTab from "./DashboardTab";
+import KanbanTab from "./KanbanTab";
+import TablaTab from "./TablaTab";
+import AccionDetailPanel from "./AccionDetailPanel";
+import NuevaAccionModal from "./NuevaAccionModal";
+
+export default function ActionsModule({ currentUser }) {
+  const [acciones, setAcciones] = useState([]);
+  const [tiposFlujo, setTiposFlujo] = useState([]);
+  const [procesos, setProcesos] = useState([]);
+  const [personas, setPersonas] = useState([]);
+  const [objetivos, setObjetivos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [filtroNivel, setFiltroNivel] = useState("all");
+  const [filtroTipo, setFiltroTipo] = useState("all");
+  const [filtroEstado, setFiltroEstado] = useState("all");
+  const [selectedAccionId, setSelectedAccionId] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function loadAll() {
+    setLoading(true);
+    const [accionesData, tiposData, procesosData, personasData, objetivosData] = await Promise.all([
+      getAcciones(),
+      getTiposFlujo(),
+      getMacroprocesos(),
+      getPersonas().catch((err) => { console.error("Error al cargar personas:", err); return []; }),
+      getObjetivos(),
+    ]);
+    setAcciones(accionesData);
+    setTiposFlujo(tiposData);
+    setProcesos(procesosData);
+    setPersonas(personasData.filter((p) => p.activo !== false && (!p.tipo || p.tipo === "persona")));
+    setObjetivos(objetivosData.filter((o) => o.codigo !== "GLOBAL"));
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const filteredAcciones = useMemo(() => {
+    return acciones.filter((a) => {
+      if (filtroNivel !== "all" && a.nivel !== filtroNivel) return false;
+      if (filtroTipo !== "all" && a.tipo !== filtroTipo) return false;
+      if (filtroEstado !== "all" && a.estado !== filtroEstado) return false;
+      return true;
+    });
+  }, [acciones, filtroNivel, filtroTipo, filtroEstado]);
+
+  const personasById = useMemo(() => Object.fromEntries(personas.map((p) => [p.id, p])), [personas]);
+  const procesosById = useMemo(() => Object.fromEntries(procesos.map((p) => [p.id, p])), [procesos]);
+  const objetivosById = useMemo(() => Object.fromEntries(objetivos.map((o) => [o.id, o])), [objetivos]);
+
+  async function handleCreateAccion(payload) {
+    const flujo = getFlujoConfig(tiposFlujo, payload.tipo);
+    const result = await createAccion(
+      {
+        ...payload,
+        estado: "Registrada",
+        requiereAnalisisCausa: flujo.requiere_analisis_causa,
+        requiereVerificacionEficacia: flujo.requiere_verificacion_eficacia,
+        requiereAprobacion: flujo.requiere_aprobacion,
+      },
+      currentUser
+    );
+    if (!result?.ok) { console.error(result?.error); setMessage("No fue posible crear la acción."); return; }
+    setAcciones((current) => [result.data, ...current]);
+    setCreating(false);
+    setSelectedAccionId(result.data.id);
+  }
+
+  async function handleUpdateAccion(id, updates) {
+    const previous = acciones.find((a) => a.id === id);
+    const result = await updateAccion(id, updates, { actor: currentUser, previous });
+    if (!result?.ok) { console.error(result?.error); setMessage("No fue posible actualizar la acción."); return; }
+    setAcciones((current) => current.map((a) => (a.id === id ? { ...a, ...result.data } : a)));
+  }
+
+  async function handleDeactivateAccion(id) {
+    if (!window.confirm("¿Quitar esta acción del centro de gestión?")) return;
+    const previous = acciones.find((a) => a.id === id);
+    const result = await deactivateAccion(id, { actor: currentUser, previous });
+    if (!result?.ok) { console.error(result?.error); setMessage("No fue posible quitar la acción."); return; }
+    setAcciones((current) => current.filter((a) => a.id !== id));
+    setSelectedAccionId((current) => (current === id ? null : current));
+  }
+
+  const selectedAccion = acciones.find((a) => a.id === selectedAccionId) || null;
+
+  const tabs = [
+    { key: "dashboard", label: "Dashboard" },
+    { key: "kanban", label: "Kanban" },
+    { key: "tabla", label: "Tabla" },
+  ];
+
+  return (
+    <section className="space-y-3">
+      <div className="rounded-[22px] border border-slate-200 bg-white/70 p-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Nivel:
+              <select value={filtroNivel} onChange={(e) => setFiltroNivel(e.target.value)} className="ml-2 h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                <option value="all">Todos</option>
+                {NIVELES_ACCION.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Tipo:
+              <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="ml-2 h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                <option value="all">Todos</option>
+                {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Estado:
+              <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="ml-2 h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                <option value="all">Todos</option>
+                {ESTADOS_ACCION.map((e) => <option key={e} value={e}>{e}</option>)}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="h-9 rounded-lg border border-dashed border-slate-300 px-3 text-[10px] font-black text-slate-500 transition hover:border-sky-300 hover:text-sky-600"
+            >
+              + Nueva Acción
+            </button>
+          </div>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black text-slate-500">
+            {filteredAcciones.length} acciones
+          </span>
+        </div>
+
+        <div className="mt-2 overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between gap-3 bg-[#001225] px-4 py-1.5 text-white">
+            <h2 className="text-[13px] font-black uppercase tracking-tight">Centro de Gestión de Acciones</h2>
+            <div className="flex gap-1 rounded-xl bg-white/10 p-0.5">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${activeTab === tab.key ? "bg-white text-[#001225]" : "text-white/70 hover:bg-white/10"}`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {message && <div className="mx-3 mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{message}</div>}
+
+          <div className="p-3">
+            {loading ? (
+              <div className="py-10 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
+            ) : activeTab === "dashboard" ? (
+              <DashboardTab acciones={filteredAcciones} procesosById={procesosById} />
+            ) : activeTab === "kanban" ? (
+              <KanbanTab
+                acciones={filteredAcciones}
+                tiposFlujo={tiposFlujo}
+                personasById={personasById}
+                onUpdateAccion={handleUpdateAccion}
+                onSelectAccion={setSelectedAccionId}
+              />
+            ) : (
+              <TablaTab
+                acciones={filteredAcciones}
+                personasById={personasById}
+                procesosById={procesosById}
+                onSelectAccion={setSelectedAccionId}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {creating && (
+        <NuevaAccionModal
+          procesos={procesos}
+          personas={personas}
+          objetivos={objetivos}
+          onSave={handleCreateAccion}
+          onClose={() => setCreating(false)}
+        />
+      )}
+
+      {selectedAccion && (
+        <AccionDetailPanel
+          accion={selectedAccion}
+          tiposFlujo={tiposFlujo}
+          procesos={procesos}
+          personas={personas}
+          objetivos={objetivos}
+          procesosById={procesosById}
+          personasById={personasById}
+          objetivosById={objetivosById}
+          currentUser={currentUser}
+          onUpdate={(updates) => handleUpdateAccion(selectedAccion.id, updates)}
+          onDeactivate={() => handleDeactivateAccion(selectedAccion.id)}
+          onClose={() => setSelectedAccionId(null)}
+        />
+      )}
+    </section>
+  );
+}

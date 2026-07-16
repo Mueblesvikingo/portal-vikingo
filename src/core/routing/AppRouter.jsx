@@ -13,6 +13,7 @@ import WorkloadBalanceModule from "../../modules/WorkloadBalanceModule";
 import MaturityModule from "../../modules/maturity/MaturityModule";
 import SigDiagnosisModule from "../../modules/sig/SigDiagnosisModule";
 import OrganizationCatalogModule from "../../modules/organization-catalog/OrganizationCatalogModule";
+import ActionsModule from "../../modules/actions/ActionsModule";
 
 export default function AppRouter({
   currentUser,
@@ -57,7 +58,7 @@ export default function AppRouter({
             path="/decision-center"
             element={
               canViewModule(currentUser, "decision-center") ? (
-                <DecisionCenterModule />
+                <DecisionCenterModule currentUser={currentUser} />
               ) : (
                 <Navigate to="/" replace />
               )
@@ -66,7 +67,18 @@ export default function AppRouter({
 
           <Route
             path="/strategic-followup"
-            element={<StrategicFollowupModule />}
+            element={<StrategicFollowupModule currentUser={currentUser} />}
+          />
+
+          <Route
+            path="/acciones"
+            element={
+              canViewModule(currentUser, "acciones") ? (
+                <ActionsModule currentUser={currentUser} />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
           />
 
 

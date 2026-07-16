@@ -31,6 +31,7 @@ const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
   "maturity",
   "sig",
   "performance",
+  "acciones",
 ];
 
 const WORKLOAD_FULL_ACCESS_ROLES = [
@@ -270,6 +271,27 @@ const STRATEGIC_KPI_EDITOR_PERSONA_IDS = [14, 15];
 
 export function canEditStrategicKpis(user) {
   return STRATEGIC_KPI_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
+}
+
+// Centro de Gestión de Acciones: el nivel de la acción determina quién la
+// edita. Estratégica/Táctica → equipo estratégico (Dirección, PM,
+// Coordinador SIG, Analista de Procesos — mismos STRATEGIC_TEAM_ROLES ya
+// usados en el resto del portal). Operativa → además el responsable real
+// del proceso vinculado (mismo criterio que canEditProcess/isProcessOwner
+// en Diseño Organizacional). `proceso` es el objeto de procesos (con su
+// campo `responsable`) ya cargado por el módulo, no se vuelve a consultar.
+export function canEditAccion(user, accion, proceso) {
+  if (!accion) return false;
+  if (isStrategicTeamMember(user)) return true;
+  if (accion.nivel === "Operativa" && proceso) return isProcessOwner(user, proceso);
+  return false;
+}
+
+// Aprobar una acción (pasar a "Aprobada") es más restrictivo que editarla —
+// hoy solo el equipo estratégico, sin importar el nivel (igual que
+// canApproveOrAuditProcess para subprocesos).
+export function canApproveAction(user) {
+  return isStrategicTeamMember(user);
 }
 
 export function hasWorkloadFullAccess(user) {
