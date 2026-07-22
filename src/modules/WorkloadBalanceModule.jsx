@@ -1223,7 +1223,7 @@ function PendingActivityEditModal({ activity, draft, error, saving, onChange, on
   const options = [...new Set([draft.frecuencia, ...frequencyOptions].filter(Boolean))];
   const isLiderProceso = isLiderDeProcesoActivity(activity);
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white"><div><p className="text-xs font-black uppercase tracking-widest">Edición rápida</p><p className="text-[10px] font-bold text-slate-300">Pendientes de programación</p></div><button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button></div><div className="space-y-3 p-4"><div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-bold text-slate-600"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Actividad</p><p className="mt-1 text-sm font-black text-slate-900">{activity.actividad}</p><div className="mt-2 grid gap-2 md:grid-cols-2"><div><span className="text-slate-400">Proceso</span><p className="text-slate-800">{activity.proceso}</p></div><div><span className="text-slate-400">Subproceso</span><p className="text-slate-800">{subprocess || "Sin subproceso"}</p></div></div></div>{isLiderProceso ? <div className="rounded-xl border border-sky-100 bg-sky-50/60 px-3 py-2 text-[10px] font-bold text-sky-700">Actividad del rol transversal "Líder de proceso": lo que captures aquí (estado, duración y frecuencia) es solo tuyo y no cambia lo que ven los demás líderes de proceso ni la actividad maestra en Diseño Organizacional.</div> : null}<div className="grid gap-3 md:grid-cols-3"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Estado{isLiderProceso ? " · personal" : ""}<select value={draft.estado} onChange={(event) => onChange("estado", event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"><option value="Activa">Activa</option><option value="Inactiva">Inactiva</option></select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Duración (min){isLiderProceso ? " · personal" : ""}<input type="number" min="1" value={draft.duracionMinutos} onChange={(event) => onChange("duracionMinutos", event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Frecuencia{isLiderProceso ? " · personal" : ""}<select value={draft.frecuencia} onChange={(event) => onChange("frecuencia", event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{options.map((option) => <option key={option} value={option}>{translateFrequency(option)}</option>)}</select></label></div>{error && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{error}</div>}<div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3">{isLiderProceso && onExclude ? <button type="button" disabled={saving} onClick={onExclude} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[10px] font-black text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">Quitar de pendientes</button> : <span />}<div className="flex gap-2"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button><button type="button" disabled={saving} onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">{saving ? "Guardando..." : "Guardar"}</button></div></div></div></div></div>;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white"><div><p className="text-xs font-black uppercase tracking-widest">Edición rápida</p><p className="text-[10px] font-bold text-slate-300">Pendientes de programación</p></div><button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button></div><div className="space-y-3 p-4"><div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-bold text-slate-600"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Actividad</p><p className="mt-1 text-sm font-black text-slate-900">{activity.actividad}</p><div className="mt-2 grid gap-2 md:grid-cols-2"><div><span className="text-slate-400">Proceso</span><p className="text-slate-800">{activity.proceso}</p></div><div><span className="text-slate-400">Subproceso</span><p className="text-slate-800">{subprocess || "Sin subproceso"}</p></div></div></div>{<div className="rounded-xl border border-sky-100 bg-sky-50/60 px-3 py-2 text-[10px] font-bold text-sky-700">{isLiderProceso ? `Actividad del rol transversal "Líder de proceso": lo que captures aquí (estado, duración y frecuencia) es solo tuyo y no cambia lo que ven los demás líderes de proceso ni la actividad maestra en Diseño Organizacional.` : `Actividad del rol "${activity.rol}": lo que captures aquí (estado, duración y frecuencia) actualiza la actividad maestra en Diseño Organizacional y aplica para cualquier persona que comparta este rol.`}</div>}<div className="grid gap-3 md:grid-cols-3"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Estado{isLiderProceso ? " · personal" : ""}<select value={draft.estado} onChange={(event) => onChange("estado", event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"><option value="Activa">Activa</option><option value="Inactiva">Inactiva</option></select></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Duración (min){isLiderProceso ? " · personal" : ""}<input type="number" min="1" value={draft.duracionMinutos} onChange={(event) => onChange("duracionMinutos", event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Frecuencia{isLiderProceso ? " · personal" : ""}<select value={draft.frecuencia} onChange={(event) => onChange("frecuencia", event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{options.map((option) => <option key={option} value={option}>{translateFrequency(option)}</option>)}</select></label></div>{error && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{error}</div>}<div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3">{onExclude ? <button type="button" disabled={saving} onClick={onExclude} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[10px] font-black text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">{isLiderProceso ? "Quitar de pendientes" : "Desactivar actividad"}</button> : <span />}<div className="flex gap-2"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button><button type="button" disabled={saving} onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">{saving ? "Guardando..." : "Guardar"}</button></div></div></div></div></div>;
 }
 function MoveScheduledModal({ modal, target, setTarget, onSave, onClose }) {
   if (!modal?.activity) return null;
@@ -2422,22 +2422,33 @@ function canCreateAssignments() {
     setScheduleMessage("Actividad actualizada correctamente.");
   }
   async function excludePendingActivityFromList() {
-    if (!editingPendingActivity?.id || !isLiderDeProcesoActivity(editingPendingActivity)) return;
-    if (!window.confirm("¿Quitar definitivamente esta actividad de tus pendientes? No volverá a aparecer para ti (a los demás Líderes de proceso no les afecta).")) return;
+    if (!editingPendingActivity?.id) return;
+    const isLider = isLiderDeProcesoActivity(editingPendingActivity);
+    const confirmMessage = isLider
+      ? "¿Quitar definitivamente esta actividad de tus pendientes? No volverá a aparecer para ti (a los demás Líderes de proceso no les afecta)."
+      : "¿Desactivar esta actividad? Quedará marcada como inactiva en Diseño Organizacional y dejará de contar como carga pendiente (afecta a cualquier persona que comparta este rol).";
+    if (!window.confirm(confirmMessage)) return;
 
     const duration = Number(pendingActivityDraft.duracionMinutos) || getDurationMinutes(editingPendingActivity) || 60;
 
     setSavingPendingActivity(true);
     setPendingActivityEditError("");
 
-    const result = await upsertLiderProcesoOverride({
-      personaId: effectivePersonFilter,
-      actividadId: editingPendingActivity.id,
-      duracionMinutos: Math.round(duration),
-      activo: pendingActivityDraft.estado !== "Inactiva",
-      frecuencia: pendingActivityDraft.frecuencia,
-      excluido: true,
-    });
+    const result = isLider
+      ? await upsertLiderProcesoOverride({
+        personaId: effectivePersonFilter,
+        actividadId: editingPendingActivity.id,
+        duracionMinutos: Math.round(duration),
+        activo: pendingActivityDraft.estado !== "Inactiva",
+        frecuencia: pendingActivityDraft.frecuencia,
+        excluido: true,
+      })
+      : await updateWorkloadSourceActivity(editingPendingActivity.id, {
+        activa: false,
+        estado: "Inactiva",
+        duracion_minutos: Math.round(duration),
+        frecuencia: pendingActivityDraft.frecuencia,
+      });
 
     if (!result?.ok) {
       console.error(result?.error);
@@ -2448,7 +2459,7 @@ function canCreateAssignments() {
 
     await loadWorkloadData();
     closePendingActivityEditModal();
-    setScheduleMessage("Actividad quitada de tus pendientes.");
+    setScheduleMessage(isLider ? "Actividad quitada de tus pendientes." : "Actividad desactivada.");
   }
   async function restoreExcludedActivity(activity) {
     if (!activity?.id) return;
