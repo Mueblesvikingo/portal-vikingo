@@ -51,6 +51,7 @@ const WORKLOAD_PENDING_ACTIVITY_EDIT_ROLES = [
   "PM",
   "Administrador",
   "Administrador Operativo",
+  "Líder de proceso",
 ];
 
 // Equipo estratégico: los únicos roles que, por defecto, pueden aprobar y
