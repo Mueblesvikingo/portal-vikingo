@@ -721,6 +721,7 @@ function applyLiderProcesoOverrideToActivity(activity, override) {
     hasLiderProcesoOverride: true,
     excluidoPersonal: override.excluido === true,
     excluidoEn: override.updated_at || null,
+    motivoExclusion: override.motivo || null,
   };
 }
 function getPersonAdjustedActivities(activities, liderProcesoOverrides, personId) {
@@ -1095,6 +1096,7 @@ function ExcludedActivitiesReportModal({ activities, onClose, onRestore }) {
                   <div>
                     <p className="text-[11px] font-black text-slate-800">{activity.actividad}</p>
                     <p className="text-[10px] font-bold text-slate-400">{activity.proceso} · {activity.rol}</p>
+                    <p className="mt-1 text-[10px] font-bold italic text-slate-500">{activity.motivoExclusion ? `Motivo: ${activity.motivoExclusion}` : "Sin motivo registrado"}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="whitespace-nowrap text-[9px] font-bold text-slate-400">
@@ -2424,10 +2426,15 @@ function canCreateAssignments() {
   async function excludePendingActivityFromList() {
     if (!editingPendingActivity?.id) return;
     const isLider = isLiderDeProcesoActivity(editingPendingActivity);
-    const confirmMessage = isLider
-      ? "¿Quitar definitivamente esta actividad de tus pendientes? No volverá a aparecer para ti (a los demás Líderes de proceso no les afecta)."
-      : "¿Desactivar esta actividad? Quedará marcada como inactiva en Diseño Organizacional y dejará de contar como carga pendiente (afecta a cualquier persona que comparta este rol).";
-    if (!window.confirm(confirmMessage)) return;
+    let motivo = "";
+    if (isLider) {
+      const promptResult = window.prompt("¿Por qué quitas esta actividad de tus pendientes? (se guardará en el reporte de Quitadas)", "");
+      if (promptResult === null) return; // canceló, no se quita nada
+      motivo = promptResult;
+    } else {
+      const confirmMessage = "¿Desactivar esta actividad? Quedará marcada como inactiva en Diseño Organizacional y dejará de contar como carga pendiente (afecta a cualquier persona que comparta este rol).";
+      if (!window.confirm(confirmMessage)) return;
+    }
 
     const duration = Number(pendingActivityDraft.duracionMinutos) || getDurationMinutes(editingPendingActivity) || 60;
 
@@ -2442,6 +2449,7 @@ function canCreateAssignments() {
         activo: pendingActivityDraft.estado !== "Inactiva",
         frecuencia: pendingActivityDraft.frecuencia,
         excluido: true,
+        motivo: motivo.trim(),
       })
       : await updateWorkloadSourceActivity(editingPendingActivity.id, {
         activa: false,

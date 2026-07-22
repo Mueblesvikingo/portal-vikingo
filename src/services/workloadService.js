@@ -173,7 +173,7 @@ export async function getLiderProcesoOverrides() {
   }
 }
 
-export async function upsertLiderProcesoOverride({ personaId, actividadId, duracionMinutos, activo = true, frecuencia, excluido = false }) {
+export async function upsertLiderProcesoOverride({ personaId, actividadId, duracionMinutos, activo = true, frecuencia, excluido = false, motivo }) {
   try {
     const cargaHoras = Number((duracionMinutos / 60).toFixed(2));
     const { data, error } = await supabase
@@ -187,6 +187,7 @@ export async function upsertLiderProcesoOverride({ personaId, actividadId, durac
           activo,
           frecuencia: frecuencia || null,
           excluido,
+          motivo: excluido ? (motivo || null) : null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "persona_id,actividad_id" }
