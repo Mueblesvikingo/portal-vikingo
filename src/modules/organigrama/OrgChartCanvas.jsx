@@ -7,6 +7,8 @@ import {
   getVisibleNodos,
   NIVEL_COLORS,
   NIVEL_LABELS,
+  ROW_HEIGHT,
+  COLUMN_WIDTH,
 } from "./organigramaLayout";
 
 const BOX_WIDTH = 176;
@@ -109,21 +111,46 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
     });
   }
 
+  function snapToGrid(value, step) {
+    return Math.round(value / step) * step;
+  }
+
   function moveDrag(event) {
     if (!dragging || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
     const rawX = (event.clientX - rect.left) / scale - dragging.offsetX;
     const rawY = (event.clientY - rect.top) / scale - dragging.offsetY;
-    setDragging((current) => ({ ...current, x: rawX, y: rawY }));
+    // Autoajuste: mientras arrastras, el bloque se alinea a la misma
+    // cuadrícula invisible que usan el resto de los puestos (misma
+    // separación de filas/columnas del layout automático), para que quede
+    // alineado con los demás en vez de en cualquier pixel suelto.
+    const posX = snapToGrid(rawX + BOX_WIDTH / 2 - PADDING, COLUMN_WIDTH);
+    const posY = snapToGrid(rawY - PADDING, ROW_HEIGHT);
+    setDragging((current) => ({ ...current, x: posX - BOX_WIDTH / 2 + PADDING, y: posY + PADDING }));
   }
 
-  // Al soltar, el bloque se queda exactamente donde lo pusiste — sin
-  // reasignar jefe ni reordenar nada más. "Reporta a" se cambia desde el
-  // panel de perfil de puesto (selector explícito), no arrastrando.
+  // Al soltar, el bloque se queda alineado a la cuadrícula donde lo
+  // soltaste — sin reasignar jefe ni reordenar nada más. "Reporta a" se
+  // cambia desde el panel de perfil de puesto (selector explícito), no
+  // arrastrando. Si esa celda ya está ocupada por otro puesto, se recorre
+  // a la más cercana libre en la misma fila para que no queden encimados.
   function stopDrag() {
     if (dragging) {
-      const posX = dragging.x + BOX_WIDTH / 2 - PADDING;
-      const posY = dragging.y - PADDING;
+      let posX = snapToGrid(dragging.x + BOX_WIDTH / 2 - PADDING, COLUMN_WIDTH);
+      const posY = snapToGrid(dragging.y - PADDING, ROW_HEIGHT);
+      const occupied = (x) =>
+        boxes.some((box) => {
+          if (box.nodo.id === dragging.id) return false;
+          const boxPos = layout.positions.get(box.nodo.id);
+          return boxPos && Math.abs(boxPos.y - posY) < ROW_HEIGHT / 2 && Math.abs(boxPos.x - x) < COLUMN_WIDTH / 2;
+        });
+      const originalX = posX;
+      let attempt = 0;
+      while (occupied(posX) && attempt < 20) {
+        attempt += 1;
+        const sign = attempt % 2 === 1 ? 1 : -1;
+        posX = originalX + sign * Math.ceil(attempt / 2) * COLUMN_WIDTH;
+      }
       onMoveNode(dragging.id, posX, posY);
     }
     setDragging(null);
@@ -160,6 +187,11 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
             style={{ width: canvasWidth, height: canvasHeight, transform: `scale(${scale})` }}
           >
           <svg className="pointer-events-none absolute inset-0" width={canvasWidth} height={canvasHeight}>
+            <defs>
+              <filter id="orgLineGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="#000000" floodOpacity="0.18" />
+              </filter>
+            </defs>
             {visibleNodos.map((nodo) => {
               if (!nodo.reporta_a_id) return null;
               const childPos = layout.positions.get(nodo.id);
@@ -177,16 +209,22 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
               const midY = (py + cy) / 2;
               const isChainOfCommand = ancestorIds.has(nodo.id) && ancestorIds.has(nodo.reporta_a_id);
               const isDirectReportEdge = selectedId && nodo.reporta_a_id === selectedId && directReportIds.has(nodo.id);
-              const strokeColor = isChainOfCommand ? "#dc2626" : isDirectReportEdge ? "#10b981" : "#cbd5e1";
+              const isEmphasized = isChainOfCommand || isDirectReportEdge;
+              const strokeColor = isChainOfCommand ? "#dc2626" : isDirectReportEdge ? "#10b981" : "#94a3b8";
               return (
-                <path
-                  key={nodo.id}
-                  d={`M ${px} ${py} L ${px} ${midY} L ${cx} ${midY} L ${cx} ${cy}`}
-                  fill="none"
-                  stroke={strokeColor}
-                  strokeWidth={isChainOfCommand || isDirectReportEdge ? 3 : 1.5}
-                  strokeDasharray={nodo.tipo_linea === "punteada" ? "5,4" : undefined}
-                />
+                <g key={nodo.id} filter={isEmphasized ? "url(#orgLineGlow)" : undefined}>
+                  <path
+                    d={`M ${px} ${py} L ${px} ${midY} L ${cx} ${midY} L ${cx} ${cy}`}
+                    fill="none"
+                    stroke={strokeColor}
+                    strokeWidth={isEmphasized ? 3.5 : 2}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    strokeDasharray={nodo.tipo_linea === "punteada" ? "6,5" : undefined}
+                  />
+                  <circle cx={px} cy={py} r={isEmphasized ? 4 : 3} fill={strokeColor} />
+                  <circle cx={cx} cy={cy} r={isEmphasized ? 4 : 3} fill={strokeColor} />
+                </g>
               );
             })}
           </svg>

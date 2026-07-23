@@ -74,8 +74,8 @@ export function canReparent(nodos, draggedId, targetId) {
   return !descendants.has(Number(targetId));
 }
 
-const ROW_HEIGHT = 150;
-const COLUMN_WIDTH = 190;
+export const ROW_HEIGHT = 150;
+export const COLUMN_WIDTH = 190;
 
 // Layout tipo "tidy tree": cada hoja ocupa una columna; un padre queda
 // centrado sobre el promedio de sus hijos. Devuelve un Map<id, {x,y,row,col}>
