@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { computeLayout, canReparent, getAncestorChain, getChildren, NIVEL_COLORS, NIVEL_LABELS } from "./organigramaLayout";
+import {
+  computeLayout,
+  canReparent,
+  getAncestorChain,
+  getChildren,
+  hasChildren,
+  getVisibleNodos,
+  NIVEL_COLORS,
+  NIVEL_LABELS,
+} from "./organigramaLayout";
 
 const BOX_WIDTH = 168;
 const BOX_HEIGHT = 74;
@@ -7,17 +16,42 @@ const PADDING = 50;
 const MIN_SCALE = 0.2;
 const MAX_SCALE = 1.5;
 
-export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onReparent, canEdit }) {
+export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onReparent, onReorderSiblings, canEdit }) {
   const viewportRef = useRef(null);
   const canvasRef = useRef(null);
   const [dragging, setDragging] = useState(null); // { id, offsetX, offsetY, x, y }
   const [hoverTargetId, setHoverTargetId] = useState(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [manualScale, setManualScale] = useState(null); // null = ajustar a pantalla automáticamente
+  const [collapsedIds, setCollapsedIds] = useState(null); // null = aún no se definió el default
 
-  const layout = useMemo(() => computeLayout(nodos), [nodos]);
+  // Por default se colapsan las ramas debajo de Jefatura (Supervisión y
+  // Operativo) para que el organigrama completo se lea de un vistazo; cada
+  // quien puede expandir la rama que le interese.
+  useEffect(() => {
+    if (collapsedIds === null && nodos.length > 0) {
+      const defaults = new Set(
+        nodos.filter((nodo) => nodo.nivel === "Jefatura" && hasChildren(nodos, nodo.id)).map((nodo) => nodo.id)
+      );
+      setCollapsedIds(defaults);
+    }
+  }, [nodos, collapsedIds]);
+
+  const effectiveCollapsed = collapsedIds || new Set();
+  const visibleNodos = useMemo(() => getVisibleNodos(nodos, effectiveCollapsed), [nodos, effectiveCollapsed]);
+
+  function toggleCollapse(id) {
+    setCollapsedIds((current) => {
+      const next = new Set(current || []);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const layout = useMemo(() => computeLayout(visibleNodos), [visibleNodos]);
   const canvasWidth = layout.width + PADDING * 2;
-  const canvasHeight = layout.height + PADDING * 2 + BOX_HEIGHT;
+  const canvasHeight = layout.height + PADDING * 2 + BOX_HEIGHT + 16;
 
   useEffect(() => {
     const element = viewportRef.current;
@@ -46,7 +80,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
     return new Set(getChildren(nodos, selectedId).map((nodo) => nodo.id));
   }, [nodos, selectedId]);
 
-  const boxes = nodos
+  const boxes = visibleNodos
     .map((nodo) => {
       const pos = layout.positions.get(nodo.id);
       if (!pos) return null;
@@ -97,9 +131,21 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
   }
 
   function stopDrag() {
-    if (dragging && hoverTargetId && canReparent(nodos, dragging.id, hoverTargetId)) {
-      const siblingCount = nodos.filter((nodo) => (nodo.reporta_a_id ?? null) === hoverTargetId).length;
-      onReparent(dragging.id, hoverTargetId, siblingCount);
+    if (dragging && hoverTargetId) {
+      const draggedNodo = nodos.find((nodo) => nodo.id === dragging.id);
+      const targetNodo = nodos.find((nodo) => nodo.id === hoverTargetId);
+      const sameParent = draggedNodo && targetNodo && (draggedNodo.reporta_a_id ?? null) === (targetNodo.reporta_a_id ?? null);
+
+      if (sameParent) {
+        // Reordenar entre hermanos: el arrastrado toma la posición del objetivo.
+        const siblings = getChildren(nodos, targetNodo.reporta_a_id ?? null).filter((nodo) => nodo.id !== dragging.id);
+        const targetIndex = siblings.findIndex((nodo) => nodo.id === hoverTargetId);
+        const reordered = [...siblings.slice(0, targetIndex), draggedNodo, ...siblings.slice(targetIndex)];
+        onReorderSiblings(reordered.map((nodo, index) => ({ id: nodo.id, orden: index })));
+      } else if (canReparent(nodos, dragging.id, hoverTargetId)) {
+        const siblingCount = nodos.filter((nodo) => (nodo.reporta_a_id ?? null) === hoverTargetId).length;
+        onReparent(dragging.id, hoverTargetId, siblingCount);
+      }
     }
     setDragging(null);
     setHoverTargetId(null);
@@ -121,7 +167,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
       <div
         ref={viewportRef}
         className="relative overflow-auto rounded-2xl border border-slate-200 bg-slate-50/60"
-        style={{ height: "min(70vh, 640px)" }}
+        style={{ height: "min(75vh, 720px)" }}
         onMouseMove={moveDrag}
         onMouseUp={stopDrag}
         onMouseLeave={() => dragging && stopDrag()}
@@ -132,7 +178,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
           style={{ width: canvasWidth, height: canvasHeight, transform: `scale(${scale})` }}
         >
           <svg className="pointer-events-none absolute inset-0" width={canvasWidth} height={canvasHeight}>
-            {nodos.map((nodo) => {
+            {visibleNodos.map((nodo) => {
               if (!nodo.reporta_a_id) return null;
               const childPos = layout.positions.get(nodo.id);
               const parentPos = layout.positions.get(nodo.reporta_a_id);
@@ -174,6 +220,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
                 : isDirectReport
                   ? "ring-2 ring-emerald-400"
                   : "";
+            const childCount = getChildren(nodos, nodo.id).length;
 
             return (
               <div
@@ -189,7 +236,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
                   <span
                     onMouseDown={(event) => startDrag(event, nodo)}
                     onClick={(event) => event.stopPropagation()}
-                    title="Arrastrar para cambiar de jefe"
+                    title="Arrastrar: sobre otro puesto cambia de jefe, entre hermanos reordena"
                     className="absolute -right-1 -top-1 flex h-5 w-5 cursor-grab items-center justify-center rounded-full border border-slate-300 bg-white text-[10px] font-black text-slate-400 opacity-0 shadow-sm group-hover:opacity-100 active:cursor-grabbing"
                   >
                     ✥
@@ -198,6 +245,20 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
                 <p className="line-clamp-2 text-[10px] font-black uppercase tracking-wide leading-tight">{nodo.titulo_puesto}</p>
                 <p className="mt-0.5 truncate text-[9px] font-bold opacity-80">{nodo.nombre_persona || "Sin asignar"}</p>
                 <span className="pointer-events-none absolute bottom-1 right-1.5 text-[9px] font-black opacity-0 group-hover:opacity-60">ⓘ</span>
+
+                {childCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleCollapse(nodo.id);
+                    }}
+                    title={effectiveCollapsed.has(nodo.id) ? `Mostrar ${childCount} subordinado(s)` : "Ocultar subordinados"}
+                    className="absolute -bottom-2.5 left-1/2 z-20 flex h-5 min-w-[20px] -translate-x-1/2 items-center justify-center rounded-full border border-slate-300 bg-white px-1 text-[9px] font-black text-slate-500 shadow-sm hover:bg-slate-50"
+                  >
+                    {effectiveCollapsed.has(nodo.id) ? `+${childCount}` : "－"}
+                  </button>
+                )}
               </div>
             );
           })}

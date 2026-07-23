@@ -5,6 +5,7 @@ import {
   createNodo,
   updateNodo,
   reparentNodo,
+  reorderSiblings,
   deactivateNodo,
 } from "../../services/organigramaService";
 import OrgChartCanvas from "./OrgChartCanvas";
@@ -75,6 +76,16 @@ export default function OrganigramaModule({ currentUser }) {
     await loadNodos();
   }
 
+  async function handleReorderSiblings(updates) {
+    const result = await reorderSiblings(updates);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible reordenar los puestos.");
+      return;
+    }
+    await loadNodos();
+  }
+
   async function handleCreateNodo() {
     if (!newNodo.titulo_puesto.trim()) {
       setMessage("Captura un título de puesto.");
@@ -112,7 +123,7 @@ export default function OrganigramaModule({ currentUser }) {
           <div>
             <p className="text-xs font-black uppercase tracking-widest">Organigrama</p>
             <p className="text-[10px] font-bold text-slate-300">
-              Arrastra un puesto sobre otro para cambiarle el jefe. Haz clic para ver su línea de mando y perfil de puesto.
+              Clic en un puesto: perfil y línea de mando. Icono ✥: arrastra sobre otro puesto para cambiar de jefe, o entre compañeros para reordenar. Botón "－"/"+N": expandir o colapsar subordinados.
             </p>
           </div>
           {canEdit && (
@@ -158,6 +169,7 @@ export default function OrganigramaModule({ currentUser }) {
               selectedId={selectedId}
               onSelectNode={setSelectedId}
               onReparent={handleReparent}
+              onReorderSiblings={handleReorderSiblings}
               canEdit={canEdit}
             />
           )}

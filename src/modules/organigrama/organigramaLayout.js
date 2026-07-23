@@ -49,6 +49,22 @@ export function getDescendantIds(nodos, nodeId) {
   return result;
 }
 
+export function hasChildren(nodos, nodeId) {
+  return getChildren(nodos, nodeId).length > 0;
+}
+
+// Nodos visibles según qué ramas están colapsadas: si un ancestro de un nodo
+// está en collapsedIds, ese nodo queda oculto (pero sigue existiendo en la
+// jerarquía para efectos de conteo/reasignación).
+export function getVisibleNodos(nodos, collapsedIds) {
+  if (!collapsedIds || collapsedIds.size === 0) return nodos;
+  const hiddenIds = new Set();
+  collapsedIds.forEach((id) => {
+    getDescendantIds(nodos, id).forEach((descendantId) => hiddenIds.add(descendantId));
+  });
+  return nodos.filter((nodo) => !hiddenIds.has(nodo.id));
+}
+
 // Evita soltar un nodo sobre sí mismo o sobre uno de sus propios subordinados
 // (lo que crearía un ciclo en la jerarquía).
 export function canReparent(nodos, draggedId, targetId) {
