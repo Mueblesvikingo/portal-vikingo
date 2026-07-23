@@ -135,6 +135,10 @@ export default function OrganigramaModule({ currentUser }) {
               </span>
             );
           })}
+          <span className="ml-auto flex items-center gap-3 text-[9px] font-bold text-slate-400">
+            <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-red-400" /> A quién reporta</span>
+            <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-emerald-400" /> Quién le reporta</span>
+          </span>
         </div>
 
         {message && (
