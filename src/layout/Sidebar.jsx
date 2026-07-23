@@ -6,6 +6,7 @@ const menuItems = [
   { label: "Despliegue Estratégico", route: "/strategic-deployment", moduleKey: "strategic-deployment" },
   { label: "Desempeño Organizacional", route: "/performance", moduleKey: "performance" },
   { label: "Diseño organizacional", route: "/capacity", moduleKey: "capacity" },
+  { label: "Organigrama", route: "/organigrama", moduleKey: "organigrama" },
   { label: "Balance de Carga", route: "/workload-balance", moduleKey: "workload-balance" },
   { label: "Seguimiento Estratégico", route: "/strategic-followup", moduleKey: "strategic-followup" },
   { label: "Centro de Decisiones", route: "/decision-center", moduleKey: "decision-center" },

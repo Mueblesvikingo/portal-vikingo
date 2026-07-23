@@ -26,6 +26,7 @@ const MODULES_HIDDEN_BY_DEFAULT = ["organization-catalog"];
 const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
   "strategic-followup",
   "capacity",
+  "organigrama",
   "organization-catalog",
   "workload-balance",
   "maturity",

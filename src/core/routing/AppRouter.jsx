@@ -14,6 +14,7 @@ import MaturityModule from "../../modules/maturity/MaturityModule";
 import SigDiagnosisModule from "../../modules/sig/SigDiagnosisModule";
 import OrganizationCatalogModule from "../../modules/organization-catalog/OrganizationCatalogModule";
 import ActionsModule from "../../modules/actions/ActionsModule";
+import OrganigramaModule from "../../modules/organigrama/OrganigramaModule";
 
 export default function AppRouter({
   currentUser,
@@ -82,6 +83,11 @@ export default function AppRouter({
           />
 
 
+
+          <Route
+            path="/organigrama"
+            element={<OrganigramaModule currentUser={currentUser} />}
+          />
 
           <Route
             path="/organization-catalog"

@@ -70,6 +70,7 @@ const PERMISSION_MODULES = [
   { key: "strategic-followup", label: "Seguimiento Estratégico", editable: false },
   { key: "strategic-deployment", label: "Despliegue Estratégico", editable: false },
   { key: "capacity", label: "Diseño Organizacional", editable: true },
+  { key: "organigrama", label: "Organigrama", editable: true },
   { key: "workload-balance", label: "Balance de Carga", editable: true },
   { key: "decision-center", label: "Centro de Decisiones", editable: false },
   { key: "maturity", label: "Madurez Organizacional", editable: false },

@@ -1,0 +1,243 @@
+import { useEffect, useState } from "react";
+import { canEditModule } from "../../services/permissionsService";
+import {
+  getOrganigramaNodos,
+  createNodo,
+  updateNodo,
+  reparentNodo,
+  deactivateNodo,
+} from "../../services/organigramaService";
+import OrgChartCanvas from "./OrgChartCanvas";
+import NodeDetailPanel from "./NodeDetailPanel";
+import { NIVEL_COLORS, NIVEL_LABELS, NIVEL_OPTIONS } from "./organigramaLayout";
+
+const EMPTY_NEW_NODO = {
+  titulo_puesto: "",
+  nombre_persona: "",
+  nivel: "Operativo",
+  reporta_a_id: "",
+  tipo_linea: "solida",
+};
+
+export default function OrganigramaModule({ currentUser }) {
+  const [nodos, setNodos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newNodo, setNewNodo] = useState(EMPTY_NEW_NODO);
+  const [message, setMessage] = useState("");
+
+  const canEdit = canEditModule(currentUser, "organigrama");
+
+  async function loadNodos() {
+    setLoading(true);
+    const data = await getOrganigramaNodos();
+    setNodos(data);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadNodos();
+  }, []);
+
+  const selectedNodo = nodos.find((nodo) => nodo.id === selectedId) || null;
+
+  async function handleSaveNodo(id, draft) {
+    const result = await updateNodo(id, draft);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar los cambios.");
+      return;
+    }
+    await loadNodos();
+    setMessage("Puesto actualizado.");
+  }
+
+  async function handleDeactivateNodo(id) {
+    const result = await deactivateNodo(id);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible quitar el puesto.");
+      return;
+    }
+    setSelectedId(null);
+    await loadNodos();
+    setMessage("Puesto quitado del organigrama.");
+  }
+
+  async function handleReparent(id, newParentId, siblingCount) {
+    const result = await reparentNodo(id, newParentId, siblingCount);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible reasignar el jefe.");
+      return;
+    }
+    await loadNodos();
+  }
+
+  async function handleCreateNodo() {
+    if (!newNodo.titulo_puesto.trim()) {
+      setMessage("Captura un título de puesto.");
+      return;
+    }
+    const siblingCount = nodos.filter(
+      (nodo) => (nodo.reporta_a_id ?? null) === (newNodo.reporta_a_id ? Number(newNodo.reporta_a_id) : null)
+    ).length;
+    const result = await createNodo({
+      ...newNodo,
+      reporta_a_id: newNodo.reporta_a_id ? Number(newNodo.reporta_a_id) : null,
+      orden: siblingCount,
+    });
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible crear el puesto.");
+      return;
+    }
+    setShowAddModal(false);
+    setNewNodo(EMPTY_NEW_NODO);
+    await loadNodos();
+    setMessage("Puesto agregado.");
+  }
+
+  useEffect(() => {
+    if (!message) return;
+    const timer = setTimeout(() => setMessage(""), 3500);
+    return () => clearTimeout(timer);
+  }, [message]);
+
+  return (
+    <div className="p-3">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#001225] px-4 py-3 text-white">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest">Organigrama</p>
+            <p className="text-[10px] font-bold text-slate-300">
+              Arrastra un puesto sobre otro para cambiarle el jefe. Haz clic para ver su línea de mando y perfil de puesto.
+            </p>
+          </div>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="rounded-xl bg-white/10 px-3 py-1.5 text-[10px] font-black text-white hover:bg-white/20"
+            >
+              + Nuevo puesto
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2">
+          {NIVEL_OPTIONS.map((nivel) => {
+            const colors = NIVEL_COLORS[nivel];
+            return (
+              <span key={nivel} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black ${colors.border} ${colors.text} ${colors.bg}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${colors.dot}`} /> {NIVEL_LABELS[nivel]}
+              </span>
+            );
+          })}
+        </div>
+
+        {message && (
+          <div className="border-b border-emerald-100 bg-emerald-50 px-4 py-2 text-[10px] font-bold text-emerald-700">{message}</div>
+        )}
+
+        <div className="p-3">
+          {loading ? (
+            <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">Cargando organigrama...</div>
+          ) : nodos.length === 0 ? (
+            <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">
+              Todavía no hay puestos en el organigrama. {canEdit && 'Usa "+ Nuevo puesto" para empezar.'}
+            </div>
+          ) : (
+            <OrgChartCanvas
+              nodos={nodos}
+              selectedId={selectedId}
+              onSelectNode={setSelectedId}
+              onReparent={handleReparent}
+              canEdit={canEdit}
+            />
+          )}
+        </div>
+      </div>
+
+      <NodeDetailPanel
+        nodo={selectedNodo}
+        nodos={nodos}
+        canEdit={canEdit}
+        onSave={handleSaveNodo}
+        onDeactivate={handleDeactivateNodo}
+        onClose={() => setSelectedId(null)}
+      />
+
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
+              <p className="text-xs font-black uppercase tracking-widest">Nuevo puesto</p>
+              <button type="button" onClick={() => setShowAddModal(false)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
+            </div>
+            <div className="space-y-3 p-4">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Título del puesto
+                <input
+                  value={newNodo.titulo_puesto}
+                  onChange={(event) => setNewNodo((current) => ({ ...current, titulo_puesto: event.target.value }))}
+                  className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+                />
+              </label>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Nombre de quien lo ocupa
+                <input
+                  value={newNodo.nombre_persona}
+                  onChange={(event) => setNewNodo((current) => ({ ...current, nombre_persona: event.target.value }))}
+                  placeholder="Sin asignar"
+                  className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+                />
+              </label>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Nivel
+                <select
+                  value={newNodo.nivel}
+                  onChange={(event) => setNewNodo((current) => ({ ...current, nivel: event.target.value }))}
+                  className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+                >
+                  {NIVEL_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{NIVEL_LABELS[option]}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Reporta a
+                <select
+                  value={newNodo.reporta_a_id}
+                  onChange={(event) => setNewNodo((current) => ({ ...current, reporta_a_id: event.target.value }))}
+                  className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+                >
+                  <option value="">Nadie (raíz del organigrama)</option>
+                  {nodos.map((nodo) => (
+                    <option key={nodo.id} value={nodo.id}>{nodo.titulo_puesto}{nodo.nombre_persona ? ` · ${nodo.nombre_persona}` : ""}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Tipo de línea
+                <select
+                  value={newNodo.tipo_linea}
+                  onChange={(event) => setNewNodo((current) => ({ ...current, tipo_linea: event.target.value }))}
+                  className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+                >
+                  <option value="solida">Sólida (mando directo)</option>
+                  <option value="punteada">Punteada (asesoría / staff)</option>
+                </select>
+              </label>
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+                <button type="button" onClick={() => setShowAddModal(false)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button>
+                <button type="button" onClick={handleCreateNodo} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Agregar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
