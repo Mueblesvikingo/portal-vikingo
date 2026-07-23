@@ -4,8 +4,7 @@ import {
   getOrganigramaNodos,
   createNodo,
   updateNodo,
-  reparentNodo,
-  reorderSiblings,
+  updateNodoPosition,
   deactivateNodo,
 } from "../../services/organigramaService";
 import OrgChartCanvas from "./OrgChartCanvas";
@@ -66,24 +65,15 @@ export default function OrganigramaModule({ currentUser }) {
     setMessage("Puesto quitado del organigrama.");
   }
 
-  async function handleReparent(id, newParentId, siblingCount) {
-    const result = await reparentNodo(id, newParentId, siblingCount);
+  async function handleMoveNode(id, posX, posY) {
+    // Actualización optimista: el bloque ya se ve donde lo soltaste, solo
+    // se persiste en segundo plano sin recargar/parpadear todo el árbol.
+    setNodos((current) => current.map((nodo) => (nodo.id === id ? { ...nodo, pos_x: posX, pos_y: posY } : nodo)));
+    const result = await updateNodoPosition(id, posX, posY);
     if (!result.ok) {
       console.error(result.error);
-      setMessage("No fue posible reasignar el jefe.");
-      return;
+      setMessage("No fue posible guardar la posición.");
     }
-    await loadNodos();
-  }
-
-  async function handleReorderSiblings(updates) {
-    const result = await reorderSiblings(updates);
-    if (!result.ok) {
-      console.error(result.error);
-      setMessage("No fue posible reordenar los puestos.");
-      return;
-    }
-    await loadNodos();
   }
 
   async function handleCreateNodo() {
@@ -123,7 +113,7 @@ export default function OrganigramaModule({ currentUser }) {
           <div>
             <p className="text-xs font-black uppercase tracking-widest">Organigrama</p>
             <p className="text-[10px] font-bold text-slate-300">
-              Clic en un puesto: perfil y línea de mando. Icono ✥: arrastra sobre otro puesto para cambiar de jefe, o entre compañeros para reordenar. Botón "－"/"+N": expandir o colapsar subordinados.
+              Clic en un puesto: perfil, línea de mando y a quién reporta. Icono ✥: arrastra para moverlo, se queda donde lo sueltes. Botón "－"/"+N": expandir o colapsar subordinados.
             </p>
           </div>
           {canEdit && (
@@ -168,8 +158,7 @@ export default function OrganigramaModule({ currentUser }) {
               nodos={nodos}
               selectedId={selectedId}
               onSelectNode={setSelectedId}
-              onReparent={handleReparent}
-              onReorderSiblings={handleReorderSiblings}
+              onMoveNode={handleMoveNode}
               canEdit={canEdit}
             />
           )}

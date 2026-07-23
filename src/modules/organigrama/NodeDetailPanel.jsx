@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NIVEL_COLORS, NIVEL_LABELS, NIVEL_OPTIONS, getAncestorChain } from "./organigramaLayout";
+import { NIVEL_COLORS, NIVEL_LABELS, NIVEL_OPTIONS, getAncestorChain, getDescendantIds } from "./organigramaLayout";
 
 export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeactivate, onClose }) {
   const [draft, setDraft] = useState(null);
@@ -12,6 +12,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
         nombre_persona: nodo.nombre_persona || "",
         nivel: nodo.nivel || "Operativo",
         perfil_puesto: nodo.perfil_puesto || "",
+        reporta_a_id: nodo.reporta_a_id ?? "",
       });
     } else {
       setDraft(null);
@@ -24,9 +25,12 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
   const jefe = chain.length > 1 ? chain[chain.length - 2] : null;
   const colors = NIVEL_COLORS[nodo.nivel] || NIVEL_COLORS.Operativo;
 
+  const descendantIds = getDescendantIds(nodos, nodo.id);
+  const reporteOptions = nodos.filter((candidate) => candidate.id !== nodo.id && !descendantIds.has(candidate.id));
+
   async function handleSave() {
     setSaving(true);
-    await onSave(nodo.id, draft);
+    await onSave(nodo.id, { ...draft, reporta_a_id: draft.reporta_a_id === "" ? null : Number(draft.reporta_a_id) });
     setSaving(false);
   }
 
@@ -62,10 +66,27 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
                 </span>
               ))}
             </div>
-            <p className="mt-2 text-[10px] font-bold text-slate-500">
-              {jefe ? <>Reporta a <span className="font-black text-slate-700">{jefe.titulo_puesto}{jefe.nombre_persona ? ` (${jefe.nombre_persona})` : ""}</span></> : "No reporta a nadie (raíz del organigrama)"}
-            </p>
           </div>
+
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Reporta a
+            {canEdit ? (
+              <select
+                value={draft.reporta_a_id}
+                onChange={(event) => setDraft((current) => ({ ...current, reporta_a_id: event.target.value }))}
+                className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+              >
+                <option value="">Nadie (raíz del organigrama)</option>
+                {reporteOptions.map((option) => (
+                  <option key={option.id} value={option.id}>{option.titulo_puesto}{option.nombre_persona ? ` · ${option.nombre_persona}` : ""}</option>
+                ))}
+              </select>
+            ) : (
+              <p className="mt-1 text-[11px] font-bold normal-case tracking-normal text-slate-700">
+                {jefe ? `${jefe.titulo_puesto}${jefe.nombre_persona ? ` (${jefe.nombre_persona})` : ""}` : "No reporta a nadie (raíz del organigrama)"}
+              </p>
+            )}
+          </label>
 
           <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
             Título del puesto

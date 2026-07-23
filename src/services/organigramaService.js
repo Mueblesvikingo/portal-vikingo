@@ -69,6 +69,7 @@ export async function updateNodo(id, payload) {
           nombre_persona: payload.nombre_persona,
           persona_id: payload.persona_id,
           nivel: payload.nivel,
+          reporta_a_id: payload.reporta_a_id,
           tipo_linea: payload.tipo_linea,
           perfil_puesto: payload.perfil_puesto,
           activo: payload.activo,
@@ -86,17 +87,13 @@ export async function updateNodo(id, payload) {
   }
 }
 
-// Arrastrar un nodo sobre otro (cambia de jefe) o entre hermanos (reordena).
-// nuevoJefeId puede ser null para convertirlo en raíz.
-export async function reparentNodo(id, nuevoJefeId, nuevoOrden) {
+// Posición manual al arrastrar un puesto: se queda exactamente donde lo
+// sueltes (no reasigna jefe ni reordena nada más).
+export async function updateNodoPosition(id, posX, posY) {
   try {
     const { data, error } = await supabase
       .from("organigrama_nodos")
-      .update({
-        reporta_a_id: nuevoJefeId,
-        orden: nuevoOrden,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ pos_x: posX, pos_y: posY, updated_at: new Date().toISOString() })
       .eq("id", id)
       .select()
       .single();
@@ -105,21 +102,6 @@ export async function reparentNodo(id, nuevoJefeId, nuevoOrden) {
     return { ok: true, error: null, data };
   } catch (err) {
     return { ok: false, error: err, data: null };
-  }
-}
-
-export async function reorderSiblings(updates) {
-  try {
-    const results = await Promise.all(
-      updates.map(({ id, orden }) =>
-        supabase.from("organigrama_nodos").update({ orden, updated_at: new Date().toISOString() }).eq("id", id)
-      )
-    );
-    const failed = results.find((result) => result.error);
-    if (failed) return { ok: false, error: failed.error };
-    return { ok: true, error: null };
-  } catch (err) {
-    return { ok: false, error: err };
   }
 }
 

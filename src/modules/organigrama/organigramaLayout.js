@@ -96,11 +96,17 @@ export function computeLayout(nodos) {
       x = (Math.min(...childXs) + Math.max(...childXs)) / 2;
     }
 
+    const autoX = x * COLUMN_WIDTH;
+    const autoY = depth * ROW_HEIGHT;
+    // Si el usuario ya arrastró este puesto a una posición manual, se
+    // respeta esa posición tal cual (no se recalcula ni se "acomoda solo").
+    const hasManualPosition = node.pos_x !== null && node.pos_x !== undefined && node.pos_y !== null && node.pos_y !== undefined;
+
     positions.set(node.id, {
       row: depth,
       col: x,
-      x: x * COLUMN_WIDTH,
-      y: depth * ROW_HEIGHT,
+      x: hasManualPosition ? Number(node.pos_x) : autoX,
+      y: hasManualPosition ? Number(node.pos_y) : autoY,
     });
 
     return x;

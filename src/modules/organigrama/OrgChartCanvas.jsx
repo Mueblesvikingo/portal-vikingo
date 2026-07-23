@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   computeLayout,
-  canReparent,
   getAncestorChain,
   getChildren,
   hasChildren,
@@ -10,17 +9,19 @@ import {
   NIVEL_LABELS,
 } from "./organigramaLayout";
 
-const BOX_WIDTH = 168;
-const BOX_HEIGHT = 74;
-const PADDING = 50;
-const MIN_SCALE = 0.2;
+const BOX_WIDTH = 176;
+const BOX_HEIGHT = 80;
+const PADDING = 60;
+const MIN_SCALE = 0.4;
 const MAX_SCALE = 1.5;
+// Nunca se auto-reduce por debajo de esto: mejor scroll que letras
+// ilegibles. El ajuste a pantalla solo encoge hasta aquí.
+const MIN_READABLE_FIT = 0.65;
 
-export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onReparent, onReorderSiblings, canEdit }) {
+export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMoveNode, canEdit }) {
   const viewportRef = useRef(null);
   const canvasRef = useRef(null);
   const [dragging, setDragging] = useState(null); // { id, offsetX, offsetY, x, y }
-  const [hoverTargetId, setHoverTargetId] = useState(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [manualScale, setManualScale] = useState(null); // null = ajustar a pantalla automáticamente
   const [collapsedIds, setCollapsedIds] = useState(null); // null = aún no se definió el default
@@ -64,9 +65,10 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
     return () => observer.disconnect();
   }, []);
 
-  const fitScale = viewportSize.width > 0 && canvasWidth > 0
+  const rawFit = viewportSize.width > 0 && canvasWidth > 0
     ? Math.min(1, viewportSize.width / canvasWidth, viewportSize.height / canvasHeight)
     : 1;
+  const fitScale = Math.max(MIN_READABLE_FIT, rawFit);
   const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, manualScale ?? fitScale));
 
   // Línea de mando hacia arriba (a quién reporta, incluyéndose a sí mismo).
@@ -92,17 +94,6 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
     })
     .filter(Boolean);
 
-  function hitTest(rawX, rawY) {
-    const hit = boxes.find(
-      (box) =>
-        rawX >= box.left &&
-        rawX <= box.left + BOX_WIDTH &&
-        rawY >= box.top &&
-        rawY <= box.top + BOX_HEIGHT
-    );
-    return hit ? hit.nodo.id : null;
-  }
-
   function startDrag(event, nodo) {
     if (!canEdit || !canvasRef.current) return;
     event.preventDefault();
@@ -123,32 +114,19 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
     const rect = canvasRef.current.getBoundingClientRect();
     const rawX = (event.clientX - rect.left) / scale - dragging.offsetX;
     const rawY = (event.clientY - rect.top) / scale - dragging.offsetY;
-    const centerX = rawX + BOX_WIDTH / 2;
-    const centerY = rawY + BOX_HEIGHT / 2;
-    const target = hitTest(centerX, centerY);
-    setHoverTargetId(target && target !== dragging.id ? target : null);
     setDragging((current) => ({ ...current, x: rawX, y: rawY }));
   }
 
+  // Al soltar, el bloque se queda exactamente donde lo pusiste — sin
+  // reasignar jefe ni reordenar nada más. "Reporta a" se cambia desde el
+  // panel de perfil de puesto (selector explícito), no arrastrando.
   function stopDrag() {
-    if (dragging && hoverTargetId) {
-      const draggedNodo = nodos.find((nodo) => nodo.id === dragging.id);
-      const targetNodo = nodos.find((nodo) => nodo.id === hoverTargetId);
-      const sameParent = draggedNodo && targetNodo && (draggedNodo.reporta_a_id ?? null) === (targetNodo.reporta_a_id ?? null);
-
-      if (sameParent) {
-        // Reordenar entre hermanos: el arrastrado toma la posición del objetivo.
-        const siblings = getChildren(nodos, targetNodo.reporta_a_id ?? null).filter((nodo) => nodo.id !== dragging.id);
-        const targetIndex = siblings.findIndex((nodo) => nodo.id === hoverTargetId);
-        const reordered = [...siblings.slice(0, targetIndex), draggedNodo, ...siblings.slice(targetIndex)];
-        onReorderSiblings(reordered.map((nodo, index) => ({ id: nodo.id, orden: index })));
-      } else if (canReparent(nodos, dragging.id, hoverTargetId)) {
-        const siblingCount = nodos.filter((nodo) => (nodo.reporta_a_id ?? null) === hoverTargetId).length;
-        onReparent(dragging.id, hoverTargetId, siblingCount);
-      }
+    if (dragging) {
+      const posX = dragging.x + BOX_WIDTH / 2 - PADDING;
+      const posY = dragging.y - PADDING;
+      onMoveNode(dragging.id, posX, posY);
     }
     setDragging(null);
-    setHoverTargetId(null);
   }
 
   function zoomBy(factor) {
@@ -197,7 +175,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
                   d={`M ${px} ${py} L ${px} ${midY} L ${cx} ${midY} L ${cx} ${cy}`}
                   fill="none"
                   stroke={strokeColor}
-                  strokeWidth={isChainOfCommand || isDirectReportEdge ? 2.5 : 1.5}
+                  strokeWidth={isChainOfCommand || isDirectReportEdge ? 3 : 1.5}
                   strokeDasharray={nodo.tipo_linea === "punteada" ? "5,4" : undefined}
                 />
               );
@@ -207,18 +185,17 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
           {boxes.map(({ nodo, left, top }) => {
             const colors = NIVEL_COLORS[nodo.nivel] || NIVEL_COLORS.Operativo;
             const isDragged = dragging?.id === nodo.id;
-            const isDropTarget = hoverTargetId === nodo.id;
             const isSelected = selectedId === nodo.id;
             const isAncestor = !isSelected && ancestorIds.has(nodo.id);
             const isDirectReport = !isSelected && directReportIds.has(nodo.id);
             const boxLeft = isDragged ? dragging.x : left;
             const boxTop = isDragged ? dragging.y : top;
             const relationRing = isSelected
-              ? "ring-2 ring-[#001225]"
+              ? "ring-[3px] ring-[#001225]"
               : isAncestor
-                ? "ring-2 ring-red-400"
+                ? "ring-[3px] ring-red-400"
                 : isDirectReport
-                  ? "ring-2 ring-emerald-400"
+                  ? "ring-[3px] ring-emerald-400"
                   : "";
             const childCount = getChildren(nodos, nodo.id).length;
 
@@ -226,9 +203,9 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
               <div
                 key={nodo.id}
                 onClick={() => onSelectNode(nodo.id)}
-                className={`group absolute flex select-none flex-col items-center justify-center rounded-xl border px-2 py-1.5 text-center shadow-sm transition-shadow cursor-pointer hover:shadow-md hover:ring-2 hover:ring-slate-300 ${colors.bg} ${colors.border} ${colors.text} ${
+                className={`group absolute flex select-none flex-col items-center justify-center rounded-xl border-2 px-2 py-1.5 text-center shadow-sm transition-shadow cursor-pointer hover:shadow-md hover:ring-2 hover:ring-slate-300 ${colors.bg} ${colors.border} ${colors.text} ${
                   isDragged ? "z-30 shadow-xl" : "z-10"
-                } ${isDropTarget ? "ring-2 ring-emerald-500" : ""} ${relationRing}`}
+                } ${relationRing}`}
                 style={{ left: boxLeft, top: boxTop, width: BOX_WIDTH, height: BOX_HEIGHT }}
                 title={`${NIVEL_LABELS[nodo.nivel] || nodo.nivel} · clic para ver perfil de puesto`}
               >
@@ -236,15 +213,15 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
                   <span
                     onMouseDown={(event) => startDrag(event, nodo)}
                     onClick={(event) => event.stopPropagation()}
-                    title="Arrastrar: sobre otro puesto cambia de jefe, entre hermanos reordena"
-                    className="absolute -right-1 -top-1 flex h-5 w-5 cursor-grab items-center justify-center rounded-full border border-slate-300 bg-white text-[10px] font-black text-slate-400 opacity-0 shadow-sm group-hover:opacity-100 active:cursor-grabbing"
+                    title="Arrastrar para moverlo — se queda donde lo sueltes"
+                    className="absolute -right-1.5 -top-1.5 flex h-6 w-6 cursor-grab items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-black text-slate-500 opacity-0 shadow-sm group-hover:opacity-100 active:cursor-grabbing"
                   >
                     ✥
                   </span>
                 )}
-                <p className="line-clamp-2 text-[10px] font-black uppercase tracking-wide leading-tight">{nodo.titulo_puesto}</p>
-                <p className="mt-0.5 truncate text-[9px] font-bold opacity-80">{nodo.nombre_persona || "Sin asignar"}</p>
-                <span className="pointer-events-none absolute bottom-1 right-1.5 text-[9px] font-black opacity-0 group-hover:opacity-60">ⓘ</span>
+                <p className="line-clamp-2 text-[12px] font-black uppercase leading-tight tracking-wide">{nodo.titulo_puesto}</p>
+                <p className="mt-0.5 truncate text-[11px] font-bold opacity-80">{nodo.nombre_persona || "Sin asignar"}</p>
+                <span className="pointer-events-none absolute bottom-1 right-1.5 text-[10px] font-black opacity-0 group-hover:opacity-60">ⓘ</span>
 
                 {childCount > 0 && (
                   <button
@@ -254,7 +231,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onRepa
                       toggleCollapse(nodo.id);
                     }}
                     title={effectiveCollapsed.has(nodo.id) ? `Mostrar ${childCount} subordinado(s)` : "Ocultar subordinados"}
-                    className="absolute -bottom-2.5 left-1/2 z-20 flex h-5 min-w-[20px] -translate-x-1/2 items-center justify-center rounded-full border border-slate-300 bg-white px-1 text-[9px] font-black text-slate-500 shadow-sm hover:bg-slate-50"
+                    className="absolute -bottom-3 left-1/2 z-20 flex h-6 min-w-[24px] -translate-x-1/2 items-center justify-center rounded-full border border-slate-300 bg-white px-1 text-[10px] font-black text-slate-600 shadow-sm hover:bg-slate-50"
                   >
                     {effectiveCollapsed.has(nodo.id) ? `+${childCount}` : "－"}
                   </button>
