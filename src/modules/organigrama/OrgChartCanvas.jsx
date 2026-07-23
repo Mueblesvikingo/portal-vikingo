@@ -150,21 +150,30 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
         onMouseUp={stopDrag}
         onMouseLeave={() => dragging && stopDrag()}
       >
-        <div
-          ref={canvasRef}
-          className="relative origin-top-left"
-          style={{ width: canvasWidth, height: canvasHeight, transform: `scale(${scale})` }}
-        >
+        {/* Este div reserva exactamente el tamaño ya escalado, para que el
+            scroll del contenedor no deje espacio en blanco de más (transform:
+            scale no reduce el tamaño de layout, solo el visual). */}
+        <div style={{ width: canvasWidth * scale, height: canvasHeight * scale }}>
+          <div
+            ref={canvasRef}
+            className="relative origin-top-left"
+            style={{ width: canvasWidth, height: canvasHeight, transform: `scale(${scale})` }}
+          >
           <svg className="pointer-events-none absolute inset-0" width={canvasWidth} height={canvasHeight}>
             {visibleNodos.map((nodo) => {
               if (!nodo.reporta_a_id) return null;
               const childPos = layout.positions.get(nodo.id);
               const parentPos = layout.positions.get(nodo.reporta_a_id);
               if (!childPos || !parentPos) return null;
-              const px = parentPos.x + PADDING;
-              const py = parentPos.y + PADDING + BOX_HEIGHT;
-              const cx = childPos.x + PADDING;
-              const cy = childPos.y + PADDING;
+              // Si uno de los dos extremos se está arrastrando, la línea
+              // sigue al cursor en vivo (como en Visio) en vez de quedarse
+              // pegada a la posición anterior.
+              const parentDragged = dragging?.id === nodo.reporta_a_id;
+              const childDragged = dragging?.id === nodo.id;
+              const px = (parentDragged ? dragging.x - PADDING + BOX_WIDTH / 2 : parentPos.x) + PADDING;
+              const py = (parentDragged ? dragging.y - PADDING : parentPos.y) + PADDING + BOX_HEIGHT;
+              const cx = (childDragged ? dragging.x - PADDING + BOX_WIDTH / 2 : childPos.x) + PADDING;
+              const cy = (childDragged ? dragging.y - PADDING : childPos.y) + PADDING;
               const midY = (py + cy) / 2;
               const isChainOfCommand = ancestorIds.has(nodo.id) && ancestorIds.has(nodo.reporta_a_id);
               const isDirectReportEdge = selectedId && nodo.reporta_a_id === selectedId && directReportIds.has(nodo.id);
@@ -239,6 +248,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
               </div>
             );
           })}
+          </div>
         </div>
       </div>
     </div>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { NIVEL_COLORS, NIVEL_LABELS, NIVEL_OPTIONS, getAncestorChain, getDescendantIds } from "./organigramaLayout";
+import { NIVEL_COLORS, NIVEL_LABELS, NIVEL_OPTIONS, getAncestorChain, getDescendantIds, getChildren } from "./organigramaLayout";
 
-export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeactivate, onClose }) {
+export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeactivate, onAssignParent, onClose }) {
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [addingReportId, setAddingReportId] = useState("");
 
   useEffect(() => {
     if (nodo) {
@@ -27,6 +28,25 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
 
   const descendantIds = getDescendantIds(nodos, nodo.id);
   const reporteOptions = nodos.filter((candidate) => candidate.id !== nodo.id && !descendantIds.has(candidate.id));
+  const directReports = getChildren(nodos, nodo.id);
+  const addableAsReport = nodos.filter(
+    (candidate) => candidate.id !== nodo.id && candidate.reporta_a_id !== nodo.id && !getAncestorChain(nodos, nodo.id).some((ancestor) => ancestor.id === candidate.id)
+  );
+
+  async function handleAddReport() {
+    if (!addingReportId) return;
+    setSaving(true);
+    await onAssignParent(Number(addingReportId), nodo.id);
+    setSaving(false);
+    setAddingReportId("");
+  }
+
+  async function handleRemoveReport(childId) {
+    if (!window.confirm("¿Quitar esta conexión? El puesto quedará sin jefe (raíz) hasta que le asignes otro.")) return;
+    setSaving(true);
+    await onAssignParent(childId, null);
+    setSaving(false);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -87,6 +107,59 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
               </p>
             )}
           </label>
+
+          <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Subordinados directos {directReports.length > 0 ? `(${directReports.length})` : ""}
+            </p>
+            {directReports.length === 0 ? (
+              <p className="mt-1 text-[10px] font-bold text-slate-400">Nadie le reporta directamente todavía.</p>
+            ) : (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {directReports.map((report) => {
+                  const reportColors = NIVEL_COLORS[report.nivel] || NIVEL_COLORS.Operativo;
+                  return (
+                    <span key={report.id} className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-black ${reportColors.border} ${reportColors.text} ${reportColors.bg}`}>
+                      {report.titulo_puesto}{report.nombre_persona ? ` · ${report.nombre_persona}` : ""}
+                      {canEdit && (
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => handleRemoveReport(report.id)}
+                          title="Quitar esta conexión"
+                          className="ml-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/10 text-[9px] leading-none hover:bg-black/20"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            {canEdit && (
+              <div className="mt-2 flex gap-1.5">
+                <select
+                  value={addingReportId}
+                  onChange={(event) => setAddingReportId(event.target.value)}
+                  className="h-9 flex-1 rounded-xl border border-slate-200 bg-white px-2 text-[10px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+                >
+                  <option value="">Agregar puesto existente como subordinado...</option>
+                  {addableAsReport.map((option) => (
+                    <option key={option.id} value={option.id}>{option.titulo_puesto}{option.nombre_persona ? ` · ${option.nombre_persona}` : ""}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!addingReportId || saving}
+                  onClick={handleAddReport}
+                  className="rounded-xl bg-[#001225] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  Agregar
+                </button>
+              </div>
+            )}
+          </div>
 
           <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
             Título del puesto

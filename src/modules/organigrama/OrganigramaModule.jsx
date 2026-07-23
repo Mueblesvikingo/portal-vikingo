@@ -65,6 +65,17 @@ export default function OrganigramaModule({ currentUser }) {
     setMessage("Puesto quitado del organigrama.");
   }
 
+  async function handleAssignParent(childId, newParentId) {
+    const result = await updateNodo(childId, { reporta_a_id: newParentId });
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible actualizar la conexión.");
+      return;
+    }
+    await loadNodos();
+    setMessage("Conexión actualizada.");
+  }
+
   async function handleMoveNode(id, posX, posY) {
     // Actualización optimista: el bloque ya se ve donde lo soltaste, solo
     // se persiste en segundo plano sin recargar/parpadear todo el árbol.
@@ -113,7 +124,7 @@ export default function OrganigramaModule({ currentUser }) {
           <div>
             <p className="text-xs font-black uppercase tracking-widest">Organigrama</p>
             <p className="text-[10px] font-bold text-slate-300">
-              Clic en un puesto: perfil, línea de mando y a quién reporta. Icono ✥: arrastra para moverlo, se queda donde lo sueltes. Botón "－"/"+N": expandir o colapsar subordinados.
+              Clic en un puesto: perfil, línea de mando, a quién reporta y quiénes le reportan (con opción de agregar/quitar conexiones ahí mismo). Icono ✥: arrastra para moverlo, se queda donde lo sueltes.
             </p>
           </div>
           {canEdit && (
@@ -171,6 +182,7 @@ export default function OrganigramaModule({ currentUser }) {
         canEdit={canEdit}
         onSave={handleSaveNodo}
         onDeactivate={handleDeactivateNodo}
+        onAssignParent={handleAssignParent}
         onClose={() => setSelectedId(null)}
       />
 
