@@ -2107,8 +2107,17 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     const step = Math.min(effectiveColumnCount - 1, allBlocks.length % effectiveColumnCount);
     const createdBlock = onAddBlock ? await onAddBlock({ ...newBlock, order: step, lane: visibleLanes[0]?.lane, roleId: visibleLanes[0]?.roleId }) : null;
     if (onAddBlock && !createdBlock) return;
-    const blockToInsert = createdBlock || newBlock;
 
+    // Cuando hay onAddBlock (Supabase), este ya recarga los datos del
+    // proceso completo al terminar (reloadSelectedProcessData) — eso trae
+    // el bloque nuevo YA bien ubicado por rol/nombre. Si aquí además lo
+    // insertábamos a mano en la posición local capturada ANTES de esperar
+    // ese await (visibleLanes[0] podía quedar desactualizado para cuando
+    // esto corre), competía con la recarga y a veces "ganaba" con datos
+    // viejos, corriendo de carril a otras actividades ya existentes.
+    if (onAddBlock) return;
+
+    const blockToInsert = newBlock;
     rememberState();
     setLanes((current) => current.map((lane) => (getLaneKey(lane, 0) === getLaneKey(visibleLanes[0], 0) ? { ...lane, [blockKey]: [...lane[blockKey], blockToInsert] } : lane)));
     setPositions((current) => {
