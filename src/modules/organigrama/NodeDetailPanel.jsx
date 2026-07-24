@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NIVEL_COLORS, NIVEL_LABELS, NIVEL_OPTIONS, getAncestorChain, getDescendantIds, getChildren } from "./organigramaLayout";
 
-export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeactivate, onAssignParent, onClose }) {
+export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeactivate, onAssignParent, onClose, personasCatalogo = [], puestosCatalogo = [] }) {
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const [addingReportId, setAddingReportId] = useState("");
@@ -164,22 +164,34 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
           <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
             Título del puesto
             <input
+              list="organigrama-puestos-catalogo-detalle"
               disabled={!canEdit}
               value={draft.titulo_puesto}
               onChange={(event) => setDraft((current) => ({ ...current, titulo_puesto: event.target.value }))}
               className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:text-slate-400"
             />
+            <datalist id="organigrama-puestos-catalogo-detalle">
+              {puestosCatalogo.map((puesto) => (
+                <option key={puesto.id} value={puesto.nombre} />
+              ))}
+            </datalist>
           </label>
 
           <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
             Nombre de quien lo ocupa
             <input
+              list="organigrama-personas-catalogo-detalle"
               disabled={!canEdit}
               value={draft.nombre_persona}
               onChange={(event) => setDraft((current) => ({ ...current, nombre_persona: event.target.value }))}
               placeholder="Sin asignar"
               className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:text-slate-400"
             />
+            <datalist id="organigrama-personas-catalogo-detalle">
+              {personasCatalogo.map((persona) => (
+                <option key={persona.id} value={persona.nombre} />
+              ))}
+            </datalist>
           </label>
 
           <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">

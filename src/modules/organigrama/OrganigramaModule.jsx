@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { canEditModule } from "../../services/permissionsService";
+import { getPersonas, getPuestos } from "../../services/organizationCatalogService";
 import {
   getOrganigramaNodos,
   createNodo,
@@ -26,6 +27,8 @@ export default function OrganigramaModule({ currentUser }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newNodo, setNewNodo] = useState(EMPTY_NEW_NODO);
   const [message, setMessage] = useState("");
+  const [personasCatalogo, setPersonasCatalogo] = useState([]);
+  const [puestosCatalogo, setPuestosCatalogo] = useState([]);
 
   const canEdit = canEditModule(currentUser, "organigrama");
 
@@ -38,12 +41,25 @@ export default function OrganigramaModule({ currentUser }) {
 
   useEffect(() => {
     loadNodos();
+    // Catálogo real (personas/puestos de Catálogo Organizacional) para
+    // autocompletar nombre y título con lo que ya existe, en vez de texto
+    // libre desconectado de la fuente oficial.
+    getPersonas().then(setPersonasCatalogo).catch(() => setPersonasCatalogo([]));
+    getPuestos().then(setPuestosCatalogo).catch(() => setPuestosCatalogo([]));
   }, []);
+
+  // Si el nombre capturado coincide exactamente (sin distinguir mayúsculas)
+  // con una persona real del catálogo, se guarda también su persona_id para
+  // dejar el vínculo real, no solo el texto.
+  function matchPersonaId(nombre) {
+    const match = personasCatalogo.find((persona) => persona.nombre?.trim().toLowerCase() === String(nombre || "").trim().toLowerCase());
+    return match ? match.id : null;
+  }
 
   const selectedNodo = nodos.find((nodo) => nodo.id === selectedId) || null;
 
   async function handleSaveNodo(id, draft) {
-    const result = await updateNodo(id, draft);
+    const result = await updateNodo(id, { ...draft, persona_id: matchPersonaId(draft.nombre_persona) });
     if (!result.ok) {
       console.error(result.error);
       setMessage("No fue posible guardar los cambios.");
@@ -98,6 +114,7 @@ export default function OrganigramaModule({ currentUser }) {
     const result = await createNodo({
       ...newNodo,
       reporta_a_id: newNodo.reporta_a_id ? Number(newNodo.reporta_a_id) : null,
+      persona_id: matchPersonaId(newNodo.nombre_persona),
       orden: siblingCount,
     });
     if (!result.ok) {
@@ -184,6 +201,8 @@ export default function OrganigramaModule({ currentUser }) {
         onDeactivate={handleDeactivateNodo}
         onAssignParent={handleAssignParent}
         onClose={() => setSelectedId(null)}
+        personasCatalogo={personasCatalogo}
+        puestosCatalogo={puestosCatalogo}
       />
 
       {showAddModal && (
@@ -197,19 +216,32 @@ export default function OrganigramaModule({ currentUser }) {
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
                 Título del puesto
                 <input
+                  list="organigrama-puestos-catalogo"
                   value={newNodo.titulo_puesto}
                   onChange={(event) => setNewNodo((current) => ({ ...current, titulo_puesto: event.target.value }))}
+                  placeholder="Elige uno del catálogo o escribe uno nuevo"
                   className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
                 />
+                <datalist id="organigrama-puestos-catalogo">
+                  {puestosCatalogo.map((puesto) => (
+                    <option key={puesto.id} value={puesto.nombre} />
+                  ))}
+                </datalist>
               </label>
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
                 Nombre de quien lo ocupa
                 <input
+                  list="organigrama-personas-catalogo"
                   value={newNodo.nombre_persona}
                   onChange={(event) => setNewNodo((current) => ({ ...current, nombre_persona: event.target.value }))}
-                  placeholder="Sin asignar"
+                  placeholder="Elige uno del catálogo o deja &quot;Sin asignar&quot;"
                   className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
                 />
+                <datalist id="organigrama-personas-catalogo">
+                  {personasCatalogo.map((persona) => (
+                    <option key={persona.id} value={persona.nombre} />
+                  ))}
+                </datalist>
               </label>
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
                 Nivel
