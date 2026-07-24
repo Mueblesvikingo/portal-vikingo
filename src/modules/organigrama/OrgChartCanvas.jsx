@@ -153,8 +153,12 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
   // otros — así se puede acomodar a mano tal cual se quiera.
   function stopDrag() {
     if (dragging?.mode === "move") {
-      const posX = dragging.x + BOX_WIDTH / 2 - PADDING;
-      const posY = dragging.y - PADDING;
+      // Nunca en negativo: el lienzo se mide desde (0,0) sin desplazarse
+      // (ver organigramaLayout.computeLayout) — una posición negativa
+      // quedaría fuera de ese cuadro y volvería a "flotar" con cada
+      // recálculo.
+      const posX = Math.max(0, dragging.x + BOX_WIDTH / 2 - PADDING);
+      const posY = Math.max(0, dragging.y - PADDING);
       onMoveNode(dragging.id, posX, posY);
       justDraggedRef.current = true;
     } else if (dragging?.mode === "connect" && dragging.hoverTargetId && dragging.hoverTargetId !== dragging.id) {
@@ -179,8 +183,8 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
     const rect = canvasRef.current.getBoundingClientRect();
     const rawX = (event.clientX - rect.left) / scale;
     const rawY = (event.clientY - rect.top) / scale;
-    const posX = rawX - PADDING;
-    const posY = rawY - PADDING - BOX_HEIGHT / 2;
+    const posX = Math.max(0, rawX - PADDING);
+    const posY = Math.max(0, rawY - PADDING - BOX_HEIGHT / 2);
     onCreateNodeAt(posX, posY);
   }
 
@@ -248,7 +252,14 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
             ref={canvasRef}
             onDoubleClick={handleCanvasDoubleClick}
             className="relative origin-top-left"
-            style={{ width: canvasWidth, height: canvasHeight, transform: `scale(${scale})`, cursor: canEdit ? "copy" : "default" }}
+            style={{
+              width: canvasWidth,
+              height: canvasHeight,
+              transform: `scale(${scale})`,
+              cursor: canEdit ? "copy" : "default",
+              backgroundImage: "radial-gradient(circle, #cbd5e1 1.5px, transparent 1.5px)",
+              backgroundSize: "24px 24px",
+            }}
           >
           <svg className="pointer-events-none absolute inset-0" width={canvasWidth} height={canvasHeight}>
             <defs>

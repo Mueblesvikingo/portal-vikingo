@@ -136,36 +136,25 @@ export function computeLayout(nodos) {
   getRoots(nodos).forEach((root) => visit(root, 0));
 
   // El ancho/alto NO se calcula solo por el conteo de columnas del árbol
-  // automático: un puesto movido a mano puede quedar fuera de ese rango
-  // (incluso en negativo). Se recalcula el cuadro real que envuelve a
-  // TODOS los puestos (automáticos y movidos a mano) y se recorren las
-  // posiciones para que el mínimo quede en 0 — así el lienzo siempre
-  // encierra todo, sin cortar ni dejar espacio de más.
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
+  // automático: un puesto movido a mano puede quedar fuera de ese rango.
+  // Importante: aquí NO se desplazan las posiciones para "encajarlas" a un
+  // mínimo de 0 — hacerlo recalculaba el corrimiento en cada render a
+  // partir del mínimo ACTUAL (que cambia cada vez que alguien mueve
+  // cualquier puesto), así que una posición manual "derivaba" de lugar
+  // sola con cada arrastre ajeno. Las posiciones quedan tal cual (siempre
+  // >= 0, ver el clamp en OrgChartCanvas al soltar) y solo se extiende el
+  // ancho/alto del lienzo para que nunca corte nada.
+  let maxX = 0;
+  let maxY = 0;
   positions.forEach((pos) => {
-    minX = Math.min(minX, pos.x);
     maxX = Math.max(maxX, pos.x);
-    minY = Math.min(minY, pos.y);
     maxY = Math.max(maxY, pos.y);
-  });
-  if (!Number.isFinite(minX)) {
-    minX = 0;
-    maxX = 0;
-    minY = 0;
-    maxY = 0;
-  }
-
-  positions.forEach((pos, id) => {
-    positions.set(id, { ...pos, x: pos.x - minX, y: pos.y - minY });
   });
 
   return {
     positions,
-    width: maxX - minX + COLUMN_WIDTH,
-    height: maxY - minY + ROW_HEIGHT,
+    width: maxX + COLUMN_WIDTH,
+    height: maxY + ROW_HEIGHT,
     columnWidth: COLUMN_WIDTH,
     rowHeight: ROW_HEIGHT,
   };
