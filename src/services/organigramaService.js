@@ -47,6 +47,11 @@ export async function createNodo(payload) {
           tipo_linea: payload.tipo_linea || "solida",
           orden: payload.orden ?? 0,
           perfil_puesto: payload.perfil_puesto || null,
+          objetivo_puesto: payload.objetivo_puesto || null,
+          competencias_clave: payload.competencias_clave || null,
+          responsabilidades_clave: payload.responsabilidades_clave || null,
+          pos_x: payload.pos_x ?? null,
+          pos_y: payload.pos_y ?? null,
           activo: payload.activo ?? true,
         }),
       ])
@@ -74,6 +79,9 @@ export async function updateNodo(id, payload) {
           reporta_a_id: payload.reporta_a_id,
           tipo_linea: payload.tipo_linea,
           perfil_puesto: payload.perfil_puesto,
+          objetivo_puesto: payload.objetivo_puesto,
+          competencias_clave: payload.competencias_clave,
+          responsabilidades_clave: payload.responsabilidades_clave,
           activo: payload.activo,
           updated_at: new Date().toISOString(),
         })

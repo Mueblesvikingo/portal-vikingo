@@ -11,6 +11,16 @@ import {
   NIVEL_LABELS,
 } from "./organigramaLayout";
 
+// En Catálogo Organizacional los nombres van "APELLIDO APELLIDO NOMBRE" —
+// en la caja solo se quiere mostrar el nombre de pila (última palabra), no
+// los apellidos. Los nombres cargados directo en el organigrama (ya sin
+// apellidos, ej. "Sajid") quedan igual porque son una sola palabra.
+function firstNameOnly(fullName) {
+  if (!fullName) return fullName;
+  const parts = fullName.trim().split(/\s+/);
+  return parts[parts.length - 1];
+}
+
 const BOX_WIDTH = 176;
 const BOX_HEIGHT = 80;
 const PADDING = 60;
@@ -20,9 +30,13 @@ const MAX_SCALE = 1.5;
 // ilegibles. El ajuste a pantalla solo encoge hasta aquí.
 const MIN_READABLE_FIT = 0.65;
 
-export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMoveNode, canEdit, personasCatalogo = [], puestosCatalogo = [], conexiones = [], onCreateConexion, onDeleteConexion }) {
+const DRAG_THRESHOLD_PX = 4;
+
+export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMoveNode, onCreateNodeAt, canEdit, personasCatalogo = [], puestosCatalogo = [], conexiones = [], onCreateConexion, onDeleteConexion }) {
   const viewportRef = useRef(null);
   const canvasRef = useRef(null);
+  const pendingRef = useRef(null); // posible arrastre de movimiento aún sin confirmar (antes de cruzar el umbral)
+  const justDraggedRef = useRef(false); // evita que el clic que sigue a un arrastre real abra el panel
   const [dragging, setDragging] = useState(null); // { id, offsetX, offsetY, x, y }
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [manualScale, setManualScale] = useState(null); // null = ajustar a pantalla automáticamente
@@ -96,28 +110,42 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
     })
     .filter(Boolean);
 
-  function startDrag(event, nodo) {
+  // Clic normal en la caja = seleccionarla (ver perfil). Si esa misma caja
+  // se arrastra (moverla) primero, no queremos que el clic al soltar abra
+  // el panel — por eso empieza como "pendiente" y solo se vuelve un
+  // arrastre real al cruzar unos pocos pixeles de movimiento.
+  function handleBoxMouseDown(event, nodo) {
     if (!canEdit || !canvasRef.current) return;
-    event.preventDefault();
-    event.stopPropagation();
     const box = boxes.find((b) => b.nodo.id === nodo.id);
     const rect = canvasRef.current.getBoundingClientRect();
-    setDragging({
+    pendingRef.current = {
       id: nodo.id,
-      mode: "move",
+      startClientX: event.clientX,
+      startClientY: event.clientY,
       offsetX: (event.clientX - rect.left) / scale - (box?.left ?? 0),
       offsetY: (event.clientY - rect.top) / scale - (box?.top ?? 0),
-      x: box?.left ?? 0,
-      y: box?.top ?? 0,
-    });
+    };
   }
 
   function moveDrag(event) {
-    if (!dragging || dragging.mode !== "move" || !canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const rawX = (event.clientX - rect.left) / scale - dragging.offsetX;
-    const rawY = (event.clientY - rect.top) / scale - dragging.offsetY;
-    setDragging((current) => ({ ...current, x: rawX, y: rawY }));
+    if (!canvasRef.current) return;
+    if (dragging?.mode === "move") {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const rawX = (event.clientX - rect.left) / scale - dragging.offsetX;
+      const rawY = (event.clientY - rect.top) / scale - dragging.offsetY;
+      setDragging((current) => ({ ...current, x: rawX, y: rawY }));
+      return;
+    }
+    if (pendingRef.current && !dragging) {
+      const dx = event.clientX - pendingRef.current.startClientX;
+      const dy = event.clientY - pendingRef.current.startClientY;
+      if (Math.abs(dx) > DRAG_THRESHOLD_PX || Math.abs(dy) > DRAG_THRESHOLD_PX) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        const rawX = (event.clientX - rect.left) / scale - pendingRef.current.offsetX;
+        const rawY = (event.clientY - rect.top) / scale - pendingRef.current.offsetY;
+        setDragging({ id: pendingRef.current.id, mode: "move", offsetX: pendingRef.current.offsetX, offsetY: pendingRef.current.offsetY, x: rawX, y: rawY });
+      }
+    }
   }
 
   // Libertad total: el bloque se queda exactamente en el pixel donde lo
@@ -128,10 +156,32 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
       const posX = dragging.x + BOX_WIDTH / 2 - PADDING;
       const posY = dragging.y - PADDING;
       onMoveNode(dragging.id, posX, posY);
+      justDraggedRef.current = true;
     } else if (dragging?.mode === "connect" && dragging.hoverTargetId && dragging.hoverTargetId !== dragging.id) {
       onCreateConexion(dragging.id, dragging.hoverTargetId);
     }
+    pendingRef.current = null;
     setDragging(null);
+  }
+
+  function handleBoxClick(nodo) {
+    if (justDraggedRef.current) {
+      justDraggedRef.current = false;
+      return;
+    }
+    onSelectNode(nodo.id);
+  }
+
+  // Doble clic en un espacio vacío del lienzo: crea un puesto nuevo justo
+  // ahí, tipo Visio (doble clic en blanco → figura nueva lista para editar).
+  function handleCanvasDoubleClick(event) {
+    if (!canEdit || !canvasRef.current || event.target !== canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const rawX = (event.clientX - rect.left) / scale;
+    const rawY = (event.clientY - rect.top) / scale;
+    const posX = rawX - PADDING;
+    const posY = rawY - PADDING - BOX_HEIGHT / 2;
+    onCreateNodeAt(posX, posY);
   }
 
   function startConnect(event, nodo) {
@@ -168,11 +218,18 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-end gap-1">
-        <button type="button" onClick={() => zoomBy(1 / 1.15)} className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-black text-slate-500 hover:bg-slate-50">－</button>
-        <span className="min-w-[3.5rem] rounded-lg border border-slate-200 bg-white px-2 py-1 text-center text-[10px] font-black text-slate-500">{Math.round(scale * 100)}%</span>
-        <button type="button" onClick={() => zoomBy(1.15)} className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-black text-slate-500 hover:bg-slate-50">＋</button>
-        <button type="button" onClick={() => setManualScale(null)} className="ml-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50">⤢ Ajustar a pantalla</button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {canEdit && (
+          <p className="text-[9px] font-bold text-slate-400">
+            Arrastra un puesto para moverlo · doble clic en un espacio vacío para agregar uno nuevo · 🔗 para conectar dos puestos
+          </p>
+        )}
+        <div className="ml-auto flex items-center gap-1">
+          <button type="button" onClick={() => zoomBy(1 / 1.15)} className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-black text-slate-500 hover:bg-slate-50">－</button>
+          <span className="min-w-[3.5rem] rounded-lg border border-slate-200 bg-white px-2 py-1 text-center text-[10px] font-black text-slate-500">{Math.round(scale * 100)}%</span>
+          <button type="button" onClick={() => zoomBy(1.15)} className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-black text-slate-500 hover:bg-slate-50">＋</button>
+          <button type="button" onClick={() => setManualScale(null)} className="ml-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50">⤢ Ajustar a pantalla</button>
+        </div>
       </div>
 
       <div
@@ -189,8 +246,9 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
         <div style={{ width: canvasWidth * scale, height: canvasHeight * scale }}>
           <div
             ref={canvasRef}
+            onDoubleClick={handleCanvasDoubleClick}
             className="relative origin-top-left"
-            style={{ width: canvasWidth, height: canvasHeight, transform: `scale(${scale})` }}
+            style={{ width: canvasWidth, height: canvasHeight, transform: `scale(${scale})`, cursor: canEdit ? "copy" : "default" }}
           >
           <svg className="pointer-events-none absolute inset-0" width={canvasWidth} height={canvasHeight}>
             <defs>
@@ -282,7 +340,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
             const isDirectReport = !isSelected && directReportIds.has(nodo.id);
             const boxLeft = isDragged ? dragging.x : left;
             const boxTop = isDragged ? dragging.y : top;
-            const relationRing = isConnectTarget
+            const relationRing = isConnectTarget || isConnectSource
               ? "ring-[3px] ring-violet-500"
               : isSelected
                 ? "ring-[3px] ring-[#001225]"
@@ -296,35 +354,26 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
             return (
               <div
                 key={nodo.id}
-                onClick={() => onSelectNode(nodo.id)}
-                className={`group absolute flex select-none flex-col items-center justify-center rounded-xl border-2 px-2 py-1.5 text-center shadow-sm transition-shadow cursor-pointer hover:shadow-md hover:ring-2 hover:ring-slate-300 ${colors.bg} ${colors.border} ${colors.text} ${
+                onMouseDown={(event) => handleBoxMouseDown(event, nodo)}
+                onClick={() => handleBoxClick(nodo)}
+                className={`group absolute flex select-none flex-col items-center justify-center rounded-xl border-2 px-2 py-1.5 text-center shadow-sm transition-shadow ${canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} hover:shadow-md hover:ring-2 hover:ring-slate-300 ${colors.bg} ${colors.border} ${colors.text} ${
                   isDragged ? "z-30 shadow-xl" : "z-10"
                 } ${relationRing}`}
                 style={{ left: boxLeft, top: boxTop, width: BOX_WIDTH, height: BOX_HEIGHT }}
-                title={`${NIVEL_LABELS[nodo.nivel] || nodo.nivel} · clic para ver perfil de puesto`}
+                title={`${NIVEL_LABELS[nodo.nivel] || nodo.nivel} · clic para ver perfil, arrastra para mover`}
               >
                 {canEdit && (
-                  <>
-                    <span
-                      onMouseDown={(event) => startDrag(event, nodo)}
-                      onClick={(event) => event.stopPropagation()}
-                      title="Arrastrar para moverlo — se queda donde lo sueltes"
-                      className="absolute -right-1.5 -top-1.5 flex h-6 w-6 cursor-grab items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-black text-slate-500 opacity-0 shadow-sm group-hover:opacity-100 active:cursor-grabbing"
-                    >
-                      ✥
-                    </span>
-                    <span
-                      onMouseDown={(event) => startConnect(event, nodo)}
-                      onClick={(event) => event.stopPropagation()}
-                      title="Arrastrar hacia otro puesto para crear una conexión de apoyo/coordinación"
-                      className="absolute -left-1.5 -top-1.5 flex h-6 w-6 cursor-crosshair items-center justify-center rounded-full border border-violet-300 bg-white text-xs opacity-0 shadow-sm group-hover:opacity-100"
-                    >
-                      🔗
-                    </span>
-                  </>
+                  <span
+                    onMouseDown={(event) => startConnect(event, nodo)}
+                    onClick={(event) => event.stopPropagation()}
+                    title="Arrastrar hacia otro puesto para crear una conexión de apoyo/coordinación"
+                    className="absolute -left-1.5 -top-1.5 flex h-6 w-6 cursor-crosshair items-center justify-center rounded-full border border-violet-300 bg-white text-xs opacity-70 shadow-sm hover:opacity-100"
+                  >
+                    🔗
+                  </span>
                 )}
                 <p className="line-clamp-2 text-[12px] font-black uppercase leading-tight tracking-wide">{getDisplayTitle(nodo, puestosCatalogo)}</p>
-                <p className="mt-0.5 truncate text-[11px] font-bold opacity-80">{getDisplayName(nodo, personasCatalogo) || "Sin asignar"}</p>
+                <p className="mt-0.5 truncate text-[11px] font-bold opacity-80">{firstNameOnly(getDisplayName(nodo, personasCatalogo)) || "Sin asignar"}</p>
                 <span className="pointer-events-none absolute bottom-1 right-1.5 text-[10px] font-black opacity-0 group-hover:opacity-60">ⓘ</span>
 
                 {childCount > 0 && (

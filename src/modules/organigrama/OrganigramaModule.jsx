@@ -152,6 +152,27 @@ export default function OrganigramaModule({ currentUser }) {
     }
   }
 
+  // Doble clic en un espacio vacío del lienzo: crea un puesto en blanco
+  // justo ahí (sin jefe todavía) y abre su panel para llenarlo al instante,
+  // sin pasar por el formulario modal.
+  async function handleCreateNodeAt(posX, posY) {
+    const result = await createNodo({
+      titulo_puesto: "Nuevo puesto",
+      nivel: "Operativo",
+      reporta_a_id: null,
+      orden: 0,
+      pos_x: posX,
+      pos_y: posY,
+    });
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible crear el puesto.");
+      return;
+    }
+    await loadNodos();
+    setSelectedId(result.data.id);
+  }
+
   async function handleCreateNodo() {
     if (!newNodo.titulo_puesto.trim()) {
       setMessage("Captura un título de puesto.");
@@ -237,6 +258,7 @@ export default function OrganigramaModule({ currentUser }) {
               selectedId={selectedId}
               onSelectNode={setSelectedId}
               onMoveNode={handleMoveNode}
+              onCreateNodeAt={handleCreateNodeAt}
               canEdit={canEdit}
               personasCatalogo={personasCatalogo}
               puestosCatalogo={puestosCatalogo}

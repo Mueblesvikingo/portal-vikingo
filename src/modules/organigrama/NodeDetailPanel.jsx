@@ -6,6 +6,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
   const [saving, setSaving] = useState(false);
   const [addingReportId, setAddingReportId] = useState("");
   const [addingConexionId, setAddingConexionId] = useState("");
+  const [activeSubModal, setActiveSubModal] = useState(null); // null | "objetivo" | "competencias" | "responsabilidades"
 
   useEffect(() => {
     if (nodo) {
@@ -14,6 +15,9 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
         nombre_persona: getDisplayName(nodo, personasCatalogo) || "",
         nivel: nodo.nivel || "Operativo",
         perfil_puesto: nodo.perfil_puesto || "",
+        objetivo_puesto: nodo.objetivo_puesto || "",
+        competencias_clave: nodo.competencias_clave || "",
+        responsabilidades_clave: nodo.responsabilidades_clave || "",
         reporta_a_id: nodo.reporta_a_id ?? "",
       });
     } else {
@@ -283,17 +287,54 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
             </span>
           </label>
 
-          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
-            Perfil de puesto
-            <textarea
-              disabled={!canEdit}
-              value={draft.perfil_puesto}
-              onChange={(event) => setDraft((current) => ({ ...current, perfil_puesto: event.target.value }))}
-              rows={4}
-              placeholder="Responsabilidades, requisitos, alcance del puesto..."
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:text-slate-400"
-            />
-          </label>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Perfil de puesto</p>
+            <div className="mt-1 grid grid-cols-3 gap-1.5">
+              {[
+                { key: "objetivo_puesto", icon: "🎯", label: "Objetivo del puesto" },
+                { key: "competencias_clave", icon: "🧠", label: "Competencias clave" },
+                { key: "responsabilidades_clave", icon: "✅", label: "Responsabilidades clave" },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setActiveSubModal(item.key)}
+                  className="relative flex flex-col items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2.5 text-center hover:bg-slate-100"
+                >
+                  {draft[item.key]?.trim() && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                  <span className="text-base">{item.icon}</span>
+                  <span className="text-[9px] font-black uppercase leading-tight tracking-wide text-slate-600">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {activeSubModal && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4">
+              <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
+                  <p className="text-xs font-black uppercase tracking-widest">
+                    {{ objetivo_puesto: "🎯 Objetivo del puesto", competencias_clave: "🧠 Competencias clave", responsabilidades_clave: "✅ Responsabilidades clave" }[activeSubModal]}
+                  </p>
+                  <button type="button" onClick={() => setActiveSubModal(null)} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
+                </div>
+                <div className="p-4">
+                  <textarea
+                    autoFocus
+                    disabled={!canEdit}
+                    value={draft[activeSubModal]}
+                    onChange={(event) => setDraft((current) => ({ ...current, [activeSubModal]: event.target.value }))}
+                    rows={6}
+                    placeholder="Escribe aquí..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:text-slate-400"
+                  />
+                  <div className="mt-3 flex justify-end">
+                    <button type="button" onClick={() => setActiveSubModal(null)} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Listo</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {canEdit && (
             <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
