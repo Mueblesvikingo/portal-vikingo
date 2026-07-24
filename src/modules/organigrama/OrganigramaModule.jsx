@@ -48,18 +48,29 @@ export default function OrganigramaModule({ currentUser }) {
     getPuestos().then(setPuestosCatalogo).catch(() => setPuestosCatalogo([]));
   }, []);
 
-  // Si el nombre capturado coincide exactamente (sin distinguir mayúsculas)
-  // con una persona real del catálogo, se guarda también su persona_id para
-  // dejar el vínculo real, no solo el texto.
+  // Si el nombre/título capturado coincide exactamente (sin distinguir
+  // mayúsculas) con una persona/puesto real del catálogo, se guarda también
+  // su id para dejar el vínculo real — así, cuando alguien edite esa
+  // persona o puesto en Catálogo Organizacional, el organigrama se
+  // actualiza solo (ver getDisplayName/getDisplayTitle en organigramaLayout.js).
   function matchPersonaId(nombre) {
     const match = personasCatalogo.find((persona) => persona.nombre?.trim().toLowerCase() === String(nombre || "").trim().toLowerCase());
+    return match ? match.id : null;
+  }
+
+  function matchPuestoId(titulo) {
+    const match = puestosCatalogo.find((puesto) => puesto.nombre?.trim().toLowerCase() === String(titulo || "").trim().toLowerCase());
     return match ? match.id : null;
   }
 
   const selectedNodo = nodos.find((nodo) => nodo.id === selectedId) || null;
 
   async function handleSaveNodo(id, draft) {
-    const result = await updateNodo(id, { ...draft, persona_id: matchPersonaId(draft.nombre_persona) });
+    const result = await updateNodo(id, {
+      ...draft,
+      persona_id: matchPersonaId(draft.nombre_persona),
+      puesto_id: matchPuestoId(draft.titulo_puesto),
+    });
     if (!result.ok) {
       console.error(result.error);
       setMessage("No fue posible guardar los cambios.");
@@ -115,6 +126,7 @@ export default function OrganigramaModule({ currentUser }) {
       ...newNodo,
       reporta_a_id: newNodo.reporta_a_id ? Number(newNodo.reporta_a_id) : null,
       persona_id: matchPersonaId(newNodo.nombre_persona),
+      puesto_id: matchPuestoId(newNodo.titulo_puesto),
       orden: siblingCount,
     });
     if (!result.ok) {
@@ -188,6 +200,8 @@ export default function OrganigramaModule({ currentUser }) {
               onSelectNode={setSelectedId}
               onMoveNode={handleMoveNode}
               canEdit={canEdit}
+              personasCatalogo={personasCatalogo}
+              puestosCatalogo={puestosCatalogo}
             />
           )}
         </div>

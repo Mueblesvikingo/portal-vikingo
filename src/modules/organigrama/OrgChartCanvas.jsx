@@ -5,6 +5,8 @@ import {
   getChildren,
   hasChildren,
   getVisibleNodos,
+  getDisplayName,
+  getDisplayTitle,
   NIVEL_COLORS,
   NIVEL_LABELS,
   ROW_HEIGHT,
@@ -20,7 +22,7 @@ const MAX_SCALE = 1.5;
 // ilegibles. El ajuste a pantalla solo encoge hasta aquí.
 const MIN_READABLE_FIT = 0.65;
 
-export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMoveNode, canEdit }) {
+export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMoveNode, canEdit, personasCatalogo = [], puestosCatalogo = [] }) {
   const viewportRef = useRef(null);
   const canvasRef = useRef(null);
   const [dragging, setDragging] = useState(null); // { id, offsetX, offsetY, x, y }
@@ -266,8 +268,8 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
                     ✥
                   </span>
                 )}
-                <p className="line-clamp-2 text-[12px] font-black uppercase leading-tight tracking-wide">{nodo.titulo_puesto}</p>
-                <p className="mt-0.5 truncate text-[11px] font-bold opacity-80">{nodo.nombre_persona || "Sin asignar"}</p>
+                <p className="line-clamp-2 text-[12px] font-black uppercase leading-tight tracking-wide">{getDisplayTitle(nodo, puestosCatalogo)}</p>
+                <p className="mt-0.5 truncate text-[11px] font-bold opacity-80">{getDisplayName(nodo, personasCatalogo) || "Sin asignar"}</p>
                 <span className="pointer-events-none absolute bottom-1 right-1.5 text-[10px] font-black opacity-0 group-hover:opacity-60">ⓘ</span>
 
                 {childCount > 0 && (

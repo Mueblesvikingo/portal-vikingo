@@ -3,6 +3,27 @@
 // Sin librerías externas de grafos/diagramas — mismo criterio que el resto
 // del portal (diagramas dibujados a mano).
 
+// Si el nodo está vinculado a una persona/puesto real de Catálogo
+// Organizacional (persona_id/puesto_id), se muestra el nombre/título ACTUAL
+// del catálogo en vez del texto guardado en el organigrama — así, si
+// alguien edita el catálogo, el organigrama se ve actualizado solo, sin
+// tener que tocar cada nodo a mano.
+export function getDisplayName(nodo, personasCatalogo) {
+  if (nodo.persona_id) {
+    const persona = personasCatalogo.find((item) => item.id === nodo.persona_id);
+    if (persona) return persona.nombre;
+  }
+  return nodo.nombre_persona;
+}
+
+export function getDisplayTitle(nodo, puestosCatalogo) {
+  if (nodo.puesto_id) {
+    const puesto = puestosCatalogo.find((item) => item.id === nodo.puesto_id);
+    if (puesto) return puesto.nombre;
+  }
+  return nodo.titulo_puesto;
+}
+
 export function getChildren(nodos, parentId) {
   return nodos
     .filter((nodo) => (nodo.reporta_a_id ?? null) === (parentId ?? null))

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NIVEL_COLORS, NIVEL_LABELS, NIVEL_OPTIONS, getAncestorChain, getDescendantIds, getChildren } from "./organigramaLayout";
+import { NIVEL_COLORS, NIVEL_LABELS, NIVEL_OPTIONS, getAncestorChain, getDescendantIds, getChildren, getDisplayName, getDisplayTitle } from "./organigramaLayout";
 
 export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeactivate, onAssignParent, onClose, personasCatalogo = [], puestosCatalogo = [] }) {
   const [draft, setDraft] = useState(null);
@@ -9,8 +9,8 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
   useEffect(() => {
     if (nodo) {
       setDraft({
-        titulo_puesto: nodo.titulo_puesto || "",
-        nombre_persona: nodo.nombre_persona || "",
+        titulo_puesto: getDisplayTitle(nodo, puestosCatalogo) || "",
+        nombre_persona: getDisplayName(nodo, personasCatalogo) || "",
         nivel: nodo.nivel || "Operativo",
         perfil_puesto: nodo.perfil_puesto || "",
         reporta_a_id: nodo.reporta_a_id ?? "",
@@ -18,6 +18,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
     } else {
       setDraft(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodo]);
 
   if (!nodo || !draft) return null;
@@ -55,7 +56,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
   }
 
   async function handleDeactivate() {
-    if (!window.confirm(`¿Quitar "${nodo.titulo_puesto}" del organigrama? Sus subordinados quedarán sin jefe directo (raíz) hasta que los reasignes.`)) return;
+    if (!window.confirm(`¿Quitar "${getDisplayTitle(nodo, puestosCatalogo)}" del organigrama? Sus subordinados quedarán sin jefe directo (raíz) hasta que los reasignes.`)) return;
     setSaving(true);
     await onDeactivate(nodo.id);
     setSaving(false);
@@ -68,7 +69,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
         <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
           <div>
             <p className="text-xs font-black uppercase tracking-widest">Perfil de puesto</p>
-            <p className="text-[10px] font-bold text-slate-300">{nodo.titulo_puesto}</p>
+            <p className="text-[10px] font-bold text-slate-300">{getDisplayTitle(nodo, puestosCatalogo)}</p>
           </div>
           <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
         </div>
@@ -80,7 +81,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
               {chain.map((ancestor, index) => (
                 <span key={ancestor.id} className="flex items-center gap-1">
                   <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${(NIVEL_COLORS[ancestor.nivel] || NIVEL_COLORS.Operativo).border} ${(NIVEL_COLORS[ancestor.nivel] || NIVEL_COLORS.Operativo).text} ${(NIVEL_COLORS[ancestor.nivel] || NIVEL_COLORS.Operativo).bg}`}>
-                    {ancestor.titulo_puesto}{ancestor.nombre_persona ? ` · ${ancestor.nombre_persona}` : ""}
+                    {getDisplayTitle(ancestor, puestosCatalogo)}{getDisplayName(ancestor, personasCatalogo) ? ` · ${getDisplayName(ancestor, personasCatalogo)}` : ""}
                   </span>
                   {index < chain.length - 1 && <span className="text-slate-300">▸</span>}
                 </span>
@@ -98,12 +99,12 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
               >
                 <option value="">Nadie (raíz del organigrama)</option>
                 {reporteOptions.map((option) => (
-                  <option key={option.id} value={option.id}>{option.titulo_puesto}{option.nombre_persona ? ` · ${option.nombre_persona}` : ""}</option>
+                  <option key={option.id} value={option.id}>{getDisplayTitle(option, puestosCatalogo)}{getDisplayName(option, personasCatalogo) ? ` · ${getDisplayName(option, personasCatalogo)}` : ""}</option>
                 ))}
               </select>
             ) : (
               <p className="mt-1 text-[11px] font-bold normal-case tracking-normal text-slate-700">
-                {jefe ? `${jefe.titulo_puesto}${jefe.nombre_persona ? ` (${jefe.nombre_persona})` : ""}` : "No reporta a nadie (raíz del organigrama)"}
+                {jefe ? `${getDisplayTitle(jefe, puestosCatalogo)}${getDisplayName(jefe, personasCatalogo) ? ` (${getDisplayName(jefe, personasCatalogo)})` : ""}` : "No reporta a nadie (raíz del organigrama)"}
               </p>
             )}
           </label>
@@ -120,7 +121,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
                   const reportColors = NIVEL_COLORS[report.nivel] || NIVEL_COLORS.Operativo;
                   return (
                     <span key={report.id} className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-black ${reportColors.border} ${reportColors.text} ${reportColors.bg}`}>
-                      {report.titulo_puesto}{report.nombre_persona ? ` · ${report.nombre_persona}` : ""}
+                      {getDisplayTitle(report, puestosCatalogo)}{getDisplayName(report, personasCatalogo) ? ` · ${getDisplayName(report, personasCatalogo)}` : ""}
                       {canEdit && (
                         <button
                           type="button"
@@ -146,7 +147,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
                 >
                   <option value="">Agregar puesto existente como subordinado...</option>
                   {addableAsReport.map((option) => (
-                    <option key={option.id} value={option.id}>{option.titulo_puesto}{option.nombre_persona ? ` · ${option.nombre_persona}` : ""}</option>
+                    <option key={option.id} value={option.id}>{getDisplayTitle(option, puestosCatalogo)}{getDisplayName(option, personasCatalogo) ? ` · ${getDisplayName(option, personasCatalogo)}` : ""}</option>
                   ))}
                 </select>
                 <button
