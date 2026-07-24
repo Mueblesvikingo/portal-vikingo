@@ -1590,7 +1590,15 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
   // índice dentro del carril como antes.
   const defaultPositions = useMemo(() => {
     const positions = {};
-    initialLanes.filter(isValidLane).forEach((lane, laneIndex) => {
+    // OJO: tiene que recorrer las lanes en el MISMO orden en que se van a
+    // renderizar (visibleLanes = lanes.filter(isValidLane), donde `lanes`
+    // ya pasó por applyLocalLaneOrder). Antes esto usaba initialLanes sin
+    // reordenar: si este navegador tenía un orden de carriles guardado
+    // localmente distinto al orden del servidor, el laneIndex calculado
+    // aquí no coincidía con la posición real en pantalla, y la actividad
+    // terminaba viéndose en el carril vecino aunque su `rol` en Supabase
+    // fuera el correcto.
+    applyLocalLaneOrder(initialLanes).filter(isValidLane).forEach((lane, laneIndex) => {
       lane[blockKey].forEach((block, blockIndex) => {
         const hasPersistedStep = block.posicion_columna !== null && block.posicion_columna !== undefined;
         const persistedStep = Number(block.posicion_columna);
@@ -1601,7 +1609,8 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
       });
     });
     return positions;
-  }, [initialLanesSignature, blockKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLanesSignature, blockKey, persistLaneOrderLocally]);
 
   // Bloques que ya tienen posicion_columna guardada en Supabase: para estos,
   // la base de datos manda y NO se debe dejar que una caché local vieja de
