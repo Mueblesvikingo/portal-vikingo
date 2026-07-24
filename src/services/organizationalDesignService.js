@@ -278,6 +278,30 @@ export async function updateRole(id, updates) {
   return data;
 }
 
+// Al renombrar un rol (o reasignar su carril a otro nombre del catálogo),
+// las actividades ya guardadas en proceso_actividades siguen el nombre
+// VIEJO en su columna `rol` (no hay FK real, es texto) — sin este cascade
+// quedan huérfanas: el carril pasa a mostrarse vacío y las actividades
+// caen en un carril "fantasma" reconstruido por texto, donde el arrastre
+// deja de ser confiable.
+export async function renameRoleAcrossActivities(proceso, oldName, newName) {
+  const cleanOld = String(oldName || "").trim();
+  const cleanNew = String(newName || "").trim();
+  if (!proceso || !cleanOld || !cleanNew || cleanOld === cleanNew) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("proceso_actividades")
+    .update({ rol: cleanNew, responsable: cleanNew, puesto: cleanNew })
+    .eq("proceso", proceso)
+    .eq("rol", cleanOld)
+    .select();
+
+  if (error) throw error;
+  return data || [];
+}
+
 export async function deactivateRole(id) {
   if (!id) {
     throw new Error("deactivateRole requiere un id real de Supabase.");

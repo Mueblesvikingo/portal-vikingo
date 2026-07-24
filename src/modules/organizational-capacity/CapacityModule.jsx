@@ -17,6 +17,7 @@ import {
   updateActivity,
   updateActivityOrder,
   updateRole,
+  renameRoleAcrossActivities,
   getSubprocessTraceability,
 createSubprocessTraceability,
 } from "../../services/organizationalDesignService";
@@ -2071,11 +2072,12 @@ function VisualGridMap({ title, initialLanes, blockKey, storageKey, onSelectBloc
     if (!lane) return;
     const cleanName = cleanRoleText(nextName);
     if (!cleanName || !roleOptions.includes(cleanName)) return;
+    const previousName = lane.lane;
 
     rememberState();
 
     setLanes((current) => current.map((item, index) => (index === laneIndex ? { ...item, lane: cleanName } : item)));
-    onUpdateLane?.({ ...lane, lane: cleanName }, { lane: cleanName, rol: cleanName, responsable: cleanName });
+    onUpdateLane?.({ ...lane, lane: cleanName }, { lane: cleanName, rol: cleanName, responsable: cleanName }, previousName);
     setEditingLane(null);
   };
 
@@ -3312,17 +3314,29 @@ export default function CapacityModule({ currentUser } = {}) {
       .catch((error) => console.error("Error quitando carril del macroproceso:", error));
   };
 
-  const updateSupabaseRoleInline = (lane, updates) => {
+  const updateSupabaseRoleInline = (lane, updates, previousName) => {
     if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño)."); return; }
     if (!lane?.roleId) return;
 
+    const nextName = updates.rol || updates.lane || lane.lane;
+
     updateRole(lane.roleId, {
       ...updates,
-      rol: updates.rol || updates.lane || lane.lane,
+      rol: nextName,
       responsable: updates.responsable || updates.lane || lane.lane,
     })
+      // Las actividades ya guardadas apuntan al rol por texto (sin FK) — si
+      // se renombra/reasigna el carril sin actualizarlas también, quedan
+      // con el nombre viejo: el carril se ve vacío y el arrastre deja de
+      // ser confiable para esas actividades.
+      .then(() => (previousName && previousName !== nextName
+        ? renameRoleAcrossActivities(selectedProcessName, previousName, nextName)
+        : Promise.resolve()))
       .then(() => reloadSelectedProcessData(selectedProcessName))
-      .catch((error) => console.error("Error actualizando carril en Supabase:", error));
+      .catch((error) => {
+        console.error("Error actualizando carril en Supabase:", error);
+        alert("No fue posible actualizar el carril. Revisa la consola para más detalle.");
+      });
   };
 
   const saveSupabaseLaneOrder = async (orderedLanes) => {
@@ -3385,7 +3399,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const moveSupabaseSubprocess = (blockId, order, roleId, laneName, orderedBlocks = []) => {
-    if (!canEdit) return;
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño) — el movimiento no se guardó."); return; }
     if (!blockId) return;
 
     const fallbackOrder = Number.isFinite(Number(order)) ? Number(order) + 1 : 1;
@@ -3403,7 +3417,7 @@ export default function CapacityModule({ currentUser } = {}) {
   };
 
   const moveSupabaseActivity = (blockId, order, roleId, laneName, orderedBlocks = []) => {
-    if (!canEdit) return;
+    if (!canEdit) { alert("No tienes permiso para editar este proceso (no eres su responsable/dueño) — el movimiento no se guardó."); return; }
     if (!blockId) return;
 
     const fallbackOrder = Number.isFinite(Number(order)) ? Number(order) + 1 : 1;
