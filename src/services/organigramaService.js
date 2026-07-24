@@ -107,6 +107,48 @@ export async function updateNodoPosition(id, posX, posY) {
   }
 }
 
+// Conexiones adicionales entre dos puestos que NO son de jefe-subordinado
+// (ej. apoyo, coordinación) — se dibujan aparte de la línea de mando, sin
+// afectar el árbol jerárquico ni el acomodo automático.
+export async function getConexiones() {
+  try {
+    const { data, error } = await supabase.from("organigrama_conexiones").select("*");
+    if (error) {
+      console.error("Error al cargar organigrama_conexiones:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar organigrama_conexiones:", err);
+    return [];
+  }
+}
+
+export async function createConexion(nodoAId, nodoBId, tipo = "apoyo") {
+  try {
+    const { data, error } = await supabase
+      .from("organigrama_conexiones")
+      .insert([{ nodo_a_id: nodoAId, nodo_b_id: nodoBId, tipo }])
+      .select()
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function deleteConexion(id) {
+  try {
+    const { error } = await supabase.from("organigrama_conexiones").delete().eq("id", id);
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+
 export async function deactivateNodo(id) {
   try {
     const { error } = await supabase

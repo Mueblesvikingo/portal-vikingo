@@ -7,6 +7,9 @@ import {
   updateNodo,
   updateNodoPosition,
   deactivateNodo,
+  getConexiones,
+  createConexion,
+  deleteConexion,
 } from "../../services/organigramaService";
 import OrgChartCanvas from "./OrgChartCanvas";
 import NodeDetailPanel from "./NodeDetailPanel";
@@ -29,6 +32,7 @@ export default function OrganigramaModule({ currentUser }) {
   const [message, setMessage] = useState("");
   const [personasCatalogo, setPersonasCatalogo] = useState([]);
   const [puestosCatalogo, setPuestosCatalogo] = useState([]);
+  const [conexiones, setConexiones] = useState([]);
 
   const canEdit = canEditModule(currentUser, "organigrama");
 
@@ -39,8 +43,14 @@ export default function OrganigramaModule({ currentUser }) {
     setLoading(false);
   }
 
+  async function loadConexiones() {
+    const data = await getConexiones();
+    setConexiones(data);
+  }
+
   useEffect(() => {
     loadNodos();
+    loadConexiones();
     // Catálogo real (personas/puestos de Catálogo Organizacional) para
     // autocompletar nombre y título con lo que ya existe, en vez de texto
     // libre desconectado de la fuente oficial.
@@ -103,6 +113,34 @@ export default function OrganigramaModule({ currentUser }) {
     setMessage("Conexión actualizada.");
   }
 
+  async function handleCreateConexion(nodoAId, nodoBId) {
+    const yaExiste = conexiones.some(
+      (conexion) =>
+        (conexion.nodo_a_id === nodoAId && conexion.nodo_b_id === nodoBId) ||
+        (conexion.nodo_a_id === nodoBId && conexion.nodo_b_id === nodoAId)
+    );
+    if (yaExiste) return;
+    const result = await createConexion(nodoAId, nodoBId);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible crear la conexión.");
+      return;
+    }
+    await loadConexiones();
+    setMessage("Conexión creada.");
+  }
+
+  async function handleDeleteConexion(id) {
+    const result = await deleteConexion(id);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible quitar la conexión.");
+      return;
+    }
+    await loadConexiones();
+    setMessage("Conexión quitada.");
+  }
+
   async function handleMoveNode(id, posX, posY) {
     // Actualización optimista: el bloque ya se ve donde lo soltaste, solo
     // se persiste en segundo plano sin recargar/parpadear todo el árbol.
@@ -153,7 +191,7 @@ export default function OrganigramaModule({ currentUser }) {
           <div>
             <p className="text-xs font-black uppercase tracking-widest">Organigrama</p>
             <p className="text-[10px] font-bold text-slate-300">
-              Clic en un puesto: perfil, línea de mando, a quién reporta y quiénes le reportan (con opción de agregar/quitar conexiones ahí mismo). Icono ✥: arrastra para moverlo, se queda donde lo sueltes.
+              Clic: perfil, línea de mando y subordinados. Icono ✥: mover libremente, se queda donde lo sueltes. Icono 🔗: arrastra hacia otro puesto para crear una conexión de apoyo/coordinación (clic en esa línea para quitarla).
             </p>
           </div>
           {canEdit && (
@@ -202,6 +240,9 @@ export default function OrganigramaModule({ currentUser }) {
               canEdit={canEdit}
               personasCatalogo={personasCatalogo}
               puestosCatalogo={puestosCatalogo}
+              conexiones={conexiones}
+              onCreateConexion={handleCreateConexion}
+              onDeleteConexion={handleDeleteConexion}
             />
           )}
         </div>
@@ -217,6 +258,9 @@ export default function OrganigramaModule({ currentUser }) {
         onClose={() => setSelectedId(null)}
         personasCatalogo={personasCatalogo}
         puestosCatalogo={puestosCatalogo}
+        conexiones={conexiones}
+        onCreateConexion={handleCreateConexion}
+        onDeleteConexion={handleDeleteConexion}
       />
 
       {showAddModal && (

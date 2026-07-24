@@ -9,8 +9,6 @@ import {
   getDisplayTitle,
   NIVEL_COLORS,
   NIVEL_LABELS,
-  ROW_HEIGHT,
-  COLUMN_WIDTH,
 } from "./organigramaLayout";
 
 const BOX_WIDTH = 176;
@@ -22,7 +20,7 @@ const MAX_SCALE = 1.5;
 // ilegibles. El ajuste a pantalla solo encoge hasta aquí.
 const MIN_READABLE_FIT = 0.65;
 
-export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMoveNode, canEdit, personasCatalogo = [], puestosCatalogo = [] }) {
+export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMoveNode, canEdit, personasCatalogo = [], puestosCatalogo = [], conexiones = [], onCreateConexion, onDeleteConexion }) {
   const viewportRef = useRef(null);
   const canvasRef = useRef(null);
   const [dragging, setDragging] = useState(null); // { id, offsetX, offsetY, x, y }
@@ -106,6 +104,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
     const rect = canvasRef.current.getBoundingClientRect();
     setDragging({
       id: nodo.id,
+      mode: "move",
       offsetX: (event.clientX - rect.left) / scale - (box?.left ?? 0),
       offsetY: (event.clientY - rect.top) / scale - (box?.top ?? 0),
       x: box?.left ?? 0,
@@ -113,49 +112,54 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
     });
   }
 
-  function snapToGrid(value, step) {
-    return Math.round(value / step) * step;
-  }
-
   function moveDrag(event) {
-    if (!dragging || !canvasRef.current) return;
+    if (!dragging || dragging.mode !== "move" || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
     const rawX = (event.clientX - rect.left) / scale - dragging.offsetX;
     const rawY = (event.clientY - rect.top) / scale - dragging.offsetY;
-    // Autoajuste: mientras arrastras, el bloque se alinea a la misma
-    // cuadrícula invisible que usan el resto de los puestos (misma
-    // separación de filas/columnas del layout automático), para que quede
-    // alineado con los demás en vez de en cualquier pixel suelto.
-    const posX = snapToGrid(rawX + BOX_WIDTH / 2 - PADDING, COLUMN_WIDTH);
-    const posY = snapToGrid(rawY - PADDING, ROW_HEIGHT);
-    setDragging((current) => ({ ...current, x: posX - BOX_WIDTH / 2 + PADDING, y: posY + PADDING }));
+    setDragging((current) => ({ ...current, x: rawX, y: rawY }));
   }
 
-  // Al soltar, el bloque se queda alineado a la cuadrícula donde lo
-  // soltaste — sin reasignar jefe ni reordenar nada más. "Reporta a" se
-  // cambia desde el panel de perfil de puesto (selector explícito), no
-  // arrastrando. Si esa celda ya está ocupada por otro puesto, se recorre
-  // a la más cercana libre en la misma fila para que no queden encimados.
+  // Libertad total: el bloque se queda exactamente en el pixel donde lo
+  // sueltes, sin ajustarse a ninguna cuadrícula ni evitar encimarse con
+  // otros — así se puede acomodar a mano tal cual se quiera.
   function stopDrag() {
-    if (dragging) {
-      let posX = snapToGrid(dragging.x + BOX_WIDTH / 2 - PADDING, COLUMN_WIDTH);
-      const posY = snapToGrid(dragging.y - PADDING, ROW_HEIGHT);
-      const occupied = (x) =>
-        boxes.some((box) => {
-          if (box.nodo.id === dragging.id) return false;
-          const boxPos = layout.positions.get(box.nodo.id);
-          return boxPos && Math.abs(boxPos.y - posY) < ROW_HEIGHT / 2 && Math.abs(boxPos.x - x) < COLUMN_WIDTH / 2;
-        });
-      const originalX = posX;
-      let attempt = 0;
-      while (occupied(posX) && attempt < 20) {
-        attempt += 1;
-        const sign = attempt % 2 === 1 ? 1 : -1;
-        posX = originalX + sign * Math.ceil(attempt / 2) * COLUMN_WIDTH;
-      }
+    if (dragging?.mode === "move") {
+      const posX = dragging.x + BOX_WIDTH / 2 - PADDING;
+      const posY = dragging.y - PADDING;
       onMoveNode(dragging.id, posX, posY);
+    } else if (dragging?.mode === "connect" && dragging.hoverTargetId && dragging.hoverTargetId !== dragging.id) {
+      onCreateConexion(dragging.id, dragging.hoverTargetId);
     }
     setDragging(null);
+  }
+
+  function startConnect(event, nodo) {
+    if (!canEdit || !canvasRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setDragging({ id: nodo.id, mode: "connect", hoverTargetId: null });
+  }
+
+  function moveConnect(event) {
+    if (!dragging || dragging.mode !== "connect" || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const rawX = (event.clientX - rect.left) / scale;
+    const rawY = (event.clientY - rect.top) / scale;
+    const hit = boxes.find((box) => rawX >= box.left && rawX <= box.left + BOX_WIDTH && rawY >= box.top && rawY <= box.top + BOX_HEIGHT);
+    setDragging((current) => ({ ...current, hoverTargetId: hit && hit.nodo.id !== current.id ? hit.nodo.id : null, cursorX: rawX, cursorY: rawY }));
+  }
+
+  // Centro actual de un puesto en el lienzo, siguiendo el arrastre en vivo
+  // si se está moviendo (para que las conexiones sueltas también "sigan al
+  // cursor" como las de la línea de mando).
+  function getRenderedCenter(nodeId) {
+    if (dragging?.mode === "move" && dragging.id === nodeId) {
+      return { x: dragging.x + BOX_WIDTH / 2, y: dragging.y + BOX_HEIGHT / 2 };
+    }
+    const box = boxes.find((b) => b.nodo.id === nodeId);
+    if (!box) return null;
+    return { x: box.left + BOX_WIDTH / 2, y: box.top + BOX_HEIGHT / 2 };
   }
 
   function zoomBy(factor) {
@@ -175,7 +179,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
         ref={viewportRef}
         className="relative overflow-auto rounded-2xl border border-slate-200 bg-slate-50/60"
         style={{ height: "min(75vh, 720px)" }}
-        onMouseMove={moveDrag}
+        onMouseMove={(event) => { moveDrag(event); moveConnect(event); }}
         onMouseUp={stopDrag}
         onMouseLeave={() => dragging && stopDrag()}
       >
@@ -202,8 +206,8 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
               // Si uno de los dos extremos se está arrastrando, la línea
               // sigue al cursor en vivo (como en Visio) en vez de quedarse
               // pegada a la posición anterior.
-              const parentDragged = dragging?.id === nodo.reporta_a_id;
-              const childDragged = dragging?.id === nodo.id;
+              const parentDragged = dragging?.mode === "move" && dragging.id === nodo.reporta_a_id;
+              const childDragged = dragging?.mode === "move" && dragging.id === nodo.id;
               const px = (parentDragged ? dragging.x - PADDING + BOX_WIDTH / 2 : parentPos.x) + PADDING;
               const py = (parentDragged ? dragging.y - PADDING : parentPos.y) + PADDING + BOX_HEIGHT;
               const cx = (childDragged ? dragging.x - PADDING + BOX_WIDTH / 2 : childPos.x) + PADDING;
@@ -229,23 +233,64 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
                 </g>
               );
             })}
+
+            {/* Conexiones sueltas (apoyo/coordinación): no forman parte del
+                árbol jerárquico, se dibujan aparte y sí reciben clic para
+                poder quitarlas directamente en el lienzo. */}
+            {conexiones.map((conexion) => {
+              const a = getRenderedCenter(conexion.nodo_a_id);
+              const b = getRenderedCenter(conexion.nodo_b_id);
+              if (!a || !b) return null;
+              return (
+                <line
+                  key={conexion.id}
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke="#8b5cf6"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeDasharray="3,7"
+                  className="pointer-events-auto cursor-pointer"
+                  onClick={() => onDeleteConexion(conexion.id)}
+                >
+                  <title>Conexión de apoyo — clic para quitarla</title>
+                </line>
+              );
+            })}
+
+            {/* Vista previa en vivo mientras arrastras el icono 🔗 hacia otro puesto. */}
+            {dragging?.mode === "connect" && (() => {
+              const from = getRenderedCenter(dragging.id);
+              if (!from) return null;
+              const to = dragging.hoverTargetId ? getRenderedCenter(dragging.hoverTargetId) : { x: dragging.cursorX, y: dragging.cursorY };
+              if (!to) return null;
+              return (
+                <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#8b5cf6" strokeWidth={3} strokeDasharray="3,7" strokeLinecap="round" />
+              );
+            })()}
           </svg>
 
           {boxes.map(({ nodo, left, top }) => {
             const colors = NIVEL_COLORS[nodo.nivel] || NIVEL_COLORS.Operativo;
-            const isDragged = dragging?.id === nodo.id;
+            const isDragged = dragging?.mode === "move" && dragging.id === nodo.id;
+            const isConnectSource = dragging?.mode === "connect" && dragging.id === nodo.id;
+            const isConnectTarget = dragging?.mode === "connect" && dragging.hoverTargetId === nodo.id;
             const isSelected = selectedId === nodo.id;
             const isAncestor = !isSelected && ancestorIds.has(nodo.id);
             const isDirectReport = !isSelected && directReportIds.has(nodo.id);
             const boxLeft = isDragged ? dragging.x : left;
             const boxTop = isDragged ? dragging.y : top;
-            const relationRing = isSelected
-              ? "ring-[3px] ring-[#001225]"
-              : isAncestor
-                ? "ring-[3px] ring-red-400"
-                : isDirectReport
-                  ? "ring-[3px] ring-emerald-400"
-                  : "";
+            const relationRing = isConnectTarget
+              ? "ring-[3px] ring-violet-500"
+              : isSelected
+                ? "ring-[3px] ring-[#001225]"
+                : isAncestor
+                  ? "ring-[3px] ring-red-400"
+                  : isDirectReport
+                    ? "ring-[3px] ring-emerald-400"
+                    : "";
             const childCount = getChildren(nodos, nodo.id).length;
 
             return (
@@ -259,14 +304,24 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
                 title={`${NIVEL_LABELS[nodo.nivel] || nodo.nivel} · clic para ver perfil de puesto`}
               >
                 {canEdit && (
-                  <span
-                    onMouseDown={(event) => startDrag(event, nodo)}
-                    onClick={(event) => event.stopPropagation()}
-                    title="Arrastrar para moverlo — se queda donde lo sueltes"
-                    className="absolute -right-1.5 -top-1.5 flex h-6 w-6 cursor-grab items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-black text-slate-500 opacity-0 shadow-sm group-hover:opacity-100 active:cursor-grabbing"
-                  >
-                    ✥
-                  </span>
+                  <>
+                    <span
+                      onMouseDown={(event) => startDrag(event, nodo)}
+                      onClick={(event) => event.stopPropagation()}
+                      title="Arrastrar para moverlo — se queda donde lo sueltes"
+                      className="absolute -right-1.5 -top-1.5 flex h-6 w-6 cursor-grab items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-black text-slate-500 opacity-0 shadow-sm group-hover:opacity-100 active:cursor-grabbing"
+                    >
+                      ✥
+                    </span>
+                    <span
+                      onMouseDown={(event) => startConnect(event, nodo)}
+                      onClick={(event) => event.stopPropagation()}
+                      title="Arrastrar hacia otro puesto para crear una conexión de apoyo/coordinación"
+                      className="absolute -left-1.5 -top-1.5 flex h-6 w-6 cursor-crosshair items-center justify-center rounded-full border border-violet-300 bg-white text-xs opacity-0 shadow-sm group-hover:opacity-100"
+                    >
+                      🔗
+                    </span>
+                  </>
                 )}
                 <p className="line-clamp-2 text-[12px] font-black uppercase leading-tight tracking-wide">{getDisplayTitle(nodo, puestosCatalogo)}</p>
                 <p className="mt-0.5 truncate text-[11px] font-bold opacity-80">{getDisplayName(nodo, personasCatalogo) || "Sin asignar"}</p>

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { NIVEL_COLORS, NIVEL_LABELS, NIVEL_OPTIONS, getAncestorChain, getDescendantIds, getChildren, getDisplayName, getDisplayTitle } from "./organigramaLayout";
 
-export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeactivate, onAssignParent, onClose, personasCatalogo = [], puestosCatalogo = [] }) {
+export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeactivate, onAssignParent, onClose, personasCatalogo = [], puestosCatalogo = [], conexiones = [], onCreateConexion, onDeleteConexion }) {
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const [addingReportId, setAddingReportId] = useState("");
+  const [addingConexionId, setAddingConexionId] = useState("");
 
   useEffect(() => {
     if (nodo) {
@@ -47,6 +48,22 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
     setSaving(true);
     await onAssignParent(childId, null);
     setSaving(false);
+  }
+
+  // Conexiones sueltas (apoyo/coordinación) donde este nodo participa en
+  // cualquiera de los dos lados.
+  const nodeConexiones = conexiones
+    .filter((conexion) => conexion.nodo_a_id === nodo.id || conexion.nodo_b_id === nodo.id)
+    .map((conexion) => ({ ...conexion, otroId: conexion.nodo_a_id === nodo.id ? conexion.nodo_b_id : conexion.nodo_a_id }));
+  const conectadosIds = new Set(nodeConexiones.map((c) => c.otroId));
+  const addableAsConexion = nodos.filter((candidate) => candidate.id !== nodo.id && !conectadosIds.has(candidate.id));
+
+  async function handleAddConexion() {
+    if (!addingConexionId) return;
+    setSaving(true);
+    await onCreateConexion(nodo.id, Number(addingConexionId));
+    setSaving(false);
+    setAddingConexionId("");
   }
 
   async function handleSave() {
@@ -157,6 +174,60 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
                   className="rounded-xl bg-[#001225] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   Agregar
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-violet-100 bg-violet-50/40 p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-violet-500">
+              Conexiones de apoyo/coordinación {nodeConexiones.length > 0 ? `(${nodeConexiones.length})` : ""}
+            </p>
+            {nodeConexiones.length === 0 ? (
+              <p className="mt-1 text-[10px] font-bold text-slate-400">Sin conexiones sueltas todavía.</p>
+            ) : (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {nodeConexiones.map((conexion) => {
+                  const otro = nodos.find((candidate) => candidate.id === conexion.otroId);
+                  if (!otro) return null;
+                  return (
+                    <span key={conexion.id} className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white px-2 py-0.5 text-[9px] font-black text-violet-700">
+                      {getDisplayTitle(otro, puestosCatalogo)}{getDisplayName(otro, personasCatalogo) ? ` · ${getDisplayName(otro, personasCatalogo)}` : ""}
+                      {canEdit && (
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => onDeleteConexion(conexion.id)}
+                          title="Quitar esta conexión"
+                          className="ml-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-violet-100 text-[9px] leading-none hover:bg-violet-200"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            {canEdit && (
+              <div className="mt-2 flex gap-1.5">
+                <select
+                  value={addingConexionId}
+                  onChange={(event) => setAddingConexionId(event.target.value)}
+                  className="h-9 flex-1 rounded-xl border border-violet-200 bg-white px-2 text-[10px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+                >
+                  <option value="">Conectar con otro puesto...</option>
+                  {addableAsConexion.map((option) => (
+                    <option key={option.id} value={option.id}>{getDisplayTitle(option, puestosCatalogo)}{getDisplayName(option, personasCatalogo) ? ` · ${getDisplayName(option, personasCatalogo)}` : ""}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!addingConexionId || saving}
+                  onClick={handleAddConexion}
+                  className="rounded-xl bg-violet-600 px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  Conectar
                 </button>
               </div>
             )}
