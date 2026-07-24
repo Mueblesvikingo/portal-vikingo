@@ -31,6 +31,7 @@ const MAX_SCALE = 1.5;
 const MIN_READABLE_FIT = 0.65;
 
 const DRAG_THRESHOLD_PX = 4;
+const ALIGN_THRESHOLD = 10;
 
 export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMoveNode, onCreateNodeAt, canEdit, personasCatalogo = [], puestosCatalogo = [], conexiones = [], onCreateConexion, onDeleteConexion }) {
   const viewportRef = useRef(null);
@@ -133,7 +134,40 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
       const rect = canvasRef.current.getBoundingClientRect();
       const rawX = (event.clientX - rect.left) / scale - dragging.offsetX;
       const rawY = (event.clientY - rect.top) / scale - dragging.offsetY;
-      setDragging((current) => ({ ...current, x: rawX, y: rawY }));
+
+      // Autoalineación: si el centro del bloque que arrastras queda cerca
+      // del centro horizontal o vertical de otro puesto (o de su propio
+      // jefe/subordinado), se ajusta exacto a esa línea — como las guías
+      // de Figma/PowerPoint. Sigue siendo libre: solo "engancha" cuando ya
+      // estás casi alineado, no fuerza ninguna cuadrícula fija.
+      const centerX = rawX + BOX_WIDTH / 2;
+      const centerY = rawY + BOX_HEIGHT / 2;
+      let snappedCenterX = centerX;
+      let snappedCenterY = centerY;
+      let guideX = null;
+      let guideY = null;
+
+      boxes.forEach((box) => {
+        if (box.nodo.id === dragging.id) return;
+        const otherCenterX = box.left + BOX_WIDTH / 2;
+        const otherCenterY = box.top + BOX_HEIGHT / 2;
+        if (guideX === null && Math.abs(centerX - otherCenterX) <= ALIGN_THRESHOLD) {
+          snappedCenterX = otherCenterX;
+          guideX = otherCenterX;
+        }
+        if (guideY === null && Math.abs(centerY - otherCenterY) <= ALIGN_THRESHOLD) {
+          snappedCenterY = otherCenterY;
+          guideY = otherCenterY;
+        }
+      });
+
+      setDragging((current) => ({
+        ...current,
+        x: snappedCenterX - BOX_WIDTH / 2,
+        y: snappedCenterY - BOX_HEIGHT / 2,
+        guideX,
+        guideY,
+      }));
       return;
     }
     if (pendingRef.current && !dragging) {
@@ -339,6 +373,15 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
                 <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#8b5cf6" strokeWidth={3} strokeDasharray="3,7" strokeLinecap="round" />
               );
             })()}
+
+            {/* Guías de alineación: aparecen mientras arrastras y quedas
+                cerca del centro horizontal/vertical de otro puesto. */}
+            {dragging?.mode === "connect" ? null : dragging?.guideX != null && (
+              <line x1={dragging.guideX} y1={0} x2={dragging.guideX} y2={canvasHeight} stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="4,4" />
+            )}
+            {dragging?.mode === "connect" ? null : dragging?.guideY != null && (
+              <line x1={0} y1={dragging.guideY} x2={canvasWidth} y2={dragging.guideY} stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="4,4" />
+            )}
           </svg>
 
           {boxes.map(({ nodo, left, top }) => {
