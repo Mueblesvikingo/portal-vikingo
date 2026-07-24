@@ -135,16 +135,37 @@ export function computeLayout(nodos) {
 
   getRoots(nodos).forEach((root) => visit(root, 0));
 
-  const maxCol = nextLeaf > 0 ? nextLeaf - 1 : 0;
-  const maxRow = nodos.reduce((max, nodo) => {
-    const pos = positions.get(nodo.id);
-    return pos ? Math.max(max, pos.row) : max;
-  }, 0);
+  // El ancho/alto NO se calcula solo por el conteo de columnas del árbol
+  // automático: un puesto movido a mano puede quedar fuera de ese rango
+  // (incluso en negativo). Se recalcula el cuadro real que envuelve a
+  // TODOS los puestos (automáticos y movidos a mano) y se recorren las
+  // posiciones para que el mínimo quede en 0 — así el lienzo siempre
+  // encierra todo, sin cortar ni dejar espacio de más.
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  positions.forEach((pos) => {
+    minX = Math.min(minX, pos.x);
+    maxX = Math.max(maxX, pos.x);
+    minY = Math.min(minY, pos.y);
+    maxY = Math.max(maxY, pos.y);
+  });
+  if (!Number.isFinite(minX)) {
+    minX = 0;
+    maxX = 0;
+    minY = 0;
+    maxY = 0;
+  }
+
+  positions.forEach((pos, id) => {
+    positions.set(id, { ...pos, x: pos.x - minX, y: pos.y - minY });
+  });
 
   return {
     positions,
-    width: (maxCol + 1) * COLUMN_WIDTH,
-    height: (maxRow + 1) * ROW_HEIGHT,
+    width: maxX - minX + COLUMN_WIDTH,
+    height: maxY - minY + ROW_HEIGHT,
     columnWidth: COLUMN_WIDTH,
     rowHeight: ROW_HEIGHT,
   };
