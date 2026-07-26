@@ -10,6 +10,7 @@ import {
   getConexiones,
   createConexion,
   deleteConexion,
+  restoreNodosSnapshot,
 } from "../../services/organigramaService";
 import OrgChartCanvas from "./OrgChartCanvas";
 import NodeDetailPanel from "./NodeDetailPanel";
@@ -33,8 +34,54 @@ export default function OrganigramaModule({ currentUser }) {
   const [personasCatalogo, setPersonasCatalogo] = useState([]);
   const [puestosCatalogo, setPuestosCatalogo] = useState([]);
   const [conexiones, setConexiones] = useState([]);
+  const [undoStack, setUndoStack] = useState([]);
+  const [redoStack, setRedoStack] = useState([]);
+  const [undoing, setUndoing] = useState(false);
 
   const canEdit = canEditModule(currentUser, "organigrama");
+
+  // Se llama justo ANTES de cualquier acción que cambie un puesto (mover,
+  // editar, reasignar jefe, crear, quitar) para poder deshacerla después.
+  // Deshacer/rehacer sí se guardan de verdad en Supabase (no es solo un
+  // efecto visual que se pierde al recargar).
+  function pushHistory() {
+    setUndoStack((current) => [...current.slice(-19), nodos]);
+    setRedoStack([]);
+  }
+
+  async function handleUndo() {
+    if (undoStack.length === 0 || undoing) return;
+    setUndoing(true);
+    const previous = undoStack[undoStack.length - 1];
+    const result = await restoreNodosSnapshot(previous, nodos);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible deshacer.");
+      setUndoing(false);
+      return;
+    }
+    setRedoStack((current) => [...current.slice(-19), nodos]);
+    setUndoStack((current) => current.slice(0, -1));
+    await loadNodos();
+    setUndoing(false);
+  }
+
+  async function handleRedo() {
+    if (redoStack.length === 0 || undoing) return;
+    setUndoing(true);
+    const next = redoStack[redoStack.length - 1];
+    const result = await restoreNodosSnapshot(next, nodos);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible rehacer.");
+      setUndoing(false);
+      return;
+    }
+    setUndoStack((current) => [...current.slice(-19), nodos]);
+    setRedoStack((current) => current.slice(0, -1));
+    await loadNodos();
+    setUndoing(false);
+  }
 
   async function loadNodos() {
     setLoading(true);
@@ -76,6 +123,7 @@ export default function OrganigramaModule({ currentUser }) {
   const selectedNodo = nodos.find((nodo) => nodo.id === selectedId) || null;
 
   async function handleSaveNodo(id, draft) {
+    pushHistory();
     const result = await updateNodo(id, {
       ...draft,
       persona_id: matchPersonaId(draft.nombre_persona),
@@ -91,6 +139,7 @@ export default function OrganigramaModule({ currentUser }) {
   }
 
   async function handleDeactivateNodo(id) {
+    pushHistory();
     const result = await deactivateNodo(id);
     if (!result.ok) {
       console.error(result.error);
@@ -103,6 +152,7 @@ export default function OrganigramaModule({ currentUser }) {
   }
 
   async function handleAssignParent(childId, newParentId) {
+    pushHistory();
     const result = await updateNodo(childId, { reporta_a_id: newParentId });
     if (!result.ok) {
       console.error(result.error);
@@ -142,6 +192,7 @@ export default function OrganigramaModule({ currentUser }) {
   }
 
   async function handleMoveNode(id, posX, posY) {
+    pushHistory();
     // Actualización optimista: el bloque ya se ve donde lo soltaste, solo
     // se persiste en segundo plano sin recargar/parpadear todo el árbol.
     setNodos((current) => current.map((nodo) => (nodo.id === id ? { ...nodo, pos_x: posX, pos_y: posY } : nodo)));
@@ -155,11 +206,12 @@ export default function OrganigramaModule({ currentUser }) {
   // Doble clic en un espacio vacío del lienzo: crea un puesto en blanco
   // justo ahí (sin jefe todavía) y abre su panel para llenarlo al instante,
   // sin pasar por el formulario modal.
-  async function handleCreateNodeAt(posX, posY) {
+  async function handleCreateNodeAt(posX, posY, detected) {
+    pushHistory();
     const result = await createNodo({
       titulo_puesto: "Nuevo puesto",
-      nivel: "Operativo",
-      reporta_a_id: null,
+      nivel: detected?.nivel || "Operativo",
+      reporta_a_id: detected?.reportaAId ?? null,
       orden: 0,
       pos_x: posX,
       pos_y: posY,
@@ -181,6 +233,7 @@ export default function OrganigramaModule({ currentUser }) {
     const siblingCount = nodos.filter(
       (nodo) => (nodo.reporta_a_id ?? null) === (newNodo.reporta_a_id ? Number(newNodo.reporta_a_id) : null)
     ).length;
+    pushHistory();
     const result = await createNodo({
       ...newNodo,
       reporta_a_id: newNodo.reporta_a_id ? Number(newNodo.reporta_a_id) : null,
@@ -216,13 +269,35 @@ export default function OrganigramaModule({ currentUser }) {
             </p>
           </div>
           {canEdit && (
-            <button
-              type="button"
-              onClick={() => setShowAddModal(true)}
-              className="rounded-xl bg-white/10 px-3 py-1.5 text-[10px] font-black text-white hover:bg-white/20"
-            >
-              + Nuevo puesto
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center overflow-hidden rounded-lg border border-white/10">
+                <button
+                  type="button"
+                  onClick={handleUndo}
+                  disabled={undoStack.length === 0 || undoing}
+                  title="Deshacer"
+                  className="px-2 py-1.5 text-[11px] font-black text-white/50 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  ↺
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRedo}
+                  disabled={redoStack.length === 0 || undoing}
+                  title="Rehacer"
+                  className="border-l border-white/10 px-2 py-1.5 text-[11px] font-black text-white/50 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  ↻
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddModal(true)}
+                className="rounded-xl bg-white/10 px-3 py-1.5 text-[10px] font-black text-white hover:bg-white/20"
+              >
+                + Nuevo puesto
+              </button>
+            </div>
           )}
         </div>
 
@@ -287,7 +362,7 @@ export default function OrganigramaModule({ currentUser }) {
 
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
               <p className="text-xs font-black uppercase tracking-widest">Nuevo puesto</p>
               <button type="button" onClick={() => setShowAddModal(false)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>

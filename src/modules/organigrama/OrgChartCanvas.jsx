@@ -11,6 +11,19 @@ import {
   NIVEL_LABELS,
 } from "./organigramaLayout";
 
+// Para cuando se agrega un puesto justo debajo de otro y hay que adivinar
+// un nivel razonable "un escalón abajo" (Externo/Auditoría son etiquetas
+// laterales, no forman parte de esta cadena descendente principal).
+const NEXT_LEVEL_DOWN = {
+  Direccion: "Gerencia",
+  Gerencia: "Jefatura",
+  Jefatura: "Supervision",
+  Supervision: "Operativo",
+  Operativo: "Operativo",
+  Externo: "Operativo",
+  Auditoria: "Operativo",
+};
+
 // En Catálogo Organizacional los nombres van "APELLIDO APELLIDO NOMBRE" —
 // en la caja solo se quiere mostrar el nombre de pila (última palabra), no
 // los apellidos. Los nombres cargados directo en el organigrama (ya sin
@@ -42,6 +55,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [manualScale, setManualScale] = useState(null); // null = ajustar a pantalla automáticamente
   const [collapsedIds, setCollapsedIds] = useState(null); // null = aún no se definió el default
+  const [hoveredId, setHoveredId] = useState(null);
 
   // Por default se colapsan las ramas debajo de Jefatura (Supervisión y
   // Operativo) para que el organigrama completo se lea de un vistazo; cada
@@ -88,16 +102,20 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
   const fitScale = Math.max(MIN_READABLE_FIT, rawFit);
   const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, manualScale ?? fitScale));
 
+  // Pasar el cursor sobre un puesto resalta lo mismo que seleccionarlo
+  // (sin necesidad de hacer clic ni abrir el panel); si además hay uno
+  // seleccionado, el resaltado del clic manda.
+  const activeHighlightId = selectedId || hoveredId;
   // Línea de mando hacia arriba (a quién reporta, incluyéndose a sí mismo).
   const ancestorIds = useMemo(() => {
-    if (!selectedId) return new Set();
-    return new Set(getAncestorChain(nodos, selectedId).map((nodo) => nodo.id));
-  }, [nodos, selectedId]);
+    if (!activeHighlightId) return new Set();
+    return new Set(getAncestorChain(nodos, activeHighlightId).map((nodo) => nodo.id));
+  }, [nodos, activeHighlightId]);
   // Quiénes le reportan directamente (un nivel hacia abajo).
   const directReportIds = useMemo(() => {
-    if (!selectedId) return new Set();
-    return new Set(getChildren(nodos, selectedId).map((nodo) => nodo.id));
-  }, [nodos, selectedId]);
+    if (!activeHighlightId) return new Set();
+    return new Set(getChildren(nodos, activeHighlightId).map((nodo) => nodo.id));
+  }, [nodos, activeHighlightId]);
 
   const boxes = visibleNodos
     .map((nodo) => {
@@ -210,6 +228,29 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
     onSelectNode(nodo.id);
   }
 
+  // Detecta con qué otros puestos "se relaciona" el punto donde vas a
+  // soltar uno nuevo: si queda a la altura de otros (misma línea), se
+  // vuelve su hermano (mismo jefe y mismo nivel); si no, pero hay uno
+  // claramente arriba y alineado, se vuelve su subordinado (nivel un
+  // escalón abajo). Así no hay que ir al panel a capturar "Reporta a" a
+  // mano cada vez.
+  function detectPlacementContext(posX, posY) {
+    const centerX = posX + BOX_WIDTH / 2;
+    const sameRow = boxes.find((box) => Math.abs(box.top - posY) <= BOX_HEIGHT * 0.6);
+    if (sameRow) {
+      return { reportaAId: sameRow.nodo.reporta_a_id ?? null, nivel: sameRow.nodo.nivel };
+    }
+
+    const above = boxes
+      .filter((box) => Math.abs(box.left + BOX_WIDTH / 2 - centerX) <= BOX_WIDTH && box.top < posY - BOX_HEIGHT * 0.4)
+      .sort((a, b) => (posY - a.top) - (posY - b.top))[0];
+    if (above) {
+      return { reportaAId: above.nodo.id, nivel: NEXT_LEVEL_DOWN[above.nodo.nivel] || "Operativo" };
+    }
+
+    return { reportaAId: null, nivel: "Operativo" };
+  }
+
   // Doble clic en un espacio vacío del lienzo: crea un puesto nuevo justo
   // ahí, tipo Visio (doble clic en blanco → figura nueva lista para editar).
   function handleCanvasDoubleClick(event) {
@@ -219,7 +260,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
     const rawY = (event.clientY - rect.top) / scale;
     const posX = Math.max(0, rawX - PADDING);
     const posY = Math.max(0, rawY - PADDING - BOX_HEIGHT / 2);
-    onCreateNodeAt(posX, posY);
+    onCreateNodeAt(posX, posY, detectPlacementContext(posX, posY));
   }
 
   function startConnect(event, nodo) {
@@ -410,6 +451,8 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
                 key={nodo.id}
                 onMouseDown={(event) => handleBoxMouseDown(event, nodo)}
                 onClick={() => handleBoxClick(nodo)}
+                onMouseEnter={() => setHoveredId(nodo.id)}
+                onMouseLeave={() => setHoveredId((current) => (current === nodo.id ? null : current))}
                 className={`group absolute flex select-none flex-col items-center justify-center rounded-xl border-2 px-2 py-1.5 text-center shadow-sm transition-shadow ${canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} hover:shadow-md hover:ring-2 hover:ring-slate-300 ${colors.bg} ${colors.border} ${colors.text} ${
                   isDragged ? "z-30 shadow-xl" : "z-10"
                 } ${relationRing}`}

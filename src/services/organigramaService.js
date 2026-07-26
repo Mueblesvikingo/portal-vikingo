@@ -97,6 +97,55 @@ export async function updateNodo(id, payload) {
   }
 }
 
+// Deshacer/rehacer: restaura TODOS los campos de cada puesto que estaba en
+// el snapshot (incluida posición y jefe) y desactiva cualquier puesto que
+// exista ahora pero no estuviera en el snapshot (deshace una creación).
+export async function restoreNodosSnapshot(snapshotNodos, currentNodos) {
+  try {
+    const snapshotIds = new Set(snapshotNodos.map((n) => n.id));
+    const currentIds = new Set(currentNodos.map((n) => n.id));
+
+    const restores = snapshotNodos.map((n) =>
+      supabase
+        .from("organigrama_nodos")
+        .update({
+          titulo_puesto: n.titulo_puesto,
+          nombre_persona: n.nombre_persona,
+          persona_id: n.persona_id,
+          puesto_id: n.puesto_id,
+          nivel: n.nivel,
+          reporta_a_id: n.reporta_a_id,
+          tipo_linea: n.tipo_linea,
+          perfil_puesto: n.perfil_puesto,
+          objetivo_puesto: n.objetivo_puesto,
+          competencias_clave: n.competencias_clave,
+          responsabilidades_clave: n.responsabilidades_clave,
+          pos_x: n.pos_x,
+          pos_y: n.pos_y,
+          activo: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", n.id)
+    );
+
+    const removals = [...currentIds]
+      .filter((id) => !snapshotIds.has(id))
+      .map((id) =>
+        supabase
+          .from("organigrama_nodos")
+          .update({ activo: false, updated_at: new Date().toISOString() })
+          .eq("id", id)
+      );
+
+    const results = await Promise.all([...restores, ...removals]);
+    const failed = results.find((result) => result.error);
+    if (failed) return { ok: false, error: failed.error };
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+
 // Posición manual al arrastrar un puesto: se queda exactamente donde lo
 // sueltes (no reasigna jefe ni reordena nada más).
 export async function updateNodoPosition(id, posX, posY) {

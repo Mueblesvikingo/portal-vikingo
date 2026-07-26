@@ -86,7 +86,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
           <div>
             <p className="text-xs font-black uppercase tracking-widest">Perfil de puesto</p>
@@ -311,7 +311,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
 
           {activeSubModal && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4">
-              <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+              <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
                 <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
                   <p className="text-xs font-black uppercase tracking-widest">
                     {{ objetivo_puesto: "🎯 Objetivo del puesto", competencias_clave: "🧠 Competencias clave", responsabilidades_clave: "✅ Responsabilidades clave" }[activeSubModal]}
@@ -324,9 +324,9 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
                     disabled={!canEdit}
                     value={draft[activeSubModal]}
                     onChange={(event) => setDraft((current) => ({ ...current, [activeSubModal]: event.target.value }))}
-                    rows={6}
+                    rows={12}
                     placeholder="Escribe aquí..."
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:text-slate-400"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:text-slate-400"
                   />
                   <div className="mt-3 flex justify-end">
                     <button type="button" onClick={() => setActiveSubModal(null)} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Listo</button>
