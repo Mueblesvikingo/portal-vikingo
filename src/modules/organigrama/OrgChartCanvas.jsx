@@ -34,10 +34,6 @@ function firstNameOnly(fullName) {
   return parts[parts.length - 1];
 }
 
-// Color especial para puestos que reciben apoyo de varios equipos a la vez
-// (ej. Ayudantes en general) — gris claro, distinto de cualquier NIVEL_COLORS.
-const APOYO_TARGET_COLORS = { bg: "bg-slate-100", border: "border-slate-300", text: "text-slate-600", dot: "bg-slate-400" };
-
 const BOX_WIDTH = 176;
 const BOX_HEIGHT = 80;
 const PADDING = 60;
@@ -57,7 +53,7 @@ const ALIGN_THRESHOLD = 10;
 const LINE_BEND_OFFSET = 26;
 const NUDGE_STEP = 15;
 
-export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMoveNode, onCreateNodeAt, canEdit, personasCatalogo = [], puestosCatalogo = [], conexiones = [] }) {
+export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMoveNode, onCreateNodeAt, canEdit, personasCatalogo = [], puestosCatalogo = [] }) {
   const viewportRef = useRef(null);
   const canvasRef = useRef(null);
   const pendingRef = useRef(null); // arrastre (uno o varios) aún sin confirmar, antes de cruzar el umbral
@@ -145,12 +141,6 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
     if (!activeHighlightId) return new Set();
     return new Set(getChildren(nodos, activeHighlightId).map((nodo) => nodo.id));
   }, [nodos, activeHighlightId]);
-  // Puestos que reciben al menos una conexión de apoyo (ej. "Ayudantes en
-  // general" recibiendo de varios equipos a la vez): para esos no se dibuja
-  // la línea normal de jefe-subordinado, solo las líneas de apoyo — así se
-  // ve que el puesto "surge" de varios equipos y no de un solo jefe.
-  const apoyoTargetIds = useMemo(() => new Set(conexiones.map((c) => c.nodo_b_id)), [conexiones]);
-
   const boxes = visibleNodos
     .map((nodo) => {
       const pos = layout.positions.get(nodo.id);
@@ -483,7 +473,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
               </filter>
             </defs>
             {visibleNodos.map((nodo) => {
-              if (!nodo.reporta_a_id || apoyoTargetIds.has(nodo.id)) return null;
+              if (!nodo.reporta_a_id) return null;
               const childPos = getRenderPosition(nodo.id);
               const parentPos = getRenderPosition(nodo.reporta_a_id);
               if (!childPos || !parentPos) return null;
@@ -513,40 +503,6 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
               );
             })}
 
-            {/* Conexiones de apoyo: varios puestos "alimentan" a otro (ej.
-                Supervisor de tapicería, de costura, de Carpintería y Jefe
-                de Embarques hacia Ayudantes en general) sin que eso sea una
-                relación de jefe-subordinado. A diferencia de la línea de
-                mando normal (que dobla cerca de quien manda), esta dobla
-                cerca de quien RECIBE el apoyo: así cada línea baja derecho
-                por su propia columna (no se confunde con la línea de mando
-                de esa columna) y solo convergen justo antes de llegar. */}
-            {conexiones.map((conexion) => {
-              const fromPos = getRenderPosition(conexion.nodo_a_id);
-              const toPos = getRenderPosition(conexion.nodo_b_id);
-              if (!fromPos || !toPos) return null;
-              const px = fromPos.left + BOX_WIDTH / 2;
-              const py = fromPos.top + BOX_HEIGHT;
-              const cx = toPos.left + BOX_WIDTH / 2;
-              const cy = toPos.top;
-              const bendY = cy - Math.sign(cy - py || 1) * Math.min(LINE_BEND_OFFSET, Math.abs(cy - py) / 2);
-              return (
-                <g key={`apoyo-${conexion.id}`}>
-                  <path
-                    d={`M ${px} ${py} L ${px} ${bendY} L ${cx} ${bendY} L ${cx} ${cy}`}
-                    fill="none"
-                    stroke="#8b5cf6"
-                    strokeWidth={2}
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    strokeDasharray="5,4"
-                  />
-                  <circle cx={px} cy={py} r={3} fill="#8b5cf6" />
-                  <circle cx={cx} cy={cy} r={3} fill="#8b5cf6" />
-                </g>
-              );
-            })}
-
             {/* Guías de alineación: aparecen mientras arrastras y quedas
                 cerca del centro horizontal/vertical de otro puesto. */}
             {dragging?.guideX != null && (
@@ -571,10 +527,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
           )}
 
           {boxes.map(({ nodo, left, top }) => {
-            // Un puesto que recibe apoyo de varios equipos (ej. Ayudantes en
-            // general) se pinta gris claro en vez del color de su nivel, para
-            // distinguirlo a simple vista como recurso compartido.
-            const colors = apoyoTargetIds.has(nodo.id) ? APOYO_TARGET_COLORS : (NIVEL_COLORS[nodo.nivel] || NIVEL_COLORS.Operativo);
+            const colors = NIVEL_COLORS[nodo.nivel] || NIVEL_COLORS.Operativo;
             const isDragged = dragging && (dragging.ids ? dragging.ids.includes(nodo.id) : dragging.id === nodo.id);
             const isSelected = selectedId === nodo.id;
             const isMultiSelected = multiIds.has(nodo.id);
@@ -607,7 +560,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
               >
                 <p className="line-clamp-2 text-[12px] font-black uppercase leading-tight tracking-wide">{getDisplayTitle(nodo, puestosCatalogo)}</p>
                 {firstNameOnly(getDisplayName(nodo, personasCatalogo)) && (
-                  <p className="mt-0.5 truncate text-[11px] font-bold opacity-80">{firstNameOnly(getDisplayName(nodo, personasCatalogo))}</p>
+                  <p className="mt-0.5 truncate text-[11px] font-bold uppercase opacity-80">{firstNameOnly(getDisplayName(nodo, personasCatalogo))}</p>
                 )}
                 <span className="pointer-events-none absolute bottom-1 right-1.5 text-[10px] font-black opacity-0 group-hover:opacity-60">ⓘ</span>
 

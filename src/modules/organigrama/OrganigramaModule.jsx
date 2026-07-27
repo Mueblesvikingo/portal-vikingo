@@ -8,7 +8,6 @@ import {
   updateNodoPosition,
   deactivateNodo,
   restoreNodosSnapshot,
-  getConexiones,
 } from "../../services/organigramaService";
 import OrgChartCanvas from "./OrgChartCanvas";
 import NodeDetailPanel from "./NodeDetailPanel";
@@ -31,7 +30,6 @@ export default function OrganigramaModule({ currentUser }) {
   const [message, setMessage] = useState("");
   const [personasCatalogo, setPersonasCatalogo] = useState([]);
   const [puestosCatalogo, setPuestosCatalogo] = useState([]);
-  const [conexiones, setConexiones] = useState([]);
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const [undoing, setUndoing] = useState(false);
@@ -95,7 +93,6 @@ export default function OrganigramaModule({ currentUser }) {
     // libre desconectado de la fuente oficial.
     getPersonas().then(setPersonasCatalogo).catch(() => setPersonasCatalogo([]));
     getPuestos().then(setPuestosCatalogo).catch(() => setPuestosCatalogo([]));
-    getConexiones().then(setConexiones).catch(() => setConexiones([]));
   }, []);
 
   // Si el nombre/título capturado coincide exactamente (sin distinguir
@@ -281,7 +278,6 @@ export default function OrganigramaModule({ currentUser }) {
           <span className="ml-auto flex items-center gap-3 text-[9px] font-bold text-slate-400">
             <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-red-400" /> A quién reporta</span>
             <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-emerald-400" /> Quién le reporta</span>
-            <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-violet-400" /> Apoyo entre equipos</span>
           </span>
         </div>
 
@@ -306,7 +302,6 @@ export default function OrganigramaModule({ currentUser }) {
               canEdit={canEdit}
               personasCatalogo={personasCatalogo}
               puestosCatalogo={puestosCatalogo}
-              conexiones={conexiones}
             />
           )}
         </div>
