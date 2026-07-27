@@ -527,9 +527,13 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
             })}
 
             {/* Conexiones de apoyo: varios puestos "alimentan" a otro (ej.
-                Tapiceros, Costureras, Carpinteros Armadores y Jefe de
-                Embarques hacia Ayudantes en general) sin que eso sea una
-                relación de jefe-subordinado. */}
+                Supervisor de tapicería, de costura, de Carpintería y Jefe
+                de Embarques hacia Ayudantes en general) sin que eso sea una
+                relación de jefe-subordinado. A diferencia de la línea de
+                mando normal (que dobla cerca de quien manda), esta dobla
+                cerca de quien RECIBE el apoyo: así cada línea baja derecho
+                por su propia columna (no se confunde con la línea de mando
+                de esa columna) y solo convergen justo antes de llegar. */}
             {conexiones.map((conexion) => {
               const fromPos = getRenderPosition(conexion.nodo_a_id);
               const toPos = getRenderPosition(conexion.nodo_b_id);
@@ -538,7 +542,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
               const py = fromPos.top + BOX_HEIGHT;
               const cx = toPos.left + BOX_WIDTH / 2;
               const cy = toPos.top;
-              const bendY = py + Math.sign(cy - py || 1) * Math.min(LINE_BEND_OFFSET, Math.abs(cy - py) / 2);
+              const bendY = cy - Math.sign(cy - py || 1) * Math.min(LINE_BEND_OFFSET, Math.abs(cy - py) / 2);
               return (
                 <g key={`apoyo-${conexion.id}`}>
                   <path
