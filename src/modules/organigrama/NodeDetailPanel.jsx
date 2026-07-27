@@ -238,20 +238,12 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
         </div>
 
         <div className="max-h-[75vh] space-y-3 overflow-y-auto p-4">
-          {!isGroup && (jefe || directReports.length > 0) && (
+          {!isGroup && jefe && (
             <div className="sticky top-0 z-10 -mx-4 -mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-100 bg-white/95 px-4 py-2 backdrop-blur">
-              {jefe && (
-                <p className="text-[10px] font-bold text-slate-600">
-                  <span className="font-black uppercase tracking-widest text-red-500">A quién reporta:</span>{" "}
-                  {getDisplayTitle(jefe, puestosCatalogo)}{getDisplayName(jefe, personasCatalogo) ? ` (${getDisplayName(jefe, personasCatalogo)})` : ""}
-                </p>
-              )}
-              {directReports.length > 0 && (
-                <p className="text-[10px] font-bold text-slate-600">
-                  <span className="font-black uppercase tracking-widest text-emerald-500">Le reportan ({directReports.length}):</span>{" "}
-                  {directReports.map((report) => getDisplayName(report, personasCatalogo) || getDisplayTitle(report, puestosCatalogo)).join(", ")}
-                </p>
-              )}
+              <p className="text-[10px] font-bold text-slate-600">
+                <span className="font-black uppercase tracking-widest text-red-500">A quién reporta:</span>{" "}
+                {getDisplayTitle(jefe, puestosCatalogo)}{getDisplayName(jefe, personasCatalogo) ? ` (${getDisplayName(jefe, personasCatalogo)})` : ""}
+              </p>
             </div>
           )}
 
@@ -310,25 +302,27 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
                 </div>
               </div>
 
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Reporta a
-                {canEdit ? (
-                  <select
-                    value={draft.reporta_a_id}
-                    onChange={(event) => setDraft((current) => ({ ...current, reporta_a_id: event.target.value }))}
-                    className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
-                  >
-                    <option value="">Nadie (raíz del organigrama)</option>
-                    {reporteOptions.map((option) => (
-                      <option key={option.id} value={option.id}>{getDisplayTitle(option, puestosCatalogo)}{getDisplayName(option, personasCatalogo) ? ` · ${getDisplayName(option, personasCatalogo)}` : ""}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <p className="mt-1 text-[11px] font-bold normal-case tracking-normal text-slate-700">
-                    {jefe ? `${getDisplayTitle(jefe, puestosCatalogo)}${getDisplayName(jefe, personasCatalogo) ? ` (${getDisplayName(jefe, personasCatalogo)})` : ""}` : "No reporta a nadie (raíz del organigrama)"}
-                  </p>
-                )}
-              </label>
+              {jefe && (
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Reporta a
+                  {canEdit ? (
+                    <select
+                      value={draft.reporta_a_id}
+                      onChange={(event) => setDraft((current) => ({ ...current, reporta_a_id: event.target.value }))}
+                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+                    >
+                      <option value="">Nadie (raíz del organigrama)</option>
+                      {reporteOptions.map((option) => (
+                        <option key={option.id} value={option.id}>{getDisplayTitle(option, puestosCatalogo)}{getDisplayName(option, personasCatalogo) ? ` · ${getDisplayName(option, personasCatalogo)}` : ""}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="mt-1 text-[11px] font-bold normal-case tracking-normal text-slate-700">
+                      {`${getDisplayTitle(jefe, puestosCatalogo)}${getDisplayName(jefe, personasCatalogo) ? ` (${getDisplayName(jefe, personasCatalogo)})` : ""}`}
+                    </p>
+                  )}
+                </label>
+              )}
 
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
