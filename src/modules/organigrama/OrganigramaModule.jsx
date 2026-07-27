@@ -230,7 +230,7 @@ export default function OrganigramaModule({ currentUser }) {
           <div className="flex items-center gap-1.5">
             <p className="text-xs font-black uppercase tracking-widest">Organigrama</p>
             <span
-              title="Clic: perfil, línea de mando y subordinados. Arrastra un puesto para moverlo — se queda donde lo sueltes. Doble clic en espacio vacío: agregar puesto nuevo."
+              title="Clic: perfil, línea de mando y subordinados. Arrastra un puesto para moverlo — se queda donde lo sueltes. Usa &quot;+ Nuevo puesto&quot; para agregar uno."
               className="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-white/20 text-[9px] font-black text-white/50 hover:text-white"
             >
               ?
