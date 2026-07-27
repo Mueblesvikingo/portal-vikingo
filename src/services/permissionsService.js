@@ -307,6 +307,25 @@ export function hasWorkloadFullAccess(user) {
   return roles.some((role) => WORKLOAD_FULL_ACCESS_ROLES.includes(role));
 }
 
+// Balance de Carga: excepción puntual para que Beatriz (Gerente de Calidad,
+// persona_id 11) pueda editar la carga de trabajo de las Inspectoras de
+// Calidad (sus subordinadas directas) sin darle acceso total a la carga de
+// todas las personas de la organización. Decisión explícita del usuario,
+// igual criterio que STRATEGIC_KPI_EDITOR_PERSONA_IDS más arriba: una
+// excepción por persona, no un rol general de "supervisor edita a su equipo".
+const WORKLOAD_SCOPED_EDITORS = {
+  11: ["Inspector de Calidad"], // RUIZ CARREON BEATRIZ → persona_roles.rol de Laura y Sulidey
+};
+
+// `targetPersonRoles` son los `persona_roles.rol` (activos) de la persona
+// cuya carga se quiere editar — ya cargados por WorkloadBalanceModule, no se
+// vuelven a consultar aquí.
+export function canEditWorkloadForPersonRoles(user, targetPersonRoles = []) {
+  const allowedRoles = WORKLOAD_SCOPED_EDITORS[Number(user?.persona_id)];
+  if (!allowedRoles) return false;
+  return targetPersonRoles.some((rol) => allowedRoles.includes(rol));
+}
+
 export function canEditWorkloadPendingActivities(user) {
   const userOverride = getUserModuleOverride(user, "workload-balance");
   if (userOverride && typeof userOverride.editar === "boolean") return userOverride.editar;

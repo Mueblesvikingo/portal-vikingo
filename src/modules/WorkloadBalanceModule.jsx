@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cancelAssignment, confirmMeetingAttendance, createWorkloadAssignment, createWorkloadSourceActivity, deleteAssignment, deleteSavedWorkloadPlan, finalizeAssignment, findExistingSavedMonth, findExistingSavedWeek, getLiderProcesoOverrides, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, pauseAssignment, programAssignmentHours, reactivateAssignment, recalculateAssignmentHours, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanHours, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanHours, updateWeeklyPlanOrder, updateWorkloadAssignment, updateWorkloadSourceActivity, upsertLiderProcesoOverride } from "../services/workloadService";
-import { hasWorkloadFullAccess, canEditWorkloadPendingActivities, isStrategicTeamMember } from "../services/permissionsService";
+import { hasWorkloadFullAccess, canEditWorkloadPendingActivities, canEditWorkloadForPersonRoles, isStrategicTeamMember } from "../services/permissionsService";
 
 const WORKLOAD_VIDEO_URL =
   "https://www.youtube.com/embed/bun2Ku2R1JI?autoplay=1&rel=0&modestbranding=1";
@@ -1522,10 +1522,21 @@ export default function WorkloadBalanceModule({
   }, [currentUser?.persona_id, currentUser?.name, peopleOptions]);
   // Todos pueden VER la carga de cualquier persona (para eso está el filtro).
   // Solo pueden EDITAR/programar cuando están viendo su propia carga, salvo
-  // los roles con acceso total (ver hasWorkloadFullAccess).
+  // los roles con acceso total (ver hasWorkloadFullAccess) o una excepción
+  // puntual por persona/rol (ver canEditWorkloadForPersonRoles).
   const effectivePersonFilter = personFilter;
   const isOwnRecordSelected = Boolean(currentUserPersonId) && String(effectivePersonFilter) === String(currentUserPersonId);
-  const canEditSelectedPerson = canViewAllWorkloads || isOwnRecordSelected;
+  const selectedPersonRoles = useMemo(
+    () =>
+      effectivePersonFilter === "all"
+        ? []
+        : activePersonRoleLinks
+            .filter((link) => String(link.persona_id ?? link.person_id ?? "") === String(effectivePersonFilter))
+            .map((link) => getPersonRoleName(link)),
+    [activePersonRoleLinks, effectivePersonFilter]
+  );
+  const canEditSelectedPerson =
+    canViewAllWorkloads || isOwnRecordSelected || canEditWorkloadForPersonRoles(currentUser, selectedPersonRoles);
   const selectedPersonOption = useMemo(
     () => peopleOptions.find((person) => String(person.id) === String(effectivePersonFilter)) || null,
     [peopleOptions, effectivePersonFilter]
