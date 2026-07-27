@@ -63,7 +63,11 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
   const [marquee, setMarquee] = useState(null); // { x0, y0, x1, y1 } en coordenadas del lienzo, mientras se dibuja
   const [multiIds, setMultiIds] = useState(new Set());
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
-  const [manualScale, setManualScale] = useState(null); // null = ajustar a pantalla automáticamente
+  // Arranca fijo en 60% (no en "ajustar a pantalla automático"): es solo el
+  // punto de partida de la sesión — el usuario puede acercar/alejar libre
+  // después, y no se guarda en ningún lado, así que una nueva sesión o
+  // ventana siempre vuelve a este mismo 60%.
+  const [manualScale, setManualScale] = useState(0.6);
   const [collapsedIds, setCollapsedIds] = useState(null); // null = aún no se definió el default
   const [hoveredId, setHoveredId] = useState(null);
 
