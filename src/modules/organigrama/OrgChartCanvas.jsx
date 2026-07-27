@@ -39,19 +39,29 @@ const BOX_HEIGHT = 80;
 const PADDING = 60;
 const MIN_SCALE = 0.4;
 const MAX_SCALE = 1.5;
-// Nunca se auto-reduce por debajo de esto: mejor scroll que letras
-// ilegibles. El ajuste a pantalla solo encoge hasta aquí.
-const MIN_READABLE_FIT = 0.65;
+// El ajuste a pantalla nunca encoge por debajo de MIN_READABLE_FIT (mejor
+// scroll que letras ilegibles) ni agranda más allá de MAX_READABLE_FIT
+// (para no terminar con letras enormes cuando hay pocos puestos visibles).
+const MIN_READABLE_FIT = 0.8;
+const MAX_READABLE_FIT = 1.1;
 
 const DRAG_THRESHOLD_PX = 4;
 const ALIGN_THRESHOLD = 10;
+// El conector dobla cerca del puesto que manda (no a la mitad del camino),
+// para que la vuelta quede lo antes posible y no cruce por encima de otros
+// puestos que estén más abajo, a un lado.
+const LINE_BEND_OFFSET = 26;
+const NUDGE_STEP = 15;
 
-export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMoveNode, onCreateNodeAt, canEdit, personasCatalogo = [], puestosCatalogo = [], conexiones = [], onCreateConexion, onDeleteConexion }) {
+export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMoveNode, onCreateNodeAt, canEdit, personasCatalogo = [], puestosCatalogo = [] }) {
   const viewportRef = useRef(null);
   const canvasRef = useRef(null);
-  const pendingRef = useRef(null); // posible arrastre de movimiento aún sin confirmar (antes de cruzar el umbral)
+  const pendingRef = useRef(null); // arrastre (uno o varios) aún sin confirmar, antes de cruzar el umbral
+  const marqueeRef = useRef(null); // selección por recuadro (arrastrar sobre espacio vacío)
   const justDraggedRef = useRef(false); // evita que el clic que sigue a un arrastre real abra el panel
-  const [dragging, setDragging] = useState(null); // { id, offsetX, offsetY, x, y }
+  const [dragging, setDragging] = useState(null); // { id, ids?, origins?, offsetX, offsetY, x, y, guideX, guideY }
+  const [marquee, setMarquee] = useState(null); // { x0, y0, x1, y1 } en coordenadas del lienzo, mientras se dibuja
+  const [multiIds, setMultiIds] = useState(new Set());
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [manualScale, setManualScale] = useState(null); // null = ajustar a pantalla automáticamente
   const [collapsedIds, setCollapsedIds] = useState(null); // null = aún no se definió el default
@@ -70,7 +80,28 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
   }, [nodos, collapsedIds]);
 
   const effectiveCollapsed = collapsedIds || new Set();
-  const visibleNodos = useMemo(() => getVisibleNodos(nodos, effectiveCollapsed), [nodos, effectiveCollapsed]);
+
+  // Un puesto "sin nombre y sin persona vinculada" que sí tiene subordinados
+  // es un equipo transversal (ej. "Oficina estratégica"): sus integrantes
+  // viven dentro de su propio panel de perfil, nunca como cajas sueltas en
+  // el lienzo — evita saturar el organigrama con roles que no tienen mando
+  // ni son parte de la línea jerárquica principal.
+  const { groupContainerIds, groupHiddenIds } = useMemo(() => {
+    const containerIds = new Set();
+    const hiddenIds = new Set();
+    nodos.forEach((nodo) => {
+      if (!nodo.persona_id && !nodo.nombre_persona && hasChildren(nodos, nodo.id)) {
+        containerIds.add(nodo.id);
+        getChildren(nodos, nodo.id).forEach((child) => hiddenIds.add(child.id));
+      }
+    });
+    return { groupContainerIds: containerIds, groupHiddenIds: hiddenIds };
+  }, [nodos]);
+
+  const visibleNodos = useMemo(
+    () => getVisibleNodos(nodos, effectiveCollapsed).filter((nodo) => !groupHiddenIds.has(nodo.id)),
+    [nodos, effectiveCollapsed, groupHiddenIds]
+  );
 
   function toggleCollapse(id) {
     setCollapsedIds((current) => {
@@ -99,7 +130,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
   const rawFit = viewportSize.width > 0 && canvasWidth > 0
     ? Math.min(1, viewportSize.width / canvasWidth, viewportSize.height / canvasHeight)
     : 1;
-  const fitScale = Math.max(MIN_READABLE_FIT, rawFit);
+  const fitScale = Math.min(MAX_READABLE_FIT, Math.max(MIN_READABLE_FIT, rawFit));
   const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, manualScale ?? fitScale));
 
   // Pasar el cursor sobre un puesto resalta lo mismo que seleccionarlo
@@ -128,6 +159,27 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
       };
     })
     .filter(Boolean);
+  const boxById = new Map(boxes.map((box) => [box.nodo.id, box]));
+
+  // Posición renderizada de un puesto, ya sea que esté quieto, arrastrado
+  // solo, o arrastrado como parte de una selección de varios (cada quien se
+  // mueve el mismo delta que el puesto "ancla" que agarraste, para que el
+  // grupo entero se desplace junto y las líneas se sigan ajustando solas).
+  function getRenderPosition(id) {
+    const box = boxById.get(id);
+    if (!box) return null;
+    if (!dragging) return { left: box.left, top: box.top };
+    if (dragging.ids) {
+      if (!dragging.ids.includes(id)) return { left: box.left, top: box.top };
+      const origin = dragging.origins[id];
+      const anchorOrigin = dragging.origins[dragging.id];
+      const dx = dragging.x - anchorOrigin.left;
+      const dy = dragging.y - anchorOrigin.top;
+      return { left: origin.left + dx, top: origin.top + dy };
+    }
+    if (dragging.id === id) return { left: dragging.x, top: dragging.y };
+    return { left: box.left, top: box.top };
+  }
 
   // Clic normal en la caja = seleccionarla (ver perfil). Si esa misma caja
   // se arrastra (moverla) primero, no queremos que el clic al soltar abra
@@ -135,8 +187,48 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
   // arrastre real al cruzar unos pocos pixeles de movimiento.
   function handleBoxMouseDown(event, nodo) {
     if (!canEdit || !canvasRef.current) return;
-    const box = boxes.find((b) => b.nodo.id === nodo.id);
+
+    // Mayús+clic: solo agrega/quita del grupo seleccionado, no mueve nada
+    // ni abre el perfil — así se arma la selección múltiple.
+    if (event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      setMultiIds((current) => {
+        const next = new Set(current);
+        if (next.has(nodo.id)) next.delete(nodo.id);
+        else next.add(nodo.id);
+        return next;
+      });
+      return;
+    }
+
     const rect = canvasRef.current.getBoundingClientRect();
+    const isGroupDrag = multiIds.has(nodo.id) && multiIds.size > 1;
+
+    if (isGroupDrag) {
+      const ids = [...multiIds];
+      const origins = {};
+      ids.forEach((id) => {
+        const box = boxById.get(id);
+        if (box) origins[id] = { left: box.left, top: box.top };
+      });
+      const anchorBox = boxById.get(nodo.id);
+      pendingRef.current = {
+        ids,
+        origins,
+        id: nodo.id,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        offsetX: (event.clientX - rect.left) / scale - (anchorBox?.left ?? 0),
+        offsetY: (event.clientY - rect.top) / scale - (anchorBox?.top ?? 0),
+      };
+      return;
+    }
+
+    // Clic simple en un puesto fuera del grupo actual: sale del modo
+    // multi-selección y arrastra solo ese puesto.
+    if (multiIds.size > 0) setMultiIds(new Set());
+    const box = boxById.get(nodo.id);
     pendingRef.current = {
       id: nodo.id,
       startClientX: event.clientX,
@@ -146,27 +238,46 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
     };
   }
 
+  // Mousedown sobre el fondo (no una caja): empieza a dibujar el recuadro
+  // de selección múltiple (estilo "rubber band" de escritorio).
+  function handleCanvasMouseDown(event) {
+    if (!canEdit || !canvasRef.current || event.target !== canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / scale;
+    const y = (event.clientY - rect.top) / scale;
+    marqueeRef.current = { x0: x, y0: y, shiftKey: event.shiftKey };
+  }
+
   function moveDrag(event) {
     if (!canvasRef.current) return;
-    if (dragging?.mode === "move") {
-      const rect = canvasRef.current.getBoundingClientRect();
+    const rect = canvasRef.current.getBoundingClientRect();
+
+    if (marqueeRef.current) {
+      const x = (event.clientX - rect.left) / scale;
+      const y = (event.clientY - rect.top) / scale;
+      setMarquee({ x0: marqueeRef.current.x0, y0: marqueeRef.current.y0, x1: x, y1: y });
+      return;
+    }
+
+    if (dragging) {
       const rawX = (event.clientX - rect.left) / scale - dragging.offsetX;
       const rawY = (event.clientY - rect.top) / scale - dragging.offsetY;
 
-      // Autoalineación: si el centro del bloque que arrastras queda cerca
-      // del centro horizontal o vertical de otro puesto (o de su propio
-      // jefe/subordinado), se ajusta exacto a esa línea — como las guías
-      // de Figma/PowerPoint. Sigue siendo libre: solo "engancha" cuando ya
-      // estás casi alineado, no fuerza ninguna cuadrícula fija.
+      // Autoalineación: si el centro del puesto "ancla" que arrastras queda
+      // cerca del centro horizontal o vertical de otro puesto fuera del
+      // grupo que se mueve, se ajusta exacto a esa línea — como las guías
+      // de Figma/PowerPoint. Sigue siendo libre: solo "engancha" al
+      // acercarte, no fuerza ninguna cuadrícula fija.
       const centerX = rawX + BOX_WIDTH / 2;
       const centerY = rawY + BOX_HEIGHT / 2;
       let snappedCenterX = centerX;
       let snappedCenterY = centerY;
       let guideX = null;
       let guideY = null;
+      const excluded = new Set(dragging.ids || [dragging.id]);
 
       boxes.forEach((box) => {
-        if (box.nodo.id === dragging.id) return;
+        if (excluded.has(box.nodo.id)) return;
         const otherCenterX = box.left + BOX_WIDTH / 2;
         const otherCenterY = box.top + BOX_HEIGHT / 2;
         if (guideX === null && Math.abs(centerX - otherCenterX) <= ALIGN_THRESHOLD) {
@@ -188,33 +299,58 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
       }));
       return;
     }
-    if (pendingRef.current && !dragging) {
+
+    if (pendingRef.current) {
       const dx = event.clientX - pendingRef.current.startClientX;
       const dy = event.clientY - pendingRef.current.startClientY;
       if (Math.abs(dx) > DRAG_THRESHOLD_PX || Math.abs(dy) > DRAG_THRESHOLD_PX) {
-        const rect = canvasRef.current.getBoundingClientRect();
         const rawX = (event.clientX - rect.left) / scale - pendingRef.current.offsetX;
         const rawY = (event.clientY - rect.top) / scale - pendingRef.current.offsetY;
-        setDragging({ id: pendingRef.current.id, mode: "move", offsetX: pendingRef.current.offsetX, offsetY: pendingRef.current.offsetY, x: rawX, y: rawY });
+        setDragging({ ...pendingRef.current, x: rawX, y: rawY });
       }
     }
   }
 
-  // Libertad total: el bloque se queda exactamente en el pixel donde lo
-  // sueltes, sin ajustarse a ninguna cuadrícula ni evitar encimarse con
+  // Libertad total: el/los bloque(s) quedan exactamente en el pixel donde
+  // los sueltes, sin ajustarse a ninguna cuadrícula ni evitar encimarse con
   // otros — así se puede acomodar a mano tal cual se quiera.
   function stopDrag() {
-    if (dragging?.mode === "move") {
+    if (marqueeRef.current && marquee) {
+      const left = Math.min(marquee.x0, marquee.x1);
+      const right = Math.max(marquee.x0, marquee.x1);
+      const top = Math.min(marquee.y0, marquee.y1);
+      const bottom = Math.max(marquee.y0, marquee.y1);
+      const hit = boxes.filter(
+        (box) => box.left < right && box.left + BOX_WIDTH > left && box.top < bottom && box.top + BOX_HEIGHT > top
+      );
+      if (hit.length > 0) {
+        setMultiIds((current) => {
+          const next = marqueeRef.current.shiftKey ? new Set(current) : new Set();
+          hit.forEach((box) => next.add(box.nodo.id));
+          return next;
+        });
+      } else if (!marqueeRef.current.shiftKey) {
+        setMultiIds(new Set());
+      }
+    }
+    marqueeRef.current = null;
+    setMarquee(null);
+
+    if (dragging) {
       // Nunca en negativo: el lienzo se mide desde (0,0) sin desplazarse
       // (ver organigramaLayout.computeLayout) — una posición negativa
       // quedaría fuera de ese cuadro y volvería a "flotar" con cada
       // recálculo.
-      const posX = Math.max(0, dragging.x + BOX_WIDTH / 2 - PADDING);
-      const posY = Math.max(0, dragging.y - PADDING);
-      onMoveNode(dragging.id, posX, posY);
+      if (dragging.ids) {
+        dragging.ids.forEach((id) => {
+          const pos = getRenderPosition(id);
+          if (!pos) return;
+          onMoveNode(id, Math.max(0, pos.left + BOX_WIDTH / 2 - PADDING), Math.max(0, pos.top - PADDING));
+        });
+      } else {
+        onMoveNode(dragging.id, Math.max(0, dragging.x + BOX_WIDTH / 2 - PADDING), Math.max(0, dragging.y - PADDING));
+      }
       justDraggedRef.current = true;
-    } else if (dragging?.mode === "connect" && dragging.hoverTargetId && dragging.hoverTargetId !== dragging.id) {
-      onCreateConexion(dragging.id, dragging.hoverTargetId);
     }
     pendingRef.current = null;
     setDragging(null);
@@ -227,6 +363,30 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
     }
     onSelectNode(nodo.id);
   }
+
+  // Flechas del teclado: si hay una selección múltiple, mueve todo el
+  // grupo un paso fijo en la dirección presionada (equivalente a arrastrar
+  // con el mouse, pero preciso para ajustes finos).
+  useEffect(() => {
+    if (!canEdit) return undefined;
+    function handleKeyDown(event) {
+      if (multiIds.size === 0) return;
+      const deltas = { ArrowUp: [0, -NUDGE_STEP], ArrowDown: [0, NUDGE_STEP], ArrowLeft: [-NUDGE_STEP, 0], ArrowRight: [NUDGE_STEP, 0] };
+      const delta = deltas[event.key];
+      if (!delta) return;
+      const target = event.target;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+      event.preventDefault();
+      multiIds.forEach((id) => {
+        const box = boxById.get(id);
+        if (!box) return;
+        onMoveNode(id, Math.max(0, box.left + delta[0] + BOX_WIDTH / 2 - PADDING), Math.max(0, box.top + delta[1] - PADDING));
+      });
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canEdit, multiIds, boxes]);
 
   // Detecta con qué otros puestos "se relaciona" el punto donde vas a
   // soltar uno nuevo: si queda a la altura de otros (misma línea), se
@@ -263,34 +423,6 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
     onCreateNodeAt(posX, posY, detectPlacementContext(posX, posY));
   }
 
-  function startConnect(event, nodo) {
-    if (!canEdit || !canvasRef.current) return;
-    event.preventDefault();
-    event.stopPropagation();
-    setDragging({ id: nodo.id, mode: "connect", hoverTargetId: null });
-  }
-
-  function moveConnect(event) {
-    if (!dragging || dragging.mode !== "connect" || !canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const rawX = (event.clientX - rect.left) / scale;
-    const rawY = (event.clientY - rect.top) / scale;
-    const hit = boxes.find((box) => rawX >= box.left && rawX <= box.left + BOX_WIDTH && rawY >= box.top && rawY <= box.top + BOX_HEIGHT);
-    setDragging((current) => ({ ...current, hoverTargetId: hit && hit.nodo.id !== current.id ? hit.nodo.id : null, cursorX: rawX, cursorY: rawY }));
-  }
-
-  // Centro actual de un puesto en el lienzo, siguiendo el arrastre en vivo
-  // si se está moviendo (para que las conexiones sueltas también "sigan al
-  // cursor" como las de la línea de mando).
-  function getRenderedCenter(nodeId) {
-    if (dragging?.mode === "move" && dragging.id === nodeId) {
-      return { x: dragging.x + BOX_WIDTH / 2, y: dragging.y + BOX_HEIGHT / 2 };
-    }
-    const box = boxes.find((b) => b.nodo.id === nodeId);
-    if (!box) return null;
-    return { x: box.left + BOX_WIDTH / 2, y: box.top + BOX_HEIGHT / 2 };
-  }
-
   function zoomBy(factor) {
     setManualScale(Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor)));
   }
@@ -300,7 +432,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
       <div className="flex flex-wrap items-center justify-between gap-2">
         {canEdit && (
           <p className="text-[9px] font-bold text-slate-400">
-            Arrastra un puesto para moverlo · doble clic en un espacio vacío para agregar uno nuevo · 🔗 para conectar dos puestos
+            Arrastra un puesto para moverlo · arrastra sobre el fondo (o Mayús+clic) para seleccionar varios y moverlos juntos con flechas o arrastre · doble clic en espacio vacío para agregar uno nuevo
           </p>
         )}
         <div className="ml-auto flex items-center gap-1">
@@ -315,9 +447,9 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
         ref={viewportRef}
         className="relative overflow-auto rounded-2xl border border-slate-200 bg-slate-50/60"
         style={{ height: "min(75vh, 720px)" }}
-        onMouseMove={(event) => { moveDrag(event); moveConnect(event); }}
+        onMouseMove={moveDrag}
         onMouseUp={stopDrag}
-        onMouseLeave={() => dragging && stopDrag()}
+        onMouseLeave={() => (dragging || marqueeRef.current) && stopDrag()}
       >
         {/* Este div reserva exactamente el tamaño ya escalado, para que el
             scroll del contenedor no deje espacio en blanco de más (transform:
@@ -326,12 +458,13 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
           <div
             ref={canvasRef}
             onDoubleClick={handleCanvasDoubleClick}
+            onMouseDown={handleCanvasMouseDown}
             className="relative origin-top-left"
             style={{
               width: canvasWidth,
               height: canvasHeight,
               transform: `scale(${scale})`,
-              cursor: canEdit ? "copy" : "default",
+              cursor: canEdit ? "crosshair" : "default",
               backgroundImage: "radial-gradient(circle, #cbd5e1 1.5px, transparent 1.5px)",
               backgroundSize: "24px 24px",
             }}
@@ -344,19 +477,14 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
             </defs>
             {visibleNodos.map((nodo) => {
               if (!nodo.reporta_a_id) return null;
-              const childPos = layout.positions.get(nodo.id);
-              const parentPos = layout.positions.get(nodo.reporta_a_id);
+              const childPos = getRenderPosition(nodo.id);
+              const parentPos = getRenderPosition(nodo.reporta_a_id);
               if (!childPos || !parentPos) return null;
-              // Si uno de los dos extremos se está arrastrando, la línea
-              // sigue al cursor en vivo (como en Visio) en vez de quedarse
-              // pegada a la posición anterior.
-              const parentDragged = dragging?.mode === "move" && dragging.id === nodo.reporta_a_id;
-              const childDragged = dragging?.mode === "move" && dragging.id === nodo.id;
-              const px = (parentDragged ? dragging.x - PADDING + BOX_WIDTH / 2 : parentPos.x) + PADDING;
-              const py = (parentDragged ? dragging.y - PADDING : parentPos.y) + PADDING + BOX_HEIGHT;
-              const cx = (childDragged ? dragging.x - PADDING + BOX_WIDTH / 2 : childPos.x) + PADDING;
-              const cy = (childDragged ? dragging.y - PADDING : childPos.y) + PADDING;
-              const midY = (py + cy) / 2;
+              const px = parentPos.left + BOX_WIDTH / 2;
+              const py = parentPos.top + BOX_HEIGHT;
+              const cx = childPos.left + BOX_WIDTH / 2;
+              const cy = childPos.top;
+              const bendY = py + Math.sign(cy - py || 1) * Math.min(LINE_BEND_OFFSET, Math.abs(cy - py) / 2);
               const isChainOfCommand = ancestorIds.has(nodo.id) && ancestorIds.has(nodo.reporta_a_id);
               const isDirectReportEdge = selectedId && nodo.reporta_a_id === selectedId && directReportIds.has(nodo.id);
               const isEmphasized = isChainOfCommand || isDirectReportEdge;
@@ -364,7 +492,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
               return (
                 <g key={nodo.id} filter={isEmphasized ? "url(#orgLineGlow)" : undefined}>
                   <path
-                    d={`M ${px} ${py} L ${px} ${midY} L ${cx} ${midY} L ${cx} ${cy}`}
+                    d={`M ${px} ${py} L ${px} ${bendY} L ${cx} ${bendY} L ${cx} ${cy}`}
                     fill="none"
                     stroke={strokeColor}
                     strokeWidth={isEmphasized ? 3.5 : 2}
@@ -378,65 +506,39 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
               );
             })}
 
-            {/* Conexiones sueltas (apoyo/coordinación): no forman parte del
-                árbol jerárquico, se dibujan aparte y sí reciben clic para
-                poder quitarlas directamente en el lienzo. */}
-            {conexiones.map((conexion) => {
-              const a = getRenderedCenter(conexion.nodo_a_id);
-              const b = getRenderedCenter(conexion.nodo_b_id);
-              if (!a || !b) return null;
-              return (
-                <line
-                  key={conexion.id}
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
-                  stroke="#8b5cf6"
-                  strokeWidth={3}
-                  strokeLinecap="round"
-                  strokeDasharray="3,7"
-                  className="pointer-events-auto cursor-pointer"
-                  onClick={() => onDeleteConexion(conexion.id)}
-                >
-                  <title>Conexión de apoyo — clic para quitarla</title>
-                </line>
-              );
-            })}
-
-            {/* Vista previa en vivo mientras arrastras el icono 🔗 hacia otro puesto. */}
-            {dragging?.mode === "connect" && (() => {
-              const from = getRenderedCenter(dragging.id);
-              if (!from) return null;
-              const to = dragging.hoverTargetId ? getRenderedCenter(dragging.hoverTargetId) : { x: dragging.cursorX, y: dragging.cursorY };
-              if (!to) return null;
-              return (
-                <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#8b5cf6" strokeWidth={3} strokeDasharray="3,7" strokeLinecap="round" />
-              );
-            })()}
-
             {/* Guías de alineación: aparecen mientras arrastras y quedas
                 cerca del centro horizontal/vertical de otro puesto. */}
-            {dragging?.mode === "connect" ? null : dragging?.guideX != null && (
+            {dragging?.guideX != null && (
               <line x1={dragging.guideX} y1={0} x2={dragging.guideX} y2={canvasHeight} stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="4,4" />
             )}
-            {dragging?.mode === "connect" ? null : dragging?.guideY != null && (
+            {dragging?.guideY != null && (
               <line x1={0} y1={dragging.guideY} x2={canvasWidth} y2={dragging.guideY} stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="4,4" />
             )}
           </svg>
 
+          {/* Recuadro de selección múltiple mientras se arrastra sobre el fondo. */}
+          {marquee && (
+            <div
+              className="pointer-events-none absolute z-40 border border-blue-500 bg-blue-500/10"
+              style={{
+                left: Math.min(marquee.x0, marquee.x1),
+                top: Math.min(marquee.y0, marquee.y1),
+                width: Math.abs(marquee.x1 - marquee.x0),
+                height: Math.abs(marquee.y1 - marquee.y0),
+              }}
+            />
+          )}
+
           {boxes.map(({ nodo, left, top }) => {
             const colors = NIVEL_COLORS[nodo.nivel] || NIVEL_COLORS.Operativo;
-            const isDragged = dragging?.mode === "move" && dragging.id === nodo.id;
-            const isConnectSource = dragging?.mode === "connect" && dragging.id === nodo.id;
-            const isConnectTarget = dragging?.mode === "connect" && dragging.hoverTargetId === nodo.id;
+            const isDragged = dragging && (dragging.ids ? dragging.ids.includes(nodo.id) : dragging.id === nodo.id);
             const isSelected = selectedId === nodo.id;
+            const isMultiSelected = multiIds.has(nodo.id);
             const isAncestor = !isSelected && ancestorIds.has(nodo.id);
             const isDirectReport = !isSelected && directReportIds.has(nodo.id);
-            const boxLeft = isDragged ? dragging.x : left;
-            const boxTop = isDragged ? dragging.y : top;
-            const relationRing = isConnectTarget || isConnectSource
-              ? "ring-[3px] ring-violet-500"
+            const renderPos = getRenderPosition(nodo.id) || { left, top };
+            const relationRing = isMultiSelected
+              ? "ring-[3px] ring-blue-500"
               : isSelected
                 ? "ring-[3px] ring-[#001225]"
                 : isAncestor
@@ -456,24 +558,14 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
                 className={`group absolute flex select-none flex-col items-center justify-center rounded-xl border-2 px-2 py-1.5 text-center shadow-sm transition-shadow ${canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} hover:shadow-md hover:ring-2 hover:ring-slate-300 ${colors.bg} ${colors.border} ${colors.text} ${
                   isDragged ? "z-30 shadow-xl" : "z-10"
                 } ${relationRing}`}
-                style={{ left: boxLeft, top: boxTop, width: BOX_WIDTH, height: BOX_HEIGHT }}
-                title={`${NIVEL_LABELS[nodo.nivel] || nodo.nivel} · clic para ver perfil, arrastra para mover`}
+                style={{ left: renderPos.left, top: renderPos.top, width: BOX_WIDTH, height: BOX_HEIGHT }}
+                title={`${NIVEL_LABELS[nodo.nivel] || nodo.nivel} · clic para ver perfil, arrastra para mover, Mayús+clic para selección múltiple`}
               >
-                {canEdit && (
-                  <span
-                    onMouseDown={(event) => startConnect(event, nodo)}
-                    onClick={(event) => event.stopPropagation()}
-                    title="Arrastrar hacia otro puesto para crear una conexión de apoyo/coordinación"
-                    className="absolute -left-1.5 -top-1.5 flex h-6 w-6 cursor-crosshair items-center justify-center rounded-full border border-violet-300 bg-white text-xs opacity-70 shadow-sm hover:opacity-100"
-                  >
-                    🔗
-                  </span>
-                )}
                 <p className="line-clamp-2 text-[12px] font-black uppercase leading-tight tracking-wide">{getDisplayTitle(nodo, puestosCatalogo)}</p>
                 <p className="mt-0.5 truncate text-[11px] font-bold opacity-80">{firstNameOnly(getDisplayName(nodo, personasCatalogo)) || "Sin asignar"}</p>
                 <span className="pointer-events-none absolute bottom-1 right-1.5 text-[10px] font-black opacity-0 group-hover:opacity-60">ⓘ</span>
 
-                {childCount > 0 && (
+                {childCount > 0 && !groupContainerIds.has(nodo.id) && (
                   <button
                     type="button"
                     onClick={(event) => {
