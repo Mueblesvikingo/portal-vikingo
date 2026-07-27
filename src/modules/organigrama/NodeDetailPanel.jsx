@@ -71,6 +71,43 @@ function BulletFieldEditor({ meta, value, canEdit, onChange, onClose }) {
   );
 }
 
+// El objetivo (del puesto o del equipo) es una sola idea redactada, no una
+// lista de puntos — a diferencia de competencias/responsabilidades, que sí
+// se prestan a viñetas.
+function TextFieldEditor({ meta, value, canEdit, onChange, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4">
+      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
+          <p className="text-xs font-black uppercase tracking-widest">{meta.icon} {meta.label}</p>
+          <button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
+        </div>
+        <div className="p-4">
+          <textarea
+            autoFocus
+            disabled={!canEdit}
+            value={value || ""}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Escribe la descripción..."
+            rows={6}
+            className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] font-bold normal-case leading-relaxed tracking-normal text-slate-700 outline-none disabled:text-slate-400"
+          />
+        </div>
+        <div className="flex justify-end border-t border-slate-100 p-4 pt-3">
+          <button type="button" onClick={onClose} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Listo</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FieldEditorModal({ fieldKey, meta, value, canEdit, onChange, onClose }) {
+  if (fieldKey === "objetivo_puesto") {
+    return <TextFieldEditor meta={meta} value={value} canEdit={canEdit} onChange={onChange} onClose={onClose} />;
+  }
+  return <BulletFieldEditor meta={meta} value={value} canEdit={canEdit} onChange={onChange} onClose={onClose} />;
+}
+
 // Ventana breve de un integrante de un equipo transversal: solo objetivo,
 // competencias y responsabilidades de esa persona — sin línea de mando ni
 // "a quién reporta", porque estos roles son transversales, no jerárquicos.
@@ -137,7 +174,8 @@ function PersonaMiniModal({ persona, personasCatalogo, puestosCatalogo, canEdit,
       </div>
 
       {activeField && (
-        <BulletFieldEditor
+        <FieldEditorModal
+          fieldKey={activeField}
           meta={SUB_MODAL_META[activeField]}
           value={draft[activeField]}
           canEdit={canEdit}
@@ -432,7 +470,8 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
           </label>
 
           {activeSubModal && (
-            <BulletFieldEditor
+            <FieldEditorModal
+              fieldKey={activeSubModal}
               meta={subModalMetaSource[activeSubModal]}
               value={draft[activeSubModal]}
               canEdit={canEdit}

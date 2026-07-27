@@ -316,6 +316,11 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
   // otros — así se puede acomodar a mano tal cual se quiera.
   function stopDrag() {
     if (marqueeRef.current && marquee) {
+      // Se guarda en una variable local antes de seguir: marqueeRef.current
+      // se limpia a null unas líneas más abajo, pero el callback de
+      // setMultiIds corre después (en el siguiente render), así que leerlo
+      // directamente ahí ya lo encontraría en null y tronaba la pantalla.
+      const wasShiftKey = marqueeRef.current.shiftKey;
       const left = Math.min(marquee.x0, marquee.x1);
       const right = Math.max(marquee.x0, marquee.x1);
       const top = Math.min(marquee.y0, marquee.y1);
@@ -325,11 +330,11 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
       );
       if (hit.length > 0) {
         setMultiIds((current) => {
-          const next = marqueeRef.current.shiftKey ? new Set(current) : new Set();
+          const next = wasShiftKey ? new Set(current) : new Set();
           hit.forEach((box) => next.add(box.nodo.id));
           return next;
         });
-      } else if (!marqueeRef.current.shiftKey) {
+      } else if (!wasShiftKey) {
         setMultiIds(new Set());
       }
     }
