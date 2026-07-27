@@ -42,7 +42,7 @@ function BulletFieldEditor({ meta, value, canEdit, onChange, onClose }) {
           <p className="text-xs font-black uppercase tracking-widest">{meta.icon} {meta.label}</p>
           <button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
         </div>
-        <div className="max-h-[60vh] space-y-2 overflow-y-auto p-4">
+        <div className="max-h-[70vh] space-y-2 overflow-y-auto p-4">
           {displayItems.map((item, index) => (
             <div key={index} className="flex items-center gap-2">
               <span className="text-sm">{meta.icon}</span>
