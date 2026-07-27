@@ -101,8 +101,12 @@ function TextFieldEditor({ meta, value, canEdit, onChange, onClose }) {
   );
 }
 
-function FieldEditorModal({ fieldKey, meta, value, canEdit, onChange, onClose }) {
-  if (fieldKey === "objetivo_puesto") {
+function FieldEditorModal({ fieldKey, meta, value, canEdit, onChange, onClose, isGroup }) {
+  // El objetivo siempre es descripción libre; en un equipo transversal el
+  // "alcance" (mismo campo que "competencias clave" en un puesto individual)
+  // también se redacta como descripción, no como viñetas.
+  const isFreeText = fieldKey === "objetivo_puesto" || (isGroup && fieldKey === "competencias_clave");
+  if (isFreeText) {
     return <TextFieldEditor meta={meta} value={value} canEdit={canEdit} onChange={onChange} onClose={onClose} />;
   }
   return <BulletFieldEditor meta={meta} value={value} canEdit={canEdit} onChange={onChange} onClose={onClose} />;
@@ -475,6 +479,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
               meta={subModalMetaSource[activeSubModal]}
               value={draft[activeSubModal]}
               canEdit={canEdit}
+              isGroup={isGroup}
               onChange={(next) => setDraft((current) => ({ ...current, [activeSubModal]: next }))}
               onClose={() => setActiveSubModal(null)}
             />
