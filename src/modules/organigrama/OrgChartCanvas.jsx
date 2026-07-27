@@ -34,6 +34,10 @@ function firstNameOnly(fullName) {
   return parts[parts.length - 1];
 }
 
+// Color especial para puestos que reciben apoyo de varios equipos a la vez
+// (ej. Ayudantes en general) — gris claro, distinto de cualquier NIVEL_COLORS.
+const APOYO_TARGET_COLORS = { bg: "bg-slate-100", border: "border-slate-300", text: "text-slate-600", dot: "bg-slate-400" };
+
 const BOX_WIDTH = 176;
 const BOX_HEIGHT = 80;
 const PADDING = 60;
@@ -68,20 +72,10 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
   // después, y no se guarda en ningún lado, así que una nueva sesión o
   // ventana siempre vuelve a este mismo 60%.
   const [manualScale, setManualScale] = useState(0.6);
-  const [collapsedIds, setCollapsedIds] = useState(null); // null = aún no se definió el default
+  // Nada empieza colapsado: todos los puestos se ven de entrada, y cada
+  // quien decide qué rama ocultar con el botón "－" de cada caja.
+  const [collapsedIds, setCollapsedIds] = useState(new Set());
   const [hoveredId, setHoveredId] = useState(null);
-
-  // Por default se colapsan las ramas debajo de Jefatura (Supervisión y
-  // Operativo) para que el organigrama completo se lea de un vistazo; cada
-  // quien puede expandir la rama que le interese.
-  useEffect(() => {
-    if (collapsedIds === null && nodos.length > 0) {
-      const defaults = new Set(
-        nodos.filter((nodo) => nodo.nivel === "Jefatura" && hasChildren(nodos, nodo.id)).map((nodo) => nodo.id)
-      );
-      setCollapsedIds(defaults);
-    }
-  }, [nodos, collapsedIds]);
 
   const effectiveCollapsed = collapsedIds || new Set();
 
@@ -577,7 +571,10 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
           )}
 
           {boxes.map(({ nodo, left, top }) => {
-            const colors = NIVEL_COLORS[nodo.nivel] || NIVEL_COLORS.Operativo;
+            // Un puesto que recibe apoyo de varios equipos (ej. Ayudantes en
+            // general) se pinta gris claro en vez del color de su nivel, para
+            // distinguirlo a simple vista como recurso compartido.
+            const colors = apoyoTargetIds.has(nodo.id) ? APOYO_TARGET_COLORS : (NIVEL_COLORS[nodo.nivel] || NIVEL_COLORS.Operativo);
             const isDragged = dragging && (dragging.ids ? dragging.ids.includes(nodo.id) : dragging.id === nodo.id);
             const isSelected = selectedId === nodo.id;
             const isMultiSelected = multiIds.has(nodo.id);
