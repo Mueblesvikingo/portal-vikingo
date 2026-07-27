@@ -8,6 +8,7 @@ import {
   updateNodoPosition,
   deactivateNodo,
   restoreNodosSnapshot,
+  getConexiones,
 } from "../../services/organigramaService";
 import OrgChartCanvas from "./OrgChartCanvas";
 import NodeDetailPanel from "./NodeDetailPanel";
@@ -30,6 +31,7 @@ export default function OrganigramaModule({ currentUser }) {
   const [message, setMessage] = useState("");
   const [personasCatalogo, setPersonasCatalogo] = useState([]);
   const [puestosCatalogo, setPuestosCatalogo] = useState([]);
+  const [conexiones, setConexiones] = useState([]);
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const [undoing, setUndoing] = useState(false);
@@ -93,6 +95,7 @@ export default function OrganigramaModule({ currentUser }) {
     // libre desconectado de la fuente oficial.
     getPersonas().then(setPersonasCatalogo).catch(() => setPersonasCatalogo([]));
     getPuestos().then(setPuestosCatalogo).catch(() => setPuestosCatalogo([]));
+    getConexiones().then(setConexiones).catch(() => setConexiones([]));
   }, []);
 
   // Si el nombre/título capturado coincide exactamente (sin distinguir
@@ -302,6 +305,7 @@ export default function OrganigramaModule({ currentUser }) {
               canEdit={canEdit}
               personasCatalogo={personasCatalogo}
               puestosCatalogo={puestosCatalogo}
+              conexiones={conexiones}
             />
           )}
         </div>
