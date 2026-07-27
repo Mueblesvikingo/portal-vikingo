@@ -567,7 +567,9 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
                 title={`${NIVEL_LABELS[nodo.nivel] || nodo.nivel} · clic para ver perfil, arrastra para mover, Mayús+clic para selección múltiple`}
               >
                 <p className="line-clamp-2 text-[12px] font-black uppercase leading-tight tracking-wide">{getDisplayTitle(nodo, puestosCatalogo)}</p>
-                <p className="mt-0.5 truncate text-[11px] font-bold opacity-80">{firstNameOnly(getDisplayName(nodo, personasCatalogo)) || "Sin asignar"}</p>
+                {firstNameOnly(getDisplayName(nodo, personasCatalogo)) && (
+                  <p className="mt-0.5 truncate text-[11px] font-bold opacity-80">{firstNameOnly(getDisplayName(nodo, personasCatalogo))}</p>
+                )}
                 <span className="pointer-events-none absolute bottom-1 right-1.5 text-[10px] font-black opacity-0 group-hover:opacity-60">ⓘ</span>
 
                 {childCount > 0 && !groupContainerIds.has(nodo.id) && (
