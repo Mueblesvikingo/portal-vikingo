@@ -359,6 +359,19 @@ function getCriticalityStyle(criticality) {
   return styles[criticality] || styles.medium;
 }
 
+// Semáforo de avance/riesgo: un solo campo compartido en la actividad
+// maestra (proceso_actividades.semaforo) — cambiarlo aquí se ve igual en
+// Balance de Carga (Semana/Mes/Planificación) y viceversa.
+function getSemaforoStyle(semaforo) {
+  const styles = {
+    verde: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    amarillo: "border-amber-200 bg-amber-50 text-amber-700",
+    rojo: "border-red-200 bg-red-50 text-red-700",
+  };
+
+  return styles[semaforo] || "border-gray-200 bg-white text-gray-500";
+}
+
 const statusConfig = {
   healthy: { label: "Completo", style: "border-sky-200 bg-sky-50 text-sky-700" },
   warning: { label: "Parcial", style: "border-yellow-200 bg-yellow-50 text-yellow-700" },
@@ -732,6 +745,7 @@ function ActivityModal({ activity, onSave, onClose, availableRoles = [] }) {
     frequencyValue: activity.frecuencia_valor ?? activity.frequencyValue ?? activity.frequencyMonthly ?? 1,
     load: activity.carga_horas ?? activity.load ?? 0,
     status: activity.estado || activity.status || (activity.active === false || activity.activa === false ? "inactive" : "active"),
+    semaforo: activity.semaforo ?? null,
     automated: activity.automatizada ?? activity.automated ?? false,
     impact: activity.impacto ?? activity.impact ?? "",
     benefit: activity.beneficio ?? activity.benefit ?? "",
@@ -792,6 +806,7 @@ function ActivityModal({ activity, onSave, onClose, availableRoles = [] }) {
       durationMinutes: Math.round(toNumber(draft.timeHours) * 60),
       criticidad: draft.criticality,
       estado: draft.status,
+      semaforo: draft.semaforo,
       automatizada: draft.automated,
       impacto: draft.impact,
       beneficio: draft.benefit,
@@ -845,7 +860,7 @@ function ActivityModal({ activity, onSave, onClose, availableRoles = [] }) {
         </div>
 
         <div className="space-y-3 overflow-y-auto p-4">
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-5 gap-3">
             <div className="min-w-0 rounded-2xl border border-gray-200 bg-gray-50 p-3">
               <div className="truncate text-[10px] font-black uppercase text-gray-400">Responsable</div>
               <select
@@ -881,6 +896,19 @@ function ActivityModal({ activity, onSave, onClose, availableRoles = [] }) {
               >
                 <option value="active">Activa</option>
                 <option value="inactive">Inactiva</option>
+              </select>
+            </div>
+            <div className="min-w-0 rounded-2xl border border-gray-200 bg-gray-50 p-3">
+              <div className="truncate text-[10px] font-black uppercase text-gray-400">Semáforo</div>
+              <select
+                value={draft.semaforo || ""}
+                onChange={(event) => updateDraft("semaforo", event.target.value || null)}
+                className={`mt-1 w-full min-w-0 rounded-lg border px-2 py-1 text-xs font-black outline-none ${getSemaforoStyle(draft.semaforo)}`}
+              >
+                <option value="">Sin definir</option>
+                <option value="verde">En tiempo</option>
+                <option value="amarillo">Atención / riesgo</option>
+                <option value="rojo">Retrasada / con problema</option>
               </select>
             </div>
             <div className="min-w-0 rounded-2xl border border-gray-200 bg-gray-50 p-3">
@@ -2958,6 +2986,7 @@ export default function CapacityModule({ currentUser } = {}) {
         descripcion: updatedActivity.description || updatedActivity.impact,
         criticidad: updatedActivity.criticidad || updatedActivity.criticality,
         estado: updatedActivity.estado || updatedActivity.status,
+        semaforo: updatedActivity.semaforo,
         automatizada: updatedActivity.automatizada ?? updatedActivity.automated,
         impacto: updatedActivity.impacto ?? updatedActivity.impact,
         beneficio: updatedActivity.beneficio ?? updatedActivity.benefit,

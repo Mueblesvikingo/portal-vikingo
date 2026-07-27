@@ -650,6 +650,7 @@ export async function updateActivity(id, updates) {
     fase: updates.fase,
     criticidad: updates.criticidad || updates.criticality,
     estado: updates.estado || updates.status,
+    semaforo: updates.semaforo,
     automatizada: updates.automatizada ?? updates.automated,
     impacto: updates.impacto ?? updates.impact,
     beneficio: updates.beneficio ?? updates.benefit,
@@ -707,6 +708,28 @@ export async function updateActivityOrder(id, order, roleId, laneName, posicionC
   const { data, error } = await supabase
     .from("proceso_actividades")
     .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Semáforo de avance/riesgo: un solo campo compartido en la actividad
+// maestra (no una copia por pestaña), así que se edita igual desde Diseño
+// Organizacional y desde cualquier vista de Balance de Carga (Semana/Mes/
+// Planificación) y se ve igual en todas — no puede desincronizarse. Update
+// mínimo (no pasa por updateActivity) para no disparar el resync completo
+// a workload_actividades solo por cambiar un color.
+export async function updateActivitySemaforo(id, semaforo) {
+  if (!id) {
+    throw new Error("updateActivitySemaforo requiere un id real de Supabase.");
+  }
+
+  const { data, error } = await supabase
+    .from("proceso_actividades")
+    .update({ semaforo: semaforo || null })
     .eq("id", id)
     .select()
     .single();
