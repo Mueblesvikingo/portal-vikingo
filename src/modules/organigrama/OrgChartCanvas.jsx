@@ -416,10 +416,16 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
     return { reportaAId: null, nivel: "Operativo" };
   }
 
-  // Doble clic en un espacio vacío del lienzo: crea un puesto nuevo justo
+  // Doble clic en un espacio vacío del lienzo: si hay una selección múltiple
+  // activa, la quita (forma rápida de "soltar" el grupo sin tener que
+  // Mayús+clic uno por uno). Si no hay selección, crea un puesto nuevo justo
   // ahí, tipo Visio (doble clic en blanco → figura nueva lista para editar).
   function handleCanvasDoubleClick(event) {
     if (!canEdit || !canvasRef.current || event.target !== canvasRef.current) return;
+    if (multiIds.size > 0) {
+      setMultiIds(new Set());
+      return;
+    }
     const rect = canvasRef.current.getBoundingClientRect();
     const rawX = (event.clientX - rect.left) / scale;
     const rawY = (event.clientY - rect.top) / scale;
@@ -437,7 +443,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
       <div className="flex flex-wrap items-center justify-between gap-2">
         {canEdit && (
           <p className="text-[9px] font-bold text-slate-400">
-            Arrastra un puesto para moverlo · arrastra sobre el fondo (o Mayús+clic) para seleccionar varios y moverlos juntos con flechas o arrastre · doble clic en espacio vacío para agregar uno nuevo
+            Arrastra un puesto para moverlo · arrastra sobre el fondo (o Mayús+clic) para seleccionar varios y moverlos juntos con flechas o arrastre · doble clic en espacio vacío para quitar la selección (o agregar un puesto nuevo si no hay selección)
           </p>
         )}
         <div className="ml-auto flex items-center gap-1">
