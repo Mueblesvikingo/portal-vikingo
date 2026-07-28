@@ -359,7 +359,7 @@ function getCriticalityStyle(criticality) {
   return styles[criticality] || styles.medium;
 }
 
-// Semáforo de avance/riesgo: un solo campo compartido en la actividad
+// Semáforo de PRIORIDAD: un solo campo compartido en la actividad
 // maestra (proceso_actividades.semaforo) — cambiarlo aquí se ve igual en
 // Balance de Carga (Semana/Mes/Planificación) y viceversa.
 function getSemaforoStyle(semaforo) {
@@ -906,9 +906,9 @@ function ActivityModal({ activity, onSave, onClose, availableRoles = [] }) {
                 className={`mt-1 w-full min-w-0 rounded-lg border px-2 py-1 text-xs font-black outline-none ${getSemaforoStyle(draft.semaforo)}`}
               >
                 <option value="">Sin definir</option>
-                <option value="verde">En tiempo</option>
-                <option value="amarillo">Atención / riesgo</option>
-                <option value="rojo">Retrasada / con problema</option>
+                <option value="rojo">Alta</option>
+                <option value="amarillo">Media</option>
+                <option value="verde">Baja</option>
               </select>
             </div>
             <div className="min-w-0 rounded-2xl border border-gray-200 bg-gray-50 p-3">

@@ -1,4 +1,4 @@
-// Semáforo de avance/riesgo de una actividad: una franja delgada en el borde
+// Semáforo de PRIORIDAD de una actividad: una franja delgada en el borde
 // izquierdo de la tarjeta (no un punto encima del texto, no colorea todo el
 // bloque). Es UN solo campo compartido en `proceso_actividades.semaforo` —
 // se edita igual desde Diseño Organizacional que desde cualquier pestaña de
@@ -10,9 +10,9 @@ const CYCLE = [null, "verde", "amarillo", "rojo"];
 // tarjeta). Con color: una franja saturada que sí resalta, sin ser ancha.
 const STYLES = {
   null: { className: "bg-slate-300", label: "Sin definir" },
-  verde: { className: "bg-emerald-500", label: "En tiempo" },
-  amarillo: { className: "bg-amber-400", label: "Atención / riesgo" },
-  rojo: { className: "bg-red-500", label: "Retrasada / con problema" },
+  verde: { className: "bg-emerald-500", label: "Prioridad baja" },
+  amarillo: { className: "bg-amber-400", label: "Prioridad media" },
+  rojo: { className: "bg-red-500", label: "Prioridad alta" },
 };
 
 export default function SemaforoDot({ value, onChange, disabled = false, className = "" }) {
