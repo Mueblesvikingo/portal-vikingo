@@ -1,16 +1,18 @@
-// Semáforo de avance/riesgo de una actividad: un punto discreto (no colorea
-// todo el bloque) que vive en una esquina de la tarjeta. Es UN solo campo
-// compartido en `proceso_actividades.semaforo` — se edita igual desde Diseño
-// Organizacional que desde cualquier pestaña de Balance de Carga (Semana/
-// Mes/Planificación), así que cambiarlo en un lugar se refleja en todos los
-// demás sin poder desincronizarse.
+// Semáforo de avance/riesgo de una actividad: una franja delgada en el borde
+// izquierdo de la tarjeta (no un punto encima del texto, no colorea todo el
+// bloque). Es UN solo campo compartido en `proceso_actividades.semaforo` —
+// se edita igual desde Diseño Organizacional que desde cualquier pestaña de
+// Balance de Carga (Semana/Mes/Planificación), así que cambiarlo en un lugar
+// se refleja en todos los demás sin poder desincronizarse.
 const CYCLE = [null, "verde", "amarillo", "rojo"];
 
+// Sin definir: casi invisible (se confunde con el borde normal de la
+// tarjeta). Con color: una franja saturada que sí resalta, sin ser ancha.
 const STYLES = {
-  null: { className: "border border-slate-300 bg-white", label: "Sin definir" },
-  verde: { className: "border border-emerald-600 bg-emerald-500", label: "En tiempo" },
-  amarillo: { className: "border border-amber-600 bg-amber-400", label: "Atención / riesgo" },
-  rojo: { className: "border border-red-700 bg-red-500", label: "Retrasada / con problema" },
+  null: { className: "bg-slate-300", label: "Sin definir" },
+  verde: { className: "bg-emerald-500", label: "En tiempo" },
+  amarillo: { className: "bg-amber-400", label: "Atención / riesgo" },
+  rojo: { className: "bg-red-500", label: "Retrasada / con problema" },
 };
 
 export default function SemaforoDot({ value, onChange, disabled = false, className = "" }) {
@@ -30,7 +32,7 @@ export default function SemaforoDot({ value, onChange, disabled = false, classNa
       onClick={handleClick}
       disabled={disabled}
       title={disabled ? `Semáforo: ${style.label}` : `Semáforo: ${style.label} (clic para cambiar)`}
-      className={`h-2.5 w-2.5 shrink-0 rounded-full ${style.className} ${disabled ? "cursor-default" : "cursor-pointer hover:scale-125"} transition-transform ${className}`}
+      className={`absolute inset-y-0 left-0 w-[3px] rounded-l-lg ${style.className} ${disabled ? "cursor-default" : "cursor-pointer hover:w-1.5"} transition-all ${className}`}
     />
   );
 }
