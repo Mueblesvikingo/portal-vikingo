@@ -3,7 +3,8 @@ import { NIVEL_COLORS, NIVEL_LABELS, NIVEL_OPTIONS, getAncestorChain, getDescend
 
 const SUB_MODAL_META = {
   objetivo_puesto: { icon: "🎯", label: "Objetivo del puesto" },
-  competencias_clave: { icon: "🧠", label: "Competencias clave" },
+  competencias_clave: { icon: "🧠", label: "Competencias blandas" },
+  competencias_tecnicas: { icon: "🛠️", label: "Competencias técnicas" },
   responsabilidades_clave: { icon: "✅", label: "Responsabilidades clave" },
 };
 
@@ -123,6 +124,7 @@ function PersonaMiniModal({ persona, personasCatalogo, puestosCatalogo, canEdit,
     perfil_puesto: persona.perfil_puesto || "",
     objetivo_puesto: persona.objetivo_puesto || "",
     competencias_clave: persona.competencias_clave || "",
+    competencias_tecnicas: persona.competencias_tecnicas || "",
     responsabilidades_clave: persona.responsabilidades_clave || "",
     reporta_a_id: persona.reporta_a_id ?? "",
   });
@@ -147,7 +149,7 @@ function PersonaMiniModal({ persona, personasCatalogo, puestosCatalogo, canEdit,
           <button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
         </div>
         <div className="space-y-3 p-4">
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5">
             {Object.entries(SUB_MODAL_META).map(([key, item]) => (
               <button
                 key={key}
@@ -207,6 +209,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
         perfil_puesto: nodo.perfil_puesto || "",
         objetivo_puesto: nodo.objetivo_puesto || "",
         competencias_clave: nodo.competencias_clave || "",
+        competencias_tecnicas: nodo.competencias_tecnicas || "",
         responsabilidades_clave: nodo.responsabilidades_clave || "",
         reporta_a_id: nodo.reporta_a_id ?? "",
       });
@@ -293,7 +296,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
               {isGroup ? "Objetivo, alcance y resultados esperados" : "Perfil de puesto"}
             </p>
-            <div className="mt-1 grid grid-cols-3 gap-1.5">
+            <div className={`mt-1 grid gap-1.5 ${isGroup ? "grid-cols-3" : "grid-cols-2"}`}>
               {Object.entries(subModalMetaSource).map(([key, item]) => (
                 <button
                   key={key}
