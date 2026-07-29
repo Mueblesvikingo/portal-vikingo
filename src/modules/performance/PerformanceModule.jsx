@@ -133,7 +133,7 @@ export default function PerformanceModule({ currentUser }) {
 
   const isEstrategico = scope === ESTRATEGICO_SCOPE;
   const scopedKpis = useMemo(
-    () => kpis.filter((k) => (isEstrategico ? k.ambito === "estrategico" : k.ambito === "tactico" && k.macroproceso === scope)),
+    () => kpis.filter((k) => (isEstrategico ? k.ambito === "estrategico" : (k.ambito === "tactico" || k.ambito === "operativo") && k.macroproceso === scope)),
     [kpis, scope, isEstrategico]
   );
 
@@ -221,10 +221,10 @@ export default function PerformanceModule({ currentUser }) {
             {canEdit && (
               <button
                 type="button"
-                onClick={() => handleCreateKpi({ perspectiva: isEstrategico ? PERSPECTIVAS[0] : null, macroproceso: isEstrategico ? null : scope, ambito: isEstrategico ? "estrategico" : "tactico" })}
+                onClick={() => handleCreateKpi({ perspectiva: isEstrategico ? PERSPECTIVAS[0] : null, macroproceso: isEstrategico ? null : scope, ambito: isEstrategico ? "estrategico" : "operativo" })}
                 className="h-9 rounded-lg border border-dashed border-slate-300 px-3 text-[10px] font-black text-slate-500 transition hover:border-sky-300 hover:text-sky-600"
               >
-                + Agregar KPI
+                + Agregar KPI {!isEstrategico && "operativo"}
               </button>
             )}
             <button

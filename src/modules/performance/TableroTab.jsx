@@ -118,14 +118,22 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
   const [openKpiId, setOpenKpiId] = useState(null);
   const isEstrategico = scope === "ESTRATEGICO";
   const mesAnteriorLabel = getPreviousMonthInfo().label;
+  // En un tablero de proceso (no Estratégico) se separan en 2 grupos: los
+  // KPIs tácticos (cascadeados desde Despliegue Estratégico) y los
+  // operativos (que el líder de proceso captura/agrega por su cuenta) — para
+  // que se distinga a simple vista cuál es cuál.
   const groups = isEstrategico
     ? PERSPECTIVAS.map((p) => ({ label: p, color: PERSPECTIVA_COLOR[p], items: kpis.filter((k) => k.perspectiva === p) }))
-    : [{ label: scope, color: PERSPECTIVA_COLOR.Financiera, items: kpis }];
+    : [
+      { label: "Tácticos", color: "#203f73", items: kpis.filter((k) => k.ambito === "tactico") },
+      { label: "Operativos", color: "#4a3aa7", items: kpis.filter((k) => k.ambito === "operativo") },
+    ].filter((group) => group.items.length > 0);
+  const showGroupHeader = isEstrategico || groups.length > 0;
   const colCount = canEdit ? 5 : 4;
 
   return (
     <div className="space-y-4">
-      <div className={`grid gap-3 ${isEstrategico ? "md:grid-cols-4" : "md:grid-cols-1"}`}>
+      <div className={`grid gap-3 ${isEstrategico ? "md:grid-cols-4" : groups.length > 1 ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
         {groups.map((group) => {
           const groupCumplimientos = group.items
             .map((k) => computeCumplimiento(resultados, k.id, anio).cumplimiento)
@@ -152,7 +160,7 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
           <tbody>
             {groups.map((group) => (
               <Fragment key={group.label}>
-                {isEstrategico && (
+                {showGroupHeader && (
                   <tr key={`${group.label}-header`}>
                     <td colSpan={colCount} className="px-3 py-1.5" style={{ background: `${group.color}14` }}>
                       <span className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest" style={{ color: group.color }}>

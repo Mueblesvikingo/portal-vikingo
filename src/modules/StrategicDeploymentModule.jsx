@@ -302,7 +302,8 @@ function EditableSelect({ value, options, onSave, canEdit, darkMode, className =
     <select
       value={value || ""}
       onChange={(event) => onSave(event.target.value)}
-      className={`rounded border px-1 py-0.5 outline-none ${className} ${darkMode ? "bg-[#0b1120] border-white/20 text-white" : "bg-white border-sky-300 text-gray-700"}`}
+      title="Clic para cambiar el proceso"
+      className={`max-w-[160px] cursor-pointer truncate rounded border-none bg-transparent px-0.5 py-0.5 outline-none transition ${className} ${darkMode ? "hover:bg-white/10" : "hover:bg-sky-50"}`}
     >
       {options.map((opt) => (
         <option key={opt} value={opt}>{opt}</option>
