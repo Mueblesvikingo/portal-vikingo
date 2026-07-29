@@ -141,7 +141,18 @@ export default function PerformanceModule({ currentUser }) {
     [kpis, scope, isEstrategico]
   );
 
-  const canEdit = isEstrategico ? canEditStrategicKpis(currentUser) : ownMacroprocesos.includes(scope);
+  // Los tácticos (cascadeados desde Despliegue Estratégico) los edita el
+  // equipo estratégico, sin importar de qué proceso sea el tablero. Los
+  // operativos (que cada líder captura para su propio proceso) solo los
+  // edita el líder de ESE proceso — dos permisos distintos dentro del mismo
+  // tablero, no uno solo para todo.
+  const canEditTactico = isStrategic;
+  const canEditOperativo = ownMacroprocesos.includes(scope);
+  function canEditKpi(kpi) {
+    if (isEstrategico) return canEditStrategicKpis(currentUser);
+    return kpi.ambito === "tactico" ? canEditTactico : canEditOperativo;
+  }
+  const canEdit = isEstrategico ? canEditStrategicKpis(currentUser) : canEditTactico || canEditOperativo;
 
   const tabs = isEstrategico
     ? [
@@ -230,7 +241,7 @@ export default function PerformanceModule({ currentUser }) {
                 {scopeOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>
             </label>
-            {canEdit && (
+            {(isEstrategico ? canEditStrategicKpis(currentUser) : canEditOperativo) && (
               <button
                 type="button"
                 onClick={() => handleCreateKpi({ perspectiva: isEstrategico ? PERSPECTIVAS[0] : null, macroproceso: isEstrategico ? null : scope, ambito: isEstrategico ? "estrategico" : "operativo" })}
@@ -279,6 +290,7 @@ export default function PerformanceModule({ currentUser }) {
                 anio={CURRENT_YEAR}
                 scope={scope}
                 canEdit={canEdit}
+                canEditKpi={canEditKpi}
                 onUpdateKpi={handleUpdateKpi}
                 onDeactivateKpi={handleDeactivateKpi}
               />
@@ -289,6 +301,7 @@ export default function PerformanceModule({ currentUser }) {
                 anio={CURRENT_YEAR}
                 scope={scope}
                 canEdit={canEdit}
+                canEditKpi={canEditKpi}
                 onSaveResultado={handleSaveResultado}
               />
             ) : (

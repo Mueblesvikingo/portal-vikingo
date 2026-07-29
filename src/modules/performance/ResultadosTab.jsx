@@ -67,11 +67,15 @@ function WeeklyRealCells({ kpi, mesIndex, resultados, anio, canEdit, onSave }) {
   );
 }
 
-export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, onSaveResultado }) {
+export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onSaveResultado }) {
   const isEstrategico = scope === "ESTRATEGICO";
   const groups = isEstrategico
     ? PERSPECTIVAS.map((p) => ({ label: p, items: kpis.filter((k) => k.perspectiva === p) }))
-    : [{ label: scope, items: kpis }];
+    : [
+      { label: "Tácticos", items: kpis.filter((k) => k.ambito === "tactico") },
+      { label: "Operativos", items: kpis.filter((k) => k.ambito === "operativo") },
+    ].filter((group) => group.items.length > 0);
+  const showGroupHeader = isEstrategico || groups.length > 0;
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -85,10 +89,10 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
         </thead>
         <tbody>
           {groups.map((group) => {
-            const groupColor = PERSPECTIVA_COLOR[group.label] || PERSPECTIVA_COLOR.Financiera;
+            const groupColor = PERSPECTIVA_COLOR[group.label] || (group.label === "Operativos" ? "#4a3aa7" : "#203f73");
             return (
             <Fragment key={group.label}>
-              {isEstrategico && (
+              {showGroupHeader && (
                 <tr>
                   <td colSpan={14} className="px-3 py-1.5" style={{ background: `${groupColor}14` }}>
                     <span className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest" style={{ color: groupColor }}>
@@ -110,7 +114,7 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
                     <td className="px-2 py-1 text-slate-400">Meta</td>
                     {MESES.map((_, i) => (
                       <td key={i} className="px-2 py-1">
-                        <EditableValue kpi={kpi} mesIndex={i} tipo="meta" resultados={resultados} anio={anio} canEdit={canEdit} onSave={onSaveResultado} />
+                        <EditableValue kpi={kpi} mesIndex={i} tipo="meta" resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} />
                       </td>
                     ))}
                   </tr>
@@ -119,9 +123,9 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
                     {MESES.map((_, i) => (
                       <td key={i} className="px-2 py-1">
                         {kpi.periodicidad === "Semanal" ? (
-                          <WeeklyRealCells kpi={kpi} mesIndex={i} resultados={resultados} anio={anio} canEdit={canEdit} onSave={onSaveResultado} />
+                          <WeeklyRealCells kpi={kpi} mesIndex={i} resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} />
                         ) : (
-                          <EditableValue kpi={kpi} mesIndex={i} tipo="real" resultados={resultados} anio={anio} canEdit={canEdit} onSave={onSaveResultado} />
+                          <EditableValue kpi={kpi} mesIndex={i} tipo="real" resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} />
                         )}
                       </td>
                     ))}

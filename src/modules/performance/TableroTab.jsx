@@ -114,7 +114,7 @@ function DetailField({ label, children }) {
   );
 }
 
-export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onUpdateKpi, onDeactivateKpi }) {
+export default function TableroTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onUpdateKpi, onDeactivateKpi }) {
   const [openKpiId, setOpenKpiId] = useState(null);
   const isEstrategico = scope === "ESTRATEGICO";
   const mesAnteriorLabel = getPreviousMonthInfo().label;
@@ -199,7 +199,7 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
                             {cumplimiento === null ? "—" : `${cumplimiento}%`}
                           </span>
                         </td>
-                        {canEdit && (
+                        {canEditKpi(kpi) && (
                           <td className="px-3 py-1.5 text-right">
                             <button
                               type="button"
@@ -217,32 +217,32 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
                           <td colSpan={colCount} className="px-4 py-3">
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                               <DetailField label="Objetivo estratégico">
-                                <EditableText value={kpi.objetivo_estrategico} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { objetivo_estrategico: v })} className="text-slate-700" />
+                                <EditableText value={kpi.objetivo_estrategico} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { objetivo_estrategico: v })} className="text-slate-700" />
                               </DetailField>
                               <DetailField label="Fórmula">
-                                <EditableText value={kpi.formula_texto} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { formula_texto: v })} className="text-slate-700" />
+                                <EditableText value={kpi.formula_texto} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { formula_texto: v })} className="text-slate-700" />
                               </DetailField>
                               <DetailField label="Fuente">
-                                <EditableText value={kpi.fuente_datos} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { fuente_datos: v })} className="text-slate-700" />
+                                <EditableText value={kpi.fuente_datos} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { fuente_datos: v })} className="text-slate-700" />
                               </DetailField>
                               <DetailField label="Responsable">
-                                <EditableText value={kpi.responsable_rol} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { responsable_rol: v })} className="text-slate-700" />
+                                <EditableText value={kpi.responsable_rol} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { responsable_rol: v })} className="text-slate-700" />
                               </DetailField>
                               <DetailField label="Periodicidad">
-                                <EditableSelect value={kpi.periodicidad} options={PERIODICIDAD_OPTIONS} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { periodicidad: v })} />
+                                <EditableSelect value={kpi.periodicidad} options={PERIODICIDAD_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { periodicidad: v })} />
                               </DetailField>
                               <DetailField label="Medida">
-                                <EditableSelect value={kpi.unidad_medida} options={UNIDAD_OPTIONS} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { unidad_medida: v })} />
+                                <EditableSelect value={kpi.unidad_medida} options={UNIDAD_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { unidad_medida: v })} />
                               </DetailField>
                               <DetailField label="Gráfico">
-                                <EditableSelect value={kpi.tipo_grafico} options={TIPO_GRAFICO_OPTIONS} canEdit={canEdit} onSave={(v) => onUpdateKpi(kpi.id, { tipo_grafico: v })} />
+                                <EditableSelect value={kpi.tipo_grafico} options={TIPO_GRAFICO_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { tipo_grafico: v })} />
                               </DetailField>
                             </div>
                             <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-2">
                               <p className="text-[9px] font-bold text-slate-400">
                                 {kpi.updated_by_nombre ? `Última edición: ${kpi.updated_by_nombre} · ${formatDateTime(kpi.updated_at)}` : "Sin ediciones registradas"}
                               </p>
-                              {canEdit && (
+                              {canEditKpi(kpi) && (
                                 <button
                                   type="button"
                                   onClick={() => onDeactivateKpi(kpi.id)}
