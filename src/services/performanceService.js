@@ -144,9 +144,11 @@ export async function deactivateKpi(id, options) {
   return updateKpi(id, { activo: false }, options);
 }
 
-// `previousValor` es el valor actual de esa celda (kpi_id, anio, mes, tipo)
-// antes de este guardado, para poder registrar el cambio en el historial.
-export async function upsertResultado({ kpiId, anio, mes, tipo, valor }, { actor, previousValor } = {}) {
+// `previousValor` es el valor actual de esa celda (kpi_id, anio, mes,
+// semana, tipo) antes de este guardado, para poder registrar el cambio en
+// el historial. `semana` (1-4) solo aplica a KPIs de captura semanal — para
+// el resto siempre es null (comportamiento sin cambios).
+export async function upsertResultado({ kpiId, anio, mes, semana = null, tipo, valor }, { actor, previousValor } = {}) {
   try {
     const { personaId, nombre } = actorFields(actor);
     const { data, error } = await supabase
@@ -156,13 +158,14 @@ export async function upsertResultado({ kpiId, anio, mes, tipo, valor }, { actor
           kpi_id: kpiId,
           anio,
           mes,
+          semana,
           tipo,
           valor,
           updated_at: new Date().toISOString(),
           updated_by_persona_id: personaId,
           updated_by_nombre: nombre,
         },
-        { onConflict: "kpi_id,anio,mes,tipo" }
+        { onConflict: "kpi_id,anio,mes,semana,tipo" }
       )
       .select("*")
       .single();
@@ -173,7 +176,7 @@ export async function upsertResultado({ kpiId, anio, mes, tipo, valor }, { actor
       await logHistorialEntries([{
         kpi_id: kpiId,
         tipo_registro: "resultado",
-        referencia: `${anio}-${mes}-${tipo}`,
+        referencia: semana ? `${anio}-${mes}-s${semana}-${tipo}` : `${anio}-${mes}-${tipo}`,
         valor_anterior: previousValor != null ? String(previousValor) : null,
         valor_nuevo: valor != null ? String(valor) : null,
         persona_id: personaId,

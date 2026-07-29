@@ -62,22 +62,44 @@ export function formatAxisValue(valor, unidad) {
   return num.toLocaleString("es-MX", { maximumFractionDigits: 0 });
 }
 
-export function getResultadoRow(resultados, kpiId, anio, mes, tipo) {
+// `semana` (1-4) solo aplica a KPIs de captura semanal — para los demás
+// siempre es null. NULL en Postgres no es igual a NULL en comparaciones de
+// JS tampoco, por eso se normaliza con `?? null` antes de comparar.
+export function getResultadoRow(resultados, kpiId, anio, mes, tipo, semana = null) {
   return resultados.find(
-    (r) => Number(r.kpi_id) === Number(kpiId) && Number(r.anio) === Number(anio) && Number(r.mes) === Number(mes) && r.tipo === tipo
+    (r) =>
+      Number(r.kpi_id) === Number(kpiId) &&
+      Number(r.anio) === Number(anio) &&
+      Number(r.mes) === Number(mes) &&
+      r.tipo === tipo &&
+      (r.semana ?? null) === semana
   ) || null;
 }
 
-export function getResultadoValue(resultados, kpiId, anio, mes, tipo) {
-  const row = getResultadoRow(resultados, kpiId, anio, mes, tipo);
+export function getResultadoValue(resultados, kpiId, anio, mes, tipo, semana = null) {
+  const row = getResultadoRow(resultados, kpiId, anio, mes, tipo, semana);
   return row ? Number(row.valor) : null;
 }
 
-export function buildMonthlySeries(resultados, kpiId, anio) {
+// El "real" mensual de un KPI de captura semanal es el promedio de las
+// semanas 1-4 capturadas ese mes (la Meta sigue siendo un solo valor
+// mensual sin importar la periodicidad del KPI).
+export function getMonthlyRealValue(resultados, kpi, anio, mes) {
+  if (kpi.periodicidad === "Semanal") {
+    const semanas = [1, 2, 3, 4]
+      .map((semana) => getResultadoValue(resultados, kpi.id, anio, mes, "real", semana))
+      .filter((v) => v !== null);
+    if (semanas.length === 0) return null;
+    return semanas.reduce((sum, v) => sum + v, 0) / semanas.length;
+  }
+  return getResultadoValue(resultados, kpi.id, anio, mes, "real");
+}
+
+export function buildMonthlySeries(resultados, kpi, anio) {
   return MESES.map((label, index) => ({
     mes: label,
-    meta: getResultadoValue(resultados, kpiId, anio, index + 1, "meta"),
-    real: getResultadoValue(resultados, kpiId, anio, index + 1, "real"),
+    meta: getResultadoValue(resultados, kpi.id, anio, index + 1, "meta"),
+    real: getMonthlyRealValue(resultados, kpi, anio, index + 1),
   }));
 }
 
@@ -92,12 +114,14 @@ export function getPreviousMonthInfo() {
   return { mes: currentMonth - 1, anio: currentYear, label: MESES[currentMonth - 2] };
 }
 
-// Real/Meta del mes anterior (calendario), contra ese mismo mes.
-export function computeCumplimiento(resultados, kpiId, anio) {
+// Real/Meta del mes anterior (calendario), contra ese mismo mes. `kpi` es el
+// objeto completo (no solo el id) porque el real de un KPI de captura
+// semanal se calcula distinto (promedio de semanas, ver getMonthlyRealValue).
+export function computeCumplimiento(resultados, kpi, anio) {
   const { mes, anio: mesAnio, label } = getPreviousMonthInfo();
   const targetAnio = mesAnio ?? anio;
-  const real = getResultadoValue(resultados, kpiId, targetAnio, mes, "real");
-  const meta = getResultadoValue(resultados, kpiId, targetAnio, mes, "meta");
+  const real = getMonthlyRealValue(resultados, kpi, targetAnio, mes);
+  const meta = getResultadoValue(resultados, kpi.id, targetAnio, mes, "meta");
   if (real === null || !meta) return { real, meta, cumplimiento: null, mesLabel: label };
   const cumplimiento = Math.round((real / meta) * 100);
   return { real, meta, cumplimiento, mesLabel: label };
@@ -125,4 +149,4 @@ export const TIPO_GRAFICO_OPTIONS = [
   { value: "circular", label: "Circular" },
 ];
 
-export const PERIODICIDAD_OPTIONS = ["Mensual", "Trimestral", "Semestral", "Anual"];
+export const PERIODICIDAD_OPTIONS = ["Semanal", "Mensual", "Trimestral", "Semestral", "Anual"];

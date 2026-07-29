@@ -34,9 +34,13 @@ const KPI_FIELD_LABELS = {
 
 function formatHistorialReferencia(entry) {
   if (entry.tipo_registro === "resultado") {
-    const [anio, mes, tipo] = String(entry.referencia || "").split("-");
+    const parts = String(entry.referencia || "").split("-");
+    const [anio, mes] = parts;
+    const semanaPart = parts.length === 4 ? parts[2] : null;
+    const tipo = parts[parts.length - 1];
     const mesLabel = MESES[Number(mes) - 1] || mes;
-    return `${tipo === "real" ? "Real" : "Meta"} · ${mesLabel} ${anio}`;
+    const semanaLabel = semanaPart ? ` · Semana ${semanaPart.replace("s", "")}` : "";
+    return `${tipo === "real" ? "Real" : "Meta"} · ${mesLabel} ${anio}${semanaLabel}`;
   }
   return KPI_FIELD_LABELS[entry.referencia] || entry.referencia;
 }
@@ -177,12 +181,20 @@ export default function PerformanceModule({ currentUser }) {
   }
 
   async function handleSaveResultado(payload) {
-    const previousValor = getResultadoValue(resultados, payload.kpiId, payload.anio, payload.mes, payload.tipo);
+    const semana = payload.semana ?? null;
+    const previousValor = getResultadoValue(resultados, payload.kpiId, payload.anio, payload.mes, payload.tipo, semana);
     const result = await upsertResultado(payload, { actor: currentUser, previousValor });
     if (!result?.ok) { console.error(result?.error); setMessage("No fue posible guardar el resultado."); return; }
     setResultados((current) => {
       const filtered = current.filter(
-        (r) => !(Number(r.kpi_id) === payload.kpiId && Number(r.anio) === payload.anio && Number(r.mes) === payload.mes && r.tipo === payload.tipo)
+        (r) =>
+          !(
+            Number(r.kpi_id) === payload.kpiId &&
+            Number(r.anio) === payload.anio &&
+            Number(r.mes) === payload.mes &&
+            (r.semana ?? null) === semana &&
+            r.tipo === payload.tipo
+          )
       );
       return [...filtered, result.data];
     });

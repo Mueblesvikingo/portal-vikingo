@@ -37,8 +37,8 @@ function ChartTooltip({ active, payload, label, unidad }) {
 }
 
 function KpiChartCard({ kpi, resultados, anio, color }) {
-  const serie = buildMonthlySeries(resultados, kpi.id, anio);
-  const { real, meta, cumplimiento } = computeCumplimiento(resultados, kpi.id, anio);
+  const serie = buildMonthlySeries(resultados, kpi, anio);
+  const { real, meta, cumplimiento } = computeCumplimiento(resultados, kpi, anio);
   const status = getCumplimientoStatus(cumplimiento);
 
   return (

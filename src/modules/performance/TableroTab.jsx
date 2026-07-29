@@ -136,7 +136,7 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
       <div className={`grid gap-3 ${isEstrategico ? "md:grid-cols-4" : groups.length > 1 ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
         {groups.map((group) => {
           const groupCumplimientos = group.items
-            .map((k) => computeCumplimiento(resultados, k.id, anio).cumplimiento)
+            .map((k) => computeCumplimiento(resultados, k, anio).cumplimiento)
             .filter((v) => v !== null && v !== undefined);
           const avg = groupCumplimientos.length
             ? Math.round(groupCumplimientos.reduce((a, b) => a + b, 0) / groupCumplimientos.length)
@@ -171,7 +171,7 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, onU
                   </tr>
                 )}
                 {group.items.map((kpi) => {
-                  const { real, meta, cumplimiento } = computeCumplimiento(resultados, kpi.id, anio);
+                  const { real, meta, cumplimiento } = computeCumplimiento(resultados, kpi, anio);
                   const status = getCumplimientoStatus(cumplimiento);
                   const isOpen = openKpiId === kpi.id;
                   return (
