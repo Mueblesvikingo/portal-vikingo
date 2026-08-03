@@ -15,6 +15,7 @@ import SigDiagnosisModule from "../../modules/sig/SigDiagnosisModule";
 import OrganizationCatalogModule from "../../modules/organization-catalog/OrganizationCatalogModule";
 import ActionsModule from "../../modules/actions/ActionsModule";
 import OrganigramaModule from "../../modules/organigrama/OrganigramaModule";
+import CompetenciaDetailPage from "../../modules/competencias/CompetenciaDetailPage";
 
 export default function AppRouter({
   currentUser,
@@ -92,6 +93,11 @@ export default function AppRouter({
           <Route
             path="/organization-catalog"
             element={<OrganizationCatalogModule />}
+          />
+
+          <Route
+            path="/competencias/:id"
+            element={<CompetenciaDetailPage currentUser={currentUser} />}
           />
 
           <Route

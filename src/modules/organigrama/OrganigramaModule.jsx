@@ -10,6 +10,7 @@ import {
   restoreNodosSnapshot,
   getConexiones,
 } from "../../services/organigramaService";
+import { getCompetenciasDiccionario, getAllNodoCompetencias, addNodoCompetencia, removeNodoCompetencia } from "../../services/competenciasService";
 import OrgChartCanvas from "./OrgChartCanvas";
 import NodeDetailPanel from "./NodeDetailPanel";
 import { NIVEL_COLORS, NIVEL_LABELS, NIVEL_OPTIONS } from "./organigramaLayout";
@@ -32,6 +33,8 @@ export default function OrganigramaModule({ currentUser }) {
   const [personasCatalogo, setPersonasCatalogo] = useState([]);
   const [puestosCatalogo, setPuestosCatalogo] = useState([]);
   const [conexiones, setConexiones] = useState([]);
+  const [competenciasDiccionario, setCompetenciasDiccionario] = useState([]);
+  const [nodoCompetencias, setNodoCompetencias] = useState([]);
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const [undoing, setUndoing] = useState(false);
@@ -96,7 +99,27 @@ export default function OrganigramaModule({ currentUser }) {
     getPersonas().then(setPersonasCatalogo).catch(() => setPersonasCatalogo([]));
     getPuestos().then(setPuestosCatalogo).catch(() => setPuestosCatalogo([]));
     getConexiones().then(setConexiones).catch(() => setConexiones([]));
+    getCompetenciasDiccionario().then(setCompetenciasDiccionario).catch(() => setCompetenciasDiccionario([]));
+    getAllNodoCompetencias().then(setNodoCompetencias).catch(() => setNodoCompetencias([]));
   }, []);
+
+  // Alta/baja optimista de una competencia en un puesto: refleja el cambio
+  // de inmediato en el checkbox y lo persiste aparte del resto del panel
+  // (no depende del botón "Guardar" del perfil de puesto).
+  async function handleToggleCompetencia(nodoId, competenciaId, checked) {
+    setNodoCompetencias((current) =>
+      checked
+        ? [...current, { nodo_id: nodoId, competencia_id: competenciaId }]
+        : current.filter((nc) => !(nc.nodo_id === nodoId && nc.competencia_id === competenciaId))
+    );
+    const result = checked ? await addNodoCompetencia(nodoId, competenciaId) : await removeNodoCompetencia(nodoId, competenciaId);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible actualizar la competencia.");
+      const fresh = await getAllNodoCompetencias();
+      setNodoCompetencias(fresh);
+    }
+  }
 
   // Si el nombre/título capturado coincide exactamente (sin distinguir
   // mayúsculas) con una persona/puesto real del catálogo, se guarda también
@@ -321,6 +344,9 @@ export default function OrganigramaModule({ currentUser }) {
         onClose={() => setSelectedId(null)}
         personasCatalogo={personasCatalogo}
         puestosCatalogo={puestosCatalogo}
+        competenciasDiccionario={competenciasDiccionario}
+        nodoCompetencias={nodoCompetencias}
+        onToggleCompetencia={handleToggleCompetencia}
       />
 
       {showAddModal && (

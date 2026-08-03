@@ -102,6 +102,50 @@ function TextFieldEditor({ meta, value, canEdit, onChange, onClose }) {
   );
 }
 
+// Selector del catálogo oficial de competencias (16 fijas, definidas en
+// competencias_diccionario) — reemplaza el texto libre para un puesto
+// individual: cada competencia es un checkbox (aplica/no aplica a este
+// puesto) y un link que abre su definición + seguimiento en pestaña nueva,
+// sin amontonar esa información dentro de este mismo panel.
+function CompetenciaPickerModal({ meta, tipo, diccionario, selectedIds, personaId, canEdit, onToggle, onClose }) {
+  const items = diccionario.filter((item) => item.tipo === tipo);
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4">
+      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
+          <p className="text-xs font-black uppercase tracking-widest">{meta.icon} {meta.label}</p>
+          <button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
+        </div>
+        <div className="max-h-[70vh] space-y-1.5 overflow-y-auto p-4">
+          {items.length === 0 && <p className="text-[11px] font-bold text-slate-300">Todavía no hay competencias de este tipo en el catálogo.</p>}
+          {items.map((item) => {
+            const checked = selectedIds.includes(item.id);
+            const href = `/competencias/${item.id}${personaId ? `?persona=${personaId}` : ""}`;
+            return (
+              <div key={item.id} className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${checked ? "border-emerald-100 bg-emerald-50/50" : "border-slate-100 bg-slate-50"}`}>
+                <input
+                  type="checkbox"
+                  disabled={!canEdit}
+                  checked={checked}
+                  onChange={(event) => onToggle(item.id, event.target.checked)}
+                  className="h-4 w-4 shrink-0 disabled:opacity-50"
+                />
+                <a href={href} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-[12px] font-bold normal-case tracking-normal text-slate-700 hover:text-sky-600 hover:underline" title="Ver definición y dar seguimiento (pestaña nueva)">
+                  {item.nombre}
+                </a>
+                <span className="shrink-0 text-[10px] text-slate-300">↗</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex justify-end border-t border-slate-100 p-4 pt-3">
+          <button type="button" onClick={onClose} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Listo</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FieldEditorModal({ fieldKey, meta, value, canEdit, onChange, onClose, isGroup }) {
   // El objetivo siempre es descripción libre; en un equipo transversal el
   // "alcance" (mismo campo que "competencias clave" en un puesto individual)
@@ -116,7 +160,7 @@ function FieldEditorModal({ fieldKey, meta, value, canEdit, onChange, onClose, i
 // Ventana breve de un integrante de un equipo transversal: solo objetivo,
 // competencias y responsabilidades de esa persona — sin línea de mando ni
 // "a quién reporta", porque estos roles son transversales, no jerárquicos.
-function PersonaMiniModal({ persona, personasCatalogo, puestosCatalogo, canEdit, onSave, onClose }) {
+function PersonaMiniModal({ persona, personasCatalogo, puestosCatalogo, canEdit, onSave, onClose, competenciasDiccionario = [], nodoCompetencias = [], onToggleCompetencia }) {
   const [draft, setDraft] = useState({
     titulo_puesto: getDisplayTitle(persona, puestosCatalogo) || "",
     nombre_persona: getDisplayName(persona, personasCatalogo) || "",
@@ -130,6 +174,17 @@ function PersonaMiniModal({ persona, personasCatalogo, puestosCatalogo, canEdit,
   });
   const [activeField, setActiveField] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  const selectedCompetenciaIds = nodoCompetencias.filter((nc) => nc.nodo_id === persona.id).map((nc) => nc.competencia_id);
+  const isCompetenciaField = (key) => key === "competencias_clave" || key === "competencias_tecnicas";
+  const competenciaTipo = (key) => (key === "competencias_tecnicas" ? "tecnica" : "blanda");
+  function hasFieldContent(key) {
+    if (isCompetenciaField(key)) {
+      const tipo = competenciaTipo(key);
+      return selectedCompetenciaIds.some((id) => competenciasDiccionario.find((c) => c.id === id)?.tipo === tipo);
+    }
+    return draft[key]?.trim();
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -157,7 +212,7 @@ function PersonaMiniModal({ persona, personasCatalogo, puestosCatalogo, canEdit,
                 onClick={() => setActiveField(key)}
                 className="relative flex flex-col items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2.5 text-center hover:bg-slate-100"
               >
-                {draft[key]?.trim() && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                {hasFieldContent(key) && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500" />}
                 <span className="text-base">{item.icon}</span>
                 <span className="text-[9px] font-black uppercase leading-tight tracking-wide text-slate-600">{item.label}</span>
               </button>
@@ -179,7 +234,19 @@ function PersonaMiniModal({ persona, personasCatalogo, puestosCatalogo, canEdit,
         </div>
       </div>
 
-      {activeField && (
+      {activeField && isCompetenciaField(activeField) && (
+        <CompetenciaPickerModal
+          meta={SUB_MODAL_META[activeField]}
+          tipo={competenciaTipo(activeField)}
+          diccionario={competenciasDiccionario}
+          selectedIds={selectedCompetenciaIds}
+          personaId={persona.persona_id}
+          canEdit={canEdit}
+          onToggle={(competenciaId, checked) => onToggleCompetencia(persona.id, competenciaId, checked)}
+          onClose={() => setActiveField(null)}
+        />
+      )}
+      {activeField && !isCompetenciaField(activeField) && (
         <FieldEditorModal
           fieldKey={activeField}
           meta={SUB_MODAL_META[activeField]}
@@ -193,7 +260,7 @@ function PersonaMiniModal({ persona, personasCatalogo, puestosCatalogo, canEdit,
   );
 }
 
-export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeactivate, onAssignParent, onClose, personasCatalogo = [], puestosCatalogo = [] }) {
+export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeactivate, onAssignParent, onClose, personasCatalogo = [], puestosCatalogo = [], competenciasDiccionario = [], nodoCompetencias = [], onToggleCompetencia }) {
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const [addingReportId, setAddingReportId] = useState("");
@@ -271,6 +338,17 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
 
   const subModalMetaSource = isGroup ? GROUP_SUB_MODAL_META : SUB_MODAL_META;
 
+  const selectedCompetenciaIds = nodoCompetencias.filter((nc) => nc.nodo_id === nodo.id).map((nc) => nc.competencia_id);
+  const isCompetenciaField = (key) => !isGroup && (key === "competencias_clave" || key === "competencias_tecnicas");
+  const competenciaTipo = (key) => (key === "competencias_tecnicas" ? "tecnica" : "blanda");
+  function hasFieldContent(key) {
+    if (isCompetenciaField(key)) {
+      const tipo = competenciaTipo(key);
+      return selectedCompetenciaIds.some((id) => competenciasDiccionario.find((c) => c.id === id)?.tipo === tipo);
+    }
+    return draft[key]?.trim();
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
       <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
@@ -304,7 +382,7 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
                   onClick={() => setActiveSubModal(key)}
                   className="relative flex flex-col items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2.5 text-center hover:bg-slate-100"
                 >
-                  {draft[key]?.trim() && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                  {hasFieldContent(key) && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500" />}
                   <span className="text-base">{item.icon}</span>
                   <span className="text-[9px] font-black uppercase leading-tight tracking-wide text-slate-600">{item.label}</span>
                 </button>
@@ -476,7 +554,19 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
             </span>
           </label>
 
-          {activeSubModal && (
+          {activeSubModal && isCompetenciaField(activeSubModal) && (
+            <CompetenciaPickerModal
+              meta={subModalMetaSource[activeSubModal]}
+              tipo={competenciaTipo(activeSubModal)}
+              diccionario={competenciasDiccionario}
+              selectedIds={selectedCompetenciaIds}
+              personaId={nodo.persona_id}
+              canEdit={canEdit}
+              onToggle={(competenciaId, checked) => onToggleCompetencia(nodo.id, competenciaId, checked)}
+              onClose={() => setActiveSubModal(null)}
+            />
+          )}
+          {activeSubModal && !isCompetenciaField(activeSubModal) && (
             <FieldEditorModal
               fieldKey={activeSubModal}
               meta={subModalMetaSource[activeSubModal]}
@@ -522,6 +612,9 @@ export default function NodeDetailPanel({ nodo, nodos, canEdit, onSave, onDeacti
           canEdit={canEdit}
           onSave={onSave}
           onClose={() => setActivePersonaId(null)}
+          competenciasDiccionario={competenciasDiccionario}
+          nodoCompetencias={nodoCompetencias}
+          onToggleCompetencia={onToggleCompetencia}
         />
       )}
     </div>
