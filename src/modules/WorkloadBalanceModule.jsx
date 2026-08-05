@@ -1204,7 +1204,7 @@ function ProgramAssignmentModal({ modal, draft, setDraft, onSave, onClose, error
   const assignment = modal.assignment;
   const horasPendientes = Number(assignment.horasPendientes || 0);
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white"><div><p className="text-xs font-black uppercase tracking-widest">Programar carga del proyecto</p><p className="text-[10px] font-bold text-slate-300">{assignment.nombre}</p></div><button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button></div><div className="space-y-3 p-4"><div className="grid gap-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-bold text-slate-600 md:grid-cols-2"><div><span className="text-slate-400">Responsable</span><p className="text-slate-900">{assignment.responsable}</p></div><div><span className="text-slate-400">Horas totales</span><p className="text-slate-900">{formatHours(assignment.horasTotales)}</p></div><div><span className="text-slate-400">Ya programadas</span><p className="text-slate-900">{formatHours(assignment.horasProgramadas)}</p></div><div><span className="text-slate-400">Pendientes</span><p className="text-slate-900">{formatHours(horasPendientes)}</p></div></div><div className="flex gap-1 rounded-xl bg-slate-100 p-1"><button type="button" onClick={() => setDraft((current) => ({ ...current, type: "weekly" }))} className={`flex-1 rounded-lg py-1.5 text-[10px] font-black uppercase tracking-widest transition ${draft.type === "weekly" ? "bg-white shadow-sm text-slate-900" : "text-slate-400"}`}>Semana típica</button><button type="button" onClick={() => setDraft((current) => ({ ...current, type: "monthly" }))} className={`flex-1 rounded-lg py-1.5 text-[10px] font-black uppercase tracking-widest transition ${draft.type === "monthly" ? "bg-white shadow-sm text-slate-900" : "text-slate-400"}`}>Mes típico</button><button type="button" onClick={() => setDraft((current) => ({ ...current, type: "planning" }))} className={`flex-1 rounded-lg py-1.5 text-[10px] font-black uppercase tracking-widest transition ${draft.type === "planning" ? "bg-white shadow-sm text-slate-900" : "text-slate-400"}`}>Planificación</button></div>{draft.type === "planning" && <p className="text-[9px] font-bold leading-snug text-slate-500">Se agrega como actividad extraordinaria únicamente en la semana de Planificación {planningWeekStart} a {planningWeekEnd} (no se repite en otras semanas). Cambia esa semana desde la pestaña Planificación antes de programar si necesitas otra.</p>}<div className="grid gap-2 md:grid-cols-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">{draft.type === "planning" ? "Horas de esta actividad" : `Horas por ${draft.type === "weekly" ? "día" : "semana"}`}<input type="number" min="0.25" step="0.25" max={horasPendientes} value={draft.horas} onChange={(event) => setDraft((current) => ({ ...current, horas: Number(event.target.value) }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total a programar</p><p className="mt-1 flex h-10 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold text-slate-700">{formatHours(draft.type === "planning" ? Number(draft.horas || 0) : Number(draft.horas || 0) * (draft.type === "weekly" ? draft.dias.length : draft.semanas.length))}</p></div></div>{draft.type === "weekly" ? <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Días sugeridos (selecciona uno o varios)</p><div className="mt-1 flex flex-wrap gap-1.5">{WEEK_DAYS.map((day) => <label key={day} className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold transition ${draft.dias.includes(day) ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-500"}`}><input type="checkbox" checked={draft.dias.includes(day)} onChange={() => onToggleDay(day)} className="h-3 w-3" />{day}</label>)}</div></div> : draft.type === "monthly" ? <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Semanas (selecciona una o varias)</p><div className="mt-1 flex flex-wrap gap-1.5">{[1, 2, 3, 4].map((week) => <label key={week} className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold transition ${draft.semanas.includes(week) ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-500"}`}><input type="checkbox" checked={draft.semanas.includes(week)} onChange={() => onToggleWeek(week)} className="h-3 w-3" />Semana {week}</label>)}</div></div> : <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Día de esa semana<select value={draft.dias[0] || "Lunes"} onChange={(event) => setDraft((current) => ({ ...current, dias: [event.target.value] }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">{WEEK_DAYS.map((day) => <option key={day} value={day}>{day}</option>)}</select></label>}<label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Comentario (opcional)<input value={draft.comentario} onChange={(event) => setDraft((current) => ({ ...current, comentario: event.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label>{capacityWarning && <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-700">{capacityWarning}</div>}{error && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{error}</div>}<div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button><button type="button" onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Programar</button></div></div></div></div>;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white"><div><p className="text-xs font-black uppercase tracking-widest">Programar carga del proyecto</p><p className="text-[10px] font-bold text-slate-300">{assignment.nombre}</p></div><button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button></div><div className="space-y-3 p-4"><div className="grid gap-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-bold text-slate-600 md:grid-cols-2"><div><span className="text-slate-400">Responsable</span><p className="text-slate-900">{assignment.responsable}</p></div><div><span className="text-slate-400">Horas totales</span><p className="text-slate-900">{formatHours(assignment.horasTotales)}</p></div><div><span className="text-slate-400">Ya programadas</span><p className="text-slate-900">{formatHours(assignment.horasProgramadas)}</p></div><div><span className="text-slate-400">Pendientes</span><p className="text-slate-900">{formatHours(horasPendientes)}</p></div></div><div className="flex gap-1 rounded-xl bg-slate-100 p-1"><button type="button" onClick={() => setDraft((current) => ({ ...current, type: "weekly" }))} className={`flex-1 rounded-lg py-1.5 text-[10px] font-black uppercase tracking-widest transition ${draft.type === "weekly" ? "bg-white shadow-sm text-slate-900" : "text-slate-400"}`}>Semana típica</button><button type="button" onClick={() => setDraft((current) => ({ ...current, type: "monthly" }))} className={`flex-1 rounded-lg py-1.5 text-[10px] font-black uppercase tracking-widest transition ${draft.type === "monthly" ? "bg-white shadow-sm text-slate-900" : "text-slate-400"}`}>Mes típico</button><button type="button" onClick={() => setDraft((current) => ({ ...current, type: "planning" }))} className={`flex-1 rounded-lg py-1.5 text-[10px] font-black uppercase tracking-widest transition ${draft.type === "planning" ? "bg-white shadow-sm text-slate-900" : "text-slate-400"}`}>Planificación</button></div>{draft.type === "planning" && <p className="text-[9px] font-bold leading-snug text-slate-500">Se agrega como actividad extraordinaria únicamente en la semana de Planificación {planningWeekStart} a {planningWeekEnd} (no se repite en otras semanas). Cambia esa semana desde la pestaña Planificación antes de programar si necesitas otra.</p>}<div className="grid gap-2 md:grid-cols-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400">{`Horas por ${draft.type === "monthly" ? "semana" : "día"}`}<input type="number" min="0.25" step="0.25" max={horasPendientes} value={draft.horas} onChange={(event) => setDraft((current) => ({ ...current, horas: Number(event.target.value) }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label><div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total a programar</p><p className="mt-1 flex h-10 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold text-slate-700">{formatHours(Number(draft.horas || 0) * (draft.type === "monthly" ? draft.semanas.length : draft.dias.length))}</p></div></div>{draft.type === "monthly" ? <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Semanas (selecciona una o varias)</p><div className="mt-1 flex flex-wrap gap-1.5">{[1, 2, 3, 4].map((week) => <label key={week} className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold transition ${draft.semanas.includes(week) ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-500"}`}><input type="checkbox" checked={draft.semanas.includes(week)} onChange={() => onToggleWeek(week)} className="h-3 w-3" />Semana {week}</label>)}</div></div> : <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Días sugeridos (selecciona uno o varios)</p><div className="mt-1 flex flex-wrap gap-1.5">{WEEK_DAYS.map((day) => <label key={day} className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold transition ${draft.dias.includes(day) ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-500"}`}><input type="checkbox" checked={draft.dias.includes(day)} onChange={() => onToggleDay(day)} className="h-3 w-3" />{day}</label>)}</div></div>}<label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Comentario (opcional)<input value={draft.comentario} onChange={(event) => setDraft((current) => ({ ...current, comentario: event.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" /></label>{capacityWarning && <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-700">{capacityWarning}</div>}{error && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{error}</div>}<div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button><button type="button" onClick={onSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Programar</button></div></div></div></div>;
 }
 function NewAssignmentModal({ open, draft, setDraft, onSave, onClose, error, puestoOptions = [], currentUserLabel = "" }) {
   if (!open) return null;
@@ -2769,7 +2769,7 @@ function canCreateAssignments() {
     const sourceType = getWeeklyTypeFromAssignmentOrigin(origin);
     return {
       ...createManualBlock({
-        id: `${idPrefix}-${assignment.id}`,
+        id: `${idPrefix}-${assignment.id}-${dayName}`,
         dayName,
         name: assignment.titulo,
         duration,
@@ -2820,7 +2820,9 @@ function canCreateAssignments() {
       isMonthlyBlock: true,
     };
   }
-  async function saveAssignmentPlanningWeek(block, range) {
+  async function saveAssignmentPlanningWeek(blocks, range) {
+    const blockList = Array.isArray(blocks) ? blocks : [blocks];
+    const assignmentId = String(blockList[0]?.assignmentId || "");
     const existingResult = await findExistingSavedWeek({
       personaId: effectivePersonFilter,
       fechaInicio: range.start,
@@ -2833,8 +2835,8 @@ function canCreateAssignments() {
     // actualmente cargada en pantalla y podría no ser la misma).
     const baseBlocks = existingResult.data ? safeArray(existingResult.data.bloques) : activeAgendaBlocks;
     const nextBlocks = baseBlocks
-      .filter((item) => String(item.assignmentId || "") !== String(block.assignmentId || ""))
-      .concat(block);
+      .filter((item) => String(item.assignmentId || "") !== assignmentId)
+      .concat(blockList);
 
     const payload = {
       ...buildSavedWeeklyPayload(),
@@ -3247,24 +3249,31 @@ function canCreateAssignments() {
     }
 
     if (programAssignmentDraft.type === "planning") {
-      if (horasPorDia > horasPendientes) {
-        setProgramAssignmentError(`No puedes programar más de las horas pendientes (${formatHours(horasPendientes)}).`);
+      const days = safeArray(programAssignmentDraft.dias);
+      if (days.length === 0) {
+        setProgramAssignmentError("Selecciona al menos un día.");
+        return;
+      }
+      const horasTotalAProgramar = horasPorDia * days.length;
+      if (horasTotalAProgramar > horasPendientes) {
+        setProgramAssignmentError(`No puedes programar más de las horas pendientes (${formatHours(horasPendientes)}). Con ${days.length} día(s) a ${formatHours(horasPorDia)} c/u serían ${formatHours(horasTotalAProgramar)}.`);
         return;
       }
 
-      const dayName = programAssignmentDraft.dias[0] || "Lunes";
       const origin = getAssignmentDefaultOrigin(assignment.tipo);
       const range = { start: planningWeekStart, end: planningWeekEnd };
-      const block = buildAssignmentWeeklyBlock({ assignment, dayName, hours: horasPorDia, origin, idPrefix: "assignment-plan-weekly" });
+      const blocks = days.map((dayName, index) =>
+        buildAssignmentWeeklyBlock({ assignment, dayName, hours: horasPorDia, origin, order: Date.now() + index, idPrefix: "assignment-plan-weekly" })
+      );
 
-      const result = await saveAssignmentPlanningWeek(block, range);
+      const result = await saveAssignmentPlanningWeek(blocks, range);
       if (!result?.ok) {
         console.error(result?.error);
         setProgramAssignmentError("No fue posible agregar la actividad a Planificación.");
         return;
       }
 
-      setAgendaManualBlocks((current) => current.filter((item) => String(item.assignmentId || "") !== String(assignment.id)).concat(block));
+      setAgendaManualBlocks((current) => current.filter((item) => String(item.assignmentId || "") !== String(assignment.id)).concat(blocks));
       const hoursResult = await recalculateAssignmentHours(assignment.id);
       if (!hoursResult?.ok) console.error(hoursResult?.error);
 
@@ -3405,7 +3414,7 @@ function canCreateAssignments() {
         origin,
         idPrefix: "assignment-plan-weekly",
       });
-      result = await saveAssignmentPlanningWeek(block, range);
+      result = await saveAssignmentPlanningWeek([block], range);
       if (result?.ok) {
         setPlanningWeekStart(range.start);
         setPlanningWeekEnd(range.end);

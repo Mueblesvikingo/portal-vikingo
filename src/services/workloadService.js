@@ -459,8 +459,10 @@ export async function recalculateAssignmentHours(assignmentId) {
 
     const horasPlanificacion = (savedPlansResult.data || []).reduce((sum, plan) => {
       const bloques = Array.isArray(plan.bloques) ? plan.bloques : [];
-      const bloque = bloques.find((item) => String(item?.assignmentId || "") === String(assignmentId));
-      return sum + (bloque ? Number(bloque.duracionMinutos || 0) / 60 : 0);
+      // Una asignación en Planificación puede tener varios bloques (uno por
+      // día seleccionado), no solo uno — hay que sumarlos todos.
+      const bloquesAsignacion = bloques.filter((item) => String(item?.assignmentId || "") === String(assignmentId));
+      return sum + bloquesAsignacion.reduce((acc, bloque) => acc + Number(bloque.duracionMinutos || 0) / 60, 0);
     }, 0);
 
     const horasProgramadas = horasPlanTipico + horasPlanificacion;
