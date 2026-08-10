@@ -115,6 +115,7 @@ const ESCENARIO_UNICO = "Base";
 export default function PlanVentaTab({ productos, planVenta, control, canEdit, onSave, onSavePrecio, onCreateProducto, onDeactivateProducto, currentUser }) {
   const escenario = ESCENARIO_UNICO;
   const [showAgregar, setShowAgregar] = useState(false);
+  const [mesExportarIdx, setMesExportarIdx] = useState(0);
 
   const horizonte = useMemo(() => buildHorizonte(control?.mes_activo, control?.horizonte_meses || 6), [control]);
 
@@ -150,10 +151,35 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
   const granTotalPiezas = totalesPorMes.reduce((s, m) => s + m.piezas, 0);
   const granTotalMonto = totalesPorMes.reduce((s, m) => s + m.monto, 0);
 
+  // Insumo para MPS de Operaciones: solo codigo/producto/linea/piezas del
+  // mes elegido — sin precios, ya que MPS planea cantidades, no dinero.
+  // Se exporta como CSV (no .xlsx) para no depender de una libreria externa
+  // con vulnerabilidades conocidas (SheetJS); Excel abre .csv sin problema.
+  function handleExportarMes() {
+    const mes = horizonte[mesExportarIdx];
+    if (!mes) return;
+    const header = ["Codigo", "Producto", "Linea", "Piezas"];
+    const escapeCsv = (value) => {
+      const s = String(value ?? "");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = productos.map((p) => [p.codigo, p.nombre, p.linea, getPiezas(p.id, mes.anio, mes.mes)]);
+    const csv = [header, ...rows].map((r) => r.map(escapeCsv).join(",")).join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Plan_de_venta_${mes.label}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-3 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canEdit && !showAgregar && (
             <button
               type="button"
@@ -163,6 +189,25 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
               + Agregar producto
             </button>
           )}
+          <div className="flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 pl-2 pr-1 py-1">
+            <select
+              value={mesExportarIdx}
+              onChange={(e) => setMesExportarIdx(Number(e.target.value))}
+              className="bg-transparent text-[10px] font-black uppercase tracking-widest text-emerald-700 outline-none"
+            >
+              {horizonte.map((m, i) => (
+                <option key={`${m.anio}-${m.mes}`} value={i}>{m.label}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleExportarMes}
+              title="Descarga codigo, producto, linea y piezas del mes elegido — listo para usarse como insumo del MPS de Operaciones."
+              className="rounded-md bg-emerald-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white hover:bg-emerald-700"
+            >
+              ⭳ Exportar
+            </button>
+          </div>
         </div>
         <div className="flex gap-2">
           <div className="rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-right">
