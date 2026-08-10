@@ -1,6 +1,52 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { buildHorizonte, formatMoney, formatNumber, LINEAS } from "./sopHelpers";
+
+// Captura de venta real (solo el importe total del mes, sin desglose por
+// SKU) — clic para editar, igual que las celdas de Plan de venta.
+function EditableMonto({ value, canEdit, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value ?? ""));
+
+  if (!canEdit) {
+    return <span className="block text-right text-[11px] font-black text-slate-700">{value ? formatMoney(value) : "—"}</span>;
+  }
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(String(value ?? ""));
+          setEditing(true);
+        }}
+        className="block w-full rounded px-1 text-right text-[11px] font-black text-slate-700 transition hover:bg-sky-50"
+      >
+        {value ? formatMoney(value) : "Capturar"}
+      </button>
+    );
+  }
+
+  return (
+    <input
+      autoFocus
+      type="number"
+      min="0"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        setEditing(false);
+        const n = Number(draft);
+        if (Number.isFinite(n) && n !== Number(value ?? 0)) onSave(n);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") setEditing(false);
+      }}
+      className="h-8 w-full rounded border border-sky-300 bg-white px-2 text-right text-[11px] font-black text-slate-800 outline-none"
+    />
+  );
+}
 
 function KpiCard({ label, value, sub, tone = "slate" }) {
   const toneClass = {
@@ -18,9 +64,15 @@ function KpiCard({ label, value, sub, tone = "slate" }) {
   );
 }
 
-export default function DashboardTab({ productos, planVenta, control, parametros }) {
+export default function DashboardTab({ productos, planVenta, control, parametros, ventaReal = [], canEdit = false, onSaveVentaReal }) {
   const horizonte = useMemo(() => buildHorizonte(control?.mes_activo, control?.horizonte_meses || 6), [control]);
   const escenarioActivo = parametros?.escenario_venta || "Base";
+
+  const ventaRealPorMes = useMemo(() => {
+    const map = new Map();
+    for (const row of ventaReal) map.set(`${row.anio}_${row.mes}`, Number(row.monto || 0));
+    return map;
+  }, [ventaReal]);
 
   const precioPorProducto = useMemo(() => new Map(productos.map((p) => [p.id, p])), [productos]);
 
@@ -65,9 +117,13 @@ export default function DashboardTab({ productos, planVenta, control, parametros
 
   const chartData = horizonte.map((m, i) => ({
     mes: m.label,
-    Base: base.porMes[i]?.monto || 0,
-    Objetivo: objetivo.porMes[i]?.monto || 0,
+    Plan: activo.porMes[i]?.monto || 0,
+    Real: ventaRealPorMes.get(`${m.anio}_${m.mes}`) || 0,
   }));
+
+  const ventaRealTotal = horizonte.reduce((sum, m) => sum + (ventaRealPorMes.get(`${m.anio}_${m.mes}`) || 0), 0);
+  const mesesConReal = horizonte.filter((m) => ventaRealPorMes.has(`${m.anio}_${m.mes}`)).length;
+  const gapPlanVsReal = ventaRealTotal - chartData.reduce((sum, d, i) => (ventaRealPorMes.has(`${horizonte[i].anio}_${horizonte[i].mes}`) ? sum + d.Plan : sum), 0);
 
   return (
     <div className="space-y-3 p-3">
@@ -77,7 +133,12 @@ export default function DashboardTab({ productos, planVenta, control, parametros
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label={`Venta plan (${escenarioActivo})`} value={formatMoney(activo.monto)} sub={`${formatNumber(activo.piezas)} piezas`} tone="slate" />
-        <KpiCard label="Gap Objetivo vs Base" value={formatMoney(objetivo.monto - base.monto)} sub={`${formatNumber(objetivo.piezas - base.piezas)} piezas`} tone="amber" />
+        <KpiCard
+          label="Venta real capturada"
+          value={formatMoney(ventaRealTotal)}
+          sub={mesesConReal > 0 ? `Gap vs plan: ${formatMoney(gapPlanVsReal)} (${mesesConReal}/${horizonte.length} meses)` : "Sin captura todavía"}
+          tone={mesesConReal === 0 ? "slate" : gapPlanVsReal >= 0 ? "emerald" : "red"}
+        />
         <KpiCard label="Margen bruto estimado" value={formatMoney(margenBrutoMonto)} sub={`${(margenBrutoPct * 100).toFixed(1)}% sobre venta`} tone="emerald" />
         <KpiCard
           label="Utilidad operativa estimada"
@@ -88,7 +149,10 @@ export default function DashboardTab({ productos, planVenta, control, parametros
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Venta mensual — Base vs Objetivo</p>
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Venta mensual — Plan ({escenarioActivo}) vs Real</p>
+          <p className="text-[9px] font-bold text-slate-400">Gap Objetivo vs Base (referencia): {formatMoney(objetivo.monto - base.monto)}</p>
+        </div>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e1e0d9" vertical={false} />
@@ -96,10 +160,26 @@ export default function DashboardTab({ productos, planVenta, control, parametros
             <YAxis tick={{ fontSize: 9, fill: "#898781" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 1e6).toFixed(1)}M`} width={40} />
             <Tooltip formatter={(v) => formatMoney(v)} />
             <Legend wrapperStyle={{ fontSize: 9 }} />
-            <Bar dataKey="Base" fill="#c3c2b7" radius={[3, 3, 0, 0]} />
-            <Bar dataKey="Objetivo" fill="#0B5ED7" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="Plan" fill="#c3c2b7" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="Real" fill="#0B5ED7" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Captura de venta real (importe total del mes)</p>
+          <div className="mt-1.5 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+            {horizonte.map((m) => (
+              <div key={`${m.anio}-${m.mes}`} className="rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
+                <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">{m.label}</p>
+                <EditableMonto
+                  value={ventaRealPorMes.get(`${m.anio}_${m.mes}`)}
+                  canEdit={canEdit}
+                  onSave={(n) => onSaveVentaReal(m.anio, m.mes, n)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

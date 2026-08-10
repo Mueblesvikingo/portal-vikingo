@@ -141,6 +141,50 @@ export async function upsertPlanVenta(productoId, escenario, anio, mes, piezas, 
   }
 }
 
+export async function getVentaReal() {
+  try {
+    const { data, error } = await supabase
+      .from("sop_venta_real")
+      .select("*")
+      .order("anio", { ascending: true })
+      .order("mes", { ascending: true });
+
+    if (error) {
+      console.error("Error al cargar venta real S&OP:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar venta real S&OP:", err);
+    return [];
+  }
+}
+
+export async function upsertVentaReal(anio, mes, monto, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_venta_real")
+      .upsert(
+        {
+          anio,
+          mes,
+          monto,
+          updated_at: new Date().toISOString(),
+          updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+          updated_by_nombre: actor?.nombre || actor?.usuario || null,
+        },
+        { onConflict: "anio,mes" }
+      )
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
 export async function getDecisiones() {
   try {
     const { data, error } = await supabase

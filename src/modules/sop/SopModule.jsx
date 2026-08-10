@@ -8,6 +8,8 @@ import {
   updateParametros,
   getPlanVenta,
   upsertPlanVenta,
+  getVentaReal,
+  upsertVentaReal,
   getDecisiones,
   createDecision,
   deleteDecision,
@@ -41,6 +43,7 @@ export default function SopModule({ currentUser }) {
   const [control, setControl] = useState(null);
   const [parametros, setParametros] = useState(null);
   const [planVenta, setPlanVenta] = useState([]);
+  const [ventaReal, setVentaReal] = useState([]);
   const [decisiones, setDecisiones] = useState([]);
   const [historico, setHistorico] = useState([]);
   const [message, setMessage] = useState("");
@@ -49,11 +52,12 @@ export default function SopModule({ currentUser }) {
 
   async function loadAll() {
     setLoading(true);
-    const [productosData, controlData, parametrosData, planData, decisionesData, historicoData] = await Promise.all([
+    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, historicoData] = await Promise.all([
       getProductos(),
       getControl(),
       getParametros(),
       getPlanVenta(),
+      getVentaReal(),
       getDecisiones(),
       getHistorico(),
     ]);
@@ -61,6 +65,7 @@ export default function SopModule({ currentUser }) {
     setControl(controlData);
     setParametros(parametrosData);
     setPlanVenta(planData);
+    setVentaReal(ventaRealData);
     setDecisiones(decisionesData);
     setHistorico(historicoData);
     setLoading(false);
@@ -109,6 +114,19 @@ export default function SopModule({ currentUser }) {
       const filtered = current.filter(
         (row) => !(row.producto_id === productoId && row.escenario === escenario && row.anio === anio && row.mes === mes)
       );
+      return [...filtered, result.data];
+    });
+  }
+
+  async function handleSaveVentaReal(anio, mes, monto) {
+    const result = await upsertVentaReal(anio, mes, monto, currentUser);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar la venta real.");
+      return;
+    }
+    setVentaReal((current) => {
+      const filtered = current.filter((row) => !(row.anio === anio && row.mes === mes));
       return [...filtered, result.data];
     });
   }
@@ -186,7 +204,17 @@ export default function SopModule({ currentUser }) {
           <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">Cargando S&amp;OP...</div>
         ) : (
           <>
-            {activeTab === "dashboard" && <DashboardTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
+            {activeTab === "dashboard" && (
+              <DashboardTab
+                productos={productos}
+                planVenta={planVenta}
+                control={control}
+                parametros={parametros}
+                ventaReal={ventaReal}
+                canEdit={canEdit}
+                onSaveVentaReal={handleSaveVentaReal}
+              />
+            )}
             {activeTab === "plan-venta" && (
               <PlanVentaTab productos={productos} planVenta={planVenta} control={control} canEdit={canEdit} onSave={handleSavePlanVenta} currentUser={currentUser} />
             )}
