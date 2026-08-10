@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { buildHorizonte, formatMoney, formatNumber, LINEAS } from "./sopHelpers";
+import { buildHorizonte, formatMoney, formatNumber, LINEAS, MES_NOMBRE } from "./sopHelpers";
 
 // Captura de venta real (solo el importe total del mes, sin desglose por
 // SKU) — clic para editar, igual que las celdas de Plan de venta.
@@ -64,7 +64,7 @@ function KpiCard({ label, value, sub, tone = "slate" }) {
   );
 }
 
-export default function DashboardTab({ productos, planVenta, control, parametros, ventaReal = [], canEdit = false, onSaveVentaReal }) {
+export default function DashboardTab({ productos, planVenta, control, parametros, ventaReal = [], historico = [], canEdit = false, onSaveVentaReal }) {
   const horizonte = useMemo(() => buildHorizonte(control?.mes_activo, control?.horizonte_meses || 6), [control]);
   const escenarioActivo = parametros?.escenario_venta || "Base";
 
@@ -115,15 +115,40 @@ export default function DashboardTab({ productos, planVenta, control, parametros
   const utilidadOperativa = margenBrutoMonto - gastosFijosTotal;
   const utilidadOperativaPct = activo.monto > 0 ? utilidadOperativa / activo.monto : 0;
 
-  const chartData = horizonte.map((m, i) => ({
-    mes: m.label,
-    Plan: activo.porMes[i]?.monto || 0,
-    Real: ventaRealPorMes.get(`${m.anio}_${m.mes}`) || 0,
-  }));
+  // Meses ya cerrados (fuera del horizonte rodante vigente) — se toman de
+  // Histórico S&OP para que la gráfica muestre la tendencia completa, no
+  // solo los 6 meses que caben en el horizonte activo.
+  const historicoChartData = useMemo(() => {
+    const horizonteKeys = new Set(horizonte.map((m) => `${m.anio}-${m.mes}`));
+    return historico
+      .filter((h) => h.mes && !horizonteKeys.has(`${Number(h.mes.slice(0, 4))}-${Number(h.mes.slice(5, 7))}`))
+      .map((h) => {
+        const anio = Number(h.mes.slice(0, 4));
+        const mes = Number(h.mes.slice(5, 7));
+        return {
+          mes: `${MES_NOMBRE[mes]}-${String(anio).slice(2)}`,
+          Plan: Number(h.venta_planeada || 0),
+          Real: Number(h.venta_real || 0),
+        };
+      });
+  }, [historico, horizonte]);
+
+  const chartData = [
+    ...historicoChartData,
+    ...horizonte.map((m, i) => ({
+      mes: m.label,
+      Plan: activo.porMes[i]?.monto || 0,
+      Real: ventaRealPorMes.get(`${m.anio}_${m.mes}`) || 0,
+    })),
+  ];
 
   const ventaRealTotal = horizonte.reduce((sum, m) => sum + (ventaRealPorMes.get(`${m.anio}_${m.mes}`) || 0), 0);
   const mesesConReal = horizonte.filter((m) => ventaRealPorMes.has(`${m.anio}_${m.mes}`)).length;
-  const gapPlanVsReal = ventaRealTotal - chartData.reduce((sum, d, i) => (ventaRealPorMes.has(`${horizonte[i].anio}_${horizonte[i].mes}`) ? sum + d.Plan : sum), 0);
+  const planParaMesesConReal = horizonte.reduce(
+    (sum, m, i) => (ventaRealPorMes.has(`${m.anio}_${m.mes}`) ? sum + (activo.porMes[i]?.monto || 0) : sum),
+    0
+  );
+  const gapPlanVsReal = ventaRealTotal - planParaMesesConReal;
 
   return (
     <div className="space-y-3 p-3">
@@ -153,6 +178,11 @@ export default function DashboardTab({ productos, planVenta, control, parametros
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Venta mensual — Plan ({escenarioActivo}) vs Real</p>
           <p className="text-[9px] font-bold text-slate-400">Gap Objetivo vs Base (referencia): {formatMoney(objetivo.monto - base.monto)}</p>
         </div>
+        {historicoChartData.length > 0 && (
+          <p className="mt-0.5 text-[9px] font-bold normal-case text-slate-400">
+            Incluye {historicoChartData.length} mes(es) cerrado(s) de Histórico S&amp;OP antes del horizonte vigente.
+          </p>
+        )}
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e1e0d9" vertical={false} />

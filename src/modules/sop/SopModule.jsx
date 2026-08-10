@@ -354,6 +354,7 @@ export default function SopModule({ currentUser }) {
                 control={control}
                 parametros={parametros}
                 ventaReal={ventaReal}
+                historico={historico}
                 canEdit={canEdit}
                 onSaveVentaReal={handleSaveVentaReal}
               />
