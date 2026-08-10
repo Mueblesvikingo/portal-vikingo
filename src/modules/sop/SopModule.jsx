@@ -1,16 +1,35 @@
 import { useEffect, useState } from "react";
 import { canViewModule } from "../../services/permissionsService";
-import { getProductos, getControl, updateControl, getParametros, updateParametros, getPlanVenta, upsertPlanVenta } from "../../services/sopService";
+import {
+  getProductos,
+  getControl,
+  updateControl,
+  getParametros,
+  updateParametros,
+  getPlanVenta,
+  upsertPlanVenta,
+  getDecisiones,
+  createDecision,
+  deleteDecision,
+  getHistorico,
+  closeCurrentMonth,
+} from "../../services/sopService";
 import ControlTab from "./ControlTab";
 import ParametrosTab from "./ParametrosTab";
 import PlanVentaTab from "./PlanVentaTab";
 import OperacionTab from "./OperacionTab";
+import FinancieroTab from "./FinancieroTab";
+import DecisionesTab from "./DecisionesTab";
+import HistoricoTab from "./HistoricoTab";
 import DashboardTab from "./DashboardTab";
 
 const TABS = [
   { key: "dashboard", label: "Dashboard" },
   { key: "plan-venta", label: "Plan de venta" },
   { key: "operacion", label: "Plan de operación" },
+  { key: "financiero", label: "Plan financiero" },
+  { key: "decisiones", label: "Decisiones S&OP" },
+  { key: "historico", label: "Histórico S&OP" },
   { key: "control", label: "Control S&OP" },
   { key: "parametros", label: "Parámetros" },
 ];
@@ -22,22 +41,28 @@ export default function SopModule({ currentUser }) {
   const [control, setControl] = useState(null);
   const [parametros, setParametros] = useState(null);
   const [planVenta, setPlanVenta] = useState([]);
+  const [decisiones, setDecisiones] = useState([]);
+  const [historico, setHistorico] = useState([]);
   const [message, setMessage] = useState("");
 
   const canEdit = canViewModule(currentUser, "sop");
 
   async function loadAll() {
     setLoading(true);
-    const [productosData, controlData, parametrosData, planData] = await Promise.all([
+    const [productosData, controlData, parametrosData, planData, decisionesData, historicoData] = await Promise.all([
       getProductos(),
       getControl(),
       getParametros(),
       getPlanVenta(),
+      getDecisiones(),
+      getHistorico(),
     ]);
     setProductos(productosData);
     setControl(controlData);
     setParametros(parametrosData);
     setPlanVenta(planData);
+    setDecisiones(decisionesData);
+    setHistorico(historicoData);
     setLoading(false);
   }
 
@@ -88,6 +113,44 @@ export default function SopModule({ currentUser }) {
     });
   }
 
+  async function handleCreateDecision(payload, actor) {
+    const result = await createDecision(payload, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar la decisión.");
+      return false;
+    }
+    setDecisiones((current) => [result.data, ...current]);
+    setMessage("Decisión registrada.");
+    return true;
+  }
+
+  async function handleDeleteDecision(id) {
+    if (!window.confirm("¿Eliminar esta decisión?")) return;
+    const result = await deleteDecision(id);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible eliminar la decisión.");
+      return;
+    }
+    setDecisiones((current) => current.filter((d) => d.id !== id));
+    setMessage("Decisión eliminada.");
+  }
+
+  async function handleCloseMonth({ control: controlArg, resumenMes, ventaReal, actor }) {
+    const result = await closeCurrentMonth({ control: controlArg, resumenMes, ventaReal, actor });
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible cerrar el mes.");
+      return false;
+    }
+    setControl(result.data);
+    const historicoData = await getHistorico();
+    setHistorico(historicoData);
+    setMessage(`Mes ${resumenMes.label} cerrado. El horizonte avanzó al siguiente mes.`);
+    return true;
+  }
+
   return (
     <div className="p-3">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -128,6 +191,22 @@ export default function SopModule({ currentUser }) {
               <PlanVentaTab productos={productos} planVenta={planVenta} control={control} canEdit={canEdit} onSave={handleSavePlanVenta} currentUser={currentUser} />
             )}
             {activeTab === "operacion" && <OperacionTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
+            {activeTab === "financiero" && <FinancieroTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
+            {activeTab === "decisiones" && (
+              <DecisionesTab decisiones={decisiones} canEdit={canEdit} onCreate={handleCreateDecision} onDelete={handleDeleteDecision} currentUser={currentUser} />
+            )}
+            {activeTab === "historico" && (
+              <HistoricoTab
+                historico={historico}
+                productos={productos}
+                planVenta={planVenta}
+                control={control}
+                parametros={parametros}
+                canEdit={canEdit}
+                onCloseMonth={handleCloseMonth}
+                currentUser={currentUser}
+              />
+            )}
             {activeTab === "control" && <ControlTab control={control} canEdit={canEdit} onSave={handleSaveControl} />}
             {activeTab === "parametros" && <ParametrosTab parametros={parametros} canEdit={canEdit} onSave={handleSaveParametros} />}
           </>
