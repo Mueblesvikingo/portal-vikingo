@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { canViewModule, canEditSopOperacionParams, canEditSopFinancieroParams, canEditSopPlanVenta, canCreateSopSolicitud } from "../../services/permissionsService";
 import {
   getProductos,
+  createProducto,
+  setProductoActivo,
   updateProductoPrecio,
   getControl,
   updateControl,
@@ -140,6 +142,29 @@ export default function SopModule({ currentUser }) {
     }
     setProductos((current) => current.map((p) => (p.id === productoId ? result.data : p)));
     setMessage("Precio actualizado.");
+  }
+
+  async function handleCreateProducto(payload, actor) {
+    const result = await createProducto(payload, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible agregar el producto.");
+      return false;
+    }
+    setProductos((current) => [...current, result.data]);
+    setMessage("Producto agregado al Plan de venta.");
+    return true;
+  }
+
+  async function handleDeactivateProducto(productoId, actor) {
+    const result = await setProductoActivo(productoId, false, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible quitar el producto.");
+      return;
+    }
+    setProductos((current) => current.filter((p) => p.id !== productoId));
+    setMessage("Producto quitado del Plan de venta.");
   }
 
   async function handleSaveVentaReal(anio, mes, monto) {
@@ -334,7 +359,17 @@ export default function SopModule({ currentUser }) {
               />
             )}
             {activeTab === "plan-venta" && (
-              <PlanVentaTab productos={productos} planVenta={planVenta} control={control} canEdit={canEditPlanVenta} onSave={handleSavePlanVenta} onSavePrecio={handleSavePrecio} currentUser={currentUser} />
+              <PlanVentaTab
+                productos={productos}
+                planVenta={planVenta}
+                control={control}
+                canEdit={canEditPlanVenta}
+                onSave={handleSavePlanVenta}
+                onSavePrecio={handleSavePrecio}
+                onCreateProducto={handleCreateProducto}
+                onDeactivateProducto={handleDeactivateProducto}
+                currentUser={currentUser}
+              />
             )}
             {activeTab === "operacion" && <OperacionTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
             {activeTab === "financiero" && <FinancieroTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}

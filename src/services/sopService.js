@@ -19,6 +19,55 @@ export async function getProductos() {
   }
 }
 
+export async function createProducto(payload, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_productos")
+      .insert({
+        codigo: payload.codigo,
+        nombre: payload.nombre,
+        linea: payload.linea,
+        precio: payload.precio || 0,
+        orden: payload.orden || 0,
+        activo: true,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+// "Quitar" un producto no lo borra (evita perder su historial en
+// sop_plan_venta/sop_historico) — solo lo desactiva, igual que el patron
+// activo/inactivo del resto del catalogo organizacional.
+export async function setProductoActivo(id, activo, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_productos")
+      .update({
+        activo,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
 export async function updateProductoPrecio(id, precio, actor) {
   try {
     const { data, error } = await supabase
@@ -98,10 +147,14 @@ export async function getParametros() {
 
 export async function updateParametros(id, payload, actor) {
   try {
+    // El draft del formulario viene de {...parametros}, que incluye "id" —
+    // Postgres rechaza el UPDATE si se intenta reescribir una columna
+    // identity (aunque sea al mismo valor), por eso se excluye aqui.
+    const { id: _omit, ...rest } = payload;
     const { data, error } = await supabase
       .from("sop_parametros")
       .update({
-        ...payload,
+        ...rest,
         updated_at: new Date().toISOString(),
         updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
         updated_by_nombre: actor?.nombre || actor?.usuario || null,

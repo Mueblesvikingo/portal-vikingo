@@ -46,8 +46,63 @@ function EditableCell({ value, canEdit, onSave, format = formatNumber, step = "1
   );
 }
 
-export default function PlanVentaTab({ productos, planVenta, control, canEdit, onSave, onSavePrecio, currentUser }) {
+function AgregarProductoForm({ onCreate, onClose, currentUser, siguienteOrden }) {
+  const [codigo, setCodigo] = useState("");
+  const [nombre, setNombre] = useState("");
+  const [linea, setLinea] = useState(LINEAS[0]);
+  const [precio, setPrecio] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleCreate() {
+    if (!codigo.trim() || !nombre.trim()) {
+      setError("Captura al menos código y nombre.");
+      return;
+    }
+    setError("");
+    setSaving(true);
+    const ok = await onCreate(
+      { codigo: codigo.trim(), nombre: nombre.trim(), linea, precio: Number(precio) || 0, orden: siguienteOrden },
+      currentUser
+    );
+    setSaving(false);
+    if (ok) onClose();
+  }
+
+  return (
+    <div className="rounded-2xl border border-sky-200 bg-sky-50/60 p-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Código
+          <input value={codigo} onChange={(e) => setCodigo(e.target.value)} className="mt-1 h-9 w-24 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Nombre
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1 h-9 w-64 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Línea
+          <select value={linea} onChange={(e) => setLinea(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            {LINEAS.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Precio
+          <input type="number" min="0" value={precio} onChange={(e) => setPrecio(e.target.value)} className="mt-1 h-9 w-28 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <button type="button" disabled={saving} onClick={handleCreate} className="h-9 rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+          {saving ? "Guardando..." : "Agregar"}
+        </button>
+        <button type="button" onClick={onClose} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+      </div>
+      {error && <p className="mt-1.5 text-[10px] font-bold text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+export default function PlanVentaTab({ productos, planVenta, control, canEdit, onSave, onSavePrecio, onCreateProducto, onDeactivateProducto, currentUser }) {
   const [escenario, setEscenario] = useState("Base");
+  const [showAgregar, setShowAgregar] = useState(false);
 
   const horizonte = useMemo(() => buildHorizonte(control?.mes_activo, control?.horizonte_meses || 6), [control]);
 
@@ -86,21 +141,32 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
   return (
     <div className="space-y-3 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
-          <button
-            type="button"
-            onClick={() => setEscenario("Base")}
-            className={`rounded-lg px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${escenario === "Base" ? "bg-white shadow-sm text-slate-900" : "text-slate-400"}`}
-          >
-            Escenario Base
-          </button>
-          <button
-            type="button"
-            onClick={() => setEscenario("Objetivo")}
-            className={`rounded-lg px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${escenario === "Objetivo" ? "bg-white shadow-sm text-slate-900" : "text-slate-400"}`}
-          >
-            Escenario Objetivo
-          </button>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => setEscenario("Base")}
+              className={`rounded-lg px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${escenario === "Base" ? "bg-white shadow-sm text-slate-900" : "text-slate-400"}`}
+            >
+              Escenario Base
+            </button>
+            <button
+              type="button"
+              onClick={() => setEscenario("Objetivo")}
+              className={`rounded-lg px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${escenario === "Objetivo" ? "bg-white shadow-sm text-slate-900" : "text-slate-400"}`}
+            >
+              Escenario Objetivo
+            </button>
+          </div>
+          {canEdit && !showAgregar && (
+            <button
+              type="button"
+              onClick={() => setShowAgregar(true)}
+              className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-sky-700 hover:bg-sky-100"
+            >
+              + Agregar producto
+            </button>
+          )}
         </div>
         <div className="flex gap-4 text-right">
           <div>
@@ -113,6 +179,15 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
           </div>
         </div>
       </div>
+
+      {canEdit && showAgregar && (
+        <AgregarProductoForm
+          onCreate={onCreateProducto}
+          onClose={() => setShowAgregar(false)}
+          currentUser={currentUser}
+          siguienteOrden={Math.max(0, ...productos.map((p) => p.orden || 0)) + 1}
+        />
+      )}
 
       <div className="max-h-[75vh] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full min-w-[900px] border-collapse text-[10px]">
@@ -137,6 +212,20 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
                     <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/70">
                       <td className="sticky left-0 z-10 bg-white px-3 py-1 font-bold text-slate-700">
                         <span className="text-[9px] text-slate-300">{p.codigo}</span> {p.nombre}
+                        {canEdit && (
+                          <button
+                            type="button"
+                            title="Quitar producto del catálogo"
+                            onClick={() => {
+                              if (window.confirm(`¿Quitar "${p.nombre}" del Plan de venta? No se borra su historial, solo deja de mostrarse.`)) {
+                                onDeactivateProducto(p.id, currentUser);
+                              }
+                            }}
+                            className="ml-1.5 text-[9px] font-black text-red-400 hover:text-red-600"
+                          >
+                            ×
+                          </button>
+                        )}
                       </td>
                       <td className="px-1 py-1">
                         <EditableCell

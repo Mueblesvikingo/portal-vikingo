@@ -84,6 +84,22 @@ export default function ParametrosTab({ parametros, canEditOperacion, canEditFin
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Precio promedio de referencia (por línea)</p>
+        <p className="mt-1 text-[9px] font-bold normal-case tracking-normal text-slate-400">Solo referencia rápida para estimaciones — no reemplaza el precio por SKU que se captura en Plan de venta. Solo Finanzas (Samantha) puede editar esta sección.</p>
+        <div className="mt-2 grid gap-3 md:grid-cols-3">
+          <Field label="Precio promedio — Bases">
+            <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_bases ?? ""} onChange={(e) => set("precio_promedio_bases", e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
+          </Field>
+          <Field label="Precio promedio — Recámaras">
+            <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_recamaras ?? ""} onChange={(e) => set("precio_promedio_recamaras", e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
+          </Field>
+          <Field label="Precio promedio — Salas">
+            <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_salas ?? ""} onChange={(e) => set("precio_promedio_salas", e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
+          </Field>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Márgenes y finanzas</p>
         <p className="mt-1 text-[9px] font-bold normal-case tracking-normal text-slate-400">Alimenta Plan financiero — solo Finanzas (Samantha) puede editar esta sección.</p>
         <div className="mt-2 grid gap-3 md:grid-cols-3">
