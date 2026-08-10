@@ -329,6 +329,13 @@ export async function getHistorico() {
   }
 }
 
+// Umbral de efectividad de forecast bajo el cual el cierre de mes genera
+// automaticamente una decision pendiente de revision — sin esto, un mes
+// que no cumple el plan no obliga a nadie a revisarlo. Mismo corte que el
+// semaforo de Historico S&OP (rojo <80%).
+const EFECTIVIDAD_MINIMA = 0.8;
+const formatMoneyPlain = (v) => `$${Math.round(Number(v || 0)).toLocaleString("es-MX")}`;
+
 // Cierra el mes activo: archiva su resumen en el histórico (append-only) y
 // avanza el control al mes siguiente — equivalente a la macro CerrarMesSOP
 // del Excel, sin el truco de ocultar columnas (aquí el horizonte es solo
@@ -336,6 +343,7 @@ export async function getHistorico() {
 export async function closeCurrentMonth({ control, resumenMes, ventaReal, actor }) {
   try {
     const diferencia = Number(ventaReal || 0) - Number(resumenMes.ventaPlaneada || 0);
+    const efectividad = Number(resumenMes.ventaPlaneada) > 0 ? Number(ventaReal || 0) / Number(resumenMes.ventaPlaneada) : null;
 
     const { error: histError } = await supabase.from("sop_historico").insert({
       mes: resumenMes.mes,
@@ -352,6 +360,17 @@ export async function closeCurrentMonth({ control, resumenMes, ventaReal, actor 
     });
 
     if (histError) return { ok: false, error: histError };
+
+    if (efectividad !== null && efectividad < EFECTIVIDAD_MINIMA) {
+      const { error: decisionError } = await supabase.from("sop_decisiones").insert({
+        mes_reunion: resumenMes.mes,
+        decision: `Baja efectividad de forecast en ${resumenMes.label}: ${(efectividad * 100).toFixed(1)}% (real ${formatMoneyPlain(ventaReal)} vs plan ${formatMoneyPlain(resumenMes.ventaPlaneada)}) — revisar causa raíz.`,
+        responsable: "Por asignar",
+        created_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        created_by_nombre: actor?.nombre || actor?.usuario || null,
+      });
+      if (decisionError) console.error("No se pudo crear la decisión automática de baja efectividad:", decisionError);
+    }
 
     const nextMonth = new Date(`${resumenMes.mes}T00:00:00`);
     nextMonth.setMonth(nextMonth.getMonth() + 1);
