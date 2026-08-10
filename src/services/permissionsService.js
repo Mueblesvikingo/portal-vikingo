@@ -291,29 +291,33 @@ export function canEditStrategicKpis(user) {
 // Parámetros S&OP, sección "Capacidad y mezcla" / "Factores de consumo de
 // tapicería" (lo que alimenta Plan de operación): decisión explícita de
 // restringirlo a Director General (Alejandro) y Gerente de Operaciones
-// (Hugo) — sin excepción por rol, aunque el resto del equipo estratégico sí
-// puede ver el módulo S&OP.
+// (Hugo), más el equipo estratégico (PM, Coordinador SIG, Analista de
+// Procesos, Director General).
 const SOP_OPERACION_EDITOR_PERSONA_IDS = [14, 13];
 
 export function canEditSopOperacionParams(user) {
+  if (isStrategicTeamMember(user)) return true;
   return SOP_OPERACION_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
 }
 
 // Parámetros S&OP, sección "Márgenes y finanzas" (lo que alimenta Plan
-// financiero): decisión explícita de restringirlo solo a Samantha (Finanzas).
+// financiero): Samantha (Finanzas) más el equipo estratégico.
 const SOP_FINANCIERO_EDITOR_PERSONA_IDS = [7];
 
 export function canEditSopFinancieroParams(user) {
+  if (isStrategicTeamMember(user)) return true;
   return SOP_FINANCIERO_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
 }
 
 // Plan de venta S&OP: solo Director General (Alejandro) y Gerente Comercial
-// (Brisa) capturan piezas y precio — el resto del equipo con acceso a S&OP
-// (Hugo, Beatriz, Kevin, Samantha, equipo estratégico) ve el módulo pero no
-// edita esta pestaña en particular.
+// (Brisa) capturan piezas y precio, más el equipo estratégico (PM,
+// Coordinador SIG, Analista de Procesos, Director General) — el resto del
+// equipo con acceso a S&OP (Hugo, Beatriz, Kevin, Samantha) ve el módulo
+// pero no edita esta pestaña en particular.
 const SOP_PLAN_VENTA_EDITOR_PERSONA_IDS = [14, 26];
 
 export function canEditSopPlanVenta(user) {
+  if (isStrategicTeamMember(user)) return true;
   return SOP_PLAN_VENTA_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
 }
 
