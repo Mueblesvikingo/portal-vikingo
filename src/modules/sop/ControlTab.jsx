@@ -8,21 +8,30 @@ const ESTADO_STYLE = {
 };
 
 export default function ControlTab({ control, canEdit, onSave }) {
+  // El <input type="month"> solo acepta/devuelve "AAAA-MM", pero la columna
+  // en Supabase es tipo date ("AAAA-MM-DD") — hay que recortar al mostrar y
+  // completar con "-01" al guardar, o el guardado falla (fecha inválida) y
+  // el selector se ve en blanco al cargar.
   const [draft, setDraft] = useState(() => ({
-    mes_activo: control?.mes_activo || "",
+    mes_activo: control?.mes_activo?.slice(0, 7) || "",
     horizonte_meses: control?.horizonte_meses || 6,
     estado: control?.estado || "Abierto",
   }));
   const [saving, setSaving] = useState(false);
+  const [consultaMes, setConsultaMes] = useState("");
 
   if (!control) return <div className="p-6 text-center text-[11px] font-bold text-slate-300">Cargando control S&OP...</div>;
 
   const horizonte = buildHorizonte(draft.mes_activo, draft.horizonte_meses);
-  const dirty = draft.mes_activo !== control.mes_activo || draft.horizonte_meses !== control.horizonte_meses || draft.estado !== control.estado;
+  const horizonteConsulta = buildHorizonte(consultaMes, draft.horizonte_meses);
+  const dirty =
+    draft.mes_activo !== control.mes_activo?.slice(0, 7) ||
+    draft.horizonte_meses !== control.horizonte_meses ||
+    draft.estado !== control.estado;
 
   async function handleSave() {
     setSaving(true);
-    await onSave(control.id, draft);
+    await onSave(control.id, { ...draft, mes_activo: draft.mes_activo ? `${draft.mes_activo}-01` : null });
     setSaving(false);
   }
 
@@ -96,6 +105,36 @@ export default function ControlTab({ control, canEdit, onSave }) {
             <span key={i} className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[10px] font-black text-sky-700">{m.label}</span>
           ))}
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Consultar otro horizonte</p>
+        <p className="mt-1 text-[9px] font-bold normal-case tracking-normal text-slate-400">
+          Solo para ver qué meses caerían en el horizonte a partir de otro mes — no cambia el ciclo real ni requiere guardar.
+        </p>
+        <div className="mt-2 flex flex-wrap items-end gap-3">
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Mes de inicio a consultar
+            <input
+              type="month"
+              value={consultaMes}
+              onChange={(e) => setConsultaMes(e.target.value)}
+              className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+            />
+          </label>
+          {consultaMes && (
+            <button type="button" onClick={() => setConsultaMes("")} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">
+              Limpiar
+            </button>
+          )}
+        </div>
+        {consultaMes && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {horizonteConsulta.map((m, i) => (
+              <span key={i} className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[10px] font-black text-violet-700">{m.label}</span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
