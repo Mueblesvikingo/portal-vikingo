@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
 import { buildHorizonte, formatMoney, formatNumber, LINEAS } from "./sopHelpers";
 
+const LINEA_STYLE = {
+  Bases: { badge: "border-sky-200 bg-sky-50 text-sky-700", row: "bg-sky-50/50", total: "bg-sky-50 text-sky-700", dot: "bg-sky-400" },
+  Recámaras: { badge: "border-violet-200 bg-violet-50 text-violet-700", row: "bg-violet-50/50", total: "bg-violet-50 text-violet-700", dot: "bg-violet-400" },
+  Salas: { badge: "border-amber-200 bg-amber-50 text-amber-700", row: "bg-amber-50/50", total: "bg-amber-50 text-amber-700", dot: "bg-amber-400" },
+};
+
 function EditableCell({ value, canEdit, onSave, format = formatNumber, step = "1", width = "w-16" }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value ?? 0));
@@ -100,8 +106,14 @@ function AgregarProductoForm({ onCreate, onClose, currentUser, siguienteOrden })
   );
 }
 
+// Escenario unico (Base) — se dejo de mostrar el toggle Base/Objetivo en
+// esta pestana, pero la columna "escenario" sigue existiendo en
+// sop_plan_venta (compartida con Dashboard/Operacion/Financiero), asi que
+// se sigue filtrando/guardando con este valor fijo.
+const ESCENARIO_UNICO = "Base";
+
 export default function PlanVentaTab({ productos, planVenta, control, canEdit, onSave, onSavePrecio, onCreateProducto, onDeactivateProducto, currentUser }) {
-  const [escenario, setEscenario] = useState("Base");
+  const escenario = ESCENARIO_UNICO;
   const [showAgregar, setShowAgregar] = useState(false);
 
   const horizonte = useMemo(() => buildHorizonte(control?.mes_activo, control?.horizonte_meses || 6), [control]);
@@ -142,22 +154,6 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
     <div className="space-y-3 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
-            <button
-              type="button"
-              onClick={() => setEscenario("Base")}
-              className={`rounded-lg px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${escenario === "Base" ? "bg-white shadow-sm text-slate-900" : "text-slate-400"}`}
-            >
-              Escenario Base
-            </button>
-            <button
-              type="button"
-              onClick={() => setEscenario("Objetivo")}
-              className={`rounded-lg px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${escenario === "Objetivo" ? "bg-white shadow-sm text-slate-900" : "text-slate-400"}`}
-            >
-              Escenario Objetivo
-            </button>
-          </div>
           {canEdit && !showAgregar && (
             <button
               type="button"
@@ -168,14 +164,14 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
             </button>
           )}
         </div>
-        <div className="flex gap-4 text-right">
-          <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total piezas</p>
-            <p className="text-sm font-black text-slate-900">{formatNumber(granTotalPiezas)}</p>
+        <div className="flex gap-2">
+          <div className="rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-right">
+            <p className="text-[9px] font-black uppercase tracking-widest text-sky-500">Total piezas</p>
+            <p className="text-sm font-black text-sky-900">{formatNumber(granTotalPiezas)}</p>
           </div>
-          <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total ventas</p>
-            <p className="text-sm font-black text-slate-900">{formatMoney(granTotalMonto)}</p>
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-2 text-right">
+            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Total ventas</p>
+            <p className="text-sm font-black text-emerald-900">{formatMoney(granTotalMonto)}</p>
           </div>
         </div>
       </div>
@@ -203,13 +199,19 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
           <tbody>
             {grouped.map((group) => {
               const lineaTotales = horizonte.map((m) => group.items.reduce((sum, p) => sum + getPiezas(p.id, m.anio, m.mes), 0));
+              const style = LINEA_STYLE[group.linea] || LINEA_STYLE.Bases;
               return (
                 <>
                   <tr key={`h-${group.linea}`}>
-                    <td colSpan={horizonte.length + 2} className="bg-slate-50 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-500">{group.linea}</td>
+                    <td colSpan={horizonte.length + 2} className={`px-3 py-1.5 ${style.row}`}>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${style.badge}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
+                        {group.linea}
+                      </span>
+                    </td>
                   </tr>
                   {group.items.map((p) => (
-                    <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/70">
+                    <tr key={p.id} className={`border-b border-slate-50 hover:bg-slate-50/70`}>
                       <td className="sticky left-0 z-10 bg-white px-3 py-1 font-bold text-slate-700">
                         <span className="text-[9px] text-slate-300">{p.codigo}</span> {p.nombre}
                         {canEdit && (
@@ -248,11 +250,11 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
                       ))}
                     </tr>
                   ))}
-                  <tr key={`t-${group.linea}`} className="border-b border-slate-100 bg-slate-50/60">
-                    <td className="sticky left-0 z-10 bg-slate-50/60 px-3 py-1 text-[9px] font-black uppercase text-slate-500">Total {group.linea}</td>
+                  <tr key={`t-${group.linea}`} className={`border-b border-slate-100 ${style.total}`}>
+                    <td className={`sticky left-0 z-10 px-3 py-1 text-[9px] font-black uppercase ${style.total}`}>Total {group.linea}</td>
                     <td />
                     {lineaTotales.map((t, i) => (
-                      <td key={i} className="px-2 py-1 text-right text-[9px] font-black text-slate-600">{formatNumber(t)}</td>
+                      <td key={i} className="px-2 py-1 text-right text-[9px] font-black">{formatNumber(t)}</td>
                     ))}
                   </tr>
                 </>
