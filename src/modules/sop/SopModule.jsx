@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { canViewModule, canEditSopOperacionParams, canEditSopFinancieroParams } from "../../services/permissionsService";
+import { canViewModule, canEditSopOperacionParams, canEditSopFinancieroParams, canEditSopPlanVenta, canCreateSopSolicitud } from "../../services/permissionsService";
 import {
   getProductos,
   updateProductoPrecio,
@@ -28,6 +28,7 @@ import FinancieroTab from "./FinancieroTab";
 import DecisionesTab from "./DecisionesTab";
 import HistoricoTab from "./HistoricoTab";
 import DashboardTab from "./DashboardTab";
+import SolicitudModal from "./SolicitudModal";
 
 const TABS = [
   { key: "control", label: "Control S&OP" },
@@ -56,6 +57,9 @@ export default function SopModule({ currentUser }) {
   const canEdit = canViewModule(currentUser, "sop");
   const canEditOperacionParams = canEditSopOperacionParams(currentUser);
   const canEditFinancieroParams = canEditSopFinancieroParams(currentUser);
+  const canEditPlanVenta = canEditSopPlanVenta(currentUser);
+  const canCreateSolicitud = canCreateSopSolicitud(currentUser);
+  const [showSolicitudModal, setShowSolicitudModal] = useState(false);
 
   async function loadAll() {
     setLoading(true);
@@ -185,7 +189,7 @@ export default function SopModule({ currentUser }) {
         owner: decision.responsable || "",
         risk: "Moderado",
         status: "Detectada",
-        executionType: "",
+        executionType: null,
         dueDate: decision.fecha || null,
         consequence: "",
         recommendation: decision.opcion_elegida || "",
@@ -197,6 +201,32 @@ export default function SopModule({ currentUser }) {
     } catch (err) {
       console.error(err);
       setMessage("No fue posible enviar la decisión al Centro de Decisiones.");
+      return false;
+    }
+  }
+
+  // Botón "+ Solicitud" (Hugo, Samantha, Brisa): manda directo a la Bandeja
+  // del Centro de Decisiones (status "Solicitud"), sin necesitar acceso al
+  // módulo completo — el director la ve ahí para aceptar/dejar en stand by.
+  async function handleCreateSolicitud(payload) {
+    try {
+      await createStrategicDecision({
+        title: payload.titulo,
+        owner: currentUser?.nombre || currentUser?.usuario || "",
+        risk: payload.riesgo || "Moderado",
+        status: "Solicitud",
+        executionType: null,
+        dueDate: payload.fecha || null,
+        consequence: "",
+        recommendation: payload.descripcion || "",
+        wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
+        process: "S&OP",
+      });
+      setMessage("Solicitud enviada a la Bandeja del Centro de Decisiones.");
+      return true;
+    } catch (err) {
+      console.error(err);
+      setMessage("No fue posible enviar la solicitud.");
       return false;
     }
   }
@@ -260,6 +290,15 @@ export default function SopModule({ currentUser }) {
             >
               ?
             </span>
+            {canCreateSolicitud && (
+              <button
+                type="button"
+                onClick={() => setShowSolicitudModal(true)}
+                className="ml-2 rounded-lg bg-white/10 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/20"
+              >
+                + Solicitud
+              </button>
+            )}
           </div>
           <div className="flex gap-1 rounded-xl bg-white/10 p-1">
             {TABS.map((tab) => (
@@ -295,7 +334,7 @@ export default function SopModule({ currentUser }) {
               />
             )}
             {activeTab === "plan-venta" && (
-              <PlanVentaTab productos={productos} planVenta={planVenta} control={control} canEdit={canEdit} onSave={handleSavePlanVenta} onSavePrecio={handleSavePrecio} currentUser={currentUser} />
+              <PlanVentaTab productos={productos} planVenta={planVenta} control={control} canEdit={canEditPlanVenta} onSave={handleSavePlanVenta} onSavePrecio={handleSavePrecio} currentUser={currentUser} />
             )}
             {activeTab === "operacion" && <OperacionTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
             {activeTab === "financiero" && <FinancieroTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
@@ -335,6 +374,10 @@ export default function SopModule({ currentUser }) {
           </>
         )}
       </div>
+
+      {showSolicitudModal && (
+        <SolicitudModal onSubmit={handleCreateSolicitud} onClose={() => setShowSolicitudModal(false)} />
+      )}
     </div>
   );
 }

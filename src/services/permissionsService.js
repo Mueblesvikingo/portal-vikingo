@@ -72,7 +72,7 @@ const STRATEGIC_TEAM_ONLY_MODULES = ["decision-center"];
 // puntual de gerencias que participan en el ciclo (Hugo Terrones, Beatriz
 // Ruiz, Kevyn "Kevin" Hernando, Samantha Huerta), identificadas por
 // persona_id porque no comparten un rol en común — no un default abierto.
-const SOP_SCOPED_PERSONA_IDS = [13, 11, 5, 7];
+const SOP_SCOPED_PERSONA_IDS = [13, 11, 5, 7, 26];
 const MODULES_VISIBLE_FOR_STRATEGIC_TEAM_PLUS_PERSONAS = { sop: SOP_SCOPED_PERSONA_IDS };
 
 let rolePermissionsCache = {};
@@ -305,6 +305,25 @@ const SOP_FINANCIERO_EDITOR_PERSONA_IDS = [7];
 
 export function canEditSopFinancieroParams(user) {
   return SOP_FINANCIERO_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
+}
+
+// Plan de venta S&OP: solo Director General (Alejandro) y Gerente Comercial
+// (Brisa) capturan piezas y precio — el resto del equipo con acceso a S&OP
+// (Hugo, Beatriz, Kevin, Samantha, equipo estratégico) ve el módulo pero no
+// edita esta pestaña en particular.
+const SOP_PLAN_VENTA_EDITOR_PERSONA_IDS = [14, 26];
+
+export function canEditSopPlanVenta(user) {
+  return SOP_PLAN_VENTA_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
+}
+
+// Botón "+ Solicitud" dentro de S&OP: quién puede mandar una solicitud
+// directo a la Bandeja del Centro de Decisiones sin tener acceso al módulo
+// completo de Centro de Decisiones (que sigue siendo solo equipo estratégico).
+const SOP_SOLICITUD_PERSONA_IDS = [13, 7, 26];
+
+export function canCreateSopSolicitud(user) {
+  return SOP_SOLICITUD_PERSONA_IDS.includes(Number(user?.persona_id));
 }
 
 // Centro de Gestión de Acciones: el nivel de la acción determina quién la
