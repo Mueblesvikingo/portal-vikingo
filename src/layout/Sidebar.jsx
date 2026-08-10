@@ -4,6 +4,7 @@ import { canViewModule } from "../services/permissionsService";
 const menuItems = [
   { label: "Inicio Ejecutivo", route: "/", moduleKey: "home" },
   { label: "Despliegue Estratégico", route: "/strategic-deployment", moduleKey: "strategic-deployment" },
+  { label: "S&OP", route: "/sop", moduleKey: "sop" },
   { label: "Desempeño Organizacional", route: "/performance", moduleKey: "performance" },
   { label: "Diseño organizacional", route: "/capacity", moduleKey: "capacity" },
   { label: "Balance de Carga", route: "/workload-balance", moduleKey: "workload-balance" },

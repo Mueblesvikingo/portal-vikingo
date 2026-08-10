@@ -16,6 +16,7 @@ import OrganizationCatalogModule from "../../modules/organization-catalog/Organi
 import ActionsModule from "../../modules/actions/ActionsModule";
 import OrganigramaModule from "../../modules/organigrama/OrganigramaModule";
 import CompetenciaDetailPage from "../../modules/competencias/CompetenciaDetailPage";
+import SopModule from "../../modules/sop/SopModule";
 
 export default function AppRouter({
   currentUser,
@@ -98,6 +99,11 @@ export default function AppRouter({
           <Route
             path="/competencias/:id"
             element={<CompetenciaDetailPage currentUser={currentUser} />}
+          />
+
+          <Route
+            path="/sop"
+            element={<SopModule currentUser={currentUser} />}
           />
 
           <Route
