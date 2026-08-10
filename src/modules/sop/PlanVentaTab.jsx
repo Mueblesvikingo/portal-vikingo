@@ -191,6 +191,7 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
             <tr className="text-left text-[9px] font-black uppercase tracking-widest text-white/60">
               <th className="sticky left-0 top-0 z-30 bg-[#001225] px-3 py-2 text-white">Producto</th>
               <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">Precio</th>
+              <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">% Part.</th>
               {horizonte.map((m) => (
                 <th key={`${m.anio}-${m.mes}`} className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">{m.label}</th>
               ))}
@@ -199,18 +200,23 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
           <tbody>
             {grouped.map((group) => {
               const lineaTotales = horizonte.map((m) => group.items.reduce((sum, p) => sum + getPiezas(p.id, m.anio, m.mes), 0));
+              const lineaPiezasTotal = lineaTotales.reduce((s, t) => s + t, 0);
+              const lineaPct = granTotalPiezas > 0 ? (lineaPiezasTotal / granTotalPiezas) * 100 : 0;
               const style = LINEA_STYLE[group.linea] || LINEA_STYLE.Bases;
               return (
                 <>
                   <tr key={`h-${group.linea}`}>
-                    <td colSpan={horizonte.length + 2} className={`px-3 py-1.5 ${style.row}`}>
+                    <td colSpan={horizonte.length + 3} className={`px-3 py-1.5 ${style.row}`}>
                       <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${style.badge}`}>
                         <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
                         {group.linea}
                       </span>
                     </td>
                   </tr>
-                  {group.items.map((p) => (
+                  {group.items.map((p) => {
+                    const productoPiezasTotal = horizonte.reduce((s, m) => s + getPiezas(p.id, m.anio, m.mes), 0);
+                    const productoPct = granTotalPiezas > 0 ? (productoPiezasTotal / granTotalPiezas) * 100 : 0;
+                    return (
                     <tr key={p.id} className={`border-b border-slate-50 hover:bg-slate-50/70`}>
                       <td className="sticky left-0 z-10 bg-white px-3 py-1 font-bold text-slate-700">
                         <span className="text-[9px] text-slate-300">{p.codigo}</span> {p.nombre}
@@ -239,6 +245,7 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
                           width="w-20"
                         />
                       </td>
+                      <td className="px-2 py-1 text-right text-[9px] font-bold text-slate-400">{productoPct.toFixed(1)}%</td>
                       {horizonte.map((m) => (
                         <td key={`${m.anio}-${m.mes}`} className="px-1 py-1">
                           <EditableCell
@@ -249,10 +256,12 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
                         </td>
                       ))}
                     </tr>
-                  ))}
+                    );
+                  })}
                   <tr key={`t-${group.linea}`} className={`border-b border-slate-100 ${style.total}`}>
                     <td className={`sticky left-0 z-10 px-3 py-1 text-[9px] font-black uppercase ${style.total}`}>Total {group.linea}</td>
                     <td />
+                    <td className="px-2 py-1 text-right text-[9px] font-black">{lineaPct.toFixed(1)}%</td>
                     {lineaTotales.map((t, i) => (
                       <td key={i} className="px-2 py-1 text-right text-[9px] font-black">{formatNumber(t)}</td>
                     ))}
@@ -265,12 +274,14 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
             <tr className="bg-[#001225] text-white">
               <td className="sticky left-0 z-10 bg-[#001225] px-3 py-2 text-[9px] font-black uppercase tracking-widest">Total general (piezas)</td>
               <td />
+              <td className="px-2 py-2 text-right text-[10px] font-black">100.0%</td>
               {totalesPorMes.map((m, i) => (
                 <td key={i} className="px-2 py-2 text-right text-[10px] font-black">{formatNumber(m.piezas)}</td>
               ))}
             </tr>
             <tr className="bg-[#001225]/95 text-white">
               <td className="sticky left-0 z-10 bg-[#001225] px-3 py-2 text-[9px] font-black uppercase tracking-widest">Total general ($)</td>
+              <td />
               <td />
               {totalesPorMes.map((m, i) => (
                 <td key={i} className="px-2 py-2 text-right text-[9px] font-bold text-white/80">{formatMoney(m.monto)}</td>
