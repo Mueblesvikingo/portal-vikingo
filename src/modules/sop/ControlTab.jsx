@@ -29,9 +29,20 @@ export default function ControlTab({ control, canEdit, onSave }) {
     draft.horizonte_meses !== control.horizonte_meses ||
     draft.estado !== control.estado;
 
+  // Solo se mandan los campos que realmente cambiaron en ESTA sesion (no
+  // todo el draft): si esta pestana quedo abierta con datos viejos en cache
+  // y se guarda un cambio que no toca mes_activo, no queremos pisar el mes
+  // activo real con el valor viejo que traia el draft desde que cargo la
+  // pagina. Ya paso varias veces por accidente.
   async function handleSave() {
     setSaving(true);
-    await onSave(control.id, { ...draft, mes_activo: draft.mes_activo ? `${draft.mes_activo}-01` : null });
+    const payload = {};
+    if (draft.mes_activo !== control.mes_activo?.slice(0, 7)) {
+      payload.mes_activo = draft.mes_activo ? `${draft.mes_activo}-01` : null;
+    }
+    if (draft.horizonte_meses !== control.horizonte_meses) payload.horizonte_meses = draft.horizonte_meses;
+    if (draft.estado !== control.estado) payload.estado = draft.estado;
+    await onSave(control.id, payload);
     setSaving(false);
   }
 

@@ -115,15 +115,6 @@ export default function ParametrosTab({ parametros, canEditOperacion, canEditFin
           <Field label="Gastos fijos mensuales">
             <input type="number" disabled={!canEditFinanciero} value={draft.gastos_fijos_mensuales ?? ""} onChange={(e) => set("gastos_fijos_mensuales", Number(e.target.value))} className={inputClass} />
           </Field>
-          <Field label="Liquidez meta (días de cobertura)">
-            <input type="number" disabled={!canEditFinanciero} value={draft.liquidez_meta_dias ?? ""} onChange={(e) => set("liquidez_meta_dias", Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field label="Liquidez meta (% sobre ventas)">
-            <input type="number" step="0.001" disabled={!canEditFinanciero} value={draft.liquidez_meta_pct ?? ""} onChange={(e) => set("liquidez_meta_pct", Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field label="Meta concentración 2 clientes principales">
-            <input type="number" disabled={!canEditFinanciero} value={draft.meta_concentracion_2_clientes ?? ""} onChange={(e) => set("meta_concentracion_2_clientes", Number(e.target.value))} className={inputClass} />
-          </Field>
         </div>
       </div>
 

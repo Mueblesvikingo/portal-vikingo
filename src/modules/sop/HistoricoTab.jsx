@@ -126,27 +126,34 @@ export default function HistoricoTab({ historico, productos, planVenta, control,
               <th className="px-2 py-2 text-right">Utilización</th>
               <th className="px-2 py-2 text-right">Margen bruto %</th>
               <th className="px-2 py-2 text-right">Utilidad operativa</th>
+              <th className="px-2 py-2 text-right">% Efectividad</th>
               <th className="px-2 py-2">Responsable</th>
             </tr>
           </thead>
           <tbody>
             {historico.length === 0 && (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay meses cerrados.</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay meses cerrados.</td></tr>
             )}
-            {historico.map((h) => (
-              <tr key={h.id} className="border-b border-slate-50">
-                <td className="px-3 py-1.5 font-bold text-slate-700">{h.mes?.slice(0, 7)}</td>
-                <td className="px-2 py-1.5 text-right text-slate-600">{formatMoney(h.venta_planeada)}</td>
-                <td className="px-2 py-1.5 text-right text-slate-600">{formatMoney(h.venta_real)}</td>
-                <td className={`px-2 py-1.5 text-right font-bold ${Number(h.diferencia) < 0 ? "text-red-600" : "text-emerald-600"}`}>{formatMoney(h.diferencia)}</td>
-                <td className="px-2 py-1.5 text-right text-slate-600">{formatNumber(h.produccion_piezas)}</td>
-                <td className="px-2 py-1.5 text-right text-slate-600">{formatNumber(h.capacidad_piezas)}</td>
-                <td className="px-2 py-1.5 text-right text-slate-600">{(Number(h.utilizacion) * 100).toFixed(1)}%</td>
-                <td className="px-2 py-1.5 text-right text-slate-600">{(Number(h.margen_bruto_pct) * 100).toFixed(1)}%</td>
-                <td className="px-2 py-1.5 text-right text-slate-600">{formatMoney(h.utilidad_operativa)}</td>
-                <td className="px-2 py-1.5 text-slate-500">{h.responsable || "—"}</td>
-              </tr>
-            ))}
+            {historico.map((h) => {
+              const efectividad = Number(h.venta_planeada) > 0 ? (Number(h.venta_real) / Number(h.venta_planeada)) * 100 : null;
+              return (
+                <tr key={h.id} className="border-b border-slate-50">
+                  <td className="px-3 py-1.5 font-bold text-slate-700">{h.mes?.slice(0, 7)}</td>
+                  <td className="px-2 py-1.5 text-right text-slate-600">{formatMoney(h.venta_planeada)}</td>
+                  <td className="px-2 py-1.5 text-right text-slate-600">{formatMoney(h.venta_real)}</td>
+                  <td className={`px-2 py-1.5 text-right font-bold ${Number(h.diferencia) < 0 ? "text-red-600" : "text-emerald-600"}`}>{formatMoney(h.diferencia)}</td>
+                  <td className="px-2 py-1.5 text-right text-slate-600">{formatNumber(h.produccion_piezas)}</td>
+                  <td className="px-2 py-1.5 text-right text-slate-600">{formatNumber(h.capacidad_piezas)}</td>
+                  <td className="px-2 py-1.5 text-right text-slate-600">{(Number(h.utilizacion) * 100).toFixed(1)}%</td>
+                  <td className="px-2 py-1.5 text-right text-slate-600">{(Number(h.margen_bruto_pct) * 100).toFixed(1)}%</td>
+                  <td className="px-2 py-1.5 text-right text-slate-600">{formatMoney(h.utilidad_operativa)}</td>
+                  <td className={`px-2 py-1.5 text-right font-black ${efectividad === null ? "text-slate-400" : efectividad >= 100 ? "text-emerald-600" : efectividad >= 80 ? "text-amber-600" : "text-red-600"}`}>
+                    {efectividad === null ? "—" : `${efectividad.toFixed(1)}%`}
+                  </td>
+                  <td className="px-2 py-1.5 text-slate-500">{h.responsable || "—"}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
