@@ -103,7 +103,13 @@ export default function AppRouter({
 
           <Route
             path="/sop"
-            element={<SopModule currentUser={currentUser} />}
+            element={
+              canViewModule(currentUser, "sop") ? (
+                <SopModule currentUser={currentUser} />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
           />
 
           <Route

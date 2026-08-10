@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { buildHorizonte, formatMoney, formatNumber, LINEAS } from "./sopHelpers";
 
-function EditableCell({ value, canEdit, onSave }) {
+function EditableCell({ value, canEdit, onSave, format = formatNumber, step = "1", width = "w-16" }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value ?? 0));
 
   if (!canEdit) {
-    return <span className="block px-1 text-right text-[10px] font-bold text-slate-600">{formatNumber(value)}</span>;
+    return <span className="block px-1 text-right text-[10px] font-bold text-slate-600">{format(value)}</span>;
   }
 
   if (!editing) {
@@ -19,7 +19,7 @@ function EditableCell({ value, canEdit, onSave }) {
         }}
         className="block w-full rounded px-1 text-right text-[10px] font-bold text-slate-600 transition hover:bg-sky-50"
       >
-        {formatNumber(value)}
+        {format(value)}
       </button>
     );
   }
@@ -29,6 +29,7 @@ function EditableCell({ value, canEdit, onSave }) {
       autoFocus
       type="number"
       min="0"
+      step={step}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
@@ -40,12 +41,12 @@ function EditableCell({ value, canEdit, onSave }) {
         if (e.key === "Enter") e.currentTarget.blur();
         if (e.key === "Escape") setEditing(false);
       }}
-      className="h-6 w-16 rounded border border-sky-300 bg-white px-1 text-right text-[10px] font-bold text-slate-800 outline-none"
+      className={`h-6 ${width} rounded border border-sky-300 bg-white px-1 text-right text-[10px] font-bold text-slate-800 outline-none`}
     />
   );
 }
 
-export default function PlanVentaTab({ productos, planVenta, control, canEdit, onSave, currentUser }) {
+export default function PlanVentaTab({ productos, planVenta, control, canEdit, onSave, onSavePrecio, currentUser }) {
   const [escenario, setEscenario] = useState("Base");
 
   const horizonte = useMemo(() => buildHorizonte(control?.mes_activo, control?.horizonte_meses || 6), [control]);
@@ -137,7 +138,16 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
                       <td className="sticky left-0 z-10 bg-white px-3 py-1 font-bold text-slate-700">
                         <span className="text-[9px] text-slate-300">{p.codigo}</span> {p.nombre}
                       </td>
-                      <td className="px-2 py-1 text-right text-slate-400">{formatMoney(p.precio)}</td>
+                      <td className="px-1 py-1">
+                        <EditableCell
+                          value={p.precio}
+                          canEdit={canEdit}
+                          onSave={(n) => onSavePrecio(p.id, n, currentUser)}
+                          format={formatMoney}
+                          step="1"
+                          width="w-20"
+                        />
+                      </td>
                       {horizonte.map((m) => (
                         <td key={`${m.anio}-${m.mes}`} className="px-1 py-1">
                           <EditableCell

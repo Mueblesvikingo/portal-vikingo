@@ -1,11 +1,82 @@
 import { useState } from "react";
 
 const EMPTY_DRAFT = { mes_reunion: "", decision: "", opcion_elegida: "", responsable: "", fecha: "" };
+const PRIORIDADES = ["Crítica", "Alta", "Media", "Baja"];
 
-export default function DecisionesTab({ decisiones, canEdit, onCreate, onDelete, currentUser }) {
+// Formulario compacto para convertir una decisión en una asignación real de
+// Balance de Carga, para cualquier persona del catálogo (no solo quien
+// aparece como "responsable" en texto libre).
+function ConvertirEnAsignacionForm({ decision, personasCatalogo, onConfirm, onCancel, currentUser }) {
+  const [personaId, setPersonaId] = useState("");
+  const [horas, setHoras] = useState(4);
+  const [fechaLimite, setFechaLimite] = useState("");
+  const [prioridad, setPrioridad] = useState("Alta");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleConfirm() {
+    if (!personaId) {
+      setError("Selecciona a quién se le asigna.");
+      return;
+    }
+    setError("");
+    setSaving(true);
+    const persona = personasCatalogo.find((p) => String(p.id) === String(personaId));
+    const ok = await onConfirm(decision, {
+      personaId: Number(personaId),
+      personaNombre: persona?.nombre || "",
+      horas: Number(horas) || 0,
+      fechaLimite: fechaLimite || null,
+      prioridad,
+    }, currentUser);
+    setSaving(false);
+    if (ok) onCancel();
+  }
+
+  return (
+    <tr className="border-b border-slate-100 bg-violet-50/50">
+      <td colSpan={6} className="px-3 py-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Persona
+            <select value={personaId} onChange={(e) => setPersonaId(e.target.value)} className="mt-1 h-9 w-52 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              <option value="">Selecciona...</option>
+              {personasCatalogo.map((p) => (
+                <option key={p.id} value={p.id}>{p.nombre}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Horas estimadas
+            <input type="number" min="0.5" step="0.5" value={horas} onChange={(e) => setHoras(e.target.value)} className="mt-1 h-9 w-24 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+          </label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Fecha límite
+            <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+          </label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Prioridad
+            <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              {PRIORIDADES.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          <button type="button" disabled={saving} onClick={handleConfirm} className="h-9 rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+            {saving ? "Enviando..." : "Confirmar asignación"}
+          </button>
+          <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+        </div>
+        {error && <p className="mt-1.5 text-[10px] font-bold text-red-600">{error}</p>}
+      </td>
+    </tr>
+  );
+}
+
+export default function DecisionesTab({ decisiones, canEdit, onCreate, onDelete, onSendToDecisionCenter, onConvertToAssignment, personasCatalogo = [], currentUser }) {
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [convertingId, setConvertingId] = useState(null);
+  const [sendingId, setSendingId] = useState(null);
 
   async function handleSave() {
     if (!draft.mes_reunion || !draft.decision.trim()) {
@@ -17,6 +88,12 @@ export default function DecisionesTab({ decisiones, canEdit, onCreate, onDelete,
     const result = await onCreate({ ...draft, mes_reunion: `${draft.mes_reunion}-01` }, currentUser);
     setSaving(false);
     if (result) setDraft(EMPTY_DRAFT);
+  }
+
+  async function handleSend(decision) {
+    setSendingId(decision.id);
+    await onSendToDecisionCenter(decision, currentUser);
+    setSendingId(null);
   }
 
   return (
@@ -64,7 +141,7 @@ export default function DecisionesTab({ decisiones, canEdit, onCreate, onDelete,
               <th className="px-2 py-2">Opción elegida</th>
               <th className="px-2 py-2">Responsable</th>
               <th className="px-2 py-2">Fecha</th>
-              {canEdit && <th className="px-2 py-2"></th>}
+              {canEdit && <th className="px-2 py-2">Acciones</th>}
             </tr>
           </thead>
           <tbody>
@@ -72,18 +149,37 @@ export default function DecisionesTab({ decisiones, canEdit, onCreate, onDelete,
               <tr><td colSpan={6} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay decisiones registradas.</td></tr>
             )}
             {decisiones.map((d) => (
-              <tr key={d.id} className="border-b border-slate-50">
-                <td className="px-3 py-1.5 font-bold text-slate-700">{d.mes_reunion?.slice(0, 7)}</td>
-                <td className="px-2 py-1.5 text-slate-700">{d.decision}</td>
-                <td className="px-2 py-1.5 text-slate-600">{d.opcion_elegida || "—"}</td>
-                <td className="px-2 py-1.5 text-slate-600">{d.responsable || "—"}</td>
-                <td className="px-2 py-1.5 text-slate-600">{d.fecha || "—"}</td>
-                {canEdit && (
-                  <td className="px-2 py-1.5 text-right">
-                    <button type="button" onClick={() => onDelete(d.id)} className="text-[9px] font-black text-red-500 hover:underline">Eliminar</button>
-                  </td>
+              <>
+                <tr key={d.id} className="border-b border-slate-50">
+                  <td className="px-3 py-1.5 font-bold text-slate-700">{d.mes_reunion?.slice(0, 7)}</td>
+                  <td className="px-2 py-1.5 text-slate-700">{d.decision}</td>
+                  <td className="px-2 py-1.5 text-slate-600">{d.opcion_elegida || "—"}</td>
+                  <td className="px-2 py-1.5 text-slate-600">{d.responsable || "—"}</td>
+                  <td className="px-2 py-1.5 text-slate-600">{d.fecha || "—"}</td>
+                  {canEdit && (
+                    <td className="px-2 py-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" disabled={sendingId === d.id} onClick={() => handleSend(d)} className="text-[9px] font-black text-sky-600 hover:underline disabled:opacity-50">
+                          {sendingId === d.id ? "Enviando..." : "→ Centro de Decisiones"}
+                        </button>
+                        <button type="button" onClick={() => setConvertingId(convertingId === d.id ? null : d.id)} className="text-[9px] font-black text-violet-600 hover:underline">
+                          → Asignación
+                        </button>
+                        <button type="button" onClick={() => onDelete(d.id)} className="text-[9px] font-black text-red-500 hover:underline">Eliminar</button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+                {convertingId === d.id && (
+                  <ConvertirEnAsignacionForm
+                    decision={d}
+                    personasCatalogo={personasCatalogo}
+                    onConfirm={onConvertToAssignment}
+                    onCancel={() => setConvertingId(null)}
+                    currentUser={currentUser}
+                  />
                 )}
-              </tr>
+              </>
             ))}
           </tbody>
         </table>

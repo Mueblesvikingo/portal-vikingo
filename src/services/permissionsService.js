@@ -68,6 +68,13 @@ const STRATEGIC_TEAM_ROLES = ["PM", "Coordinador SIG", "Analista de Procesos", "
 // Usuarios → Permisos (override por usuario o por rol).
 const STRATEGIC_TEAM_ONLY_MODULES = ["decision-center"];
 
+// Módulo S&OP: visible para el equipo estratégico (por rol) más un grupo
+// puntual de gerencias que participan en el ciclo (Hugo Terrones, Beatriz
+// Ruiz, Kevyn "Kevin" Hernando, Samantha Huerta), identificadas por
+// persona_id porque no comparten un rol en común — no un default abierto.
+const SOP_SCOPED_PERSONA_IDS = [13, 11, 5, 7];
+const MODULES_VISIBLE_FOR_STRATEGIC_TEAM_PLUS_PERSONAS = { sop: SOP_SCOPED_PERSONA_IDS };
+
 let rolePermissionsCache = {};
 let personaRolesCache = {};
 
@@ -172,6 +179,12 @@ function defaultVisible(user, moduleKey) {
     return roles.some((role) => STRATEGIC_TEAM_ROLES.includes(role));
   }
 
+  const scopedPersonaIds = MODULES_VISIBLE_FOR_STRATEGIC_TEAM_PLUS_PERSONAS[moduleKey];
+  if (scopedPersonaIds) {
+    if (isStrategicTeamMember(user)) return true;
+    return scopedPersonaIds.includes(Number(user?.persona_id));
+  }
+
   const role = getPrimaryRole(user);
   if (!RESTRICTED_MENU_ROLES.includes(role)) return true;
 
@@ -273,6 +286,25 @@ const STRATEGIC_KPI_EDITOR_PERSONA_IDS = [14, 15];
 
 export function canEditStrategicKpis(user) {
   return STRATEGIC_KPI_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
+}
+
+// Parámetros S&OP, sección "Capacidad y mezcla" / "Factores de consumo de
+// tapicería" (lo que alimenta Plan de operación): decisión explícita de
+// restringirlo a Director General (Alejandro) y Gerente de Operaciones
+// (Hugo) — sin excepción por rol, aunque el resto del equipo estratégico sí
+// puede ver el módulo S&OP.
+const SOP_OPERACION_EDITOR_PERSONA_IDS = [14, 13];
+
+export function canEditSopOperacionParams(user) {
+  return SOP_OPERACION_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
+}
+
+// Parámetros S&OP, sección "Márgenes y finanzas" (lo que alimenta Plan
+// financiero): decisión explícita de restringirlo solo a Samantha (Finanzas).
+const SOP_FINANCIERO_EDITOR_PERSONA_IDS = [7];
+
+export function canEditSopFinancieroParams(user) {
+  return SOP_FINANCIERO_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
 }
 
 // Centro de Gestión de Acciones: el nivel de la acción determina quién la

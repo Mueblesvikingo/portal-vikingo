@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { canViewModule } from "../../services/permissionsService";
+import { canViewModule, canEditSopOperacionParams, canEditSopFinancieroParams } from "../../services/permissionsService";
 import {
   getProductos,
+  updateProductoPrecio,
   getControl,
   updateControl,
   getParametros,
@@ -16,6 +17,9 @@ import {
   getHistorico,
   closeCurrentMonth,
 } from "../../services/sopService";
+import { getPersonas } from "../../services/organizationCatalogService";
+import { createStrategicDecision } from "../../services/decisionService";
+import { createWorkloadAssignment } from "../../services/workloadService";
 import ControlTab from "./ControlTab";
 import ParametrosTab from "./ParametrosTab";
 import PlanVentaTab from "./PlanVentaTab";
@@ -46,13 +50,16 @@ export default function SopModule({ currentUser }) {
   const [ventaReal, setVentaReal] = useState([]);
   const [decisiones, setDecisiones] = useState([]);
   const [historico, setHistorico] = useState([]);
+  const [personasCatalogo, setPersonasCatalogo] = useState([]);
   const [message, setMessage] = useState("");
 
   const canEdit = canViewModule(currentUser, "sop");
+  const canEditOperacionParams = canEditSopOperacionParams(currentUser);
+  const canEditFinancieroParams = canEditSopFinancieroParams(currentUser);
 
   async function loadAll() {
     setLoading(true);
-    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, historicoData] = await Promise.all([
+    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, historicoData, personasData] = await Promise.all([
       getProductos(),
       getControl(),
       getParametros(),
@@ -60,6 +67,7 @@ export default function SopModule({ currentUser }) {
       getVentaReal(),
       getDecisiones(),
       getHistorico(),
+      getPersonas().catch(() => []),
     ]);
     setProductos(productosData);
     setControl(controlData);
@@ -68,6 +76,7 @@ export default function SopModule({ currentUser }) {
     setVentaReal(ventaRealData);
     setDecisiones(decisionesData);
     setHistorico(historicoData);
+    setPersonasCatalogo(personasData);
     setLoading(false);
   }
 
@@ -118,6 +127,17 @@ export default function SopModule({ currentUser }) {
     });
   }
 
+  async function handleSavePrecio(productoId, precio, actor) {
+    const result = await updateProductoPrecio(productoId, precio, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar el precio.");
+      return;
+    }
+    setProductos((current) => current.map((p) => (p.id === productoId ? result.data : p)));
+    setMessage("Precio actualizado.");
+  }
+
   async function handleSaveVentaReal(anio, mes, monto) {
     const result = await upsertVentaReal(anio, mes, monto, currentUser);
     if (!result.ok) {
@@ -153,6 +173,65 @@ export default function SopModule({ currentUser }) {
     }
     setDecisiones((current) => current.filter((d) => d.id !== id));
     setMessage("Decisión eliminada.");
+  }
+
+  // "Si aplica": una decisión del ciclo S&OP puede escalarse al Centro de
+  // Decisiones de Dirección (para que siga el proceso WRAP formal) sin
+  // duplicar captura — se manda tal cual está, Dirección la completa allá.
+  async function handleSendToDecisionCenter(decision) {
+    try {
+      await createStrategicDecision({
+        title: decision.decision,
+        owner: decision.responsable || "",
+        risk: "Moderado",
+        status: "Detectada",
+        executionType: "",
+        dueDate: decision.fecha || null,
+        consequence: "",
+        recommendation: decision.opcion_elegida || "",
+        wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
+        process: "S&OP",
+      });
+      setMessage("Decisión enviada al Centro de Decisiones.");
+      return true;
+    } catch (err) {
+      console.error(err);
+      setMessage("No fue posible enviar la decisión al Centro de Decisiones.");
+      return false;
+    }
+  }
+
+  // Si la decisión ya es una acción concreta, se manda directo a Balance de
+  // Carga como una asignación (proyecto) para la persona que elijas, sin
+  // pasar por Centro de Decisiones ni por Centro de Gestión de Acciones.
+  async function handleConvertToAssignment(decision, { personaId, personaNombre, horas, fechaLimite, prioridad }, actor) {
+    const result = await createWorkloadAssignment({
+      persona_id: personaId,
+      responsable: personaNombre,
+      rol: "S&OP",
+      tipo: "Proyecto",
+      prioridad: prioridad || "Alta",
+      gestion: "Otro",
+      titulo: decision.decision,
+      descripcion: decision.opcion_elegida || "",
+      revisara: "",
+      aprobara: "",
+      seguimiento: "",
+      carga_horas: horas,
+      fecha_limite: fechaLimite || null,
+      estado: "Pendiente",
+      asigna: actor?.nombre || actor?.usuario || "",
+      asigna_rol: "S&OP",
+      horas_totales: horas,
+      origen_estrategico: "Estrategia",
+    });
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible convertir la decisión en asignación.");
+      return false;
+    }
+    setMessage("Decisión enviada a Balance de Carga como asignación.");
+    return true;
   }
 
   async function handleCloseMonth({ control: controlArg, resumenMes, ventaReal, actor }) {
@@ -216,12 +295,21 @@ export default function SopModule({ currentUser }) {
               />
             )}
             {activeTab === "plan-venta" && (
-              <PlanVentaTab productos={productos} planVenta={planVenta} control={control} canEdit={canEdit} onSave={handleSavePlanVenta} currentUser={currentUser} />
+              <PlanVentaTab productos={productos} planVenta={planVenta} control={control} canEdit={canEdit} onSave={handleSavePlanVenta} onSavePrecio={handleSavePrecio} currentUser={currentUser} />
             )}
             {activeTab === "operacion" && <OperacionTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
             {activeTab === "financiero" && <FinancieroTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
             {activeTab === "decisiones" && (
-              <DecisionesTab decisiones={decisiones} canEdit={canEdit} onCreate={handleCreateDecision} onDelete={handleDeleteDecision} currentUser={currentUser} />
+              <DecisionesTab
+                decisiones={decisiones}
+                canEdit={canEdit}
+                onCreate={handleCreateDecision}
+                onDelete={handleDeleteDecision}
+                onSendToDecisionCenter={handleSendToDecisionCenter}
+                onConvertToAssignment={handleConvertToAssignment}
+                personasCatalogo={personasCatalogo}
+                currentUser={currentUser}
+              />
             )}
             {activeTab === "historico" && (
               <HistoricoTab
@@ -236,7 +324,14 @@ export default function SopModule({ currentUser }) {
               />
             )}
             {activeTab === "control" && <ControlTab control={control} canEdit={canEdit} onSave={handleSaveControl} />}
-            {activeTab === "parametros" && <ParametrosTab parametros={parametros} canEdit={canEdit} onSave={handleSaveParametros} />}
+            {activeTab === "parametros" && (
+              <ParametrosTab
+                parametros={parametros}
+                canEditOperacion={canEditOperacionParams}
+                canEditFinanciero={canEditFinancieroParams}
+                onSave={handleSaveParametros}
+              />
+            )}
           </>
         )}
       </div>

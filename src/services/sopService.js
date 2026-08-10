@@ -19,6 +19,27 @@ export async function getProductos() {
   }
 }
 
+export async function updateProductoPrecio(id, precio, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_productos")
+      .update({
+        precio,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
 export async function getControl() {
   try {
     const { data, error } = await supabase
