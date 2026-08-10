@@ -67,6 +67,22 @@ export default function ParametrosTab({ parametros, canEdit, onSave }) {
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Factores de consumo de tapicería</p>
+        <p className="mt-1 text-[9px] font-bold normal-case tracking-normal text-slate-400">Unidades de tapicería por pieza vendida, por línea — alimentan la carga de Plan de operación.</p>
+        <div className="mt-2 grid gap-3 md:grid-cols-3">
+          <Field label="Factor — Bases">
+            <input type="number" step="0.01" disabled={!canEdit} value={draft.factor_consumo_bases ?? ""} onChange={(e) => set("factor_consumo_bases", Number(e.target.value))} className={inputClass} />
+          </Field>
+          <Field label="Factor — Recámaras">
+            <input type="number" step="0.01" disabled={!canEdit} value={draft.factor_consumo_recamaras ?? ""} onChange={(e) => set("factor_consumo_recamaras", Number(e.target.value))} className={inputClass} />
+          </Field>
+          <Field label="Factor — Salas">
+            <input type="number" step="0.01" disabled={!canEdit} value={draft.factor_consumo_salas ?? ""} onChange={(e) => set("factor_consumo_salas", Number(e.target.value))} className={inputClass} />
+          </Field>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Márgenes y finanzas</p>
         <div className="mt-2 grid gap-3 md:grid-cols-3">
           <Field label="Margen bruto Salas">

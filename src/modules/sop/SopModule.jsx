@@ -4,11 +4,13 @@ import { getProductos, getControl, updateControl, getParametros, updateParametro
 import ControlTab from "./ControlTab";
 import ParametrosTab from "./ParametrosTab";
 import PlanVentaTab from "./PlanVentaTab";
+import OperacionTab from "./OperacionTab";
 import DashboardTab from "./DashboardTab";
 
 const TABS = [
   { key: "dashboard", label: "Dashboard" },
   { key: "plan-venta", label: "Plan de venta" },
+  { key: "operacion", label: "Plan de operación" },
   { key: "control", label: "Control S&OP" },
   { key: "parametros", label: "Parámetros" },
 ];
@@ -125,6 +127,7 @@ export default function SopModule({ currentUser }) {
             {activeTab === "plan-venta" && (
               <PlanVentaTab productos={productos} planVenta={planVenta} control={control} canEdit={canEdit} onSave={handleSavePlanVenta} currentUser={currentUser} />
             )}
+            {activeTab === "operacion" && <OperacionTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
             {activeTab === "control" && <ControlTab control={control} canEdit={canEdit} onSave={handleSaveControl} />}
             {activeTab === "parametros" && <ParametrosTab parametros={parametros} canEdit={canEdit} onSave={handleSaveParametros} />}
           </>
