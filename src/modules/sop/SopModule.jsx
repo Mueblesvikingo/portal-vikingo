@@ -26,13 +26,13 @@ import HistoricoTab from "./HistoricoTab";
 import DashboardTab from "./DashboardTab";
 
 const TABS = [
+  { key: "control", label: "Control S&OP" },
   { key: "dashboard", label: "Dashboard" },
   { key: "plan-venta", label: "Plan de venta" },
   { key: "operacion", label: "Plan de operación" },
   { key: "financiero", label: "Plan financiero" },
   { key: "decisiones", label: "Decisiones S&OP" },
   { key: "historico", label: "Histórico S&OP" },
-  { key: "control", label: "Control S&OP" },
   { key: "parametros", label: "Parámetros" },
 ];
 
