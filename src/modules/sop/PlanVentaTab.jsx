@@ -113,14 +113,14 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="max-h-[75vh] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full min-w-[900px] border-collapse text-[10px]">
           <thead>
-            <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
-              <th className="sticky left-0 z-10 bg-[#001225] px-3 py-2 text-white">Producto</th>
-              <th className="px-2 py-2 text-right">Precio</th>
+            <tr className="text-left text-[9px] font-black uppercase tracking-widest text-white/60">
+              <th className="sticky left-0 top-0 z-30 bg-[#001225] px-3 py-2 text-white">Producto</th>
+              <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">Precio</th>
               {horizonte.map((m) => (
-                <th key={`${m.anio}-${m.mes}`} className="px-2 py-2 text-right">{m.label}</th>
+                <th key={`${m.anio}-${m.mes}`} className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">{m.label}</th>
               ))}
             </tr>
           </thead>
