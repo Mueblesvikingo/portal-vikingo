@@ -10,7 +10,31 @@ function Field({ label, children, note }) {
   );
 }
 
-const inputClass = "mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:text-slate-400";
+const TONE = {
+  sky: { border: "border-sky-200", header: "bg-sky-50/60", dot: "bg-sky-400", title: "text-sky-700", input: "border-sky-200 bg-sky-50/40 focus:border-sky-400" },
+  violet: { border: "border-violet-200", header: "bg-violet-50/60", dot: "bg-violet-400", title: "text-violet-700", input: "border-violet-200 bg-violet-50/40 focus:border-violet-400" },
+  emerald: { border: "border-emerald-200", header: "bg-emerald-50/60", dot: "bg-emerald-400", title: "text-emerald-700", input: "border-emerald-200 bg-emerald-50/40 focus:border-emerald-400" },
+};
+
+function inputClass(tone) {
+  return `mt-1 h-10 w-full rounded-xl border ${TONE[tone].input} px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none transition disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400`;
+}
+
+function Section({ tone, title, subtitle, children }) {
+  const t = TONE[tone];
+  return (
+    <div className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${t.border}`}>
+      <div className={`flex items-center gap-2 px-4 py-2.5 ${t.header}`}>
+        <span className={`h-2 w-2 rounded-full ${t.dot}`} />
+        <p className={`text-[10px] font-black uppercase tracking-widest ${t.title}`}>{title}</p>
+      </div>
+      <div className="p-4">
+        {subtitle && <p className="text-[9px] font-bold normal-case tracking-normal text-slate-400">{subtitle}</p>}
+        <div className="mt-2 grid gap-3 md:grid-cols-3">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 export default function ParametrosTab({ parametros, canEditOperacion, canEditFinanciero, onSave }) {
   const [draft, setDraft] = useState(() => ({ ...parametros }));
@@ -36,87 +60,71 @@ export default function ParametrosTab({ parametros, canEditOperacion, canEditFin
         Panel de control único: aquí se fijan las palancas vigentes del ciclo. El Dashboard y el Plan de venta se calculan a partir de estos valores.
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Capacidad y mezcla</p>
-        <p className="mt-1 text-[9px] font-bold normal-case tracking-normal text-slate-400">Alimenta Plan de operación — solo Director General y Gerente de Operaciones pueden editar esta sección.</p>
-        <div className="mt-2 grid gap-3 md:grid-cols-3">
-          <Field label="Escenario de capacidad">
-            <select disabled={!canEditOperacion} value={draft.escenario_capacidad} onChange={(e) => set("escenario_capacidad", e.target.value)} className={inputClass}>
-              <option value="1 turno">1 turno</option>
-              <option value="2 turnos">2 turnos</option>
-            </select>
-          </Field>
-          <Field label="Capacidad tapicería 1 turno (pzas/mes)">
-            <input type="number" disabled={!canEditOperacion} value={draft.capacidad_tapiceria_1_turno ?? ""} onChange={(e) => set("capacidad_tapiceria_1_turno", Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field label="Capacidad tapicería 2 turnos (pzas/mes)">
-            <input type="number" disabled={!canEditOperacion} value={draft.capacidad_tapiceria_2_turnos ?? ""} placeholder="Pendiente de confirmar" onChange={(e) => set("capacidad_tapiceria_2_turnos", e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field label="Escenario de mezcla comercial activo">
-            <input disabled={!canEditOperacion} value={draft.escenario_mezcla ?? ""} onChange={(e) => set("escenario_mezcla", e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="% Salas objetivo según mezcla activa">
-            <input type="number" step="0.01" disabled={!canEditOperacion} value={draft.pct_salas_objetivo ?? ""} onChange={(e) => set("pct_salas_objetivo", Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field label="Escenario de venta activo" note="Determina qué escenario (Base/Objetivo) alimenta el Dashboard.">
-            <select disabled={!canEditOperacion} value={draft.escenario_venta} onChange={(e) => set("escenario_venta", e.target.value)} className={inputClass}>
-              <option value="Base">Base</option>
-              <option value="Objetivo">Objetivo</option>
-            </select>
-          </Field>
-        </div>
-      </div>
+      <Section tone="sky" title="Capacidad y mezcla" subtitle="Alimenta Plan de operación — solo Director General y Gerente de Operaciones pueden editar esta sección.">
+        <Field label="Escenario de capacidad">
+          <select disabled={!canEditOperacion} value={draft.escenario_capacidad} onChange={(e) => set("escenario_capacidad", e.target.value)} className={inputClass("sky")}>
+            <option value="1 turno">1 turno</option>
+            <option value="2 turnos">2 turnos</option>
+          </select>
+        </Field>
+        <Field label="Capacidad tapicería 1 turno (pzas/mes)">
+          <input type="number" disabled={!canEditOperacion} value={draft.capacidad_tapiceria_1_turno ?? ""} onChange={(e) => set("capacidad_tapiceria_1_turno", Number(e.target.value))} className={inputClass("sky")} />
+        </Field>
+        <Field label="Capacidad tapicería 2 turnos (pzas/mes)">
+          <input type="number" disabled={!canEditOperacion} value={draft.capacidad_tapiceria_2_turnos ?? ""} placeholder="Pendiente de confirmar" onChange={(e) => set("capacidad_tapiceria_2_turnos", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("sky")} />
+        </Field>
+        <Field label="Escenario de mezcla comercial activo">
+          <input disabled={!canEditOperacion} value={draft.escenario_mezcla ?? ""} onChange={(e) => set("escenario_mezcla", e.target.value)} className={inputClass("sky")} />
+        </Field>
+        <Field label="% Salas objetivo según mezcla activa">
+          <input type="number" step="0.01" disabled={!canEditOperacion} value={draft.pct_salas_objetivo ?? ""} onChange={(e) => set("pct_salas_objetivo", Number(e.target.value))} className={inputClass("sky")} />
+        </Field>
+        <Field label="Escenario de venta activo" note="Determina qué escenario (Base/Objetivo) alimenta el Dashboard.">
+          <select disabled={!canEditOperacion} value={draft.escenario_venta} onChange={(e) => set("escenario_venta", e.target.value)} className={inputClass("sky")}>
+            <option value="Base">Base</option>
+            <option value="Objetivo">Objetivo</option>
+          </select>
+        </Field>
+      </Section>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Factores de consumo de tapicería</p>
-        <p className="mt-1 text-[9px] font-bold normal-case tracking-normal text-slate-400">Unidades de tapicería por pieza vendida, por línea — alimentan la carga de Plan de operación. Solo Director General y Gerente de Operaciones pueden editar esta sección.</p>
-        <div className="mt-2 grid gap-3 md:grid-cols-3">
-          <Field label="Factor — Bases">
-            <input type="number" step="0.01" disabled={!canEditOperacion} value={draft.factor_consumo_bases ?? ""} onChange={(e) => set("factor_consumo_bases", Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field label="Factor — Recámaras">
-            <input type="number" step="0.01" disabled={!canEditOperacion} value={draft.factor_consumo_recamaras ?? ""} onChange={(e) => set("factor_consumo_recamaras", Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field label="Factor — Salas">
-            <input type="number" step="0.01" disabled={!canEditOperacion} value={draft.factor_consumo_salas ?? ""} onChange={(e) => set("factor_consumo_salas", Number(e.target.value))} className={inputClass} />
-          </Field>
-        </div>
-      </div>
+      <Section tone="sky" title="Factores de consumo de tapicería" subtitle="Unidades de tapicería por pieza vendida, por línea — alimentan la carga de Plan de operación. Solo Director General y Gerente de Operaciones pueden editar esta sección.">
+        <Field label="Factor — Bases">
+          <input type="number" step="0.01" disabled={!canEditOperacion} value={draft.factor_consumo_bases ?? ""} onChange={(e) => set("factor_consumo_bases", Number(e.target.value))} className={inputClass("sky")} />
+        </Field>
+        <Field label="Factor — Recámaras">
+          <input type="number" step="0.01" disabled={!canEditOperacion} value={draft.factor_consumo_recamaras ?? ""} onChange={(e) => set("factor_consumo_recamaras", Number(e.target.value))} className={inputClass("sky")} />
+        </Field>
+        <Field label="Factor — Salas">
+          <input type="number" step="0.01" disabled={!canEditOperacion} value={draft.factor_consumo_salas ?? ""} onChange={(e) => set("factor_consumo_salas", Number(e.target.value))} className={inputClass("sky")} />
+        </Field>
+      </Section>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Precio promedio de referencia (por línea)</p>
-        <p className="mt-1 text-[9px] font-bold normal-case tracking-normal text-slate-400">Solo referencia rápida para estimaciones — no reemplaza el precio por SKU que se captura en Plan de venta. Solo Finanzas (Samantha) puede editar esta sección.</p>
-        <div className="mt-2 grid gap-3 md:grid-cols-3">
-          <Field label="Precio promedio — Bases">
-            <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_bases ?? ""} onChange={(e) => set("precio_promedio_bases", e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field label="Precio promedio — Recámaras">
-            <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_recamaras ?? ""} onChange={(e) => set("precio_promedio_recamaras", e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field label="Precio promedio — Salas">
-            <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_salas ?? ""} onChange={(e) => set("precio_promedio_salas", e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
-          </Field>
-        </div>
-      </div>
+      <Section tone="violet" title="Precio promedio de referencia (por línea)" subtitle="Solo referencia rápida para estimaciones — no reemplaza el precio por SKU que se captura en Plan de venta. Solo Finanzas (Samantha) puede editar esta sección.">
+        <Field label="Precio promedio — Bases">
+          <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_bases ?? ""} onChange={(e) => set("precio_promedio_bases", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("violet")} />
+        </Field>
+        <Field label="Precio promedio — Recámaras">
+          <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_recamaras ?? ""} onChange={(e) => set("precio_promedio_recamaras", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("violet")} />
+        </Field>
+        <Field label="Precio promedio — Salas">
+          <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_salas ?? ""} onChange={(e) => set("precio_promedio_salas", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("violet")} />
+        </Field>
+      </Section>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Márgenes y finanzas</p>
-        <p className="mt-1 text-[9px] font-bold normal-case tracking-normal text-slate-400">Alimenta Plan financiero — solo Finanzas (Samantha) puede editar esta sección.</p>
-        <div className="mt-2 grid gap-3 md:grid-cols-3">
-          <Field label="Margen bruto Salas">
-            <input type="number" step="0.001" disabled={!canEditFinanciero} value={draft.margen_bruto_salas ?? ""} onChange={(e) => set("margen_bruto_salas", Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field label="Margen bruto Bases">
-            <input type="number" step="0.001" disabled={!canEditFinanciero} value={draft.margen_bruto_bases ?? ""} onChange={(e) => set("margen_bruto_bases", Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field label="Margen bruto Recámaras" note="Sin dato oficial — usar referencia de Contabilidad.">
-            <input type="number" step="0.001" disabled={!canEditFinanciero} value={draft.margen_bruto_recamaras ?? ""} placeholder="Pendiente" onChange={(e) => set("margen_bruto_recamaras", e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field label="Gastos fijos mensuales">
-            <input type="number" disabled={!canEditFinanciero} value={draft.gastos_fijos_mensuales ?? ""} onChange={(e) => set("gastos_fijos_mensuales", Number(e.target.value))} className={inputClass} />
-          </Field>
-        </div>
-      </div>
+      <Section tone="emerald" title="Márgenes y finanzas" subtitle="Alimenta Plan financiero — solo Finanzas (Samantha) puede editar esta sección.">
+        <Field label="Margen bruto Salas">
+          <input type="number" step="0.001" disabled={!canEditFinanciero} value={draft.margen_bruto_salas ?? ""} onChange={(e) => set("margen_bruto_salas", Number(e.target.value))} className={inputClass("emerald")} />
+        </Field>
+        <Field label="Margen bruto Bases">
+          <input type="number" step="0.001" disabled={!canEditFinanciero} value={draft.margen_bruto_bases ?? ""} onChange={(e) => set("margen_bruto_bases", Number(e.target.value))} className={inputClass("emerald")} />
+        </Field>
+        <Field label="Margen bruto Recámaras" note="Sin dato oficial — usar referencia de Contabilidad.">
+          <input type="number" step="0.001" disabled={!canEditFinanciero} value={draft.margen_bruto_recamaras ?? ""} placeholder="Pendiente" onChange={(e) => set("margen_bruto_recamaras", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("emerald")} />
+        </Field>
+        <Field label="Gastos fijos mensuales">
+          <input type="number" disabled={!canEditFinanciero} value={draft.gastos_fijos_mensuales ?? ""} onChange={(e) => set("gastos_fijos_mensuales", Number(e.target.value))} className={inputClass("emerald")} />
+        </Field>
+      </Section>
 
       {(canEditOperacion || canEditFinanciero) && dirty && (
         <div className="flex justify-end">
@@ -124,7 +132,7 @@ export default function ParametrosTab({ parametros, canEditOperacion, canEditFin
             type="button"
             disabled={saving}
             onClick={handleSave}
-            className="rounded-lg bg-[#001225] px-4 py-2 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="rounded-lg bg-[#001225] px-4 py-2 text-[10px] font-black text-white transition hover:bg-[#001a38] disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {saving ? "Guardando..." : "Guardar parámetros"}
           </button>
