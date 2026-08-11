@@ -30,6 +30,16 @@ function EditableCell({ value, canEdit, onSave, format = formatNumber, step = "1
     );
   }
 
+  // commit() se llama directo desde blur Y desde Enter (antes Enter solo
+  // hacia blur() esperando que eso disparara onBlur; en pruebas reales no
+  // siempre alcanzaba a completar antes de que el usuario cambiara de
+  // pantalla, perdiendo el dato sin aviso).
+  function commit() {
+    setEditing(false);
+    const n = Number(draft);
+    if (Number.isFinite(n) && n !== Number(value ?? 0)) onSave(n);
+  }
+
   return (
     <input
       autoFocus
@@ -38,13 +48,12 @@ function EditableCell({ value, canEdit, onSave, format = formatNumber, step = "1
       step={step}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        setEditing(false);
-        const n = Number(draft);
-        if (Number.isFinite(n) && n !== Number(value ?? 0)) onSave(n);
-      }}
+      onBlur={commit}
       onKeyDown={(e) => {
-        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        }
         if (e.key === "Escape") setEditing(false);
       }}
       className={`h-6 ${width} rounded border border-sky-300 bg-white px-1 text-right text-[10px] font-bold text-slate-800 outline-none`}

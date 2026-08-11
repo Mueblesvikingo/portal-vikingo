@@ -27,6 +27,18 @@ function EditableMonto({ value, canEdit, onSave }) {
     );
   }
 
+  // commit() se llama directo desde blur Y desde Enter — antes Enter solo
+  // hacia currentTarget.blur() esperando que eso disparara onBlur, pero en
+  // pruebas reales el keydown de Enter no siempre alcanzaba a completar el
+  // blur antes de que el usuario ya hubiera cambiado de pantalla, perdiendo
+  // el dato capturado sin aviso. Llamar la misma logica en ambos casos lo
+  // hace confiable sin depender de ese efecto indirecto.
+  function commit() {
+    setEditing(false);
+    const n = Number(draft);
+    if (Number.isFinite(n) && n !== Number(value ?? 0)) onSave(n);
+  }
+
   return (
     <input
       autoFocus
@@ -34,13 +46,12 @@ function EditableMonto({ value, canEdit, onSave }) {
       min="0"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        setEditing(false);
-        const n = Number(draft);
-        if (Number.isFinite(n) && n !== Number(value ?? 0)) onSave(n);
-      }}
+      onBlur={commit}
       onKeyDown={(e) => {
-        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        }
         if (e.key === "Escape") setEditing(false);
       }}
       className="h-8 w-full rounded border border-sky-300 bg-white px-2 text-right text-[11px] font-black text-slate-800 outline-none"
