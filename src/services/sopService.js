@@ -541,3 +541,172 @@ export async function closeCurrentMonth({ control, resumenMes, ventaReal, actor 
     return { ok: false, error: err };
   }
 }
+
+// Gestión de capacidad — mano de obra (sop_capacidad_procesos) e
+// infraestructura (sop_infraestructura). Ambas son catálogos capturables
+// desde Plan de operación, mismo patrón activo/inactivo que sop_productos
+// para no perder historial al "quitar" una fila.
+export async function getCapacidadProcesos() {
+  try {
+    const { data, error } = await supabase
+      .from("sop_capacidad_procesos")
+      .select("*")
+      .eq("activo", true)
+      .order("id", { ascending: true });
+
+    if (error) {
+      console.error("Error al cargar capacidad de procesos S&OP:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar capacidad de procesos S&OP:", err);
+    return [];
+  }
+}
+
+export async function createCapacidadProceso(payload, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_capacidad_procesos")
+      .insert({
+        proceso: payload.proceso,
+        operarios: payload.operarios || 0,
+        horas_turno: payload.horas_turno || 8,
+        turnos_activos: payload.turnos_activos || 1,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function updateCapacidadProceso(id, payload, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_capacidad_procesos")
+      .update({
+        ...payload,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function deactivateCapacidadProceso(id, actor) {
+  try {
+    const { error } = await supabase
+      .from("sop_capacidad_procesos")
+      .update({
+        activo: false,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", id);
+
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+
+export async function getInfraestructura() {
+  try {
+    const { data, error } = await supabase
+      .from("sop_infraestructura")
+      .select("*")
+      .eq("activo", true)
+      .order("id", { ascending: true });
+
+    if (error) {
+      console.error("Error al cargar infraestructura S&OP:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar infraestructura S&OP:", err);
+    return [];
+  }
+}
+
+export async function createInfraestructura(payload, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_infraestructura")
+      .insert({
+        nombre_equipo: payload.nombre_equipo,
+        proceso: payload.proceso || null,
+        cantidad: payload.cantidad || 1,
+        horas_disponibles_turno: payload.horas_disponibles_turno || 8,
+        turnos_activos: payload.turnos_activos || 1,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function updateInfraestructura(id, payload, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_infraestructura")
+      .update({
+        ...payload,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function deactivateInfraestructura(id, actor) {
+  try {
+    const { error } = await supabase
+      .from("sop_infraestructura")
+      .update({
+        activo: false,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", id);
+
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}

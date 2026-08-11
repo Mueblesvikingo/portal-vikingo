@@ -85,6 +85,12 @@ export default function ParametrosTab({ parametros, canEditOperacion, canEditFin
             <option value="Objetivo">Objetivo</option>
           </select>
         </Field>
+        <Field label="Días hábiles del mes" note="Se usa para calcular capacidad de mano de obra e infraestructura en Plan de operación.">
+          <input type="number" step="1" disabled={!canEditOperacion} value={draft.dias_habiles_mes ?? ""} placeholder="Ej. 24" onChange={(e) => set("dias_habiles_mes", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("sky")} />
+        </Field>
+        <Field label="Horas-hombre por unidad de complejidad" note="Estimación: cuántas horas-hombre toma fabricar 1 unidad de complejidad (≈ una Base Oslo Matrimonial).">
+          <input type="number" step="0.1" disabled={!canEditOperacion} value={draft.horas_por_unidad_complejidad ?? ""} placeholder="Ej. 2.5" onChange={(e) => set("horas_por_unidad_complejidad", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("sky")} />
+        </Field>
       </Section>
 
       <Section tone="violet" title="Precio promedio de referencia (por línea)" subtitle="Solo referencia rápida para estimaciones — no reemplaza el precio por SKU que se captura en Plan de venta. Solo Finanzas (Samantha) puede editar esta sección.">

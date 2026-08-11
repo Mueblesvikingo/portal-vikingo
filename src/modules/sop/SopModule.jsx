@@ -24,6 +24,14 @@ import {
   getPrioridadesSemana,
   createPrioridadSemana,
   updatePrioridadSemana,
+  getCapacidadProcesos,
+  createCapacidadProceso,
+  updateCapacidadProceso,
+  deactivateCapacidadProceso,
+  getInfraestructura,
+  createInfraestructura,
+  updateInfraestructura,
+  deactivateInfraestructura,
 } from "../../services/sopService";
 import { getPersonas } from "../../services/organizationCatalogService";
 import { createStrategicDecision } from "../../services/decisionService";
@@ -63,6 +71,8 @@ export default function SopModule({ currentUser }) {
   const [historico, setHistorico] = useState([]);
   const [firmas, setFirmas] = useState([]);
   const [prioridades, setPrioridades] = useState([]);
+  const [capacidadProcesos, setCapacidadProcesos] = useState([]);
+  const [infraestructura, setInfraestructura] = useState([]);
   const [personasCatalogo, setPersonasCatalogo] = useState([]);
   const [message, setMessage] = useState("");
 
@@ -75,7 +85,7 @@ export default function SopModule({ currentUser }) {
 
   async function loadAll() {
     setLoading(true);
-    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, historicoData, prioridadesData, personasData] = await Promise.all([
+    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, historicoData, prioridadesData, capacidadProcesosData, infraestructuraData, personasData] = await Promise.all([
       getProductos(),
       getControl(),
       getParametros(),
@@ -84,6 +94,8 @@ export default function SopModule({ currentUser }) {
       getDecisiones(),
       getHistorico(),
       getPrioridadesSemana(),
+      getCapacidadProcesos(),
+      getInfraestructura(),
       getPersonas().catch(() => []),
     ]);
     setProductos(productosData);
@@ -94,6 +106,8 @@ export default function SopModule({ currentUser }) {
     setDecisiones(decisionesData);
     setHistorico(historicoData);
     setPrioridades(prioridadesData);
+    setCapacidadProcesos(capacidadProcesosData);
+    setInfraestructura(infraestructuraData);
     setPersonasCatalogo(personasData);
 
     if (controlData?.mes_activo) {
@@ -359,6 +373,70 @@ export default function SopModule({ currentUser }) {
     setPrioridades((current) => current.map((p) => (p.id === id ? result.data : p)));
   }
 
+  async function handleCreateProceso(payload, actor) {
+    const result = await createCapacidadProceso(payload, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar el proceso.");
+      return false;
+    }
+    setCapacidadProcesos((current) => [...current, result.data]);
+    setMessage("Proceso agregado.");
+    return true;
+  }
+
+  async function handleUpdateProceso(id, payload, actor) {
+    const result = await updateCapacidadProceso(id, payload, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible actualizar el proceso.");
+      return;
+    }
+    setCapacidadProcesos((current) => current.map((p) => (p.id === id ? result.data : p)));
+  }
+
+  async function handleDeactivateProceso(id, actor) {
+    const result = await deactivateCapacidadProceso(id, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible quitar el proceso.");
+      return;
+    }
+    setCapacidadProcesos((current) => current.filter((p) => p.id !== id));
+  }
+
+  async function handleCreateInfra(payload, actor) {
+    const result = await createInfraestructura(payload, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar el equipo.");
+      return false;
+    }
+    setInfraestructura((current) => [...current, result.data]);
+    setMessage("Equipo agregado.");
+    return true;
+  }
+
+  async function handleUpdateInfra(id, payload, actor) {
+    const result = await updateInfraestructura(id, payload, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible actualizar el equipo.");
+      return;
+    }
+    setInfraestructura((current) => current.map((e) => (e.id === id ? result.data : e)));
+  }
+
+  async function handleDeactivateInfra(id, actor) {
+    const result = await deactivateInfraestructura(id, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible quitar el equipo.");
+      return;
+    }
+    setInfraestructura((current) => current.filter((e) => e.id !== id));
+  }
+
   async function handleCloseMonth({ control: controlArg, resumenMes, ventaReal, actor }) {
     const result = await closeCurrentMonth({ control: controlArg, resumenMes, ventaReal, actor });
     if (!result.ok) {
@@ -447,7 +525,24 @@ export default function SopModule({ currentUser }) {
                 currentUser={currentUser}
               />
             )}
-            {activeTab === "operacion" && <OperacionTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
+            {activeTab === "operacion" && (
+              <OperacionTab
+                productos={productos}
+                planVenta={planVenta}
+                control={control}
+                parametros={parametros}
+                capacidadProcesos={capacidadProcesos}
+                infraestructura={infraestructura}
+                canEdit={canEditOperacionParams}
+                currentUser={currentUser}
+                onCreateProceso={handleCreateProceso}
+                onUpdateProceso={handleUpdateProceso}
+                onDeactivateProceso={handleDeactivateProceso}
+                onCreateInfra={handleCreateInfra}
+                onUpdateInfra={handleUpdateInfra}
+                onDeactivateInfra={handleDeactivateInfra}
+              />
+            )}
             {activeTab === "financiero" && <FinancieroTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
             {activeTab === "decisiones" && (
               <DecisionesTab
