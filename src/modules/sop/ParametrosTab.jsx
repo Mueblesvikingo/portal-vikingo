@@ -124,6 +124,9 @@ export default function ParametrosTab({ parametros, canEditOperacion, canEditFin
         <Field label="Gastos fijos mensuales">
           <input type="number" disabled={!canEditFinanciero} value={draft.gastos_fijos_mensuales ?? ""} onChange={(e) => set("gastos_fijos_mensuales", Number(e.target.value))} className={inputClass("emerald")} />
         </Field>
+        <Field label="Meta estratégica de venta anual" note="Debe coincidir con la meta vigente en Despliegue Estratégico (objetivo Ventas).">
+          <input type="number" disabled={!canEditFinanciero} value={draft.meta_venta_anual ?? ""} placeholder="Ej. 74000000" onChange={(e) => set("meta_venta_anual", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("emerald")} />
+        </Field>
       </Section>
 
       {(canEditOperacion || canEditFinanciero) && dirty && (

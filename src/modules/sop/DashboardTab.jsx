@@ -153,6 +153,24 @@ export default function DashboardTab({ productos, planVenta, control, parametros
     })),
   ];
 
+  // Vínculo con la meta estratégica anual (Despliegue Estratégico, objetivo
+  // Ventas): "comprometido" = lo ya cerrado en Histórico S&OP este año más
+  // lo planeado en el escenario activo para los meses del horizonte rolado
+  // que caen en este mismo año — no depende de que el horizonte cubra todo
+  // el año, solo suma lo que efectivamente está cerrado o planeado hoy.
+  const anioActual = new Date().getFullYear();
+  const metaVentaAnual = Number(parametros?.meta_venta_anual || 0);
+  const ventaCerradaAnio = useMemo(
+    () => historico.filter((h) => h.mes && Number(h.mes.slice(0, 4)) === anioActual).reduce((sum, h) => sum + Number(h.venta_real || 0), 0),
+    [historico, anioActual]
+  );
+  const ventaHorizonteAnio = useMemo(
+    () => horizonte.reduce((sum, m, i) => (m.anio === anioActual ? sum + (activo.porMes[i]?.monto || 0) : sum), 0),
+    [horizonte, activo, anioActual]
+  );
+  const ventaComprometidaAnio = ventaCerradaAnio + ventaHorizonteAnio;
+  const avanceMetaPct = metaVentaAnual > 0 ? (ventaComprometidaAnio / metaVentaAnual) * 100 : null;
+
   const ventaRealTotal = horizonte.reduce((sum, m) => sum + (ventaRealPorMes.get(`${m.anio}_${m.mes}`) || 0), 0);
   const mesesConReal = horizonte.filter((m) => ventaRealPorMes.has(`${m.anio}_${m.mes}`)).length;
   const planParaMesesConReal = horizonte.reduce(
@@ -167,7 +185,7 @@ export default function DashboardTab({ productos, planVenta, control, parametros
         Escenario activo (definido en Parámetros): <b>{escenarioActivo}</b> — horizonte {control?.mes_activo ? `${horizonte[0]?.label} a ${horizonte[horizonte.length - 1]?.label}` : "sin definir"}.
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard label={`Venta plan (${escenarioActivo})`} value={formatMoney(activo.monto)} sub={`${formatNumber(activo.piezas)} piezas`} tone="slate" />
         <KpiCard
           label="Venta real capturada"
@@ -181,6 +199,16 @@ export default function DashboardTab({ productos, planVenta, control, parametros
           value={formatMoney(utilidadOperativa)}
           sub={`${(utilidadOperativaPct * 100).toFixed(1)}% — gastos fijos ${formatMoney(gastosFijosTotal)}`}
           tone={utilidadOperativa >= 0 ? "emerald" : "red"}
+        />
+        <KpiCard
+          label={`Meta estratégica ${anioActual}`}
+          value={metaVentaAnual > 0 ? formatMoney(metaVentaAnual) : "Sin definir"}
+          sub={
+            metaVentaAnual > 0
+              ? `Comprometido: ${formatMoney(ventaComprometidaAnio)} (${avanceMetaPct.toFixed(1)}%)`
+              : "Captúrala en Parámetros → Márgenes y finanzas"
+          }
+          tone={metaVentaAnual === 0 ? "slate" : avanceMetaPct >= 100 ? "emerald" : avanceMetaPct >= 80 ? "amber" : "red"}
         />
       </div>
 

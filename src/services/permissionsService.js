@@ -330,6 +330,23 @@ export function canCreateSopSolicitud(user) {
   return SOP_SOLICITUD_PERSONA_IDS.includes(Number(user?.persona_id));
 }
 
+// Firmas del ciclo S&OP (VEN-SP-03): quién puede aprobar/rechazar cada una
+// de las 4 etapas del BPMN. Reutiliza los mismos IDs por rol que ya se usan
+// en Parámetros/Plan de venta — "ejecutivo" (Dirección) es solo Alejandro,
+// igual que el resto de las decisiones exclusivas de Dirección en el portal.
+const SOP_ETAPA_EDITOR_PERSONA_IDS = {
+  comercial: SOP_PLAN_VENTA_EDITOR_PERSONA_IDS,
+  operativo: SOP_OPERACION_EDITOR_PERSONA_IDS,
+  financiero: SOP_FINANCIERO_EDITOR_PERSONA_IDS,
+  ejecutivo: [14],
+};
+
+export function canApproveSopEtapa(user, etapa) {
+  if (isStrategicTeamMember(user)) return true;
+  const ids = SOP_ETAPA_EDITOR_PERSONA_IDS[etapa] || [];
+  return ids.includes(Number(user?.persona_id));
+}
+
 // Centro de Gestión de Acciones: el nivel de la acción determina quién la
 // edita. Estratégica/Táctica → equipo estratégico (Dirección, PM,
 // Coordinador SIG, Analista de Procesos — mismos STRATEGIC_TEAM_ROLES ya

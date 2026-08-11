@@ -18,6 +18,12 @@ import {
   deleteDecision,
   getHistorico,
   closeCurrentMonth,
+  getFirmasCiclo,
+  ensureFirmasCiclo,
+  upsertFirma,
+  getPrioridadesSemana,
+  createPrioridadSemana,
+  updatePrioridadSemana,
 } from "../../services/sopService";
 import { getPersonas } from "../../services/organizationCatalogService";
 import { createStrategicDecision } from "../../services/decisionService";
@@ -28,6 +34,7 @@ import PlanVentaTab from "./PlanVentaTab";
 import OperacionTab from "./OperacionTab";
 import FinancieroTab from "./FinancieroTab";
 import DecisionesTab from "./DecisionesTab";
+import PrioridadesTab from "./PrioridadesTab";
 import HistoricoTab from "./HistoricoTab";
 import DashboardTab from "./DashboardTab";
 import SolicitudModal from "./SolicitudModal";
@@ -38,7 +45,8 @@ const TABS = [
   { key: "plan-venta", label: "Plan de venta" },
   { key: "operacion", label: "Plan de operación" },
   { key: "financiero", label: "Plan financiero" },
-  { key: "decisiones", label: "Decisiones S&OP" },
+  { key: "decisiones", label: "Acuerdos S&OP" },
+  { key: "prioridades", label: "Prioridades semanales" },
   { key: "historico", label: "Histórico S&OP" },
   { key: "parametros", label: "Parámetros" },
 ];
@@ -53,6 +61,8 @@ export default function SopModule({ currentUser }) {
   const [ventaReal, setVentaReal] = useState([]);
   const [decisiones, setDecisiones] = useState([]);
   const [historico, setHistorico] = useState([]);
+  const [firmas, setFirmas] = useState([]);
+  const [prioridades, setPrioridades] = useState([]);
   const [personasCatalogo, setPersonasCatalogo] = useState([]);
   const [message, setMessage] = useState("");
 
@@ -65,7 +75,7 @@ export default function SopModule({ currentUser }) {
 
   async function loadAll() {
     setLoading(true);
-    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, historicoData, personasData] = await Promise.all([
+    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, historicoData, prioridadesData, personasData] = await Promise.all([
       getProductos(),
       getControl(),
       getParametros(),
@@ -73,6 +83,7 @@ export default function SopModule({ currentUser }) {
       getVentaReal(),
       getDecisiones(),
       getHistorico(),
+      getPrioridadesSemana(),
       getPersonas().catch(() => []),
     ]);
     setProductos(productosData);
@@ -82,7 +93,15 @@ export default function SopModule({ currentUser }) {
     setVentaReal(ventaRealData);
     setDecisiones(decisionesData);
     setHistorico(historicoData);
+    setPrioridades(prioridadesData);
     setPersonasCatalogo(personasData);
+
+    if (controlData?.mes_activo) {
+      const anio = Number(controlData.mes_activo.slice(0, 4));
+      const mes = Number(controlData.mes_activo.slice(5, 7));
+      await ensureFirmasCiclo(anio, mes);
+      setFirmas(await getFirmasCiclo(anio, mes));
+    }
     setLoading(false);
   }
 
@@ -204,16 +223,18 @@ export default function SopModule({ currentUser }) {
     setMessage("Decisión eliminada.");
   }
 
-  // "Si aplica": una decisión del ciclo S&OP puede escalarse al Centro de
-  // Decisiones de Dirección (para que siga el proceso WRAP formal) sin
-  // duplicar captura — se manda tal cual está, Dirección la completa allá.
-  async function handleSendToDecisionCenter(decision) {
+  // Un líder de área escala un acuerdo a Dirección desde su propia pestaña
+  // (Acuerdos S&OP) — igual que el botón "+ Solicitud" de la cabecera, cae
+  // en la Bandeja del Centro de Decisiones con status "Solicitud" (pendiente
+  // de Dirección), no como decisión ya creada — Dirección decide si la
+  // acepta o la deja en stand by.
+  async function handleRequestDirectorDecision(decision, actor) {
     try {
       await createStrategicDecision({
         title: decision.decision,
-        owner: decision.responsable || "",
+        owner: actor?.nombre || actor?.usuario || decision.responsable || "",
         risk: "Moderado",
-        status: "Detectada",
+        status: "Solicitud",
         executionType: null,
         dueDate: decision.fecha || null,
         consequence: "",
@@ -221,11 +242,11 @@ export default function SopModule({ currentUser }) {
         wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
         process: "S&OP",
       });
-      setMessage("Decisión enviada al Centro de Decisiones.");
+      setMessage("Acuerdo enviado a la Bandeja del Centro de Decisiones.");
       return true;
     } catch (err) {
       console.error(err);
-      setMessage("No fue posible enviar la decisión al Centro de Decisiones.");
+      setMessage("No fue posible enviar el acuerdo a Dirección.");
       return false;
     }
   }
@@ -289,6 +310,55 @@ export default function SopModule({ currentUser }) {
     return true;
   }
 
+  // Al aprobar/rechazar una etapa del ciclo de firmas (VEN-SP-03). Caso
+  // especial: si Dirección rechaza la reunión ejecutiva, el diagrama regresa
+  // al paso "alinear supuestos" — las 3 validaciones previas se reabren a
+  // Pendiente para que se reajuste la propuesta antes de volver a firmarlas.
+  async function handleUpsertFirma(anio, mes, etapa, estado, comentario) {
+    const result = await upsertFirma(anio, mes, etapa, estado, comentario, currentUser);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible actualizar la firma del ciclo.");
+      return;
+    }
+    let nuevasFirmas = [result.data];
+    if (etapa === "ejecutivo" && estado === "Rechazado") {
+      const reaperturas = await Promise.all(
+        ["comercial", "operativo", "financiero"].map((e) =>
+          upsertFirma(anio, mes, e, "Pendiente", "Reabierto: la reunión ejecutiva rechazó el plan integrado.", currentUser)
+        )
+      );
+      nuevasFirmas = [...nuevasFirmas, ...reaperturas.filter((r) => r.ok).map((r) => r.data)];
+    }
+    setFirmas((current) => {
+      const filtered = current.filter((f) => !nuevasFirmas.some((n) => n.anio === f.anio && n.mes === f.mes && n.etapa === f.etapa));
+      return [...filtered, ...nuevasFirmas];
+    });
+    setMessage("Ciclo de firmas actualizado.");
+  }
+
+  async function handleCreatePrioridad(payload, actor) {
+    const result = await createPrioridadSemana(payload, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar la prioridad.");
+      return false;
+    }
+    setPrioridades((current) => [result.data, ...current]);
+    setMessage("Prioridad semanal registrada.");
+    return true;
+  }
+
+  async function handleUpdatePrioridadEstado(id, estado) {
+    const result = await updatePrioridadSemana(id, estado);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible actualizar el estado de la prioridad.");
+      return;
+    }
+    setPrioridades((current) => current.map((p) => (p.id === id ? result.data : p)));
+  }
+
   async function handleCloseMonth({ control: controlArg, resumenMes, ventaReal, actor }) {
     const result = await closeCurrentMonth({ control: controlArg, resumenMes, ventaReal, actor });
     if (!result.ok) {
@@ -299,6 +369,11 @@ export default function SopModule({ currentUser }) {
     setControl(result.data);
     const historicoData = await getHistorico();
     setHistorico(historicoData);
+    if (result.data?.mes_activo) {
+      const anio = Number(result.data.mes_activo.slice(0, 4));
+      const mes = Number(result.data.mes_activo.slice(5, 7));
+      setFirmas(await getFirmasCiclo(anio, mes));
+    }
     setMessage(`Mes ${resumenMes.label} cerrado. El horizonte avanzó al siguiente mes.`);
     return true;
   }
@@ -378,11 +453,22 @@ export default function SopModule({ currentUser }) {
               <DecisionesTab
                 decisiones={decisiones}
                 canEdit={canEdit}
+                canRequestDirectorDecision={canCreateSolicitud}
                 onCreate={handleCreateDecision}
                 onDelete={handleDeleteDecision}
-                onSendToDecisionCenter={handleSendToDecisionCenter}
+                onRequestDirectorDecision={handleRequestDirectorDecision}
                 onConvertToAssignment={handleConvertToAssignment}
                 personasCatalogo={personasCatalogo}
+                currentUser={currentUser}
+              />
+            )}
+            {activeTab === "prioridades" && (
+              <PrioridadesTab
+                prioridades={prioridades}
+                control={control}
+                canEdit={canEdit}
+                onCreate={handleCreatePrioridad}
+                onUpdateEstado={handleUpdatePrioridadEstado}
                 currentUser={currentUser}
               />
             )}
@@ -398,7 +484,9 @@ export default function SopModule({ currentUser }) {
                 currentUser={currentUser}
               />
             )}
-            {activeTab === "control" && <ControlTab control={control} canEdit={canEdit} onSave={handleSaveControl} />}
+            {activeTab === "control" && (
+              <ControlTab control={control} canEdit={canEdit} onSave={handleSaveControl} firmas={firmas} currentUser={currentUser} onUpsertFirma={handleUpsertFirma} />
+            )}
             {activeTab === "parametros" && (
               <ParametrosTab
                 parametros={parametros}

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { buildHorizonte } from "./sopHelpers";
+import { buildHorizonte, ETAPAS_CICLO, getFechaLimite } from "./sopHelpers";
+import { canApproveSopEtapa } from "../../services/permissionsService";
 
 const ESTADO_STYLE = {
   Abierto: { badge: "border-emerald-200 bg-emerald-50 text-emerald-700", card: "border-emerald-200", header: "bg-emerald-50/60", dot: "bg-emerald-400" },
@@ -7,7 +8,137 @@ const ESTADO_STYLE = {
   Ejecutivo: { badge: "border-amber-200 bg-amber-50 text-amber-700", card: "border-amber-200", header: "bg-amber-50/60", dot: "bg-amber-400" },
 };
 
-export default function ControlTab({ control, canEdit, onSave }) {
+const FIRMA_STYLE = {
+  Pendiente: { badge: "border-slate-300 bg-slate-100 text-slate-600", dot: "bg-slate-400" },
+  Aprobado: { badge: "border-emerald-200 bg-emerald-50 text-emerald-700", dot: "bg-emerald-400" },
+  Rechazado: { badge: "border-red-200 bg-red-50 text-red-700", dot: "bg-red-500" },
+};
+
+// Una etapa se habilita cuando la anterior quedó Aprobada — así el flujo
+// respeta el orden del BPMN VEN-SP-03 (Comercial → Operativo → Financiero →
+// Ejecutivo) sin necesitar un motor de estados aparte: simplemente no se
+// deja aprobar una etapa fuera de turno.
+function isHabilitada(etapaKey, firmasPorEtapa) {
+  if (etapaKey === "comercial") return true;
+  if (etapaKey === "operativo") return firmasPorEtapa.comercial?.estado === "Aprobado";
+  if (etapaKey === "financiero") return firmasPorEtapa.operativo?.estado === "Aprobado";
+  if (etapaKey === "ejecutivo") {
+    return ["comercial", "operativo", "financiero"].every((k) => firmasPorEtapa[k]?.estado === "Aprobado");
+  }
+  return false;
+}
+
+function FirmaCard({ etapa, firma, habilitada, canApprove, onAction }) {
+  const estado = firma?.estado || "Pendiente";
+  const estilo = FIRMA_STYLE[estado];
+  const fechaLimite = getFechaLimite(firma?.anio, firma?.mes, etapa.key);
+  const hoy = new Date();
+  const vencido = estado !== "Aprobado" && fechaLimite && hoy > fechaLimite;
+  const [comentando, setComentando] = useState(false);
+  const [comentario, setComentario] = useState("");
+
+  return (
+    <div className={`rounded-xl border p-3 ${vencido ? "border-red-200 bg-red-50/40" : "border-slate-200 bg-white"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">{etapa.label}</p>
+        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${estilo.badge}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${estilo.dot}`} />
+          {estado}
+        </span>
+      </div>
+      <p className="mt-1.5 text-[9px] font-bold normal-case tracking-normal text-slate-400">
+        Límite: <b className="text-slate-600">{fechaLimite ? fechaLimite.toLocaleDateString("es-MX") : "—"}</b>
+        {vencido && <span className="ml-1 font-black text-red-600">VENCIDO</span>}
+      </p>
+      {firma?.fecha && (
+        <p className="text-[9px] font-bold normal-case tracking-normal text-slate-400">
+          {estado === "Rechazado" ? "Rechazado" : "Aprobado"} el {new Date(firma.fecha).toLocaleDateString("es-MX")} por <b className="text-slate-600">{firma.usuario_nombre || "—"}</b>
+        </p>
+      )}
+      {firma?.comentario && <p className="mt-1 rounded-lg bg-red-50 px-2 py-1 text-[9px] font-bold normal-case tracking-normal text-red-600">{firma.comentario}</p>}
+
+      {!habilitada && estado !== "Aprobado" && (
+        <p className="mt-2 text-[9px] font-bold normal-case tracking-normal text-slate-300">Se habilita cuando la etapa anterior esté aprobada.</p>
+      )}
+
+      {canApprove && habilitada && (
+        <div className="mt-2 border-t border-slate-100 pt-2">
+          {!comentando ? (
+            <div className="flex gap-2">
+              <button type="button" onClick={() => onAction("Aprobado", "")} className="rounded-lg bg-emerald-600 px-3 py-1 text-[9px] font-black text-white hover:bg-emerald-700">
+                Aprobar
+              </button>
+              <button type="button" onClick={() => setComentando(true)} className="rounded-lg border border-red-200 bg-white px-3 py-1 text-[9px] font-black text-red-600 hover:bg-red-50">
+                Rechazar
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <textarea
+                value={comentario}
+                onChange={(e) => setComentario(e.target.value)}
+                placeholder="Motivo de la corrección solicitada..."
+                rows={2}
+                className="w-full rounded-lg border border-red-200 bg-white px-2 py-1 text-[10px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAction("Rechazado", comentario);
+                    setComentando(false);
+                    setComentario("");
+                  }}
+                  className="rounded-lg bg-red-600 px-3 py-1 text-[9px] font-black text-white hover:bg-red-700"
+                >
+                  Confirmar rechazo
+                </button>
+                <button type="button" onClick={() => setComentando(false)} className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-[9px] font-black text-slate-500">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CicloFirmasSection({ control, firmas, currentUser, onUpsertFirma }) {
+  const anio = control?.mes_activo ? Number(control.mes_activo.slice(0, 4)) : null;
+  const mes = control?.mes_activo ? Number(control.mes_activo.slice(5, 7)) : null;
+
+  const firmasPorEtapa = Object.fromEntries(ETAPAS_CICLO.map((e) => [e.key, { ...firmas.find((f) => f.etapa === e.key), anio, mes }]));
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+      <div className="flex items-center gap-2 bg-amber-50/60 px-4 py-2.5">
+        <span className="h-2 w-2 rounded-full bg-amber-400" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Ciclo de firmas del mes activo (VEN-SP-03)</p>
+      </div>
+      <div className="p-4">
+        <p className="text-[9px] font-bold normal-case tracking-normal text-slate-400">
+          Validación secuencial Comercial → Operativa → Financiera → Alineación integral, con fecha límite por etapa. Si Dirección rechaza la reunión ejecutiva, las tres validaciones vuelven a Pendiente para reajustar la propuesta.
+        </p>
+        <div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+          {ETAPAS_CICLO.map((etapa) => (
+            <FirmaCard
+              key={etapa.key}
+              etapa={etapa}
+              firma={firmasPorEtapa[etapa.key]}
+              habilitada={isHabilitada(etapa.key, firmasPorEtapa)}
+              canApprove={anio && mes && canApproveSopEtapa(currentUser, etapa.key)}
+              onAction={(estado, comentario) => onUpsertFirma(anio, mes, etapa.key, estado, comentario)}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ControlTab({ control, canEdit, onSave, firmas = [], currentUser, onUpsertFirma }) {
   // El <input type="month"> solo acepta/devuelve "AAAA-MM", pero la columna
   // en Supabase es tipo date ("AAAA-MM-DD") — hay que recortar al mostrar y
   // completar con "-01" al guardar, o el guardado falla (fecha inválida) y
@@ -123,6 +254,8 @@ export default function ControlTab({ control, canEdit, onSave }) {
           )}
         </div>
       </div>
+
+      <CicloFirmasSection control={control} firmas={firmas} currentUser={currentUser} onUpsertFirma={onUpsertFirma} />
 
       <div className="overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-sm">
         <div className="flex items-center gap-2 bg-sky-50/60 px-4 py-2.5">
