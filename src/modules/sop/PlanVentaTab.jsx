@@ -151,19 +151,25 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
   const granTotalPiezas = totalesPorMes.reduce((s, m) => s + m.piezas, 0);
   const granTotalMonto = totalesPorMes.reduce((s, m) => s + m.monto, 0);
 
-  // Insumo para MPS de Operaciones: solo codigo/producto/linea/piezas del
-  // mes elegido — sin precios, ya que MPS planea cantidades, no dinero.
-  // Se exporta como CSV (no .xlsx) para no depender de una libreria externa
-  // con vulnerabilidades conocidas (SheetJS); Excel abre .csv sin problema.
+  // Insumo para MPS de Operaciones: codigo/producto/linea/piezas del mes
+  // elegido, mas precio y % de participacion (mismo % que se ve en pantalla,
+  // sobre el total de piezas del horizonte completo) para dar contexto sin
+  // tener que volver a abrir el portal. Se exporta como CSV (no .xlsx) para
+  // no depender de una libreria externa con vulnerabilidades conocidas
+  // (SheetJS); Excel abre .csv sin problema.
   function handleExportarMes() {
     const mes = horizonte[mesExportarIdx];
     if (!mes) return;
-    const header = ["Codigo", "Producto", "Linea", "Piezas"];
+    const header = ["Codigo", "Producto", "Linea", "Precio", "% Participacion", "Piezas"];
     const escapeCsv = (value) => {
       const s = String(value ?? "");
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const rows = productos.map((p) => [p.codigo, p.nombre, p.linea, getPiezas(p.id, mes.anio, mes.mes)]);
+    const rows = productos.map((p) => {
+      const productoPiezasTotal = horizonte.reduce((s, m) => s + getPiezas(p.id, m.anio, m.mes), 0);
+      const pct = granTotalPiezas > 0 ? (productoPiezasTotal / granTotalPiezas) * 100 : 0;
+      return [p.codigo, p.nombre, p.linea, p.precio, `${pct.toFixed(1)}%`, getPiezas(p.id, mes.anio, mes.mes)];
+    });
     const csv = [header, ...rows].map((r) => r.map(escapeCsv).join(",")).join("\r\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
