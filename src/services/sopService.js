@@ -173,15 +173,32 @@ export async function updateParametros(id, payload, actor) {
 // Trae TODO el plan de venta de una vez (ambos escenarios, todos los meses
 // capturados) — el filtrado por horizonte/escenario se hace del lado del
 // cliente para evitar N llamadas al cambiar de mes o escenario activo.
+// Paginado explicito: PostgREST corta cualquier select("*") sin rango a
+// 1000 filas por default. sop_plan_venta ya paso ese umbral (74 productos x
+// 2 escenarios x N meses acumulados) y esto estaba recortando filas
+// silenciosamente — sin error, solo datos faltantes al azar segun el orden
+// fisico de la tabla.
+const PAGE_SIZE = 1000;
+
 export async function getPlanVenta() {
   try {
-    const { data, error } = await supabase.from("sop_plan_venta").select("*");
+    const rows = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("sop_plan_venta")
+        .select("*")
+        .range(from, from + PAGE_SIZE - 1);
 
-    if (error) {
-      console.error("Error al cargar plan de venta S&OP:", error);
-      return [];
+      if (error) {
+        console.error("Error al cargar plan de venta S&OP:", error);
+        return rows;
+      }
+      rows.push(...(data || []));
+      if (!data || data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
-    return data || [];
+    return rows;
   } catch (err) {
     console.error("Error inesperado al cargar plan de venta S&OP:", err);
     return [];
