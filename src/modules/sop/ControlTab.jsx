@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { buildHorizonte, ETAPAS_CICLO, getFechaLimite } from "./sopHelpers";
-import { canApproveSopEtapa } from "../../services/permissionsService";
+import { canApproveSopEtapa, isStrategicTeamMember } from "../../services/permissionsService";
 
 const ESTADO_STYLE = {
   Abierto: { badge: "border-emerald-200 bg-emerald-50 text-emerald-700", card: "border-emerald-200", header: "bg-emerald-50/60", dot: "bg-emerald-400" },
@@ -28,7 +28,46 @@ function isHabilitada(etapaKey, firmasPorEtapa) {
   return false;
 }
 
-function FirmaCard({ etapa, firma, habilitada, canApprove, onAction }) {
+function AlertaLiderForm({ etapa, personasCatalogo, onEnviar, onCancel }) {
+  const [personaId, setPersonaId] = useState("");
+  const [mensaje, setMensaje] = useState(`Falta información o una acción pendiente en ${etapa.label.toLowerCase()} del ciclo S&OP.`);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleEnviar() {
+    if (!personaId) {
+      setError("Selecciona a quién se le avisa.");
+      return;
+    }
+    setError("");
+    setSaving(true);
+    const persona = personasCatalogo.find((p) => String(p.id) === String(personaId));
+    const ok = await onEnviar({ personaId: Number(personaId), personaNombre: persona?.nombre || "", mensaje });
+    setSaving(false);
+    if (ok) onCancel();
+  }
+
+  return (
+    <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
+      <select value={personaId} onChange={(e) => setPersonaId(e.target.value)} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none">
+        <option value="">Selecciona a quién avisar...</option>
+        {personasCatalogo.map((p) => (
+          <option key={p.id} value={p.id}>{p.nombre}</option>
+        ))}
+      </select>
+      <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} rows={2} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+      <div className="flex gap-2">
+        <button type="button" disabled={saving} onClick={handleEnviar} className="rounded-lg bg-sky-600 px-3 py-1 text-[9px] font-black text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+          {saving ? "Enviando..." : "Enviar a asignaciones"}
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-[9px] font-black text-slate-500">Cancelar</button>
+      </div>
+      {error && <p className="text-[9px] font-bold text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+function FirmaCard({ etapa, firma, habilitada, canApprove, onAction, isEquipoEstrategico, personasCatalogo, onAlertaLider }) {
   const estado = firma?.estado || "Pendiente";
   const estilo = FIRMA_STYLE[estado];
   const fechaLimite = getFechaLimite(firma?.anio, firma?.mes, etapa.key);
@@ -36,6 +75,7 @@ function FirmaCard({ etapa, firma, habilitada, canApprove, onAction }) {
   const vencido = estado !== "Aprobado" && fechaLimite && hoy > fechaLimite;
   const [comentando, setComentando] = useState(false);
   const [comentario, setComentario] = useState("");
+  const [alertando, setAlertando] = useState(false);
 
   return (
     <div className={`rounded-xl border p-3 ${vencido ? "border-red-200 bg-red-50/40" : "border-slate-200 bg-white"}`}>
@@ -101,25 +141,65 @@ function FirmaCard({ etapa, firma, habilitada, canApprove, onAction }) {
           )}
         </div>
       )}
+
+      {isEquipoEstrategico && estado !== "Aprobado" && (
+        <div className="mt-2 border-t border-slate-100 pt-2">
+          {!alertando ? (
+            <button type="button" onClick={() => setAlertando(true)} className="text-[9px] font-black text-sky-600 hover:underline">
+              Enviar alerta a un líder →
+            </button>
+          ) : (
+            <AlertaLiderForm etapa={etapa} personasCatalogo={personasCatalogo} onEnviar={onAlertaLider} onCancel={() => setAlertando(false)} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function CicloFirmasSection({ control, firmas, currentUser, onUpsertFirma }) {
+function CicloFirmasSection({ control, firmas, currentUser, personasCatalogo, onUpsertFirma, onResetFirmas, onAlertaLider }) {
   const anio = control?.mes_activo ? Number(control.mes_activo.slice(0, 4)) : null;
   const mes = control?.mes_activo ? Number(control.mes_activo.slice(5, 7)) : null;
+  const equipoEstrategico = isStrategicTeamMember(currentUser);
+  const [resetting, setResetting] = useState(false);
+  const [confirmandoReset, setConfirmandoReset] = useState(false);
 
   const firmasPorEtapa = Object.fromEntries(ETAPAS_CICLO.map((e) => [e.key, { ...firmas.find((f) => f.etapa === e.key), anio, mes }]));
 
+  async function handleReset() {
+    setResetting(true);
+    await onResetFirmas(anio, mes);
+    setResetting(false);
+    setConfirmandoReset(false);
+  }
+
   return (
     <div className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
-      <div className="flex items-center gap-2 bg-amber-50/60 px-4 py-2.5">
-        <span className="h-2 w-2 rounded-full bg-amber-400" />
-        <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Ciclo de firmas del mes activo (VEN-SP-03)</p>
+      <div className="flex items-center justify-between gap-2 bg-amber-50/60 px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-amber-400" />
+          <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Ciclo de firmas del mes activo (VEN-SP-03)</p>
+        </div>
+        {equipoEstrategico && anio && mes && (
+          confirmandoReset ? (
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-bold text-amber-700">¿Reiniciar las 4 etapas a Pendiente?</span>
+              <button type="button" disabled={resetting} onClick={handleReset} className="rounded-lg bg-red-600 px-2.5 py-1 text-[9px] font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+                {resetting ? "Reiniciando..." : "Confirmar"}
+              </button>
+              <button type="button" onClick={() => setConfirmandoReset(false)} className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-[9px] font-black text-amber-700">Cancelar</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setConfirmandoReset(true)} className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-[9px] font-black text-amber-700 hover:bg-amber-100">
+              Reiniciar ciclo de firmas
+            </button>
+          )
+        )}
       </div>
       <div className="p-4">
         <p className="text-[9px] font-bold normal-case tracking-normal text-slate-400">
           Validación secuencial Comercial → Operativa → Financiera → Alineación integral, con fecha límite por etapa. Si Dirección rechaza la reunión ejecutiva, las tres validaciones vuelven a Pendiente para reajustar la propuesta.
+          {equipoEstrategico && " El reinicio (solo equipo estratégico) limpia las 4 etapas a Pendiente y deja listo el ciclo del mes siguiente en el sistema."}
         </p>
         <div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-4">
           {ETAPAS_CICLO.map((etapa) => (
@@ -130,6 +210,9 @@ function CicloFirmasSection({ control, firmas, currentUser, onUpsertFirma }) {
               habilitada={isHabilitada(etapa.key, firmasPorEtapa)}
               canApprove={anio && mes && canApproveSopEtapa(currentUser, etapa.key)}
               onAction={(estado, comentario) => onUpsertFirma(anio, mes, etapa.key, estado, comentario)}
+              isEquipoEstrategico={equipoEstrategico}
+              personasCatalogo={personasCatalogo}
+              onAlertaLider={(payload) => onAlertaLider(etapa, payload, currentUser)}
             />
           ))}
         </div>
@@ -138,7 +221,7 @@ function CicloFirmasSection({ control, firmas, currentUser, onUpsertFirma }) {
   );
 }
 
-export default function ControlTab({ control, canEdit, onSave, firmas = [], currentUser, onUpsertFirma }) {
+export default function ControlTab({ control, canEdit, onSave, firmas = [], currentUser, personasCatalogo = [], onUpsertFirma, onResetFirmas, onAlertaLider }) {
   // El <input type="month"> solo acepta/devuelve "AAAA-MM", pero la columna
   // en Supabase es tipo date ("AAAA-MM-DD") — hay que recortar al mostrar y
   // completar con "-01" al guardar, o el guardado falla (fecha inválida) y
@@ -255,7 +338,15 @@ export default function ControlTab({ control, canEdit, onSave, firmas = [], curr
         </div>
       </div>
 
-      <CicloFirmasSection control={control} firmas={firmas} currentUser={currentUser} onUpsertFirma={onUpsertFirma} />
+      <CicloFirmasSection
+        control={control}
+        firmas={firmas}
+        currentUser={currentUser}
+        personasCatalogo={personasCatalogo}
+        onUpsertFirma={onUpsertFirma}
+        onResetFirmas={onResetFirmas}
+        onAlertaLider={onAlertaLider}
+      />
 
       <div className="overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-sm">
         <div className="flex items-center gap-2 bg-sky-50/60 px-4 py-2.5">

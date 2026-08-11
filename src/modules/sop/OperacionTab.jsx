@@ -79,7 +79,11 @@ function ManoDeObraSection({
   const horasPorComplejidad = Number(parametros?.horas_por_unidad_complejidad || 0);
   const faltaConfig = !diasHabiles || !horasPorComplejidad || capacidadProcesos.length === 0;
 
-  const horasHombreDisponibles = CAPACIDAD_TOTAL(capacidadProcesos) * diasHabiles;
+  // Eficiencia operativa (OEE simplificado): sin capturarla se asume 100% de
+  // aprovechamiento — optimista, pero no bloquea el calculo como si lo hacen
+  // dias_habiles_mes/horas_por_unidad_complejidad, que son indispensables.
+  const eficiencia = parametros?.eficiencia_operativa != null ? Number(parametros.eficiencia_operativa) : 1;
+  const horasHombreDisponibles = CAPACIDAD_TOTAL(capacidadProcesos) * diasHabiles * eficiencia;
 
   const demandaHoras = useMemo(() => {
     return horizonte.map((m) => {
@@ -112,12 +116,18 @@ function ManoDeObraSection({
       </div>
       <div className="p-4">
         <p className="text-[9px] font-bold normal-case tracking-normal text-slate-400">
-          Horas-hombre requeridas = Σ (piezas del mes × peso de complejidad del producto) × horas por unidad de complejidad. Horas-hombre disponibles = Σ de los procesos capturados abajo (operarios × horas/turno × turnos) × días hábiles del mes.
+          Horas-hombre requeridas = Σ (piezas del mes × peso de complejidad del producto) × horas por unidad de complejidad. Horas-hombre disponibles = Σ de los procesos capturados abajo (operarios × horas/turno × turnos) × días hábiles del mes × eficiencia operativa.
           Es capacidad de planta agregada, no por estación individual — no hay dato de qué % de cada pieza pasa por cada proceso.
         </p>
         {faltaConfig && (
           <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[9px] font-bold text-amber-700">
             Falta capturar: {!diasHabiles && "días hábiles del mes (Parámetros). "}{!horasPorComplejidad && "horas-hombre por unidad de complejidad (Parámetros). "}{capacidadProcesos.length === 0 && "al menos un proceso con su dotación (abajo)."}
+          </p>
+        )}
+        {!faltaConfig && (
+          <p className="mt-2 text-[9px] font-bold normal-case tracking-normal text-slate-400">
+            Eficiencia operativa aplicada: <b className="text-slate-600">{(eficiencia * 100).toFixed(0)}%</b>
+            {parametros?.eficiencia_operativa == null && " (sin capturar, se asume 100% — captúrala en Parámetros para un cálculo más realista)."}
           </p>
         )}
 
@@ -362,7 +372,11 @@ export default function OperacionTab({
   onCreateInfra,
   onUpdateInfra,
   onDeactivateInfra,
+  onSolicitarCapacidad,
 }) {
+  const [enviando, setEnviando] = useState(null);
+  const [enviados, setEnviados] = useState(() => new Set());
+
   const horizonte = useMemo(() => buildHorizonte(control?.mes_activo, control?.horizonte_meses || 6), [control]);
   const escenarioActivo = parametros?.escenario_venta || "Base";
 
@@ -393,6 +407,14 @@ export default function OperacionTab({
   const promedioUtilizacion = demandaPorMes.length
     ? demandaPorMes.reduce((s, m) => s + m.utilizacion, 0) / demandaPorMes.length
     : 0;
+
+  async function handleSolicitar(m) {
+    const key = `${m.anio}-${m.mes}`;
+    setEnviando(key);
+    const ok = await onSolicitarCapacidad(m, m.totalPiezas, capacidadDisponible, currentUser);
+    setEnviando(null);
+    if (ok) setEnviados((c) => new Set(c).add(key));
+  }
 
   return (
     <div className="space-y-3 p-3">
@@ -474,6 +496,8 @@ export default function OperacionTab({
       <div className="grid gap-2 sm:grid-cols-3">
         {demandaPorMes.map((m, i) => {
           const estado = getEstado(m.utilizacion);
+          const key = `${m.anio}-${m.mes}`;
+          const yaEnviado = enviados.has(key);
           return (
             <div key={i} className={`rounded-xl border p-3 ${estado.tone}`}>
               <div className="flex items-center justify-between">
@@ -484,6 +508,16 @@ export default function OperacionTab({
                 <div className={`h-full rounded-full ${estado.bar}`} style={{ width: `${Math.min(m.utilizacion * 100, 140)}%` }} />
               </div>
               <p className="mt-1 text-[9px] font-bold">{formatNumber(m.totalPiezas)} / {formatNumber(capacidadDisponible)} pzas ({(m.utilizacion * 100).toFixed(0)}%)</p>
+              {canEdit && estado.label === "Saturado" && (
+                <button
+                  type="button"
+                  disabled={enviando === key || yaEnviado}
+                  onClick={() => handleSolicitar(m)}
+                  className="mt-1.5 rounded-lg border border-red-300 bg-white px-2 py-1 text-[9px] font-black text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {yaEnviado ? "Solicitud enviada ✓" : enviando === key ? "Enviando..." : "Solicitar a Dirección"}
+                </button>
+              )}
             </div>
           );
         })}

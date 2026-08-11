@@ -1,5 +1,13 @@
 import { useMemo, useState } from "react";
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, LabelList } from "recharts";
 import { buildHorizonte, formatMoney, formatNumber, LINEAS } from "./sopHelpers";
+
+function colorEfectividad(pct) {
+  if (pct === null) return "#c3c2b7";
+  if (pct >= 100) return "#10b981";
+  if (pct >= 80) return "#f59e0b";
+  return "#ef4444";
+}
 
 // Resume el mes activo (primer mes del horizonte) con lo mismo que ya
 // calculan Plan de operación y Plan financiero, para poder archivarlo al
@@ -58,6 +66,15 @@ export default function HistoricoTab({ historico, productos, planVenta, control,
 
   const resumen = useMemo(() => resumirMesActivo(productos, planVenta, control, parametros), [productos, planVenta, control, parametros]);
 
+  const chartData = useMemo(
+    () =>
+      historico.map((h) => {
+        const efectividad = Number(h.venta_planeada) > 0 ? (Number(h.venta_real) / Number(h.venta_planeada)) * 100 : null;
+        return { mes: h.mes?.slice(0, 7), efectividad, fill: colorEfectividad(efectividad) };
+      }),
+    [historico]
+  );
+
   async function handleConfirmClose() {
     const n = Number(ventaReal);
     if (!Number.isFinite(n) || n < 0) {
@@ -105,6 +122,28 @@ export default function HistoricoTab({ historico, productos, planVenta, control,
               {error && <p className="w-full text-[10px] font-bold text-red-600">{error}</p>}
             </div>
           )}
+        </div>
+      )}
+
+      {chartData.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">% Efectividad por mes (venta real / venta planeada)</p>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={chartData} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e1e0d9" vertical={false} />
+              <XAxis dataKey="mes" tick={{ fontSize: 9, fill: "#898781" }} axisLine={{ stroke: "#c3c2b7" }} tickLine={false} />
+              <YAxis tick={{ fontSize: 9, fill: "#898781" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} width={36} />
+              <Tooltip formatter={(v) => (v == null ? "—" : `${v.toFixed(1)}%`)} />
+              <ReferenceLine y={100} stroke="#001225" strokeDasharray="3 3" />
+              <ReferenceLine y={80} stroke="#f59e0b" strokeDasharray="3 3" />
+              <Bar dataKey="efectividad" radius={[3, 3, 0, 0]}>
+                {chartData.map((d, i) => (
+                  <Cell key={i} fill={d.fill} />
+                ))}
+                <LabelList dataKey="efectividad" position="top" formatter={(v) => (v == null ? "" : `${v.toFixed(0)}%`)} style={{ fontSize: 9, fontWeight: 700, fill: "#475569" }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       )}
 

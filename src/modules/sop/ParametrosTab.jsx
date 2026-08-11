@@ -91,17 +91,8 @@ export default function ParametrosTab({ parametros, canEditOperacion, canEditFin
         <Field label="Horas-hombre por unidad de complejidad" note="Estimación: cuántas horas-hombre toma fabricar 1 unidad de complejidad (≈ una Base Oslo Matrimonial).">
           <input type="number" step="0.1" disabled={!canEditOperacion} value={draft.horas_por_unidad_complejidad ?? ""} placeholder="Ej. 2.5" onChange={(e) => set("horas_por_unidad_complejidad", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("sky")} />
         </Field>
-      </Section>
-
-      <Section tone="violet" title="Precio promedio de referencia (por línea)" subtitle="Solo referencia rápida para estimaciones — no reemplaza el precio por SKU que se captura en Plan de venta. Solo Finanzas (Samantha) puede editar esta sección.">
-        <Field label="Precio promedio — Bases">
-          <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_bases ?? ""} onChange={(e) => set("precio_promedio_bases", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("violet")} />
-        </Field>
-        <Field label="Precio promedio — Recámaras">
-          <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_recamaras ?? ""} onChange={(e) => set("precio_promedio_recamaras", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("violet")} />
-        </Field>
-        <Field label="Precio promedio — Salas">
-          <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_salas ?? ""} onChange={(e) => set("precio_promedio_salas", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("violet")} />
+        <Field label="Eficiencia operativa (%)" note="OEE simplificado: % de las horas nominales que realmente se aprovecha (mermas, tiempos muertos, ausentismo, mantenimiento). Sin este dato se asume 100%.">
+          <input type="number" step="0.01" min="0" max="1" disabled={!canEditOperacion} value={draft.eficiencia_operativa ?? ""} placeholder="Ej. 0.85" onChange={(e) => set("eficiencia_operativa", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("sky")} />
         </Field>
       </Section>
 

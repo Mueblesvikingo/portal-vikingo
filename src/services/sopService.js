@@ -411,6 +411,42 @@ export async function upsertFirma(anio, mes, etapa, estado, comentario, actor) {
   }
 }
 
+// Reinicio manual del ciclo de firmas (solo equipo estrategico) — util cuando
+// el ciclo quedo en un estado inconsistente (ej. varias etapas rechazadas a
+// la vez mientras se probaba el flujo) y hay que empezar de nuevo sin
+// esperar a que se cierre el mes. Ademas deja listo (Pendiente) el ciclo del
+// mes siguiente en la base de datos, para que ya este disponible en cuanto
+// ese mes se vuelva el mes activo (el avance real de mes_activo sigue
+// pasando unicamente al cerrar el mes en Historico S&OP, no aqui).
+export async function resetCicloFirmas(anio, mes, actor) {
+  try {
+    const rows = ETAPAS_CICLO_KEYS.map((etapa) => ({
+      anio,
+      mes,
+      etapa,
+      estado: "Pendiente",
+      comentario: null,
+      usuario_persona_id: null,
+      usuario_nombre: null,
+      fecha: null,
+      updated_at: new Date().toISOString(),
+    }));
+    const { data, error } = await supabase
+      .from("sop_firmas_ciclo")
+      .upsert(rows, { onConflict: "anio,mes,etapa" })
+      .select("*");
+
+    if (error) return { ok: false, error, data: null };
+
+    const nextMonth = new Date(anio, mes, 1);
+    await ensureFirmasCiclo(nextMonth.getFullYear(), nextMonth.getMonth() + 1);
+
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
 export async function getPrioridadesSemana() {
   try {
     const { data, error } = await supabase

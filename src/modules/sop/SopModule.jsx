@@ -21,6 +21,7 @@ import {
   getFirmasCiclo,
   ensureFirmasCiclo,
   upsertFirma,
+  resetCicloFirmas,
   getPrioridadesSemana,
   createPrioridadSemana,
   updatePrioridadSemana,
@@ -265,6 +266,35 @@ export default function SopModule({ currentUser }) {
     }
   }
 
+  // Restricción de capacidad detectada en Plan de operación (mes Saturado):
+  // manda una solicitud a Dirección igual que el resto de "Solicitar a
+  // Dirección" del módulo — status "Solicitud", cae en la Bandeja del Centro
+  // de Decisiones para que Dirección decida (2do turno, subcontratar, correr
+  // fecha con Ventas).
+  async function handleSolicitarCapacidad(mes, totalPiezas, capacidadDisponible, actor) {
+    try {
+      const gap = totalPiezas - capacidadDisponible;
+      await createStrategicDecision({
+        title: `Restricción de capacidad — ${mes.label}`,
+        owner: actor?.nombre || actor?.usuario || "",
+        risk: "Alto",
+        status: "Solicitud",
+        executionType: null,
+        dueDate: null,
+        consequence: "",
+        recommendation: `Demanda ${Math.round(totalPiezas).toLocaleString("es-MX")} pzas vs. capacidad ${Math.round(capacidadDisponible).toLocaleString("es-MX")} pzas/mes — excedente de ${Math.round(gap).toLocaleString("es-MX")} pzas. Definir: 2do turno, subcontratación o ajuste de fecha con Ventas.`,
+        wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
+        process: "S&OP",
+      });
+      setMessage(`Restricción de capacidad de ${mes.label} enviada a la Bandeja del Centro de Decisiones.`);
+      return true;
+    } catch (err) {
+      console.error(err);
+      setMessage("No fue posible enviar la solicitud de capacidad.");
+      return false;
+    }
+  }
+
   // Botón "+ Solicitud" (Hugo, Samantha, Brisa): manda directo a la Bandeja
   // del Centro de Decisiones (status "Solicitud"), sin necesitar acceso al
   // módulo completo — el director la ve ahí para aceptar/dejar en stand by.
@@ -349,6 +379,56 @@ export default function SopModule({ currentUser }) {
       return [...filtered, ...nuevasFirmas];
     });
     setMessage("Ciclo de firmas actualizado.");
+  }
+
+  // Reinicio manual (solo equipo estratégico, gateado en ControlTab): limpia
+  // las 4 etapas del ciclo activo a Pendiente y deja listo el ciclo del mes
+  // siguiente en la base de datos.
+  async function handleResetFirmas(anio, mes) {
+    const result = await resetCicloFirmas(anio, mes, currentUser);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible reiniciar el ciclo de firmas.");
+      return;
+    }
+    setFirmas((current) => {
+      const filtered = current.filter((f) => !(f.anio === anio && f.mes === mes));
+      return [...filtered, ...result.data];
+    });
+    setMessage("Ciclo de firmas reiniciado.");
+  }
+
+  // Alerta puntual desde una etapa del ciclo de firmas hacia las asignaciones
+  // de un líder — reutiliza el mismo mecanismo de Balance de Carga que ya usa
+  // handleConvertToAssignment, sin pasar por Centro de Decisiones.
+  async function handleAlertaLider(etapa, { personaId, personaNombre, mensaje }, actor) {
+    const result = await createWorkloadAssignment({
+      persona_id: personaId,
+      responsable: personaNombre,
+      rol: "S&OP",
+      tipo: "Otro",
+      prioridad: "Alta",
+      gestion: "Otro",
+      titulo: `Alerta S&OP — ${etapa.label}`,
+      descripcion: mensaje,
+      revisara: "",
+      aprobara: "",
+      seguimiento: "",
+      carga_horas: 0.5,
+      fecha_limite: null,
+      estado: "Pendiente",
+      asigna: actor?.nombre || actor?.usuario || "",
+      asigna_rol: "S&OP",
+      horas_totales: 0.5,
+      origen_estrategico: "Estrategia",
+    });
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible enviar la alerta.");
+      return false;
+    }
+    setMessage("Alerta enviada a las asignaciones del líder.");
+    return true;
   }
 
   async function handleCreatePrioridad(payload, actor) {
@@ -541,6 +621,7 @@ export default function SopModule({ currentUser }) {
                 onCreateInfra={handleCreateInfra}
                 onUpdateInfra={handleUpdateInfra}
                 onDeactivateInfra={handleDeactivateInfra}
+                onSolicitarCapacidad={handleSolicitarCapacidad}
               />
             )}
             {activeTab === "financiero" && <FinancieroTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
@@ -580,7 +661,17 @@ export default function SopModule({ currentUser }) {
               />
             )}
             {activeTab === "control" && (
-              <ControlTab control={control} canEdit={canEdit} onSave={handleSaveControl} firmas={firmas} currentUser={currentUser} onUpsertFirma={handleUpsertFirma} />
+              <ControlTab
+                control={control}
+                canEdit={canEdit}
+                onSave={handleSaveControl}
+                firmas={firmas}
+                currentUser={currentUser}
+                personasCatalogo={personasCatalogo}
+                onUpsertFirma={handleUpsertFirma}
+                onResetFirmas={handleResetFirmas}
+                onAlertaLider={handleAlertaLider}
+              />
             )}
             {activeTab === "parametros" && (
               <ParametrosTab
