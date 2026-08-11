@@ -13,12 +13,6 @@ export default function OperacionTab({ productos, planVenta, control, parametros
 
   const productoLinea = useMemo(() => new Map(productos.map((p) => [p.id, p.linea])), [productos]);
 
-  const factores = {
-    Bases: Number(parametros?.factor_consumo_bases ?? 1),
-    "Recámaras": Number(parametros?.factor_consumo_recamaras ?? 0),
-    Salas: Number(parametros?.factor_consumo_salas ?? 1),
-  };
-
   const capacidadDisponible =
     parametros?.escenario_capacidad === "2 turnos" && parametros?.capacidad_tapiceria_2_turnos
       ? Number(parametros.capacidad_tapiceria_2_turnos)
@@ -34,13 +28,11 @@ export default function OperacionTab({ productos, planVenta, control, parametros
         porLinea[linea] += Number(row.piezas || 0);
       }
       const totalPiezas = LINEAS.reduce((s, l) => s + porLinea[l], 0);
-      const carga = LINEAS.reduce((s, l) => s + porLinea[l] * factores[l], 0);
-      const utilizacion = capacidadDisponible > 0 ? carga / capacidadDisponible : 0;
-      const gap = capacidadDisponible - carga;
-      return { ...m, porLinea, totalPiezas, carga, utilizacion, gap };
+      const utilizacion = capacidadDisponible > 0 ? totalPiezas / capacidadDisponible : 0;
+      const gap = capacidadDisponible - totalPiezas;
+      return { ...m, porLinea, totalPiezas, utilizacion, gap };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [horizonte, planVenta, escenarioActivo, productoLinea, factores.Bases, factores["Recámaras"], factores.Salas, capacidadDisponible]);
+  }, [horizonte, planVenta, escenarioActivo, productoLinea, capacidadDisponible]);
 
   const promedioUtilizacion = demandaPorMes.length
     ? demandaPorMes.reduce((s, m) => s + m.utilizacion, 0) / demandaPorMes.length
@@ -49,7 +41,7 @@ export default function OperacionTab({ productos, planVenta, control, parametros
   return (
     <div className="space-y-3 p-3">
       <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3 text-[10px] font-bold text-sky-700">
-        Escenario de venta activo: <b>{escenarioActivo}</b> · Capacidad disponible: <b>{formatNumber(capacidadDisponible)} pzas/mes</b> ({parametros?.escenario_capacidad}) · Factores de consumo y capacidad se editan en Parámetros.
+        Escenario de venta activo: <b>{escenarioActivo}</b> · Capacidad disponible: <b>{formatNumber(capacidadDisponible)} pzas/mes</b> ({parametros?.escenario_capacidad}) · La capacidad se edita en Parámetros.
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -66,7 +58,7 @@ export default function OperacionTab({ productos, planVenta, control, parametros
           <tbody>
             {LINEAS.map((linea) => (
               <tr key={linea} className="border-b border-slate-50">
-                <td className="px-3 py-1.5 font-bold text-slate-700">{linea} <span className="text-[9px] text-slate-400">(factor {factores[linea]})</span></td>
+                <td className="px-3 py-1.5 font-bold text-slate-700">{linea}</td>
                 {demandaPorMes.map((m, i) => (
                   <td key={i} className="px-2 py-1.5 text-right text-slate-600">{formatNumber(m.porLinea[linea])}</td>
                 ))}
@@ -82,15 +74,6 @@ export default function OperacionTab({ productos, planVenta, control, parametros
               ))}
               <td className="px-2 py-1.5 text-right font-black text-slate-700">
                 {formatNumber(demandaPorMes.reduce((s, m) => s + m.totalPiezas, 0) / (demandaPorMes.length || 1))}
-              </td>
-            </tr>
-            <tr className="border-b border-slate-50">
-              <td className="px-3 py-1.5 font-bold text-slate-700">Carga de tapicería (pzas equiv.)</td>
-              {demandaPorMes.map((m, i) => (
-                <td key={i} className="px-2 py-1.5 text-right text-slate-600">{formatNumber(m.carga)}</td>
-              ))}
-              <td className="px-2 py-1.5 text-right font-bold text-slate-700">
-                {formatNumber(demandaPorMes.reduce((s, m) => s + m.carga, 0) / (demandaPorMes.length || 1))}
               </td>
             </tr>
             <tr className="border-b border-slate-50">
@@ -144,7 +127,7 @@ export default function OperacionTab({ productos, planVenta, control, parametros
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/60">
                 <div className={`h-full rounded-full ${estado.bar}`} style={{ width: `${Math.min(m.utilizacion * 100, 140)}%` }} />
               </div>
-              <p className="mt-1 text-[9px] font-bold">{formatNumber(m.carga)} / {formatNumber(capacidadDisponible)} pzas ({(m.utilizacion * 100).toFixed(0)}%)</p>
+              <p className="mt-1 text-[9px] font-bold">{formatNumber(m.totalPiezas)} / {formatNumber(capacidadDisponible)} pzas ({(m.utilizacion * 100).toFixed(0)}%)</p>
             </div>
           );
         })}

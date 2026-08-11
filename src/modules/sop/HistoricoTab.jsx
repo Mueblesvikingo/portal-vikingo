@@ -11,11 +11,6 @@ function resumirMesActivo(productos, planVenta, control, parametros) {
 
   const escenario = parametros?.escenario_venta || "Base";
   const productoMap = new Map(productos.map((p) => [p.id, p]));
-  const factores = {
-    Bases: Number(parametros?.factor_consumo_bases ?? 1),
-    "Recámaras": Number(parametros?.factor_consumo_recamaras ?? 0),
-    Salas: Number(parametros?.factor_consumo_salas ?? 1),
-  };
   const margenPorLinea = {
     Bases: Number(parametros?.margen_bruto_bases ?? 0),
     "Recámaras": Number(parametros?.margen_bruto_recamaras ?? 0),
@@ -32,7 +27,7 @@ function resumirMesActivo(productos, planVenta, control, parametros) {
     ventaPorLinea[producto.linea] += Number(row.piezas || 0) * Number(producto.precio || 0);
   }
   const ventaPlaneada = LINEAS.reduce((s, l) => s + ventaPorLinea[l], 0);
-  const produccionPiezas = LINEAS.reduce((s, l) => s + piezasPorLinea[l] * factores[l], 0);
+  const produccionPiezas = LINEAS.reduce((s, l) => s + piezasPorLinea[l], 0);
   const capacidadPiezas =
     parametros?.escenario_capacidad === "2 turnos" && parametros?.capacidad_tapiceria_2_turnos
       ? Number(parametros.capacidad_tapiceria_2_turnos)

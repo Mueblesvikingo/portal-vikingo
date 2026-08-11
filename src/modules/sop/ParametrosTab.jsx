@@ -87,18 +87,6 @@ export default function ParametrosTab({ parametros, canEditOperacion, canEditFin
         </Field>
       </Section>
 
-      <Section tone="sky" title="Factores de consumo de tapicería" subtitle="Unidades de tapicería por pieza vendida, por línea — alimentan la carga de Plan de operación. Solo Director General y Gerente de Operaciones pueden editar esta sección.">
-        <Field label="Factor — Bases">
-          <input type="number" step="0.01" disabled={!canEditOperacion} value={draft.factor_consumo_bases ?? ""} onChange={(e) => set("factor_consumo_bases", Number(e.target.value))} className={inputClass("sky")} />
-        </Field>
-        <Field label="Factor — Recámaras">
-          <input type="number" step="0.01" disabled={!canEditOperacion} value={draft.factor_consumo_recamaras ?? ""} onChange={(e) => set("factor_consumo_recamaras", Number(e.target.value))} className={inputClass("sky")} />
-        </Field>
-        <Field label="Factor — Salas">
-          <input type="number" step="0.01" disabled={!canEditOperacion} value={draft.factor_consumo_salas ?? ""} onChange={(e) => set("factor_consumo_salas", Number(e.target.value))} className={inputClass("sky")} />
-        </Field>
-      </Section>
-
       <Section tone="violet" title="Precio promedio de referencia (por línea)" subtitle="Solo referencia rápida para estimaciones — no reemplaza el precio por SKU que se captura en Plan de venta. Solo Finanzas (Samantha) puede editar esta sección.">
         <Field label="Precio promedio — Bases">
           <input type="number" step="1" disabled={!canEditFinanciero} value={draft.precio_promedio_bases ?? ""} onChange={(e) => set("precio_promedio_bases", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("violet")} />
