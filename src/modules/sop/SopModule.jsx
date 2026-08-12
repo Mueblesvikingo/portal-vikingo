@@ -57,6 +57,9 @@ import HistoricoTab from "./HistoricoTab";
 import DashboardTab from "./DashboardTab";
 import SolicitudModal from "./SolicitudModal";
 
+const SOP_VIDEO_URL = "https://www.youtube.com/embed/p8qnJBX1yH8?autoplay=1&rel=0&modestbranding=1";
+const SOP_MANUAL_URL = "/manuales/SOP_Mission_Control.pdf";
+
 const TABS = [
   { key: "control", label: "Control S&OP" },
   { key: "dashboard", label: "Dashboard" },
@@ -95,6 +98,7 @@ export default function SopModule({ currentUser }) {
   const canEditPlanVenta = canEditSopPlanVenta(currentUser);
   const canCreateSolicitud = canCreateSopSolicitud(currentUser);
   const [showSolicitudModal, setShowSolicitudModal] = useState(false);
+  const [showSopVideo, setShowSopVideo] = useState(false);
 
   async function loadAll() {
     setLoading(true);
@@ -662,6 +666,20 @@ export default function SopModule({ currentUser }) {
             >
               ?
             </span>
+            <button
+              type="button"
+              onClick={() => setShowSopVideo(true)}
+              className="rounded-lg bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/20"
+            >
+              ▶ Video
+            </button>
+            <button
+              type="button"
+              onClick={() => window.open(SOP_MANUAL_URL, "_blank")}
+              className="rounded-lg bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/20"
+            >
+              📄 PDF
+            </button>
             {canCreateSolicitud && (
               <button
                 type="button"
@@ -824,6 +842,29 @@ export default function SopModule({ currentUser }) {
 
       {showSolicitudModal && (
         <SolicitudModal onSubmit={handleCreateSolicitud} onClose={() => setShowSolicitudModal(false)} />
+      )}
+
+      {showSopVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-4xl overflow-hidden rounded-[24px] bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-[#001225] px-5 py-3 text-white">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">Video tutorial</p>
+                <h3 className="text-lg font-black">S&amp;OP</h3>
+              </div>
+              <button type="button" onClick={() => setShowSopVideo(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-lg font-black text-white hover:bg-red-700">×</button>
+            </div>
+            {SOP_VIDEO_URL ? (
+              <div className="aspect-video w-full bg-black">
+                <iframe className="h-full w-full" src={SOP_VIDEO_URL} title="Video S&OP" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+              </div>
+            ) : (
+              <div className="flex aspect-video w-full items-center justify-center bg-slate-50 px-6 text-center text-sm font-bold text-slate-400">
+                El video aún no está disponible. Se publicará aquí en cuanto esté cargado en YouTube.
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
