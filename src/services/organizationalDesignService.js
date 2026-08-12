@@ -77,6 +77,15 @@ function workloadPayload(activity) {
   };
 }
 
+export async function getSubprocesosCatalog() {
+  const { data, error } = await supabase.from("subprocesos").select("proceso, codigo, nombre");
+  if (error) {
+    console.error("SUPABASE subprocesos ERROR:", error);
+    return [];
+  }
+  return data || [];
+}
+
 export async function getOrganizationalDesignData() {
   const [processesResult, rolesResult, subprocessesResult, activitiesResult] =
     await Promise.all([
