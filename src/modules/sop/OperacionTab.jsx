@@ -501,9 +501,17 @@ export default function OperacionTab({
             </tr>
             <tr>
               <td className="px-3 py-1.5 font-black uppercase text-[9px] text-slate-500">% Utilización</td>
-              {demandaPorMes.map((m, i) => (
-                <td key={i} className="px-2 py-1.5 text-right font-black text-slate-700">{(m.utilizacion * 100).toFixed(1)}%</td>
-              ))}
+              {demandaPorMes.map((m, i) => {
+                const estado = getEstado(m.utilizacion);
+                return (
+                  <td key={i} className="px-2 py-1.5 text-right">
+                    <span className="font-black text-slate-700">{(m.utilizacion * 100).toFixed(1)}%</span>
+                    <div className="mt-1 ml-auto h-1 w-full max-w-[64px] overflow-hidden rounded-full bg-slate-100">
+                      <div className={`h-full rounded-full ${estado.bar}`} style={{ width: `${Math.min(m.utilizacion * 100, 100)}%` }} />
+                    </div>
+                  </td>
+                );
+              })}
               <td className="px-2 py-1.5 text-right font-black text-slate-700">{(promedioUtilizacion * 100).toFixed(1)}%</td>
             </tr>
             <tr>
@@ -520,24 +528,6 @@ export default function OperacionTab({
             </tr>
           </tbody>
         </table>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-3">
-        {demandaPorMes.map((m, i) => {
-          const estado = getEstado(m.utilizacion);
-          return (
-            <div key={i} className={`rounded-xl border p-3 ${estado.tone}`}>
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-widest">{m.label}</p>
-                <span className="text-[9px] font-black uppercase">{estado.label}</span>
-              </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/60">
-                <div className={`h-full rounded-full ${estado.bar}`} style={{ width: `${Math.min(m.utilizacion * 100, 140)}%` }} />
-              </div>
-              <p className="mt-1 text-[9px] font-bold">{formatNumber(m.totalPiezas)} / {formatNumber(capacidadDisponible)} pzas ({(m.utilizacion * 100).toFixed(0)}%)</p>
-            </div>
-          );
-        })}
       </div>
 
       <ManoDeObraSection
