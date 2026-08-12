@@ -870,3 +870,66 @@ export async function upsertFinancieroMonto(filaId, anio, mes, monto) {
     return { ok: false, error: err, data: null };
   }
 }
+
+// Ajustes manuales sobre las filas calculadas de Plan financiero (Ventas
+// netas, Margen bruto, Gastos fijos) — sobreescriben el valor derivado de
+// Plan de venta/Parametros para ESE mes en ESTA pestana unicamente. Dashboard
+// y Plan de operacion siguen leyendo Plan de venta directo, sin este ajuste
+// — por eso la UI marca visualmente la celda ajustada, para que quede claro
+// que puede diferir de lo que muestran esos otros modulos.
+export async function getFinancieroAjustes() {
+  try {
+    const { data, error } = await supabase.from("sop_financiero_ajustes").select("*");
+
+    if (error) {
+      console.error("Error al cargar ajustes financieros S&OP:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar ajustes financieros S&OP:", err);
+    return [];
+  }
+}
+
+export async function upsertFinancieroAjuste(anio, mes, concepto, monto, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_financiero_ajustes")
+      .upsert(
+        {
+          anio,
+          mes,
+          concepto,
+          monto,
+          updated_at: new Date().toISOString(),
+          updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+          updated_by_nombre: actor?.nombre || actor?.usuario || null,
+        },
+        { onConflict: "anio,mes,concepto" }
+      )
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function deleteFinancieroAjuste(anio, mes, concepto) {
+  try {
+    const { error } = await supabase
+      .from("sop_financiero_ajustes")
+      .delete()
+      .eq("anio", anio)
+      .eq("mes", mes)
+      .eq("concepto", concepto);
+
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}

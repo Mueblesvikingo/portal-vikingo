@@ -51,6 +51,25 @@ function EditableMonto({ value, canEdit, onSave }) {
   );
 }
 
+// Celda de una fila calculada (Ventas/Margen/Gastos fijos): editable como
+// ajuste manual. Si esta ajustada se marca con un punto ambar clicable que
+// la restablece al valor real de Plan de venta/Parametros.
+function CeldaAjustable({ value, ajustada, canEdit, onSave, onReset }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <EditableMonto value={value} canEdit={canEdit} onSave={onSave} />
+      {ajustada && (
+        <button
+          type="button"
+          onClick={onReset}
+          title="Ajustado manualmente — clic para restablecer el valor de Plan de venta/Parámetros"
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400 hover:bg-amber-600"
+        />
+      )}
+    </span>
+  );
+}
+
 export default function FinancieroTab({
   productos,
   planVenta,
@@ -58,12 +77,15 @@ export default function FinancieroTab({
   parametros,
   financieroFilas = [],
   financieroMontos = [],
+  financieroAjustes = [],
   canEdit = false,
   currentUser,
   onCreateFila,
   onUpdateFila,
   onDeactivateFila,
   onUpsertMonto,
+  onUpsertAjuste,
+  onDeleteAjuste,
   onSolicitarFinanciero,
 }) {
   const [showSolicitud, setShowSolicitud] = useState(false);
@@ -82,7 +104,7 @@ export default function FinancieroTab({
   };
   const gastosFijosMensuales = Number(parametros?.gastos_fijos_mensuales || 0);
 
-  const filas = useMemo(() => {
+  const filasBase = useMemo(() => {
     return horizonte.map((m) => {
       const ventaPorLinea = Object.fromEntries(LINEAS.map((l) => [l, 0]));
       for (const row of planVenta) {
@@ -93,13 +115,43 @@ export default function FinancieroTab({
       }
       const ventasNetas = LINEAS.reduce((s, l) => s + ventaPorLinea[l], 0);
       const margenBruto = LINEAS.reduce((s, l) => s + ventaPorLinea[l] * margenPorLinea[l], 0);
-      const margenBrutoPct = ventasNetas > 0 ? margenBruto / ventasNetas : 0;
-      const utilidadOperativa = margenBruto - gastosFijosMensuales;
-      const margenOperativoPct = ventasNetas > 0 ? utilidadOperativa / ventasNetas : 0;
-      return { ...m, ventasNetas, margenBruto, margenBrutoPct, gastosFijos: gastosFijosMensuales, utilidadOperativa, margenOperativoPct };
+      return { ...m, ventasNetas, margenBruto, gastosFijos: gastosFijosMensuales };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [horizonte, planVenta, escenarioActivo, productoMap, margenPorLinea.Bases, margenPorLinea["Recámaras"], margenPorLinea.Salas, gastosFijosMensuales]);
+
+  // Ajustes manuales (Ventas/Margen/Gastos fijos) sobreescriben el valor
+  // calculado de Plan de venta/Parametros SOLO en esta pestana — Dashboard y
+  // Plan de operacion siguen mostrando el valor real de Plan de venta, por
+  // eso cada celda ajustada se marca visualmente y se puede restablecer.
+  function ajusteDe(anio, mes, concepto) {
+    return financieroAjustes.find((a) => a.anio === anio && a.mes === mes && a.concepto === concepto);
+  }
+
+  const filas = useMemo(() => {
+    return filasBase.map((f) => {
+      const ajVenta = ajusteDe(f.anio, f.mes, "ventas_netas");
+      const ajMargen = ajusteDe(f.anio, f.mes, "margen_bruto");
+      const ajGastos = ajusteDe(f.anio, f.mes, "gastos_fijos");
+      const ventasNetas = ajVenta ? Number(ajVenta.monto) : f.ventasNetas;
+      const margenBruto = ajMargen ? Number(ajMargen.monto) : f.margenBruto;
+      const gastosFijos = ajGastos ? Number(ajGastos.monto) : f.gastosFijos;
+      const margenBrutoPct = ventasNetas > 0 ? margenBruto / ventasNetas : 0;
+      const utilidadOperativa = margenBruto - gastosFijos;
+      const margenOperativoPct = ventasNetas > 0 ? utilidadOperativa / ventasNetas : 0;
+      return {
+        ...f,
+        ventasNetas,
+        margenBruto,
+        margenBrutoPct,
+        gastosFijos,
+        utilidadOperativa,
+        margenOperativoPct,
+        ajustada: { ventasNetas: !!ajVenta, margenBruto: !!ajMargen, gastosFijos: !!ajGastos },
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filasBase, financieroAjustes]);
 
   const totales = filas.reduce(
     (acc, f) => ({
@@ -172,7 +224,7 @@ export default function FinancieroTab({
     <div className="space-y-3 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-sky-200 bg-sky-50 p-3 text-[10px] font-bold text-sky-700">
         <span>
-          Escenario de venta activo: <b>{escenarioActivo}</b> · Márgenes por línea y gastos fijos se editan en Parámetros. El margen bruto aquí se pondera por la mezcla real de venta de cada mes (Salas/Bases/Recámaras), no un porcentaje fijo.
+          Escenario de venta activo: <b>{escenarioActivo}</b> · Ventas netas, Margen bruto ($) y Gastos fijos vienen de Plan de venta/Parámetros, pero se pueden ajustar manualmente aquí (punto ámbar = ajustado). <b>Ojo</b>: Dashboard y Plan de operación siguen mostrando el valor real de Plan de venta, no el ajuste — úsalo solo cuando Finanzas tenga información que aún no está en Plan de venta.
         </span>
         {canEdit && (
           <button
@@ -204,7 +256,15 @@ export default function FinancieroTab({
             <tr className="border-b border-slate-50">
               <td className="px-3 py-1.5 font-bold text-slate-700">Ventas netas totales</td>
               {filas.map((f, i) => (
-                <td key={i} className="px-2 py-1.5 text-right text-slate-600">{formatMoney(f.ventasNetas)}</td>
+                <td key={i} className="px-2 py-1.5 text-right text-slate-600">
+                  <CeldaAjustable
+                    value={f.ventasNetas}
+                    ajustada={f.ajustada.ventasNetas}
+                    canEdit={canEdit}
+                    onSave={(n) => onUpsertAjuste(f.anio, f.mes, "ventas_netas", n, currentUser)}
+                    onReset={() => onDeleteAjuste(f.anio, f.mes, "ventas_netas")}
+                  />
+                </td>
               ))}
               <td className="px-2 py-1.5 text-right font-black text-slate-800">{formatMoney(totales.ventasNetas)}</td>
             </tr>
@@ -218,14 +278,30 @@ export default function FinancieroTab({
             <tr className="border-b border-slate-50">
               <td className="px-3 py-1.5 font-bold text-slate-700">Margen bruto ($)</td>
               {filas.map((f, i) => (
-                <td key={i} className="px-2 py-1.5 text-right text-slate-600">{formatMoney(f.margenBruto)}</td>
+                <td key={i} className="px-2 py-1.5 text-right text-slate-600">
+                  <CeldaAjustable
+                    value={f.margenBruto}
+                    ajustada={f.ajustada.margenBruto}
+                    canEdit={canEdit}
+                    onSave={(n) => onUpsertAjuste(f.anio, f.mes, "margen_bruto", n, currentUser)}
+                    onReset={() => onDeleteAjuste(f.anio, f.mes, "margen_bruto")}
+                  />
+                </td>
               ))}
               <td className="px-2 py-1.5 text-right font-black text-slate-800">{formatMoney(totales.margenBruto)}</td>
             </tr>
             <tr className="border-b border-slate-50">
               <td className="px-3 py-1.5 font-bold text-slate-700">Gastos fijos</td>
               {filas.map((f, i) => (
-                <td key={i} className="px-2 py-1.5 text-right text-slate-600">{formatMoney(f.gastosFijos)}</td>
+                <td key={i} className="px-2 py-1.5 text-right text-slate-600">
+                  <CeldaAjustable
+                    value={f.gastosFijos}
+                    ajustada={f.ajustada.gastosFijos}
+                    canEdit={canEdit}
+                    onSave={(n) => onUpsertAjuste(f.anio, f.mes, "gastos_fijos", n, currentUser)}
+                    onReset={() => onDeleteAjuste(f.anio, f.mes, "gastos_fijos")}
+                  />
+                </td>
               ))}
               <td className="px-2 py-1.5 text-right font-black text-slate-800">{formatMoney(totales.gastosFijos)}</td>
             </tr>

@@ -39,6 +39,9 @@ import {
   deactivateFinancieroFila,
   getFinancieroMontos,
   upsertFinancieroMonto,
+  getFinancieroAjustes,
+  upsertFinancieroAjuste,
+  deleteFinancieroAjuste,
 } from "../../services/sopService";
 import { getPersonas } from "../../services/organizationCatalogService";
 import { createStrategicDecision } from "../../services/decisionService";
@@ -82,6 +85,7 @@ export default function SopModule({ currentUser }) {
   const [infraestructura, setInfraestructura] = useState([]);
   const [financieroFilas, setFinancieroFilas] = useState([]);
   const [financieroMontos, setFinancieroMontos] = useState([]);
+  const [financieroAjustes, setFinancieroAjustes] = useState([]);
   const [personasCatalogo, setPersonasCatalogo] = useState([]);
   const [message, setMessage] = useState("");
 
@@ -94,7 +98,7 @@ export default function SopModule({ currentUser }) {
 
   async function loadAll() {
     setLoading(true);
-    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, historicoData, prioridadesData, capacidadProcesosData, infraestructuraData, financieroFilasData, financieroMontosData, personasData] = await Promise.all([
+    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, historicoData, prioridadesData, capacidadProcesosData, infraestructuraData, financieroFilasData, financieroMontosData, financieroAjustesData, personasData] = await Promise.all([
       getProductos(),
       getControl(),
       getParametros(),
@@ -107,6 +111,7 @@ export default function SopModule({ currentUser }) {
       getInfraestructura(),
       getFinancieroFilas(),
       getFinancieroMontos(),
+      getFinancieroAjustes(),
       getPersonas().catch(() => []),
     ]);
     setProductos(productosData);
@@ -121,6 +126,7 @@ export default function SopModule({ currentUser }) {
     setInfraestructura(infraestructuraData);
     setFinancieroFilas(financieroFilasData);
     setFinancieroMontos(financieroMontosData);
+    setFinancieroAjustes(financieroAjustesData);
     setPersonasCatalogo(personasData);
 
     if (controlData?.mes_activo) {
@@ -373,6 +379,29 @@ export default function SopModule({ currentUser }) {
       const filtered = current.filter((m) => !(m.fila_id === filaId && m.anio === anio && m.mes === mes));
       return [...filtered, result.data];
     });
+  }
+
+  async function handleUpsertFinancieroAjuste(anio, mes, concepto, monto, actor) {
+    const result = await upsertFinancieroAjuste(anio, mes, concepto, monto, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar el ajuste.");
+      return;
+    }
+    setFinancieroAjustes((current) => {
+      const filtered = current.filter((a) => !(a.anio === anio && a.mes === mes && a.concepto === concepto));
+      return [...filtered, result.data];
+    });
+  }
+
+  async function handleDeleteFinancieroAjuste(anio, mes, concepto) {
+    const result = await deleteFinancieroAjuste(anio, mes, concepto);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible restablecer el valor.");
+      return;
+    }
+    setFinancieroAjustes((current) => current.filter((a) => !(a.anio === anio && a.mes === mes && a.concepto === concepto)));
   }
 
   // Botón "+ Solicitud" (Hugo, Samantha, Brisa): manda directo a la Bandeja
@@ -717,12 +746,15 @@ export default function SopModule({ currentUser }) {
                 parametros={parametros}
                 financieroFilas={financieroFilas}
                 financieroMontos={financieroMontos}
+                financieroAjustes={financieroAjustes}
                 canEdit={canEditFinancieroParams}
                 currentUser={currentUser}
                 onCreateFila={handleCreateFinancieroFila}
                 onUpdateFila={handleUpdateFinancieroFila}
                 onDeactivateFila={handleDeactivateFinancieroFila}
                 onUpsertMonto={handleUpsertFinancieroMonto}
+                onUpsertAjuste={handleUpsertFinancieroAjuste}
+                onDeleteAjuste={handleDeleteFinancieroAjuste}
                 onSolicitarFinanciero={handleSolicitarFinanciero}
               />
             )}
