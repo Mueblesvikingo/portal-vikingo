@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { buildHorizonte, formatNumber, LINEAS } from "./sopHelpers";
+import SolicitudModal from "./SolicitudModal";
 
 function getEstado(utilizacion) {
   if (utilizacion > 1) return { label: "Saturado", tone: "border-red-200 bg-red-50 text-red-700", bar: "bg-red-500" };
@@ -374,8 +375,7 @@ export default function OperacionTab({
   onDeactivateInfra,
   onSolicitarCapacidad,
 }) {
-  const [enviando, setEnviando] = useState(null);
-  const [enviados, setEnviados] = useState(() => new Set());
+  const [showSolicitud, setShowSolicitud] = useState(false);
 
   const horizonte = useMemo(() => buildHorizonte(control?.mes_activo, control?.horizonte_meses || 6), [control]);
   const escenarioActivo = parametros?.escenario_venta || "Base";
@@ -408,19 +408,48 @@ export default function OperacionTab({
     ? demandaPorMes.reduce((s, m) => s + m.utilizacion, 0) / demandaPorMes.length
     : 0;
 
-  async function handleSolicitar(m) {
-    const key = `${m.anio}-${m.mes}`;
-    setEnviando(key);
-    const ok = await onSolicitarCapacidad(m, m.totalPiezas, capacidadDisponible, currentUser);
-    setEnviando(null);
-    if (ok) setEnviados((c) => new Set(c).add(key));
+  const mesesSaturados = demandaPorMes.filter((m) => getEstado(m.utilizacion).label === "Saturado");
+
+  // Sugerencia editable, no texto forzado: si hay meses saturados se arma un
+  // resumen como punto de partida, pero el título y la descripción se pueden
+  // reescribir por completo antes de enviar — la solicitud puede ser por
+  // cualquier tema de capacidad, no solo saturación de piezas.
+  const solicitudInicial = {
+    titulo: mesesSaturados.length > 0 ? `Restricción de capacidad — ${mesesSaturados.map((m) => m.label).join(", ")}` : "",
+    descripcion:
+      mesesSaturados.length > 0
+        ? mesesSaturados
+            .map((m) => `${m.label}: demanda ${formatNumber(m.totalPiezas)} pzas vs. capacidad ${formatNumber(capacidadDisponible)} pzas/mes — excedente de ${formatNumber(m.totalPiezas - capacidadDisponible)} pzas.`)
+            .join("\n")
+        : "",
+    riesgo: mesesSaturados.length > 0 ? "Alto" : "Moderado",
+  };
+
+  async function handleEnviarSolicitud(draft) {
+    const ok = await onSolicitarCapacidad(draft, currentUser);
+    return ok;
   }
 
   return (
     <div className="space-y-3 p-3">
-      <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3 text-[10px] font-bold text-sky-700">
-        Escenario de venta activo: <b>{escenarioActivo}</b> · Capacidad disponible: <b>{formatNumber(capacidadDisponible)} pzas/mes</b> ({parametros?.escenario_capacidad}) · La capacidad se edita en Parámetros.
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-sky-200 bg-sky-50 p-3 text-[10px] font-bold text-sky-700">
+        <span>
+          Escenario de venta activo: <b>{escenarioActivo}</b> · Capacidad disponible: <b>{formatNumber(capacidadDisponible)} pzas/mes</b> ({parametros?.escenario_capacidad}) · La capacidad se edita en Parámetros.
+        </span>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => setShowSolicitud(true)}
+            className="rounded-lg bg-[#001225] px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-white hover:bg-[#001a38]"
+          >
+            Solicitar a Dirección
+          </button>
+        )}
       </div>
+
+      {showSolicitud && (
+        <SolicitudModal initialDraft={solicitudInicial} onSubmit={handleEnviarSolicitud} onClose={() => setShowSolicitud(false)} />
+      )}
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full min-w-[800px] border-collapse text-[10px]">
@@ -496,8 +525,6 @@ export default function OperacionTab({
       <div className="grid gap-2 sm:grid-cols-3">
         {demandaPorMes.map((m, i) => {
           const estado = getEstado(m.utilizacion);
-          const key = `${m.anio}-${m.mes}`;
-          const yaEnviado = enviados.has(key);
           return (
             <div key={i} className={`rounded-xl border p-3 ${estado.tone}`}>
               <div className="flex items-center justify-between">
@@ -508,16 +535,6 @@ export default function OperacionTab({
                 <div className={`h-full rounded-full ${estado.bar}`} style={{ width: `${Math.min(m.utilizacion * 100, 140)}%` }} />
               </div>
               <p className="mt-1 text-[9px] font-bold">{formatNumber(m.totalPiezas)} / {formatNumber(capacidadDisponible)} pzas ({(m.utilizacion * 100).toFixed(0)}%)</p>
-              {canEdit && estado.label === "Saturado" && (
-                <button
-                  type="button"
-                  disabled={enviando === key || yaEnviado}
-                  onClick={() => handleSolicitar(m)}
-                  className="mt-1.5 rounded-lg border border-red-300 bg-white px-2 py-1 text-[9px] font-black text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {yaEnviado ? "Solicitud enviada ✓" : enviando === key ? "Enviando..." : "Solicitar a Dirección"}
-                </button>
-              )}
             </div>
           );
         })}

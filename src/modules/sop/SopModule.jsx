@@ -266,27 +266,26 @@ export default function SopModule({ currentUser }) {
     }
   }
 
-  // Restricción de capacidad detectada en Plan de operación (mes Saturado):
-  // manda una solicitud a Dirección igual que el resto de "Solicitar a
-  // Dirección" del módulo — status "Solicitud", cae en la Bandeja del Centro
-  // de Decisiones para que Dirección decida (2do turno, subcontratar, correr
-  // fecha con Ventas).
-  async function handleSolicitarCapacidad(mes, totalPiezas, capacidadDisponible, actor) {
+  // Un solo botón en Plan de operación para cualquier solicitud a Dirección
+  // relacionada con capacidad — el título/descripción se sugieren si hay
+  // meses saturados, pero quedan totalmente editables en SolicitudModal
+  // antes de enviar. Mismo mecanismo que el resto de "Solicitar a Dirección"
+  // del módulo — status "Solicitud", cae en la Bandeja del Centro de Decisiones.
+  async function handleSolicitarCapacidad(draft, actor) {
     try {
-      const gap = totalPiezas - capacidadDisponible;
       await createStrategicDecision({
-        title: `Restricción de capacidad — ${mes.label}`,
+        title: draft.titulo,
         owner: actor?.nombre || actor?.usuario || "",
-        risk: "Alto",
+        risk: draft.riesgo || "Moderado",
         status: "Solicitud",
         executionType: null,
-        dueDate: null,
+        dueDate: draft.fecha || null,
         consequence: "",
-        recommendation: `Demanda ${Math.round(totalPiezas).toLocaleString("es-MX")} pzas vs. capacidad ${Math.round(capacidadDisponible).toLocaleString("es-MX")} pzas/mes — excedente de ${Math.round(gap).toLocaleString("es-MX")} pzas. Definir: 2do turno, subcontratación o ajuste de fecha con Ventas.`,
+        recommendation: draft.descripcion || "",
         wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
         process: "S&OP",
       });
-      setMessage(`Restricción de capacidad de ${mes.label} enviada a la Bandeja del Centro de Decisiones.`);
+      setMessage("Solicitud de capacidad enviada a la Bandeja del Centro de Decisiones.");
       return true;
     } catch (err) {
       console.error(err);

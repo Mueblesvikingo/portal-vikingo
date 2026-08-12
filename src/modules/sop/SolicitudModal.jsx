@@ -2,8 +2,8 @@ import { useState } from "react";
 
 const EMPTY = { titulo: "", descripcion: "", fecha: "", riesgo: "Moderado" };
 
-export default function SolicitudModal({ onSubmit, onClose }) {
-  const [draft, setDraft] = useState(EMPTY);
+export default function SolicitudModal({ onSubmit, onClose, initialDraft }) {
+  const [draft, setDraft] = useState({ ...EMPTY, ...initialDraft });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 

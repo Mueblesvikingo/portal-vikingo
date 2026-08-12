@@ -232,12 +232,10 @@ export default function ControlTab({ control, canEdit, onSave, firmas = [], curr
     estado: control?.estado || "Abierto",
   }));
   const [saving, setSaving] = useState(false);
-  const [consultaMes, setConsultaMes] = useState("");
 
   if (!control) return <div className="p-6 text-center text-[11px] font-bold text-slate-300">Cargando control S&OP...</div>;
 
   const horizonte = buildHorizonte(draft.mes_activo, draft.horizonte_meses);
-  const horizonteConsulta = buildHorizonte(consultaMes, draft.horizonte_meses);
   const dirty =
     draft.mes_activo !== control.mes_activo?.slice(0, 7) ||
     draft.horizonte_meses !== control.horizonte_meses ||
@@ -357,41 +355,6 @@ export default function ControlTab({ control, canEdit, onSave, firmas = [], curr
           {horizonte.map((m, i) => (
             <span key={i} className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[10px] font-black text-sky-700">{m.label}</span>
           ))}
-        </div>
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm">
-        <div className="flex items-center gap-2 bg-violet-50/60 px-4 py-2.5">
-          <span className="h-2 w-2 rounded-full bg-violet-400" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-violet-700">Consultar otro horizonte</p>
-        </div>
-        <div className="p-4">
-          <p className="text-[9px] font-bold normal-case tracking-normal text-slate-400">
-            Solo para ver qué meses caerían en el horizonte a partir de otro mes — no cambia el ciclo real ni requiere guardar.
-          </p>
-          <div className="mt-2 flex flex-wrap items-end gap-3">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Mes de inicio a consultar
-              <input
-                type="month"
-                value={consultaMes}
-                onChange={(e) => setConsultaMes(e.target.value)}
-                className="mt-1 h-10 w-full rounded-xl border border-violet-200 bg-violet-50/40 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none focus:border-violet-400"
-              />
-            </label>
-            {consultaMes && (
-              <button type="button" onClick={() => setConsultaMes("")} className="h-10 rounded-xl border border-violet-200 bg-white px-3 text-[10px] font-black text-violet-600 hover:bg-violet-50">
-                Limpiar
-              </button>
-            )}
-          </div>
-          {consultaMes && (
-            <div className="mt-3 flex flex-wrap gap-1.5 border-t border-violet-100 pt-3">
-              {horizonteConsulta.map((m, i) => (
-                <span key={i} className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[10px] font-black text-violet-700">{m.label}</span>
-              ))}
-            </div>
-          )}
         </div>
       </div>
     </div>

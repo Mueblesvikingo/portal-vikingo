@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, LabelList } from "recharts";
-import { buildHorizonte, formatMoney, formatNumber, LINEAS } from "./sopHelpers";
+import { buildHorizonte, formatMoney, formatNumber, LINEAS, MES_NOMBRE } from "./sopHelpers";
 
 function colorEfectividad(pct) {
   if (pct === null) return "#c3c2b7";
@@ -70,7 +70,10 @@ export default function HistoricoTab({ historico, productos, planVenta, control,
     () =>
       historico.map((h) => {
         const efectividad = Number(h.venta_planeada) > 0 ? (Number(h.venta_real) / Number(h.venta_planeada)) * 100 : null;
-        return { mes: h.mes?.slice(0, 7), efectividad, fill: colorEfectividad(efectividad) };
+        const anio = h.mes ? Number(h.mes.slice(0, 4)) : null;
+        const mesNum = h.mes ? Number(h.mes.slice(5, 7)) : null;
+        const label = anio && mesNum ? `${MES_NOMBRE[mesNum]}-${String(anio).slice(2)}` : h.mes?.slice(0, 7);
+        return { mes: label, efectividad, fill: colorEfectividad(efectividad) };
       }),
     [historico]
   );

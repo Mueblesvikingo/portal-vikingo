@@ -61,23 +61,17 @@ export default function ParametrosTab({ parametros, canEditOperacion, canEditFin
       </div>
 
       <Section tone="sky" title="Capacidad y mezcla" subtitle="Alimenta Plan de operación — solo Director General y Gerente de Operaciones pueden editar esta sección.">
-        <Field label="Escenario de capacidad">
+        <Field label="Escenario de capacidad" note="Elige cuál de las dos capacidades de abajo usa Plan de operación para calcular saturación.">
           <select disabled={!canEditOperacion} value={draft.escenario_capacidad} onChange={(e) => set("escenario_capacidad", e.target.value)} className={inputClass("sky")}>
             <option value="1 turno">1 turno</option>
             <option value="2 turnos">2 turnos</option>
           </select>
         </Field>
-        <Field label="Capacidad tapicería 1 turno (pzas/mes)">
+        <Field label="Capacidad tapicería 1 turno (pzas/mes)" note="Cuántas piezas puede producir la planta al mes trabajando 1 turno.">
           <input type="number" disabled={!canEditOperacion} value={draft.capacidad_tapiceria_1_turno ?? ""} onChange={(e) => set("capacidad_tapiceria_1_turno", Number(e.target.value))} className={inputClass("sky")} />
         </Field>
-        <Field label="Capacidad tapicería 2 turnos (pzas/mes)">
+        <Field label="Capacidad tapicería 2 turnos (pzas/mes)" note="Igual, pero con 2 turnos activos. Solo aplica si arriba eliges 2 turnos.">
           <input type="number" disabled={!canEditOperacion} value={draft.capacidad_tapiceria_2_turnos ?? ""} placeholder="Pendiente de confirmar" onChange={(e) => set("capacidad_tapiceria_2_turnos", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("sky")} />
-        </Field>
-        <Field label="Escenario de mezcla comercial activo">
-          <input disabled={!canEditOperacion} value={draft.escenario_mezcla ?? ""} onChange={(e) => set("escenario_mezcla", e.target.value)} className={inputClass("sky")} />
-        </Field>
-        <Field label="% Salas objetivo según mezcla activa">
-          <input type="number" step="0.01" disabled={!canEditOperacion} value={draft.pct_salas_objetivo ?? ""} onChange={(e) => set("pct_salas_objetivo", Number(e.target.value))} className={inputClass("sky")} />
         </Field>
         <Field label="Escenario de venta activo" note="Determina qué escenario (Base/Objetivo) alimenta el Dashboard.">
           <select disabled={!canEditOperacion} value={draft.escenario_venta} onChange={(e) => set("escenario_venta", e.target.value)} className={inputClass("sky")}>
