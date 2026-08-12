@@ -106,6 +106,9 @@ export default function ParametrosTab({ parametros, canEditOperacion, canEditFin
         <Field label="Meta estratégica de venta anual" note="Debe coincidir con la meta vigente en Despliegue Estratégico (objetivo Ventas).">
           <input type="number" disabled={!canEditFinanciero} value={draft.meta_venta_anual ?? ""} placeholder="Ej. 74000000" onChange={(e) => set("meta_venta_anual", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("emerald")} />
         </Field>
+        <Field label="Meta estratégica de margen operativo (%)" note="Debe coincidir con la meta vigente en Despliegue Estratégico (objetivo Rentabilidad).">
+          <input type="number" step="0.01" disabled={!canEditFinanciero} value={draft.meta_margen_operativo_pct ?? ""} placeholder="Ej. 0.15" onChange={(e) => set("meta_margen_operativo_pct", e.target.value === "" ? null : Number(e.target.value))} className={inputClass("emerald")} />
+        </Field>
       </Section>
 
       {(canEditOperacion || canEditFinanciero) && dirty && (

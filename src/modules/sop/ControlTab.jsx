@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { buildHorizonte, ETAPAS_CICLO, getFechaLimite } from "./sopHelpers";
+import { useMemo, useState } from "react";
+import { buildHorizonte, ETAPAS_CICLO, getFechaLimite, formatMoney, LINEAS } from "./sopHelpers";
 import { canApproveSopEtapa, isStrategicTeamMember } from "../../services/permissionsService";
 
 const ESTADO_STYLE = {
@@ -157,6 +157,98 @@ function FirmaCard({ etapa, firma, habilitada, canApprove, onAction, isEquipoEst
   );
 }
 
+// Primer elemento del flujo S&OP: de dónde parte todo el ciclo. La meta de
+// venta ya se captura en Parámetros (meta_venta_anual) y se compara aquí
+// contra lo ya cerrado en Histórico + lo planeado en el horizonte vigente
+// para el año en curso — mismo cálculo que la tarjeta de Dashboard, para no
+// mostrar dos números distintos del mismo dato. La meta de margen operativo
+// es nueva (meta_margen_operativo_pct) y se compara contra el margen
+// proyectado con los supuestos vigentes de Parámetros.
+function MetasEstrategicasSection({ control, parametros, planVenta, productos, historico }) {
+  const anioActual = new Date().getFullYear();
+  const horizonte = buildHorizonte(control?.mes_activo, control?.horizonte_meses || 6);
+  const escenarioActivo = parametros?.escenario_venta || "Base";
+  const productoMap = useMemo(() => new Map(productos.map((p) => [p.id, p])), [productos]);
+
+  const { ventaHorizonteTotal, porLineaMonto } = useMemo(() => {
+    let total = 0;
+    const porLinea = Object.fromEntries(LINEAS.map((l) => [l, 0]));
+    for (const row of planVenta) {
+      if (row.escenario !== escenarioActivo) continue;
+      const monthIndex = horizonte.findIndex((m) => m.anio === row.anio && m.mes === row.mes);
+      if (monthIndex === -1) continue;
+      const producto = productoMap.get(row.producto_id);
+      if (!producto) continue;
+      const monto = Number(row.piezas || 0) * Number(producto.precio || 0);
+      total += monto;
+      porLinea[producto.linea] += monto;
+    }
+    return { ventaHorizonteTotal: total, porLineaMonto: porLinea };
+  }, [planVenta, escenarioActivo, horizonte, productoMap]);
+
+  const ventaHorizonteAnio = useMemo(
+    () => horizonte.reduce((sum, m, i) => {
+      if (m.anio !== anioActual) return sum;
+      let montoMes = 0;
+      for (const row of planVenta) {
+        if (row.escenario !== escenarioActivo || row.anio !== m.anio || row.mes !== m.mes) continue;
+        const producto = productoMap.get(row.producto_id);
+        if (!producto) continue;
+        montoMes += Number(row.piezas || 0) * Number(producto.precio || 0);
+      }
+      return sum + montoMes;
+    }, 0),
+    [horizonte, planVenta, escenarioActivo, productoMap, anioActual]
+  );
+  const ventaCerradaAnio = historico
+    .filter((h) => h.mes && Number(h.mes.slice(0, 4)) === anioActual)
+    .reduce((sum, h) => sum + Number(h.venta_real || 0), 0);
+  const ventaComprometidaAnio = ventaCerradaAnio + ventaHorizonteAnio;
+  const metaVenta = Number(parametros?.meta_venta_anual || 0);
+  const avanceVentaPct = metaVenta > 0 ? (ventaComprometidaAnio / metaVenta) * 100 : null;
+
+  const margenBrutoMonto =
+    Number(parametros?.margen_bruto_salas || 0) * porLineaMonto.Salas +
+    Number(parametros?.margen_bruto_bases || 0) * porLineaMonto.Bases +
+    Number(parametros?.margen_bruto_recamaras || 0) * porLineaMonto["Recámaras"];
+  const gastosFijosTotal = Number(parametros?.gastos_fijos_mensuales || 0) * horizonte.length;
+  const utilidadOperativaPct = ventaHorizonteTotal > 0 ? (margenBrutoMonto - gastosFijosTotal) / ventaHorizonteTotal : null;
+  const metaMargen = parametros?.meta_margen_operativo_pct != null ? Number(parametros.meta_margen_operativo_pct) : null;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[#001225] bg-white shadow-sm">
+      <div className="flex items-center gap-2 bg-[#001225] px-4 py-2.5">
+        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-white">Paso 1</span>
+        <p className="text-[10px] font-black uppercase tracking-widest text-white">Metas estratégicas — punto de partida del ciclo S&amp;OP</p>
+      </div>
+      <div className="grid gap-3 p-4 sm:grid-cols-2">
+        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Meta de venta {anioActual}</p>
+          <p className="mt-1 text-lg font-black text-slate-900">{metaVenta > 0 ? formatMoney(metaVenta) : "Sin definir"}</p>
+          {metaVenta > 0 ? (
+            <p className="mt-0.5 text-[10px] font-bold text-slate-500">
+              Comprometido: <b className="text-slate-700">{formatMoney(ventaComprometidaAnio)}</b> ({avanceVentaPct.toFixed(1)}%)
+            </p>
+          ) : (
+            <p className="mt-0.5 text-[10px] font-bold text-slate-400">Captúrala en Parámetros → Márgenes y finanzas.</p>
+          )}
+        </div>
+        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Meta de margen operativo</p>
+          <p className="mt-1 text-lg font-black text-slate-900">{metaMargen != null ? `${(metaMargen * 100).toFixed(1)}%` : "Sin definir"}</p>
+          {metaMargen != null && utilidadOperativaPct != null ? (
+            <p className="mt-0.5 text-[10px] font-bold text-slate-500">
+              Proyectado con supuestos vigentes: <b className={utilidadOperativaPct >= metaMargen ? "text-emerald-600" : "text-red-600"}>{(utilidadOperativaPct * 100).toFixed(1)}%</b>
+            </p>
+          ) : (
+            <p className="mt-0.5 text-[10px] font-bold text-slate-400">Captúrala en Parámetros → Márgenes y finanzas.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CicloFirmasSection({ control, firmas, currentUser, personasCatalogo, onUpsertFirma, onResetFirmas, onAlertaLider }) {
   const anio = control?.mes_activo ? Number(control.mes_activo.slice(0, 4)) : null;
   const mes = control?.mes_activo ? Number(control.mes_activo.slice(5, 7)) : null;
@@ -221,7 +313,21 @@ function CicloFirmasSection({ control, firmas, currentUser, personasCatalogo, on
   );
 }
 
-export default function ControlTab({ control, canEdit, onSave, firmas = [], currentUser, personasCatalogo = [], onUpsertFirma, onResetFirmas, onAlertaLider }) {
+export default function ControlTab({
+  control,
+  canEdit,
+  onSave,
+  firmas = [],
+  currentUser,
+  personasCatalogo = [],
+  onUpsertFirma,
+  onResetFirmas,
+  onAlertaLider,
+  parametros,
+  planVenta = [],
+  productos = [],
+  historico = [],
+}) {
   // El <input type="month"> solo acepta/devuelve "AAAA-MM", pero la columna
   // en Supabase es tipo date ("AAAA-MM-DD") — hay que recortar al mostrar y
   // completar con "-01" al guardar, o el guardado falla (fecha inválida) y
@@ -261,6 +367,8 @@ export default function ControlTab({ control, canEdit, onSave, firmas = [], curr
 
   return (
     <div className="space-y-3 p-3">
+      <MetasEstrategicasSection control={control} parametros={parametros} planVenta={planVenta} productos={productos} historico={historico} />
+
       <div className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${estilo.card}`}>
         <div className={`flex items-center gap-2 px-4 py-2.5 ${estilo.header}`}>
           <span className={`h-2 w-2 rounded-full ${estilo.dot}`} />

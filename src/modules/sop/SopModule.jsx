@@ -670,6 +670,10 @@ export default function SopModule({ currentUser }) {
                 onUpsertFirma={handleUpsertFirma}
                 onResetFirmas={handleResetFirmas}
                 onAlertaLider={handleAlertaLider}
+                parametros={parametros}
+                planVenta={planVenta}
+                productos={productos}
+                historico={historico}
               />
             )}
             {activeTab === "parametros" && (
