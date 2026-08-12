@@ -671,14 +671,14 @@ export default function SopModule({ currentUser }) {
               onClick={() => setShowSopVideo(true)}
               className="rounded-lg bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/20"
             >
-              ▶ Video
+              ▶ Guía en video
             </button>
             <button
               type="button"
               onClick={() => window.open(SOP_MANUAL_URL, "_blank")}
               className="rounded-lg bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/20"
             >
-              📄 PDF
+              📄 Guía en PDF
             </button>
             {canCreateSolicitud && (
               <button
