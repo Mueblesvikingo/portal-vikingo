@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../services/supabase";
 import { createAccion, getTiposFlujo } from "../../services/accionesService";
 import { getFlujoConfig } from "../actions/actionsHelpers";
+import { createStrategicDecision } from "../../services/decisionService";
+import { createWorkloadAssignment } from "../../services/workloadService";
 
 const tabs = ["ENFOQUE", "INSUMOS", "SESIÓN"];
 
@@ -152,6 +154,105 @@ function CreateAccionButton({ onClick, disabled }) {
   );
 }
 
+function SolicitarDireccionButton({ onClick, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={disabled ? "Guarda la semana antes de enviarlo a Dirección" : "Enviar a la Bandeja del Centro de Decisiones"}
+      className="text-sm font-black leading-none text-slate-300 transition hover:text-violet-600 disabled:cursor-not-allowed disabled:opacity-30"
+    >
+      ⇧
+    </button>
+  );
+}
+
+function AsignacionButton({ onClick, disabled, active }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={disabled ? "Guarda la semana antes de crear una asignación" : "Convertir en asignación de Balance de Carga"}
+      className={`text-sm font-black leading-none transition disabled:cursor-not-allowed disabled:opacity-30 ${
+        active ? "text-amber-600" : "text-slate-300 hover:text-amber-600"
+      }`}
+    >
+      ◆
+    </button>
+  );
+}
+
+// Formulario compacto para convertir una fila de Enfoque o Sesión en una
+// asignación real de Balance de Carga, para cualquier persona del catálogo —
+// mismo patrón que `ConvertirEnAsignacionForm` en
+// src/modules/sop/DecisionesTab.jsx (Acuerdos S&OP), adaptado a este módulo.
+function ConvertirEnAsignacionForm({ colSpan, personasCatalogo, onConfirm, onCancel }) {
+  const [personaId, setPersonaId] = useState("");
+  const [horas, setHoras] = useState(4);
+  const [fechaLimite, setFechaLimite] = useState("");
+  const [prioridad, setPrioridad] = useState("Alta");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleConfirm() {
+    if (!personaId) {
+      setError("Selecciona a quién se le asigna.");
+      return;
+    }
+    setError("");
+    setSaving(true);
+    const persona = personasCatalogo.find((p) => String(p.id) === String(personaId));
+    const ok = await onConfirm({
+      personaId: Number(personaId),
+      personaNombre: persona?.nombre || "",
+      horas: Number(horas) || 0,
+      fechaLimite: fechaLimite || null,
+      prioridad,
+    });
+    setSaving(false);
+    if (ok) onCancel();
+  }
+
+  return (
+    <tr className="border-b border-slate-100 bg-amber-50/50">
+      <td colSpan={colSpan} className="px-3 py-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Persona
+            <select value={personaId} onChange={(e) => setPersonaId(e.target.value)} className="mt-1 h-9 w-52 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              <option value="">Selecciona...</option>
+              {personasCatalogo.map((p) => (
+                <option key={p.id} value={p.id}>{p.nombre}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Horas estimadas
+            <input type="number" min="0.5" step="0.5" value={horas} onChange={(e) => setHoras(e.target.value)} className="mt-1 h-9 w-24 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+          </label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Fecha límite
+            <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+          </label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Prioridad
+            <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              {["Crítica", "Alta", "Media", "Baja"].map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          <button type="button" disabled={saving} onClick={handleConfirm} className="h-9 rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+            {saving ? "Enviando..." : "Confirmar asignación"}
+          </button>
+          <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+        </div>
+        {error && <p className="mt-1.5 text-[10px] font-bold text-red-600">{error}</p>}
+      </td>
+    </tr>
+  );
+}
+
 function Th({ children, className = "" }) {
   return (
     <th
@@ -191,7 +292,14 @@ function KpiCard({ label, value, sub, tone = "slate" }) {
 
 function getWeekStatusLabel(status) {
   const value = String(status || "abierta").toLowerCase();
-  return value === "abierta" ? "Abierta" : status;
+  return value === "abierta" ? "Abierta" : value === "cerrada" ? "Cerrada" : status;
+}
+
+function getWeekStatusBadgeClass(status) {
+  const value = String(status || "abierta").toLowerCase();
+  return value === "cerrada"
+    ? "border-slate-200 bg-slate-100 text-slate-500"
+    : "border-emerald-100 bg-emerald-50 text-emerald-700";
 }
 
 export default function StrategicFollowupModule({ currentUser }) {
@@ -207,7 +315,9 @@ export default function StrategicFollowupModule({ currentUser }) {
     fecha_inicio: toDateInput(initialStart),
     fecha_fin: toDateInput(initialEnd),
     estado: "abierta",
+    kpis_riesgos: "",
   });
+  const [convertingKey, setConvertingKey] = useState(null);
 
   const [data, setData] = useState({
     ENFOQUE: [
@@ -241,8 +351,15 @@ export default function StrategicFollowupModule({ currentUser }) {
 
   useEffect(() => {
     loadPeople();
-    loadWeeks();
     getTiposFlujo().then(setTiposFlujoAcciones);
+    // Si ya existe una semana guardada para la semana en curso, la carga en
+    // vez de dejar el formulario en blanco — evita crear una semana
+    // duplicada por accidente cada vez que se reabre el módulo.
+    loadWeeks().then((weeksData) => {
+      const mondayStr = toDateInput(getMonday());
+      const existing = weeksData.find((week) => week.fecha_inicio === mondayStr);
+      if (existing) loadWeek(existing);
+    });
   }, []);
 
   async function handleCrearAccionEnfoque(row) {
@@ -307,7 +424,84 @@ export default function StrategicFollowupModule({ currentUser }) {
       alert("No fue posible crear la acción.");
       return;
     }
+
+    const { error: updateError } = await supabase
+      .from("seguimiento_sesion")
+      .update({ accion_id: result.data.id })
+      .eq("id", row.id);
+
+    if (updateError) console.error(updateError);
+
+    setData((current) => ({
+      ...current,
+      SESIÓN: current.SESIÓN.map((r) => (r.id === row.id ? { ...r, accionId: result.data.id } : r)),
+    }));
+
     alert(`Acción ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
+  }
+
+  // Envía una fila de Enfoque o Sesión a la Bandeja del Centro de Decisiones
+  // con status "Solicitud" (pendiente de Dirección) — mismo mecanismo que
+  // handleRequestDirectorDecision en src/modules/sop/SopModule.jsx.
+  async function handleSolicitarDireccion(row, tabKey) {
+    if (!row.id) {
+      alert("Guarda la semana primero para poder enviarlo a Dirección.");
+      return;
+    }
+    if (!window.confirm(`¿Enviar "${row.tema}" a la Bandeja del Centro de Decisiones?`)) return;
+
+    try {
+      await createStrategicDecision({
+        title: row.tema,
+        owner: currentUser?.nombre || currentUser?.usuario || "",
+        risk: "Moderado",
+        status: "Solicitud",
+        executionType: null,
+        dueDate: null,
+        consequence: "",
+        recommendation: tabKey === "SESIÓN" ? row.observacion || "" : row.resultado || "",
+        wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
+        process: "Seguimiento Estratégico",
+      });
+      alert("Enviado a la Bandeja del Centro de Decisiones.");
+    } catch (err) {
+      console.error(err);
+      alert("No fue posible enviar a Dirección.");
+    }
+  }
+
+  // Convierte una fila de Enfoque o Sesión en una asignación real de Balance
+  // de Carga — mismo mecanismo que handleConvertToAssignment en
+  // src/modules/sop/SopModule.jsx.
+  async function handleConvertToAssignment(row, tabKey, payload) {
+    const result = await createWorkloadAssignment({
+      persona_id: payload.personaId,
+      responsable: payload.personaNombre,
+      rol: "Seguimiento Estratégico",
+      tipo: "Proyecto",
+      prioridad: payload.prioridad || "Alta",
+      gestion: "Otro",
+      titulo: row.tema,
+      descripcion: tabKey === "SESIÓN" ? row.observacion || "" : row.resultado || "",
+      revisara: "",
+      aprobara: "",
+      seguimiento: "",
+      carga_horas: payload.horas,
+      fecha_limite: payload.fechaLimite || null,
+      estado: "Pendiente",
+      asigna: currentUser?.nombre || currentUser?.usuario || "",
+      asigna_rol: "Seguimiento Estratégico",
+      horas_totales: payload.horas,
+      origen_estrategico: "Estrategia",
+    });
+
+    if (!result.ok) {
+      console.error(result.error);
+      alert("No fue posible crear la asignación.");
+      return false;
+    }
+    alert("Asignación creada en Balance de Carga.");
+    return true;
   }
 
   async function loadPeople() {
@@ -332,10 +526,11 @@ export default function StrategicFollowupModule({ currentUser }) {
 
     if (error) {
       console.error("Error cargando semanas:", error);
-      return;
+      return [];
     }
 
     setWeeks(weeksData || []);
+    return weeksData || [];
   }
 
   function updateRow(index, field, value) {
@@ -409,14 +604,38 @@ export default function StrategicFollowupModule({ currentUser }) {
       fecha_inicio: toDateInput(start),
       fecha_fin: toDateInput(end),
       estado: "abierta",
+      kpis_riesgos: "",
     });
 
-    setData((current) => ({
-      ...current,
-      ENFOQUE: [],
-    }));
-
+    // Limpia las 3 pestañas — antes solo se reiniciaba Enfoque, dejando
+    // Insumos/Sesión de la semana anterior listas para duplicarse por
+    // accidente si el usuario guardaba sin notarlo.
+    setData({ ENFOQUE: [], INSUMOS: [], SESIÓN: [] });
+    setConvertingKey(null);
     setActiveTab("ENFOQUE");
+  }
+
+  async function closeWeek() {
+    if (!currentWeek.id) {
+      alert("Guarda la semana antes de cerrarla.");
+      return;
+    }
+    if (!window.confirm("¿Cerrar esta semana? Seguirás pudiendo consultarla, pero quedará marcada como cerrada.")) return;
+
+    const { error } = await supabase
+      .from("seguimiento_semanas")
+      .update({ estado: "cerrada" })
+      .eq("id", currentWeek.id);
+
+    if (error) {
+      alert("No se pudo cerrar la semana.");
+      console.error(error);
+      return;
+    }
+
+    setCurrentWeek((current) => ({ ...current, estado: "cerrada" }));
+    await loadWeeks();
+    alert("Semana cerrada.");
   }
 
   async function saveWeek() {
@@ -429,6 +648,7 @@ export default function StrategicFollowupModule({ currentUser }) {
           fecha_inicio: currentWeek.fecha_inicio,
           fecha_fin: currentWeek.fecha_fin,
           estado: currentWeek.estado || "abierta",
+          kpis_riesgos: currentWeek.kpis_riesgos || "",
         })
         .select()
         .single();
@@ -448,6 +668,7 @@ export default function StrategicFollowupModule({ currentUser }) {
           fecha_inicio: currentWeek.fecha_inicio,
           fecha_fin: currentWeek.fecha_fin,
           estado: currentWeek.estado || "abierta",
+          kpis_riesgos: currentWeek.kpis_riesgos || "",
         })
         .eq("id", weekId);
 
@@ -610,6 +831,7 @@ export default function StrategicFollowupModule({ currentUser }) {
         tema: row.tema || "",
         resultado: row.resultado || "Pendiente",
         observacion: row.observacion || "",
+        accionId: row.accion_id || null,
       })),
     });
 
@@ -664,8 +886,9 @@ export default function StrategicFollowupModule({ currentUser }) {
     const reviewed = data.SESIÓN.filter((row) => row.revisado).length;
     const closed = data.SESIÓN.filter((row) => row.resultado === "Cerrado").length;
     const pending = data.SESIÓN.filter((row) => row.resultado === "Pendiente").length;
+    const withAccion = data.SESIÓN.filter((row) => row.accionId).length;
 
-    return { total, reviewed, closed, pending };
+    return { total, reviewed, closed, pending, withAccion };
   }, [data.SESIÓN]);
 
   return (
@@ -723,16 +946,16 @@ export default function StrategicFollowupModule({ currentUser }) {
       )}
 
       {activeTab === "SESIÓN" && (
-        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <KpiCard label="Acuerdos" value={sessionSummary.total} tone="slate" />
           <KpiCard label="Revisados" value={sessionSummary.reviewed} tone="emerald" />
           <KpiCard label="Cerrados" value={sessionSummary.closed} tone="emerald" />
           <KpiCard label="Pendientes" value={sessionSummary.pending} tone={sessionSummary.pending > 0 ? "amber" : "slate"} />
+          <KpiCard label="Acciones creadas" value={sessionSummary.withAccion} sub={`de ${sessionSummary.total} acuerdos`} tone="slate" />
         </div>
       )}
 
-      {activeTab === "ENFOQUE" && (
-        <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs font-black text-slate-500">
               Semana {getWeekNumber(currentWeek.fecha_inicio)}:{" "}
@@ -763,6 +986,25 @@ export default function StrategicFollowupModule({ currentUser }) {
               >
                 Consultar
               </button>
+              <button
+                type="button"
+                onClick={closeWeek}
+                disabled={!currentWeek.id || String(currentWeek.estado).toLowerCase() === "cerrada"}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Cerrar semana
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-400">KPI's y riesgos relevantes de la semana</p>
+            <div className="rounded-xl border border-slate-200 bg-white px-2">
+              <AutoTextarea
+                value={currentWeek.kpis_riesgos}
+                onChange={(value) => setCurrentWeek((current) => ({ ...current, kpis_riesgos: value }))}
+                placeholder="Desviaciones, KPI's y riesgos que Dirección debe conocer antes de la sesión"
+              />
             </div>
           </div>
 
@@ -784,14 +1026,13 @@ export default function StrategicFollowupModule({ currentUser }) {
                       Semana {getWeekNumber(week.fecha_inicio)} · {formatDate(week.fecha_inicio)} al{" "}
                       {formatDate(week.fecha_fin)}
                     </span>
-                    <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700">{getWeekStatusLabel(week.estado)}</span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${getWeekStatusBadgeClass(week.estado)}`}>{getWeekStatusLabel(week.estado)}</span>
                   </button>
                 ))
               )}
             </div>
           )}
-        </div>
-      )}
+      </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         {activeTab === "ENFOQUE" && (
@@ -804,65 +1045,84 @@ export default function StrategicFollowupModule({ currentUser }) {
                 <Th className="min-w-[260px]">Resultado esperado</Th>
                 <Th className="min-w-[240px]">Responsable</Th>
                 <Th className="w-[80px]">Min</Th>
-                <Th className="w-[56px]" />
+                <Th className="w-[104px]" />
               </tr>
             </thead>
             <tbody>
-              {activeRows.map((row, index) => (
-                <tr key={`enfoque-${index}`}>
-                  <Td className="w-[44px]">
-                    <input
-                      type="checkbox"
-                      checked={row.revisado}
-                      onChange={(event) => updateRow(index, "revisado", event.target.checked)}
-                      className="mt-2 h-4 w-4 accent-red-600"
-                    />
-                  </Td>
-                  <Td className="w-[110px] min-w-[110px]">
-                    <AutoTextarea
-                      value={row.prioridad}
-                      onChange={(value) => updateRow(index, "prioridad", value)}
-                    />
-                  </Td>
-                  <Td className="min-w-[220px]">
-                    <AutoTextarea
-                      value={row.tema}
-                      onChange={(value) => updateRow(index, "tema", value)}
-                      placeholder="Tema estratégico"
-                    />
-                  </Td>
-                  <Td className="min-w-[260px]">
-                    <AutoTextarea
-                      value={row.resultado}
-                      onChange={(value) => updateRow(index, "resultado", value)}
-                      placeholder="Resultado esperado"
-                    />
-                  </Td>
-                  <Td className="min-w-[240px]">
-                    <ResponsibleSelect
-                      value={row.responsableId}
-                      people={people}
-                      onChange={(payload) => updateResponsible(index, payload)}
-                    />
-                  </Td>
-                  <Td className="w-[80px]">
-                    <input
-                      type="number"
-                      min="0"
-                      value={row.tiempo || ""}
-                      onChange={(event) => updateRow(index, "tiempo", event.target.value)}
-                      placeholder="30"
-                      className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-300 focus:border-red-200 focus:bg-white"
-                    />
-                  </Td>
-                  <Td className="w-[56px] px-2 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <CreateAccionButton onClick={() => handleCrearAccionEnfoque(row)} disabled={!row.id} />
-                      <DeleteButton onClick={() => deleteRow(index)} />
-                    </div>
-                  </Td>
-                </tr>
-              ))}
+              {activeRows.map((row, index) => {
+                const convertKey = `ENFOQUE::${row.id}`;
+                return (
+                  <React.Fragment key={`enfoque-${index}`}>
+                    <tr>
+                      <Td className="w-[44px]">
+                        <input
+                          type="checkbox"
+                          checked={row.revisado}
+                          onChange={(event) => updateRow(index, "revisado", event.target.checked)}
+                          className="mt-2 h-4 w-4 accent-red-600"
+                        />
+                      </Td>
+                      <Td className="w-[110px] min-w-[110px]">
+                        <AutoTextarea
+                          value={row.prioridad}
+                          onChange={(value) => updateRow(index, "prioridad", value)}
+                        />
+                      </Td>
+                      <Td className="min-w-[220px]">
+                        <AutoTextarea
+                          value={row.tema}
+                          onChange={(value) => updateRow(index, "tema", value)}
+                          placeholder="Tema estratégico"
+                        />
+                      </Td>
+                      <Td className="min-w-[260px]">
+                        <AutoTextarea
+                          value={row.resultado}
+                          onChange={(value) => updateRow(index, "resultado", value)}
+                          placeholder="Resultado esperado"
+                        />
+                      </Td>
+                      <Td className="min-w-[240px]">
+                        <ResponsibleSelect
+                          value={row.responsableId}
+                          people={people}
+                          onChange={(payload) => updateResponsible(index, payload)}
+                        />
+                      </Td>
+                      <Td className="w-[80px]">
+                        <input
+                          type="number"
+                          min="0"
+                          value={row.tiempo || ""}
+                          onChange={(event) => updateRow(index, "tiempo", event.target.value)}
+                          placeholder="30"
+                          className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-300 focus:border-red-200 focus:bg-white"
+                        />
+                      </Td>
+                      <Td className="w-[104px] px-2 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <CreateAccionButton onClick={() => handleCrearAccionEnfoque(row)} disabled={!row.id} />
+                          <SolicitarDireccionButton onClick={() => handleSolicitarDireccion(row, "ENFOQUE")} disabled={!row.id} />
+                          <AsignacionButton
+                            onClick={() => setConvertingKey((current) => (current === convertKey ? null : convertKey))}
+                            disabled={!row.id}
+                            active={convertingKey === convertKey}
+                          />
+                          <DeleteButton onClick={() => deleteRow(index)} />
+                        </div>
+                      </Td>
+                    </tr>
+                    {convertingKey === convertKey && (
+                      <ConvertirEnAsignacionForm
+                        colSpan={7}
+                        personasCatalogo={people}
+                        onCancel={() => setConvertingKey(null)}
+                        onConfirm={(payload) => handleConvertToAssignment(row, "ENFOQUE", payload)}
+                      />
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -943,49 +1203,73 @@ export default function StrategicFollowupModule({ currentUser }) {
                 <Th className="w-[30%]">Tema</Th>
                 <Th className="w-[145px]">Resultado</Th>
                 <Th>Observación</Th>
-                <Th className="w-[56px]" />
+                <Th className="w-[104px]" />
               </tr>
             </thead>
             <tbody>
-              {activeRows.map((row, index) => (
-                <tr key={`sesion-${index}`}>
-                  <Td className="w-[42px]">
-                    <input
-                      type="checkbox"
-                      checked={row.revisado}
-                      onChange={(event) => updateRow(index, "revisado", event.target.checked)}
-                      className="mt-2 h-4 w-4 accent-red-600"
-                    />
-                  </Td>
-                  <Td>
-                    <AutoTextarea
-                      value={row.tema}
-                      onChange={(value) => updateRow(index, "tema", value)}
-                      placeholder="Tema revisado"
-                    />
-                  </Td>
-                  <Td className="w-[145px]">
-                    <ClickBadge
-                      value={row.resultado}
-                      options={resultFlow}
-                      onChange={(value) => updateRow(index, "resultado", value)}
-                    />
-                  </Td>
-                  <Td>
-                    <AutoTextarea
-                      value={row.observacion}
-                      onChange={(value) => updateRow(index, "observacion", value)}
-                      placeholder="Observación ejecutiva"
-                    />
-                  </Td>
-                  <Td className="w-[56px] px-2 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <CreateAccionButton onClick={() => handleCrearAccionSesion(row)} disabled={!row.id} />
-                      <DeleteButton onClick={() => deleteRow(index)} />
-                    </div>
-                  </Td>
-                </tr>
-              ))}
+              {activeRows.map((row, index) => {
+                const convertKey = `SESIÓN::${row.id}`;
+                return (
+                  <React.Fragment key={`sesion-${index}`}>
+                    <tr>
+                      <Td className="w-[42px]">
+                        <input
+                          type="checkbox"
+                          checked={row.revisado}
+                          onChange={(event) => updateRow(index, "revisado", event.target.checked)}
+                          className="mt-2 h-4 w-4 accent-red-600"
+                        />
+                      </Td>
+                      <Td>
+                        <AutoTextarea
+                          value={row.tema}
+                          onChange={(value) => updateRow(index, "tema", value)}
+                          placeholder="Tema revisado"
+                        />
+                      </Td>
+                      <Td className="w-[145px]">
+                        <ClickBadge
+                          value={row.resultado}
+                          options={resultFlow}
+                          onChange={(value) => updateRow(index, "resultado", value)}
+                        />
+                      </Td>
+                      <Td>
+                        <AutoTextarea
+                          value={row.observacion}
+                          onChange={(value) => updateRow(index, "observacion", value)}
+                          placeholder="Observación ejecutiva"
+                        />
+                        {row.accionId && (
+                          <span className="mt-1 inline-flex rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[9px] font-black text-sky-700">
+                            Acción #{row.accionId} creada
+                          </span>
+                        )}
+                      </Td>
+                      <Td className="w-[104px] px-2 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <CreateAccionButton onClick={() => handleCrearAccionSesion(row)} disabled={!row.id} />
+                          <SolicitarDireccionButton onClick={() => handleSolicitarDireccion(row, "SESIÓN")} disabled={!row.id} />
+                          <AsignacionButton
+                            onClick={() => setConvertingKey((current) => (current === convertKey ? null : convertKey))}
+                            disabled={!row.id}
+                            active={convertingKey === convertKey}
+                          />
+                          <DeleteButton onClick={() => deleteRow(index)} />
+                        </div>
+                      </Td>
+                    </tr>
+                    {convertingKey === convertKey && (
+                      <ConvertirEnAsignacionForm
+                        colSpan={5}
+                        personasCatalogo={people}
+                        onCancel={() => setConvertingKey(null)}
+                        onConfirm={(payload) => handleConvertToAssignment(row, "SESIÓN", payload)}
+                      />
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         )}
