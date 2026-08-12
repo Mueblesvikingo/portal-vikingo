@@ -752,3 +752,121 @@ export async function deactivateInfraestructura(id, actor) {
     return { ok: false, error: err };
   }
 }
+
+// Plan financiero — partidas manuales (sop_financiero_filas) y sus montos
+// por mes (sop_financiero_montos), editables/reordenables/agregables por
+// Finanzas + equipo estratégico. Las filas calculadas (venta, margen,
+// utilidad) NO viven aqui — siguen derivandose de Plan de venta/Parametros.
+export async function getFinancieroFilas() {
+  try {
+    const { data, error } = await supabase
+      .from("sop_financiero_filas")
+      .select("*")
+      .eq("activo", true)
+      .order("orden", { ascending: true });
+
+    if (error) {
+      console.error("Error al cargar filas financieras S&OP:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar filas financieras S&OP:", err);
+    return [];
+  }
+}
+
+export async function createFinancieroFila(payload, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_financiero_filas")
+      .insert({
+        concepto: payload.concepto,
+        categoria: payload.categoria,
+        orden: payload.orden ?? 0,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function updateFinancieroFila(id, payload, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_financiero_filas")
+      .update({
+        ...payload,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function deactivateFinancieroFila(id, actor) {
+  try {
+    const { error } = await supabase
+      .from("sop_financiero_filas")
+      .update({
+        activo: false,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", id);
+
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+
+export async function getFinancieroMontos() {
+  try {
+    const { data, error } = await supabase.from("sop_financiero_montos").select("*");
+
+    if (error) {
+      console.error("Error al cargar montos financieros S&OP:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar montos financieros S&OP:", err);
+    return [];
+  }
+}
+
+export async function upsertFinancieroMonto(filaId, anio, mes, monto) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_financiero_montos")
+      .upsert(
+        { fila_id: filaId, anio, mes, monto, updated_at: new Date().toISOString() },
+        { onConflict: "fila_id,anio,mes" }
+      )
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}

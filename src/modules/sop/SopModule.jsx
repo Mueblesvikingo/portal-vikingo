@@ -33,6 +33,12 @@ import {
   createInfraestructura,
   updateInfraestructura,
   deactivateInfraestructura,
+  getFinancieroFilas,
+  createFinancieroFila,
+  updateFinancieroFila,
+  deactivateFinancieroFila,
+  getFinancieroMontos,
+  upsertFinancieroMonto,
 } from "../../services/sopService";
 import { getPersonas } from "../../services/organizationCatalogService";
 import { createStrategicDecision } from "../../services/decisionService";
@@ -74,6 +80,8 @@ export default function SopModule({ currentUser }) {
   const [prioridades, setPrioridades] = useState([]);
   const [capacidadProcesos, setCapacidadProcesos] = useState([]);
   const [infraestructura, setInfraestructura] = useState([]);
+  const [financieroFilas, setFinancieroFilas] = useState([]);
+  const [financieroMontos, setFinancieroMontos] = useState([]);
   const [personasCatalogo, setPersonasCatalogo] = useState([]);
   const [message, setMessage] = useState("");
 
@@ -86,7 +94,7 @@ export default function SopModule({ currentUser }) {
 
   async function loadAll() {
     setLoading(true);
-    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, historicoData, prioridadesData, capacidadProcesosData, infraestructuraData, personasData] = await Promise.all([
+    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, historicoData, prioridadesData, capacidadProcesosData, infraestructuraData, financieroFilasData, financieroMontosData, personasData] = await Promise.all([
       getProductos(),
       getControl(),
       getParametros(),
@@ -97,6 +105,8 @@ export default function SopModule({ currentUser }) {
       getPrioridadesSemana(),
       getCapacidadProcesos(),
       getInfraestructura(),
+      getFinancieroFilas(),
+      getFinancieroMontos(),
       getPersonas().catch(() => []),
     ]);
     setProductos(productosData);
@@ -109,6 +119,8 @@ export default function SopModule({ currentUser }) {
     setPrioridades(prioridadesData);
     setCapacidadProcesos(capacidadProcesosData);
     setInfraestructura(infraestructuraData);
+    setFinancieroFilas(financieroFilasData);
+    setFinancieroMontos(financieroMontosData);
     setPersonasCatalogo(personasData);
 
     if (controlData?.mes_activo) {
@@ -292,6 +304,75 @@ export default function SopModule({ currentUser }) {
       setMessage("No fue posible enviar la solicitud de capacidad.");
       return false;
     }
+  }
+
+  // Mismo mecanismo que handleSolicitarCapacidad, para Plan financiero.
+  async function handleSolicitarFinanciero(draft, actor) {
+    try {
+      await createStrategicDecision({
+        title: draft.titulo,
+        owner: actor?.nombre || actor?.usuario || "",
+        risk: draft.riesgo || "Moderado",
+        status: "Solicitud",
+        executionType: null,
+        dueDate: draft.fecha || null,
+        consequence: "",
+        recommendation: draft.descripcion || "",
+        wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
+        process: "S&OP",
+      });
+      setMessage("Solicitud financiera enviada a la Bandeja del Centro de Decisiones.");
+      return true;
+    } catch (err) {
+      console.error(err);
+      setMessage("No fue posible enviar la solicitud financiera.");
+      return false;
+    }
+  }
+
+  async function handleCreateFinancieroFila(payload, actor) {
+    const result = await createFinancieroFila(payload, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar la partida.");
+      return false;
+    }
+    setFinancieroFilas((current) => [...current, result.data]);
+    setMessage("Partida agregada.");
+    return true;
+  }
+
+  async function handleUpdateFinancieroFila(id, payload, actor) {
+    const result = await updateFinancieroFila(id, payload, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible actualizar la partida.");
+      return;
+    }
+    setFinancieroFilas((current) => current.map((f) => (f.id === id ? result.data : f)).sort((a, b) => a.orden - b.orden));
+  }
+
+  async function handleDeactivateFinancieroFila(id, actor) {
+    const result = await deactivateFinancieroFila(id, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible quitar la partida.");
+      return;
+    }
+    setFinancieroFilas((current) => current.filter((f) => f.id !== id));
+  }
+
+  async function handleUpsertFinancieroMonto(filaId, anio, mes, monto) {
+    const result = await upsertFinancieroMonto(filaId, anio, mes, monto);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar el monto.");
+      return;
+    }
+    setFinancieroMontos((current) => {
+      const filtered = current.filter((m) => !(m.fila_id === filaId && m.anio === anio && m.mes === mes));
+      return [...filtered, result.data];
+    });
   }
 
   // Botón "+ Solicitud" (Hugo, Samantha, Brisa): manda directo a la Bandeja
@@ -628,7 +709,23 @@ export default function SopModule({ currentUser }) {
                 onSolicitarCapacidad={handleSolicitarCapacidad}
               />
             )}
-            {activeTab === "financiero" && <FinancieroTab productos={productos} planVenta={planVenta} control={control} parametros={parametros} />}
+            {activeTab === "financiero" && (
+              <FinancieroTab
+                productos={productos}
+                planVenta={planVenta}
+                control={control}
+                parametros={parametros}
+                financieroFilas={financieroFilas}
+                financieroMontos={financieroMontos}
+                canEdit={canEditFinancieroParams}
+                currentUser={currentUser}
+                onCreateFila={handleCreateFinancieroFila}
+                onUpdateFila={handleUpdateFinancieroFila}
+                onDeactivateFila={handleDeactivateFinancieroFila}
+                onUpsertMonto={handleUpsertFinancieroMonto}
+                onSolicitarFinanciero={handleSolicitarFinanciero}
+              />
+            )}
             {activeTab === "decisiones" && (
               <DecisionesTab
                 decisiones={decisiones}
