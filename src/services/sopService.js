@@ -467,21 +467,27 @@ export async function getPrioridadesSemana() {
   }
 }
 
-export async function createPrioridadSemana(payload, actor) {
+// Una sola prioridad por área y semana (unique en anio,mes,semana,area) —
+// upsert en vez de insert para que capturar de nuevo sobre la misma casilla
+// reemplace el texto en vez de duplicar filas.
+export async function upsertPrioridadSemana(payload, actor) {
   try {
     const { data, error } = await supabase
       .from("sop_prioridades_semana")
-      .insert({
-        anio: payload.anio,
-        mes: payload.mes,
-        semana: payload.semana,
-        area: payload.area,
-        prioridad: payload.prioridad,
-        meta_numerica: payload.meta_numerica || null,
-        responsable: payload.responsable || null,
-        created_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
-        created_by_nombre: actor?.nombre || actor?.usuario || null,
-      })
+      .upsert(
+        {
+          anio: payload.anio,
+          mes: payload.mes,
+          semana: payload.semana,
+          area: payload.area,
+          prioridad: payload.prioridad,
+          meta_numerica: payload.meta_numerica || null,
+          responsable: payload.responsable || null,
+          created_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+          created_by_nombre: actor?.nombre || actor?.usuario || null,
+        },
+        { onConflict: "anio,mes,semana,area" }
+      )
       .select("*")
       .single();
 

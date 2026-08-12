@@ -23,7 +23,7 @@ import {
   upsertFirma,
   resetCicloFirmas,
   getPrioridadesSemana,
-  createPrioridadSemana,
+  upsertPrioridadSemana,
   updatePrioridadSemana,
   getCapacidadProcesos,
   createCapacidadProceso,
@@ -430,15 +430,20 @@ export default function SopModule({ currentUser }) {
     return true;
   }
 
-  async function handleCreatePrioridad(payload, actor) {
-    const result = await createPrioridadSemana(payload, actor);
+  async function handleUpsertPrioridad(payload, actor) {
+    const result = await upsertPrioridadSemana(payload, actor);
     if (!result.ok) {
       console.error(result.error);
       setMessage("No fue posible guardar la prioridad.");
       return false;
     }
-    setPrioridades((current) => [result.data, ...current]);
-    setMessage("Prioridad semanal registrada.");
+    setPrioridades((current) => {
+      const filtered = current.filter(
+        (p) => !(p.anio === result.data.anio && p.mes === result.data.mes && p.semana === result.data.semana && p.area === result.data.area)
+      );
+      return [result.data, ...filtered];
+    });
+    setMessage("Prioridad semanal guardada.");
     return true;
   }
 
@@ -642,7 +647,7 @@ export default function SopModule({ currentUser }) {
                 prioridades={prioridades}
                 control={control}
                 canEdit={canEdit}
-                onCreate={handleCreatePrioridad}
+                onUpsert={handleUpsertPrioridad}
                 onUpdateEstado={handleUpdatePrioridadEstado}
                 currentUser={currentUser}
               />

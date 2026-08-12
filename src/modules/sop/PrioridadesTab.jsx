@@ -1,7 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-const AREAS = ["Comercial", "Operaciones", "Finanzas"];
-const EMPTY_DRAFT = { semana: 1, area: "Comercial", prioridad: "", meta_numerica: "", responsable: "" };
+const AREAS = [
+  { key: "Comercial", tone: "sky" },
+  { key: "Operaciones", tone: "emerald" },
+  { key: "Finanzas", tone: "violet" },
+];
+
+const TONE = {
+  sky: { border: "border-sky-200", header: "bg-sky-50/60", dot: "bg-sky-400", title: "text-sky-700" },
+  emerald: { border: "border-emerald-200", header: "bg-emerald-50/60", dot: "bg-emerald-400", title: "text-emerald-700" },
+  violet: { border: "border-violet-200", header: "bg-violet-50/60", dot: "bg-violet-400", title: "text-violet-700" },
+};
 
 const ESTADO_STYLE = {
   "En curso": "border-sky-200 bg-sky-50 text-sky-700",
@@ -9,79 +18,175 @@ const ESTADO_STYLE = {
   "No cumplida": "border-red-200 bg-red-50 text-red-700",
 };
 
-// Captura ligera de prioridades semana a semana (ritmo semanal recomendado
-// en el taller S&OP: fijar 3-4 prioridades por área cada semana, sin flujo
-// de aprobación — el consultor fue explícito en que en esta etapa inicial
-// puede ser tan simple como esto).
-export default function PrioridadesTab({ prioridades, control, canEdit, onCreate, onUpdateEstado, currentUser }) {
-  const [draft, setDraft] = useState(EMPTY_DRAFT);
+// Semana de referencia dentro del mes en curso (1-4), estimada a partir del
+// dia del mes de hoy — solo un punto de partida razonable, el selector deja
+// cambiarla a mano.
+function semanaActualEstimada() {
+  const dia = new Date().getDate();
+  return Math.min(4, Math.ceil(dia / 7));
+}
+
+function PrioridadCard({ area, prioridad, canEdit, onUpsert, onUpdateEstado, anio, mes, semana }) {
+  const tone = TONE[area.tone];
+  const [editando, setEditando] = useState(false);
+  const [draft, setDraft] = useState({ prioridad: prioridad?.prioridad || "", meta_numerica: prioridad?.meta_numerica || "", responsable: prioridad?.responsable || "" });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+
+  async function handleGuardar() {
+    if (!draft.prioridad.trim()) return;
+    setSaving(true);
+    const ok = await onUpsert({ anio, mes, semana, area: area.key, ...draft });
+    setSaving(false);
+    if (ok) setEditando(false);
+  }
+
+  const mostrarForm = editando || !prioridad;
+
+  return (
+    <div className={`flex min-h-[220px] flex-col overflow-hidden rounded-2xl border bg-white shadow-sm ${tone.border}`}>
+      <div className={`flex items-center justify-between gap-2 px-4 py-2.5 ${tone.header}`}>
+        <div className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
+          <p className={`text-[10px] font-black uppercase tracking-widest ${tone.title}`}>{area.key}</p>
+        </div>
+        {prioridad && canEdit && !editando && (
+          <button type="button" onClick={() => setEditando(true)} className="text-[9px] font-black text-slate-400 hover:text-slate-600 hover:underline">
+            Editar
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-1 flex-col justify-between p-4">
+        {mostrarForm ? (
+          canEdit ? (
+            <div className="space-y-2">
+              <textarea
+                value={draft.prioridad}
+                onChange={(e) => setDraft((c) => ({ ...c, prioridad: e.target.value }))}
+                placeholder="¿Cuál es la prioridad de esta semana?"
+                rows={3}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+              />
+              <div className="flex gap-2">
+                <input
+                  value={draft.meta_numerica}
+                  onChange={(e) => setDraft((c) => ({ ...c, meta_numerica: e.target.value }))}
+                  placeholder="Meta (opcional)"
+                  className="h-9 w-1/2 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+                />
+                <input
+                  value={draft.responsable}
+                  onChange={(e) => setDraft((c) => ({ ...c, responsable: e.target.value }))}
+                  placeholder="Responsable (opcional)"
+                  className="h-9 w-1/2 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button type="button" disabled={saving} onClick={handleGuardar} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[9px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+                  {saving ? "Guardando..." : "Guardar prioridad"}
+                </button>
+                {prioridad && (
+                  <button type="button" onClick={() => setEditando(false)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[9px] font-black text-slate-500">
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[11px] font-bold text-slate-300">Sin prioridad definida.</p>
+          )
+        ) : (
+          <>
+            <div>
+              <p className="text-[13px] font-bold leading-snug text-slate-800">{prioridad.prioridad}</p>
+              {prioridad.meta_numerica && <p className="mt-1 text-[10px] font-bold text-slate-500">Meta: {prioridad.meta_numerica}</p>}
+              {prioridad.responsable && <p className="text-[10px] font-bold text-slate-500">Responsable: {prioridad.responsable}</p>}
+            </div>
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">Al cierre de la semana</p>
+              {canEdit ? (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onUpdateEstado(prioridad.id, "Cumplida")}
+                    className={`flex-1 rounded-lg border px-2 py-1.5 text-[10px] font-black uppercase ${prioridad.estado === "Cumplida" ? "border-emerald-300 bg-emerald-100 text-emerald-700" : "border-slate-200 bg-white text-slate-500 hover:bg-emerald-50"}`}
+                  >
+                    ✓ Cumplida
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateEstado(prioridad.id, "No cumplida")}
+                    className={`flex-1 rounded-lg border px-2 py-1.5 text-[10px] font-black uppercase ${prioridad.estado === "No cumplida" ? "border-red-300 bg-red-100 text-red-700" : "border-slate-200 bg-white text-slate-500 hover:bg-red-50"}`}
+                  >
+                    ✗ No cumplida
+                  </button>
+                </div>
+              ) : (
+                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${ESTADO_STYLE[prioridad.estado] || ESTADO_STYLE["En curso"]}`}>{prioridad.estado}</span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function PrioridadesTab({ prioridades, control, canEdit, onUpsert, onUpdateEstado }) {
+  const [semana, setSemana] = useState(semanaActualEstimada);
 
   const anio = control?.mes_activo ? Number(control.mes_activo.slice(0, 4)) : null;
   const mes = control?.mes_activo ? Number(control.mes_activo.slice(5, 7)) : null;
 
-  async function handleSave() {
-    if (!draft.prioridad.trim()) {
-      setError("Captura la prioridad.");
-      return;
+  const prioridadPorArea = useMemo(() => {
+    const map = new Map();
+    for (const p of prioridades) {
+      if (p.anio === anio && p.mes === mes && p.semana === semana) map.set(p.area, p);
     }
-    if (!anio || !mes) {
-      setError("No hay mes activo definido en Control S&OP.");
-      return;
-    }
-    setError("");
-    setSaving(true);
-    const ok = await onCreate({ ...draft, anio, mes }, currentUser);
-    setSaving(false);
-    if (ok) setDraft(EMPTY_DRAFT);
-  }
+    return map;
+  }, [prioridades, anio, mes, semana]);
+
+  const historial = useMemo(
+    () => [...prioridades].sort((a, b) => b.anio - a.anio || b.mes - a.mes || b.semana - a.semana || a.area.localeCompare(b.area)),
+    [prioridades]
+  );
 
   return (
     <div className="space-y-3 p-3">
-      <div className="rounded-2xl border border-violet-200 bg-violet-50 p-3 text-[10px] font-bold text-violet-700">
-        Ritmo semanal: 3-4 prioridades concretas por área, definidas al inicio de cada semana del mes activo. No requiere aprobación, solo seguimiento.
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-[10px] font-bold text-violet-700">
+        <span>Una prioridad por área, definida al inicio de la semana del mes activo. Al cerrar la semana se marca cumplida o no cumplida.</span>
+        <label className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-violet-700">
+          Semana
+          <select value={semana} onChange={(e) => setSemana(Number(e.target.value))} className="h-8 rounded-lg border border-violet-200 bg-white px-2 text-[10px] font-bold text-violet-700 outline-none">
+            {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
       </div>
 
-      {canEdit && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nueva prioridad de la semana</p>
-          <div className="mt-2 grid gap-2 md:grid-cols-6">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Semana
-              <select value={draft.semana} onChange={(e) => setDraft((c) => ({ ...c, semana: Number(e.target.value) }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
-                {[1, 2, 3, 4].map((n) => <option key={n} value={n}>Semana {n}</option>)}
-              </select>
-            </label>
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Área
-              <select value={draft.area} onChange={(e) => setDraft((c) => ({ ...c, area: e.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
-                {AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </label>
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-2">
-              Prioridad
-              <input value={draft.prioridad} onChange={(e) => setDraft((c) => ({ ...c, prioridad: e.target.value }))} placeholder="Ej. Cerrar 40 pzas de Sala Roma" className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
-            </label>
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Meta numérica
-              <input value={draft.meta_numerica} onChange={(e) => setDraft((c) => ({ ...c, meta_numerica: e.target.value }))} placeholder="Opcional" className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
-            </label>
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Responsable
-              <input value={draft.responsable} onChange={(e) => setDraft((c) => ({ ...c, responsable: e.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
-            </label>
-          </div>
-          <div className="mt-2 flex justify-end">
-            <button type="button" disabled={saving} onClick={handleSave} className="rounded-lg bg-[#001225] px-4 py-2 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
-              {saving ? "Guardando..." : "+ Agregar prioridad"}
-            </button>
-          </div>
-          {error && <p className="mt-2 text-[10px] font-bold text-red-600">{error}</p>}
+      {!anio || !mes ? (
+        <p className="text-[11px] font-bold text-slate-300">No hay mes activo definido en Control S&OP.</p>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-3">
+          {AREAS.map((area) => (
+            <PrioridadCard
+              key={area.key}
+              area={area}
+              prioridad={prioridadPorArea.get(area.key)}
+              canEdit={canEdit}
+              onUpsert={onUpsert}
+              onUpdateEstado={onUpdateEstado}
+              anio={anio}
+              mes={mes}
+              semana={semana}
+            />
+          ))}
         </div>
       )}
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center gap-2 bg-slate-50 px-4 py-2.5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Histórico de prioridades semanales</p>
+        </div>
         <table className="w-full border-collapse text-[10px]">
           <thead>
             <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
@@ -94,10 +199,10 @@ export default function PrioridadesTab({ prioridades, control, canEdit, onCreate
             </tr>
           </thead>
           <tbody>
-            {prioridades.length === 0 && (
+            {historial.length === 0 && (
               <tr><td colSpan={6} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay prioridades semanales registradas.</td></tr>
             )}
-            {prioridades.map((p) => (
+            {historial.map((p) => (
               <tr key={p.id} className="border-b border-slate-50">
                 <td className="px-3 py-1.5 font-bold text-slate-700">{p.anio}-{String(p.mes).padStart(2, "0")} / S{p.semana}</td>
                 <td className="px-2 py-1.5 text-slate-600">{p.area}</td>
@@ -105,19 +210,7 @@ export default function PrioridadesTab({ prioridades, control, canEdit, onCreate
                 <td className="px-2 py-1.5 text-slate-600">{p.meta_numerica || "—"}</td>
                 <td className="px-2 py-1.5 text-slate-600">{p.responsable || "—"}</td>
                 <td className="px-2 py-1.5">
-                  {canEdit ? (
-                    <select
-                      value={p.estado}
-                      onChange={(e) => onUpdateEstado(p.id, e.target.value)}
-                      className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase outline-none ${ESTADO_STYLE[p.estado] || ESTADO_STYLE["En curso"]}`}
-                    >
-                      <option value="En curso">En curso</option>
-                      <option value="Cumplida">Cumplida</option>
-                      <option value="No cumplida">No cumplida</option>
-                    </select>
-                  ) : (
-                    <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${ESTADO_STYLE[p.estado] || ESTADO_STYLE["En curso"]}`}>{p.estado}</span>
-                  )}
+                  <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${ESTADO_STYLE[p.estado] || ESTADO_STYLE["En curso"]}`}>{p.estado}</span>
                 </td>
               </tr>
             ))}
