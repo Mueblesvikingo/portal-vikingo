@@ -172,6 +172,23 @@ function Td({ children, className = "" }) {
   );
 }
 
+const KPI_TONE_CLASS = {
+  slate: "border-slate-200 bg-white",
+  emerald: "border-emerald-200 bg-emerald-50",
+  amber: "border-amber-200 bg-amber-50",
+  red: "border-red-200 bg-red-50",
+};
+
+function KpiCard({ label, value, sub, tone = "slate" }) {
+  return (
+    <div className={`rounded-2xl border p-3 shadow-sm ${KPI_TONE_CLASS[tone] || KPI_TONE_CLASS.slate}`}>
+      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+      <p className="mt-1 text-xl font-black text-slate-900">{value}</p>
+      {sub && <p className="mt-0.5 text-[10px] font-bold text-slate-500">{sub}</p>}
+    </div>
+  );
+}
+
 function getWeekStatusLabel(status) {
   const value = String(status || "abierta").toLowerCase();
   return value === "abierta" ? "Abierta" : status;
@@ -246,6 +263,38 @@ export default function StrategicFollowupModule({ currentUser }) {
         titulo: row.tema,
         descripcion: row.resultado || "",
         responsablePersonaId: row.responsableId || null,
+        requiereAnalisisCausa: flujo.requiere_analisis_causa,
+        requiereVerificacionEficacia: flujo.requiere_verificacion_eficacia,
+        requiereAprobacion: flujo.requiere_aprobacion,
+      },
+      currentUser
+    );
+
+    if (!result?.ok) {
+      console.error(result?.error);
+      alert("No fue posible crear la acción.");
+      return;
+    }
+    alert(`Acción ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
+  }
+
+  async function handleCrearAccionSesion(row) {
+    if (!row.id) {
+      alert("Guarda la semana primero para poder crear una acción a partir de este acuerdo.");
+      return;
+    }
+    if (!window.confirm(`¿Crear una acción en el Centro de Gestión de Acciones a partir de "${row.tema}"?`)) return;
+
+    const flujo = getFlujoConfig(tiposFlujoAcciones, "Acuerdo Directivo");
+    const result = await createAccion(
+      {
+        tipo: "Acuerdo Directivo",
+        nivel: "Estratégica",
+        origenModulo: "Seguimiento Estratégico",
+        origenTabla: "seguimiento_sesion",
+        origenId: row.id,
+        titulo: row.tema,
+        descripcion: row.observacion || "",
         requiereAnalisisCausa: flujo.requiere_analisis_causa,
         requiereVerificacionEficacia: flujo.requiere_verificacion_eficacia,
         requiereAprobacion: flujo.requiere_aprobacion,
@@ -444,27 +493,98 @@ export default function StrategicFollowupModule({ currentUser }) {
       }
     }
 
-    await loadWeeks();
-    alert("Semana guardada correctamente.");
-  }
+    const { error: deleteInsumosError } = await supabase
+      .from("seguimiento_insumos")
+      .delete()
+      .eq("semana_id", weekId);
 
-  async function loadWeek(week) {
-    const { data: focusRows, error } = await supabase
-      .from("seguimiento_enfoque")
-      .select("*")
-      .eq("semana_id", week.id)
-      .order("orden", { ascending: true });
-
-    if (error) {
-      alert("No se pudo consultar la semana.");
-      console.error(error);
+    if (deleteInsumosError) {
+      alert("No se pudieron reemplazar los insumos de la semana.");
+      console.error(deleteInsumosError);
       return;
     }
 
-    setCurrentWeek(week);
-    setData((current) => ({
-      ...current,
-      ENFOQUE: (focusRows || []).map((row) => ({
+    const insumosToSave = data.INSUMOS.map((row, index) => ({
+      semana_id: weekId,
+      tema: row.tema || "",
+      insumo: row.insumo || "",
+      responsable_id: row.responsableId || null,
+      responsable_texto: row.responsableTexto || "",
+      fuente: row.fuente || "",
+      estado: row.estado || "Pendiente",
+      orden: index + 1,
+    })).filter((row) => row.tema || row.insumo || row.responsable_id || row.fuente);
+
+    if (insumosToSave.length > 0) {
+      const { error: insumosInsertError } = await supabase
+        .from("seguimiento_insumos")
+        .insert(insumosToSave);
+
+      if (insumosInsertError) {
+        alert("No se pudieron guardar los insumos.");
+        console.error(insumosInsertError);
+        return;
+      }
+    }
+
+    const { error: deleteSesionError } = await supabase
+      .from("seguimiento_sesion")
+      .delete()
+      .eq("semana_id", weekId);
+
+    if (deleteSesionError) {
+      alert("No se pudo reemplazar la sesión de la semana.");
+      console.error(deleteSesionError);
+      return;
+    }
+
+    const sesionToSave = data.SESIÓN.map((row, index) => ({
+      semana_id: weekId,
+      tema: row.tema || "",
+      resultado: row.resultado || "Pendiente",
+      observacion: row.observacion || "",
+      revisado: Boolean(row.revisado),
+      orden: index + 1,
+    })).filter((row) => row.tema || row.observacion);
+
+    if (sesionToSave.length > 0) {
+      const { error: sesionInsertError } = await supabase
+        .from("seguimiento_sesion")
+        .insert(sesionToSave);
+
+      if (sesionInsertError) {
+        alert("No se pudo guardar la sesión.");
+        console.error(sesionInsertError);
+        return;
+      }
+    }
+
+    await loadWeeks();
+    // Recarga las 3 pestañas con los ids reales asignados por Supabase, sin
+    // cambiar de pestaña ni cerrar el listado de semanas — a diferencia de
+    // loadWeek(), que sí hace ambas cosas porque responde a un clic explícito
+    // del usuario sobre una semana distinta.
+    await fetchWeekData(weekId);
+    alert("Semana guardada correctamente.");
+  }
+
+  // Trae Enfoque + Insumos + Sesión de una semana y puebla `data`. Separado de
+  // loadWeek() para poder reutilizarlo también al final de saveWeek() (refresca
+  // los ids reales tras guardar, sin forzar un cambio de pestaña).
+  async function fetchWeekData(weekId) {
+    const [focusResult, insumosResult, sesionResult] = await Promise.all([
+      supabase.from("seguimiento_enfoque").select("*").eq("semana_id", weekId).order("orden", { ascending: true }),
+      supabase.from("seguimiento_insumos").select("*").eq("semana_id", weekId).order("orden", { ascending: true }),
+      supabase.from("seguimiento_sesion").select("*").eq("semana_id", weekId).order("orden", { ascending: true }),
+    ]);
+
+    if (focusResult.error || insumosResult.error || sesionResult.error) {
+      console.error(focusResult.error || insumosResult.error || sesionResult.error);
+      return false;
+    }
+
+    setData({
+      ENFOQUE: (focusResult.data || []).map((row) => ({
         id: row.id,
         revisado: Boolean(row.revisado),
         prioridad: row.prioridad || "",
@@ -474,8 +594,37 @@ export default function StrategicFollowupModule({ currentUser }) {
         responsableTexto: row.responsable_texto || "",
         tiempo: row.tiempo_minutos ? String(row.tiempo_minutos) : "",
       })),
-    }));
+      INSUMOS: (insumosResult.data || []).map((row) => ({
+        id: row.id,
+        tema: row.tema || "",
+        insumo: row.insumo || "",
+        responsableId: row.responsable_id || "",
+        responsableTexto: row.responsable_texto || "",
+        fuente: row.fuente || "",
+        estado: row.estado || "Pendiente",
+        url: "",
+      })),
+      SESIÓN: (sesionResult.data || []).map((row) => ({
+        id: row.id,
+        revisado: Boolean(row.revisado),
+        tema: row.tema || "",
+        resultado: row.resultado || "Pendiente",
+        observacion: row.observacion || "",
+      })),
+    });
 
+    return true;
+  }
+
+  async function loadWeek(week) {
+    const ok = await fetchWeekData(week.id);
+
+    if (!ok) {
+      alert("No se pudo consultar la semana.");
+      return;
+    }
+
+    setCurrentWeek(week);
     setActiveTab("ENFOQUE");
     setShowWeeks(false);
   }
@@ -510,25 +659,36 @@ export default function StrategicFollowupModule({ currentUser }) {
     return { total, delivered, validated, pending };
   }, [data.INSUMOS]);
 
-  return (
-    <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
-      <nav className="mb-4 flex gap-2 rounded-2xl bg-slate-950 p-2">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 rounded-xl px-3 py-2 text-xs font-black tracking-[0.18em] transition ${
-              activeTab === tab
-                ? "bg-red-600 text-white"
-                : "bg-white text-slate-900 hover:bg-slate-100"
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </nav>
+  const sessionSummary = useMemo(() => {
+    const total = data.SESIÓN.length;
+    const reviewed = data.SESIÓN.filter((row) => row.revisado).length;
+    const closed = data.SESIÓN.filter((row) => row.resultado === "Cerrado").length;
+    const pending = data.SESIÓN.filter((row) => row.resultado === "Pendiente").length;
 
+    return { total, reviewed, closed, pending };
+  }, [data.SESIÓN]);
+
+  return (
+    <section className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#001225] px-4 py-2 text-white">
+        <h2 className="text-[13px] font-black uppercase tracking-tight">Seguimiento Estratégico</h2>
+        <div className="flex gap-1 rounded-xl bg-white/10 p-0.5">
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${
+                activeTab === tab ? "bg-white text-[#001225]" : "text-white/70 hover:bg-white/10"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-4">
       <div className="mb-3 flex items-center justify-between gap-4">
         <p className="max-w-[72%] text-sm font-medium leading-snug text-slate-500">
           {tabDescription[activeTab]}
@@ -543,6 +703,33 @@ export default function StrategicFollowupModule({ currentUser }) {
           +
         </button>
       </div>
+
+      {activeTab === "ENFOQUE" && (
+        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <KpiCard label="Total temas" value={focusSummary.total} tone="slate" />
+          <KpiCard label="Revisados" value={focusSummary.reviewed} tone="emerald" />
+          <KpiCard label="Pendientes" value={focusSummary.pending} tone={focusSummary.pending > 0 ? "amber" : "slate"} />
+          <KpiCard label="Tiempo estimado" value={`${focusSummary.minutes} min`} tone="slate" />
+        </div>
+      )}
+
+      {activeTab === "INSUMOS" && (
+        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <KpiCard label="Insumos" value={inputSummary.total} tone="slate" />
+          <KpiCard label="Entregados" value={inputSummary.delivered} tone="amber" />
+          <KpiCard label="Validados" value={inputSummary.validated} tone="emerald" />
+          <KpiCard label="Pendientes" value={inputSummary.pending} tone={inputSummary.pending > 0 ? "red" : "slate"} />
+        </div>
+      )}
+
+      {activeTab === "SESIÓN" && (
+        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <KpiCard label="Acuerdos" value={sessionSummary.total} tone="slate" />
+          <KpiCard label="Revisados" value={sessionSummary.reviewed} tone="emerald" />
+          <KpiCard label="Cerrados" value={sessionSummary.closed} tone="emerald" />
+          <KpiCard label="Pendientes" value={sessionSummary.pending} tone={sessionSummary.pending > 0 ? "amber" : "slate"} />
+        </div>
+      )}
 
       {activeTab === "ENFOQUE" && (
         <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -756,7 +943,7 @@ export default function StrategicFollowupModule({ currentUser }) {
                 <Th className="w-[30%]">Tema</Th>
                 <Th className="w-[145px]">Resultado</Th>
                 <Th>Observación</Th>
-                <Th className="w-[38px]" />
+                <Th className="w-[56px]" />
               </tr>
             </thead>
             <tbody>
@@ -791,8 +978,11 @@ export default function StrategicFollowupModule({ currentUser }) {
                       placeholder="Observación ejecutiva"
                     />
                   </Td>
-                  <Td className="w-[38px] px-2 text-center">
-                    <DeleteButton onClick={() => deleteRow(index)} />
+                  <Td className="w-[56px] px-2 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <CreateAccionButton onClick={() => handleCrearAccionSesion(row)} disabled={!row.id} />
+                      <DeleteButton onClick={() => deleteRow(index)} />
+                    </div>
                   </Td>
                 </tr>
               ))}
@@ -800,20 +990,7 @@ export default function StrategicFollowupModule({ currentUser }) {
           </table>
         )}
       </div>
-
-      {activeTab === "ENFOQUE" && (
-        <div className="mt-3 text-xs font-black text-slate-500">
-          Total temas: {focusSummary.total} | Revisados: {focusSummary.reviewed} | Pendientes:{" "}
-          {focusSummary.pending} | Tiempo estimado: {focusSummary.minutes} min
-        </div>
-      )}
-
-      {activeTab === "INSUMOS" && (
-        <div className="mt-3 text-xs font-black text-slate-500">
-          Insumos: {inputSummary.total} | Entregados: {inputSummary.delivered} | Validados:{" "}
-          {inputSummary.validated} | Pendientes: {inputSummary.pending}
-        </div>
-      )}
+      </div>
     </section>
   );
 }
