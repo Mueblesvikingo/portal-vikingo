@@ -114,7 +114,7 @@ function DetailField({ label, children }) {
   );
 }
 
-export default function TableroTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onUpdateKpi, onDeactivateKpi }) {
+export default function TableroTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onUpdateKpi, onToggleKpiActivo }) {
   const [openKpiId, setOpenKpiId] = useState(null);
   const isEstrategico = scope === "ESTRATEGICO";
   const mesAnteriorLabel = getPreviousMonthInfo().label;
@@ -136,6 +136,7 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
       <div className={`grid gap-3 ${isEstrategico ? "md:grid-cols-4" : groups.length > 1 ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
         {groups.map((group) => {
           const groupCumplimientos = group.items
+            .filter((k) => k.activo)
             .map((k) => computeCumplimiento(resultados, k, anio).cumplimiento)
             .filter((v) => v !== null && v !== undefined);
           const avg = groupCumplimientos.length
@@ -174,10 +175,11 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                   const { real, meta, cumplimiento } = computeCumplimiento(resultados, kpi, anio);
                   const status = getCumplimientoStatus(cumplimiento);
                   const isOpen = openKpiId === kpi.id;
+                  const isInactivo = !kpi.activo;
                   return (
                     <Fragment key={kpi.id}>
-                      <tr className="border-b border-slate-50 transition hover:bg-slate-50/70">
-                        <td className="px-3 py-1.5" style={{ boxShadow: `inset 3px 0 0 ${group.color}` }}>
+                      <tr className={`border-b border-slate-50 transition hover:bg-slate-50/70 ${isInactivo ? "opacity-45" : ""}`}>
+                        <td className="px-3 py-1.5" style={{ boxShadow: `inset 3px 0 0 ${isInactivo ? "#c3c2b7" : group.color}` }}>
                           <button
                             type="button"
                             onClick={() => setOpenKpiId(isOpen ? null : kpi.id)}
@@ -190,6 +192,9 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                               ▸
                             </span>
                             {kpi.nombre_indicador}
+                            {isInactivo && (
+                              <span className="rounded-full border border-slate-200 bg-slate-100 px-1.5 py-0 text-[8px] font-black uppercase tracking-wide text-slate-400">Inactivo</span>
+                            )}
                           </button>
                         </td>
                         <td className="px-3 py-1.5 text-right font-black text-slate-800">{formatKpiValue(real, kpi.unidad_medida)}</td>
@@ -203,11 +208,15 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                           <td className="px-3 py-1.5 text-right">
                             <button
                               type="button"
-                              onClick={() => onDeactivateKpi(kpi.id)}
-                              title="Eliminar KPI"
-                              className="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition hover:bg-red-50 hover:text-red-500"
+                              onClick={() => onToggleKpiActivo(kpi)}
+                              title={isInactivo ? "Activar KPI" : "Desactivar KPI"}
+                              className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wide transition ${
+                                isInactivo
+                                  ? "border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                                  : "border-slate-200 text-slate-400 hover:border-red-200 hover:text-red-500"
+                              }`}
                             >
-                              ×
+                              {isInactivo ? "Activar" : "Desactivar"}
                             </button>
                           </td>
                         )}
@@ -245,10 +254,14 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                               {canEditKpi(kpi) && (
                                 <button
                                   type="button"
-                                  onClick={() => onDeactivateKpi(kpi.id)}
-                                  className="rounded-lg border border-red-200 px-3 py-1 text-[10px] font-black text-red-500 transition hover:bg-red-50"
+                                  onClick={() => onToggleKpiActivo(kpi)}
+                                  className={`rounded-lg border px-3 py-1 text-[10px] font-black transition ${
+                                    isInactivo
+                                      ? "border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                                      : "border-red-200 text-red-500 hover:bg-red-50"
+                                  }`}
                                 >
-                                  Eliminar KPI
+                                  {isInactivo ? "Activar KPI" : "Desactivar KPI"}
                                 </button>
                               )}
                             </div>

@@ -8,6 +8,7 @@ import {
   createKpi,
   updateKpi,
   deactivateKpi,
+  activateKpi,
   upsertResultado,
 } from "../../services/performanceService";
 import { isStrategicTeamMember, canEditStrategicKpis } from "../../services/permissionsService";
@@ -136,7 +137,7 @@ export default function PerformanceModule({ currentUser }) {
   }, [currentUser?.persona_id]);
 
   const isEstrategico = scope === ESTRATEGICO_SCOPE;
-  const scopedKpis = useMemo(
+  const scopedKpisAll = useMemo(
     () => kpis.filter((k) => (isEstrategico ? k.ambito === "estrategico" : (k.ambito === "tactico" || k.ambito === "operativo") && k.macroproceso === scope)),
     [kpis, scope, isEstrategico]
   );
@@ -153,6 +154,17 @@ export default function PerformanceModule({ currentUser }) {
     return kpi.ambito === "tactico" ? canEditTactico : canEditOperativo;
   }
   const canEdit = isEstrategico ? canEditStrategicKpis(currentUser) : canEditTactico || canEditOperativo;
+
+  // El Tablero muestra los KPIs inactivos en gris solo a quien puede
+  // editarlos (para que los pueda reactivar); a todos los demás se les
+  // oculta por completo. Resultados y Gráficas nunca muestran inactivos —
+  // no tiene sentido capturar/graficar algo que está apagado.
+  const scopedKpis = useMemo(
+    () => scopedKpisAll.filter((k) => k.activo || canEditKpi(k)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scopedKpisAll, isStrategic, ownMacroprocesos, currentUser]
+  );
+  const activeScopedKpis = useMemo(() => scopedKpisAll.filter((k) => k.activo), [scopedKpisAll]);
 
   const tabs = isEstrategico
     ? [
@@ -183,12 +195,12 @@ export default function PerformanceModule({ currentUser }) {
     setKpis((current) => [...current, result.data]);
   }
 
-  async function handleDeactivateKpi(id) {
-    if (!window.confirm("¿Quitar este KPI del tablero?")) return;
-    const previous = kpis.find((k) => k.id === id);
-    const result = await deactivateKpi(id, { actor: currentUser, previous });
-    if (!result?.ok) { console.error(result?.error); setMessage("No fue posible quitar el KPI."); return; }
-    setKpis((current) => current.filter((k) => k.id !== id));
+  async function handleToggleKpiActivo(kpi) {
+    const previous = kpis.find((k) => k.id === kpi.id);
+    const toggle = kpi.activo ? deactivateKpi : activateKpi;
+    const result = await toggle(kpi.id, { actor: currentUser, previous });
+    if (!result?.ok) { console.error(result?.error); setMessage("No fue posible cambiar el estado del KPI."); return; }
+    setKpis((current) => current.map((k) => (k.id === kpi.id ? { ...k, ...result.data } : k)));
   }
 
   async function handleSaveResultado(payload) {
@@ -292,11 +304,11 @@ export default function PerformanceModule({ currentUser }) {
                 canEdit={canEdit}
                 canEditKpi={canEditKpi}
                 onUpdateKpi={handleUpdateKpi}
-                onDeactivateKpi={handleDeactivateKpi}
+                onToggleKpiActivo={handleToggleKpiActivo}
               />
             ) : activeTab === "resultados" ? (
               <ResultadosTab
-                kpis={scopedKpis}
+                kpis={activeScopedKpis}
                 resultados={resultados}
                 anio={CURRENT_YEAR}
                 scope={scope}
@@ -306,7 +318,7 @@ export default function PerformanceModule({ currentUser }) {
               />
             ) : (
               <PerspectivaChartsTab
-                kpis={scopedKpis}
+                kpis={activeScopedKpis}
                 resultados={resultados}
                 anio={CURRENT_YEAR}
                 perspectiva={activeTab.replace("persp-", "")}

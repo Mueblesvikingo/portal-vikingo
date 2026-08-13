@@ -17,12 +17,14 @@ async function logHistorialEntries(entries) {
   }
 }
 
+// Trae KPIs activos e inactivos — el filtrado de qué inactivo se muestra a
+// quién (gris para quien puede editarlo, oculto para el resto) se hace en la
+// UI (PerformanceModule/TableroTab), no aquí.
 export async function getKpis() {
   try {
     const { data, error } = await supabase
       .from("desempeno_kpis")
       .select("*")
-      .eq("activo", true)
       .order("ambito", { ascending: true })
       .order("orden", { ascending: true });
 
@@ -142,6 +144,10 @@ export async function updateKpi(id, updates, { actor, previous } = {}) {
 
 export async function deactivateKpi(id, options) {
   return updateKpi(id, { activo: false }, options);
+}
+
+export async function activateKpi(id, options) {
+  return updateKpi(id, { activo: true }, options);
 }
 
 // `previousValor` es el valor actual de esa celda (kpi_id, anio, mes,
