@@ -118,15 +118,19 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
   const [openKpiId, setOpenKpiId] = useState(null);
   const isEstrategico = scope === "ESTRATEGICO";
   const mesAnteriorLabel = getPreviousMonthInfo().label;
+  // Los inactivos (visibles solo para quien puede editarlos, ver
+  // PerformanceModule) siempre se ordenan al final de su grupo — sort
+  // estable, así que el orden entre activos (y entre inactivos) no cambia.
+  const byActivoThenOrden = (a, b) => Number(b.activo) - Number(a.activo);
   // En un tablero de proceso (no Estratégico) se separan en 2 grupos: los
   // KPIs tácticos (cascadeados desde Despliegue Estratégico) y los
   // operativos (que el líder de proceso captura/agrega por su cuenta) — para
   // que se distinga a simple vista cuál es cuál.
   const groups = isEstrategico
-    ? PERSPECTIVAS.map((p) => ({ label: p, color: PERSPECTIVA_COLOR[p], items: kpis.filter((k) => k.perspectiva === p) }))
+    ? PERSPECTIVAS.map((p) => ({ label: p, color: PERSPECTIVA_COLOR[p], items: kpis.filter((k) => k.perspectiva === p).sort(byActivoThenOrden) }))
     : [
-      { label: "Tácticos", color: "#203f73", items: kpis.filter((k) => k.ambito === "tactico") },
-      { label: "Operativos", color: "#4a3aa7", items: kpis.filter((k) => k.ambito === "operativo") },
+      { label: "Tácticos", color: "#203f73", items: kpis.filter((k) => k.ambito === "tactico").sort(byActivoThenOrden) },
+      { label: "Operativos", color: "#4a3aa7", items: kpis.filter((k) => k.ambito === "operativo").sort(byActivoThenOrden) },
     ].filter((group) => group.items.length > 0);
   const showGroupHeader = isEstrategico || groups.length > 0;
   const colCount = canEdit ? 5 : 4;
