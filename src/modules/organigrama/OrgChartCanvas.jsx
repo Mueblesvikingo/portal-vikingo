@@ -487,7 +487,7 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
               const py = parentPos.top + BOX_HEIGHT;
               const cx = childPos.left + BOX_WIDTH / 2;
               const cy = childPos.top;
-              const bendY = py + Math.sign(cy - py || 1) * Math.min(LINE_BEND_OFFSET, Math.abs(cy - py) / 2);
+              const bendY = cy - Math.sign(cy - py || 1) * Math.min(LINE_BEND_OFFSET, Math.abs(cy - py) / 2);
               const isChainOfCommand = ancestorIds.has(nodo.id) && ancestorIds.has(nodo.reporta_a_id);
               const isDirectReportEdge = selectedId && nodo.reporta_a_id === selectedId && directReportIds.has(nodo.id);
               const isEmphasized = isChainOfCommand || isDirectReportEdge;
