@@ -483,19 +483,39 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
               const childPos = getRenderPosition(nodo.id);
               const parentPos = getRenderPosition(nodo.reporta_a_id);
               if (!childPos || !parentPos) return null;
-              const px = parentPos.left + BOX_WIDTH / 2;
-              const py = parentPos.top + BOX_HEIGHT;
-              const cx = childPos.left + BOX_WIDTH / 2;
-              const cy = childPos.top;
-              const bendY = cy - Math.sign(cy - py || 1) * Math.min(LINE_BEND_OFFSET, Math.abs(cy - py) / 2);
               const isChainOfCommand = ancestorIds.has(nodo.id) && ancestorIds.has(nodo.reporta_a_id);
               const isDirectReportEdge = selectedId && nodo.reporta_a_id === selectedId && directReportIds.has(nodo.id);
               const isEmphasized = isChainOfCommand || isDirectReportEdge;
               const strokeColor = isChainOfCommand ? "#dc2626" : isDirectReportEdge ? "#10b981" : "#94a3b8";
+
+              // Un puesto colocado casi a la misma altura que su jefe (ej. un
+              // asistente de dirección, movido a mano al lado en vez de
+              // abajo) entra por el costado del cuadro, no por arriba —
+              // entrar por arriba de un cuadro que está al lado, no debajo,
+              // se ve como si la línea lo atravesara.
+              const isBeside = childPos.top - (parentPos.top + BOX_HEIGHT) < BOX_HEIGHT;
+              let px, py, cx, cy, d;
+              if (isBeside) {
+                const childIsRight = childPos.left + BOX_WIDTH / 2 > parentPos.left + BOX_WIDTH / 2;
+                px = childIsRight ? parentPos.left + BOX_WIDTH : parentPos.left;
+                py = parentPos.top + BOX_HEIGHT / 2;
+                cx = childIsRight ? childPos.left : childPos.left + BOX_WIDTH;
+                cy = childPos.top + BOX_HEIGHT / 2;
+                const bendX = px + Math.sign(cx - px || 1) * Math.min(LINE_BEND_OFFSET, Math.abs(cx - px) / 2);
+                d = `M ${px} ${py} L ${bendX} ${py} L ${bendX} ${cy} L ${cx} ${cy}`;
+              } else {
+                px = parentPos.left + BOX_WIDTH / 2;
+                py = parentPos.top + BOX_HEIGHT;
+                cx = childPos.left + BOX_WIDTH / 2;
+                cy = childPos.top;
+                const bendY = cy - Math.sign(cy - py || 1) * Math.min(LINE_BEND_OFFSET, Math.abs(cy - py) / 2);
+                d = `M ${px} ${py} L ${px} ${bendY} L ${cx} ${bendY} L ${cx} ${cy}`;
+              }
+
               return (
                 <g key={nodo.id} filter={isEmphasized ? "url(#orgLineGlow)" : undefined}>
                   <path
-                    d={`M ${px} ${py} L ${px} ${bendY} L ${cx} ${bendY} L ${cx} ${cy}`}
+                    d={d}
                     fill="none"
                     stroke={strokeColor}
                     strokeWidth={isEmphasized ? 3.5 : 2}
