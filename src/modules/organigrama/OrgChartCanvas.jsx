@@ -506,11 +506,16 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
                 cy = childPos.top + BOX_HEIGHT / 2;
                 d = `M ${px} ${py} L ${px} ${cy} L ${cx} ${cy}`;
               } else {
+                // Dobla cerca del jefe (no del subordinado): así el tramo
+                // largo baja recto por la columna propia de cada hijo, sin
+                // atravesar la columna de otro hermano que tenga su propio
+                // tronco hacia subordinados más abajo (ej. Jefe de Embarques
+                // vs. el tronco de Operaciones hacia sus supervisores).
                 px = parentPos.left + BOX_WIDTH / 2;
                 py = parentPos.top + BOX_HEIGHT;
                 cx = childPos.left + BOX_WIDTH / 2;
                 cy = childPos.top;
-                const bendY = cy - Math.sign(cy - py || 1) * Math.min(LINE_BEND_OFFSET, Math.abs(cy - py) / 2);
+                const bendY = py + Math.sign(cy - py || 1) * Math.min(LINE_BEND_OFFSET, Math.abs(cy - py) / 2);
                 d = `M ${px} ${py} L ${px} ${bendY} L ${cx} ${bendY} L ${cx} ${cy}`;
               }
 
