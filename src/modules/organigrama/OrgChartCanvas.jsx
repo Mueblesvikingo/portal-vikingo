@@ -492,17 +492,19 @@ export default function OrgChartCanvas({ nodos, selectedId, onSelectNode, onMove
               // asistente de dirección, movido a mano al lado en vez de
               // abajo) entra por el costado del cuadro, no por arriba —
               // entrar por arriba de un cuadro que está al lado, no debajo,
-              // se ve como si la línea lo atravesara.
+              // se ve como si la línea lo atravesara. Además arranca del
+              // mismo punto (centro-abajo del jefe) que el tronco vertical
+              // hacia los demás subordinados, para que se vea pegada a esa
+              // línea en vez de salir aparte del costado de la caja.
               const isBeside = childPos.top - (parentPos.top + BOX_HEIGHT) < BOX_HEIGHT;
               let px, py, cx, cy, d;
               if (isBeside) {
                 const childIsRight = childPos.left + BOX_WIDTH / 2 > parentPos.left + BOX_WIDTH / 2;
-                px = childIsRight ? parentPos.left + BOX_WIDTH : parentPos.left;
-                py = parentPos.top + BOX_HEIGHT / 2;
+                px = parentPos.left + BOX_WIDTH / 2;
+                py = parentPos.top + BOX_HEIGHT;
                 cx = childIsRight ? childPos.left : childPos.left + BOX_WIDTH;
                 cy = childPos.top + BOX_HEIGHT / 2;
-                const bendX = px + Math.sign(cx - px || 1) * Math.min(LINE_BEND_OFFSET, Math.abs(cx - px) / 2);
-                d = `M ${px} ${py} L ${bendX} ${py} L ${bendX} ${cy} L ${cx} ${cy}`;
+                d = `M ${px} ${py} L ${px} ${cy} L ${cx} ${cy}`;
               } else {
                 px = parentPos.left + BOX_WIDTH / 2;
                 py = parentPos.top + BOX_HEIGHT;
