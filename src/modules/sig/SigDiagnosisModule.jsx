@@ -3,6 +3,7 @@ import { supabase } from "../../services/supabase";
 import { isStrategicTeamMember } from "../../services/permissionsService";
 import { createWorkloadAssignment } from "../../services/workloadService";
 import { getEstados, upsertEstado, getHistorial, getChecks, createCheck } from "../../services/sigService";
+import { getPlanMacroprocesos, updatePendienteEstado, getPlanHistorial } from "../../services/sigPlanService";
 import { upsertResultado } from "../../services/performanceService";
 
 // Nombre/macroproceso del KPI en Desempeño Organizacional que refleja el
@@ -400,6 +401,19 @@ function findPersonaByFirstName(personasCatalogo, firstName) {
   }) || null;
 }
 
+const PLAN_ESTADOS = ["Pendiente", "En progreso", "Completado"];
+
+function nextPlanEstado(estado) {
+  const idx = PLAN_ESTADOS.indexOf(estado);
+  return PLAN_ESTADOS[(idx + 1) % PLAN_ESTADOS.length];
+}
+
+function planEstadoBg(estado) {
+  if (estado === "Completado") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (estado === "En progreso") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-slate-200 bg-slate-100 text-slate-500";
+}
+
 function formatDateTime(value) {
   if (!value) return "";
   return new Date(value).toLocaleString("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -525,6 +539,76 @@ function SigAsignacionForm({ colSpan, personasCatalogo, defaultPersonaId, defaul
   );
 }
 
+// Misma forma que SigAsignacionForm, pero en tarjeta (div) en vez de fila de
+// tabla, para encajar en las tarjetas de macroproceso del Plan de
+// implementación.
+function PlanAsignacionForm({ personasCatalogo, defaultPersonaId, defaultRol, defaultTitulo, onConfirm, onCancel }) {
+  const [personaId, setPersonaId] = useState(defaultPersonaId || "");
+  const [rol, setRol] = useState(defaultRol || "");
+  const [titulo, setTitulo] = useState(defaultTitulo || "");
+  const [horas, setHoras] = useState(2);
+  const [fechaLimite, setFechaLimite] = useState("");
+  const [prioridad, setPrioridad] = useState("Media");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleConfirm() {
+    if (!personaId) { setError("Selecciona a quién se le asigna."); return; }
+    if (!titulo.trim()) { setError("El título no puede quedar vacío."); return; }
+    setError("");
+    setSaving(true);
+    const persona = personasCatalogo.find((p) => String(p.id) === String(personaId));
+    const ok = await onConfirm({
+      personaId: Number(personaId),
+      personaNombre: persona?.nombre || "",
+      rol,
+      titulo: titulo.trim(),
+      horas: Number(horas) || 0,
+      fechaLimite: fechaLimite || null,
+      prioridad,
+    });
+    setSaving(false);
+    if (ok) onCancel();
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Persona
+          <select value={personaId} onChange={(e) => setPersonaId(e.target.value)} className="mt-1 h-9 w-52 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            <option value="">Selecciona...</option>
+            {personasCatalogo.map((p) => (<option key={p.id} value={p.id}>{p.nombre}</option>))}
+          </select>
+        </label>
+        <label className="min-w-[200px] flex-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Título
+          <input type="text" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Horas estimadas
+          <input type="number" min="0.5" step="0.5" value={horas} onChange={(e) => setHoras(e.target.value)} className="mt-1 h-9 w-24 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Fecha límite
+          <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Prioridad
+          <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            {["Crítica", "Alta", "Media", "Baja"].map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={saving} onClick={handleConfirm} className="h-9 rounded-lg bg-[#111827] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+          {saving ? "Enviando..." : "Confirmar asignación"}
+        </button>
+        <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+      </div>
+      {error && <p className="mt-1.5 text-[10px] font-bold text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 export default function DiagnosticoSIGModule({ currentUser }) {
   const [selectedCell, setSelectedCell] = useState(null);
   const [selectedProcess, setSelectedProcess] = useState("Todos");
@@ -539,6 +623,16 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [historialEntries, setHistorialEntries] = useState([]);
   const [convertingSection, setConvertingSection] = useState(null);
   const [sigKpiId, setSigKpiId] = useState(null);
+
+  // Vista discreta: alterna entre el diagnóstico HLS de siempre y el nuevo
+  // Plan de implementación — mismo módulo, sin rediseño, solo un toggle.
+  const [view, setView] = useState("diagnostico");
+  const [planMacroprocesos, setPlanMacroprocesos] = useState(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [convertingPendienteId, setConvertingPendienteId] = useState(null);
+  const [planHistorialOpen, setPlanHistorialOpen] = useState(false);
+  const [planHistorialLoading, setPlanHistorialLoading] = useState(false);
+  const [planHistorialEntries, setPlanHistorialEntries] = useState([]);
 
   const canEdit = isStrategicTeamMember(currentUser);
   // Espejo de lo último realmente guardado en Supabase (no lo que se va
@@ -619,6 +713,30 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     if (selectedProcess === "Todos") { setLastCheck(null); return; }
     getChecks(selectedProcess).then((rows) => setLastCheck(rows[0] || null));
   }, [selectedProcess]);
+
+  async function loadPlan() {
+    setPlanLoading(true);
+    const data = await getPlanMacroprocesos();
+    setPlanMacroprocesos(data);
+    setPlanLoading(false);
+  }
+
+  // Carga perezosa: solo la primera vez que se entra a la pestaña, no en
+  // cada render del módulo.
+  useEffect(() => {
+    if (view === "plan" && planMacroprocesos === null) loadPlan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  const planStats = useMemo(() => {
+    const all = (planMacroprocesos || []).flatMap((mp) => mp.pendientes);
+    return {
+      total: all.length,
+      completados: all.filter((p) => p.estado === "Completado").length,
+      enProgreso: all.filter((p) => p.estado === "En progreso").length,
+      pendientes: all.filter((p) => p.estado === "Pendiente").length,
+    };
+  }, [planMacroprocesos]);
 
   const global = useMemo(() => globalAverageWithOverrides(sigSections, statusOverrides), [statusOverrides]);
   // La barra refleja el proceso filtrado (o el global si es "Todos"); la
@@ -743,6 +861,66 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     return true;
   }
 
+  async function handleUpdateEstadoPendiente(pendiente) {
+    if (!canEdit) return;
+    const next = nextPlanEstado(pendiente.estado);
+    const result = await updatePendienteEstado(pendiente.id, next, { actor: currentUser, previousEstado: pendiente.estado });
+    if (!result.ok) { console.error(result.error); setMessage("No fue posible actualizar el estado del pendiente."); return; }
+    setPlanMacroprocesos((current) => (current || []).map((mp) => ({
+      ...mp,
+      pendientes: mp.pendientes.map((p) => (p.id === pendiente.id ? { ...p, estado: next } : p)),
+    })));
+  }
+
+  function getPlanLeaderPersonaId(macroproceso) {
+    const firstLeader = (macroproceso.lider || "").split(/\s*\/\s*/)[0].split(/\s*\(/)[0].trim();
+    const persona = findPersonaByFirstName(people, firstLeader);
+    return persona?.id || "";
+  }
+
+  async function handleCrearAsignacionPlan(macroproceso, pendiente, payload) {
+    if (!canEdit) return false;
+    const result = await createWorkloadAssignment({
+      persona_id: payload.personaId,
+      responsable: payload.personaNombre,
+      rol: payload.rol,
+      tipo: "Mejora",
+      prioridad: payload.prioridad,
+      gestion: "SIG",
+      titulo: payload.titulo,
+      descripcion: `Plan de implementación SIG — ${macroproceso.nombre}: ${pendiente.titulo}`,
+      revisara: "", aprobara: "", seguimiento: "",
+      carga_horas: payload.horas,
+      fecha_limite: payload.fechaLimite,
+      estado: "Pendiente",
+      asigna: currentUser?.nombre || currentUser?.usuario || "",
+      asigna_rol: "Coordinador SIG",
+      horas_totales: payload.horas,
+      origen_estrategico: "SIG",
+    });
+    if (!result.ok) { console.error(result.error); alert("No fue posible crear la asignación."); return false; }
+    alert(`Asignación creada para ${payload.personaNombre} en Balance de Carga.`);
+    return true;
+  }
+
+  async function openPlanHistorial() {
+    setPlanHistorialOpen(true);
+    setPlanHistorialLoading(true);
+    const historial = await getPlanHistorial();
+    const pendienteLabels = new Map();
+    (planMacroprocesos || []).forEach((mp) => mp.pendientes.forEach((p) => pendienteLabels.set(p.id, `${mp.nombre}${mp.letra || ""} — ${p.titulo}`)));
+    const entries = historial.map((h) => ({
+      key: `plan-hist-${h.id}`,
+      type: "score",
+      title: `Estado actualizado: ${h.valor_anterior ?? "—"} → ${h.valor_nuevo ?? "—"}`,
+      detail: pendienteLabels.get(h.pendiente_id) || "Pendiente del plan",
+      date: h.created_at,
+      nombre: h.nombre,
+    }));
+    setPlanHistorialEntries(entries);
+    setPlanHistorialLoading(false);
+  }
+
   return (
     <div className="min-h-screen bg-[#f4f5f7] p-5 text-slate-900">
       <div className="mx-auto max-w-7xl space-y-4">
@@ -783,6 +961,18 @@ export default function DiagnosticoSIGModule({ currentUser }) {
 
         {message && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{message}</div>}
 
+        <section className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
+          <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-0.5 text-[10px] font-black uppercase tracking-wide">
+            <button type="button" onClick={() => setView("diagnostico")} className={`rounded-md px-3 py-1.5 transition ${view === "diagnostico" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Diagnóstico HLS</button>
+            <button type="button" onClick={() => setView("plan")} className={`rounded-md px-3 py-1.5 transition ${view === "plan" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Plan de implementación</button>
+          </div>
+          {view === "plan" && (
+            <button type="button" onClick={openPlanHistorial} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 transition hover:border-slate-300 hover:text-slate-700">⏱ Historial del plan</button>
+          )}
+        </section>
+
+        {view === "diagnostico" && (
+        <>
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white px-5 py-2 shadow-sm">
           <div className="flex w-full flex-wrap items-center gap-2">
             <div className="shrink-0 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Filtro por proceso</div>
@@ -1000,6 +1190,104 @@ export default function DiagnosticoSIGModule({ currentUser }) {
           entries={historialEntries}
           selectedProcess={selectedProcess}
         />
+        </>
+        )}
+
+        {view === "plan" && (
+          <section className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-center shadow-sm">
+                <div className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">Completados</div>
+                <div className="mt-1 text-xl font-black text-emerald-600">{planStats.completados}/{planStats.total}</div>
+              </div>
+              <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-center shadow-sm">
+                <div className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">En progreso</div>
+                <div className="mt-1 text-xl font-black text-amber-600">{planStats.enProgreso}</div>
+              </div>
+              <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-center shadow-sm">
+                <div className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">Pendientes</div>
+                <div className="mt-1 text-xl font-black text-slate-500">{planStats.pendientes}</div>
+              </div>
+            </div>
+
+            {planLoading ? (
+              <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-400 shadow-sm">Cargando plan de implementación…</div>
+            ) : (
+              (planMacroprocesos || []).map((mp) => {
+                const completados = mp.pendientes.filter((p) => p.estado === "Completado").length;
+                return (
+                  <div key={mp.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-[10px] font-black text-white">{mp.numero}{mp.letra || ""}</span>
+                        <div>
+                          <div className="text-[11px] font-black text-slate-800">{mp.nombre}</div>
+                          <div className="text-[9px] font-bold text-slate-400">{mp.lider}</div>
+                        </div>
+                      </div>
+                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[9px] font-black text-slate-500">{completados}/{mp.pendientes.length} completados</span>
+                    </div>
+                    <div className="space-y-2 px-4 py-3">
+                      {mp.pendientes.map((pendiente) => (
+                        <div key={pendiente.id} className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[11px] font-black text-slate-800">{pendiente.titulo}</span>
+                                {pendiente.periodicidad && <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-slate-400">{pendiente.periodicidad}</span>}
+                              </div>
+                              {pendiente.nota && <p className="mt-1 text-[10px] font-medium leading-snug text-slate-500">{pendiente.nota}</p>}
+                              {pendiente.responsables?.length > 0 && (
+                                <div className="mt-1.5 flex flex-wrap gap-1">
+                                  {pendiente.responsables.map((r) => (
+                                    <span key={r.id} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold ${r.apoyo_consultor ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-white text-slate-500"}`}>
+                                      {r.nombre}{r.rol ? ` · ${r.rol}` : ""}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              <button type="button" disabled={!canEdit} onClick={() => handleUpdateEstadoPendiente(pendiente)} className={`rounded-lg border px-2 py-1 text-[9px] font-black transition ${planEstadoBg(pendiente.estado)} ${canEdit ? "hover:opacity-80" : "cursor-default"}`}>{pendiente.estado}</button>
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={() => setConvertingPendienteId((current) => (current === pendiente.id ? null : pendiente.id))}
+                                  title="Enviar a Asignaciones"
+                                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition ${convertingPendienteId === pendiente.id ? "bg-sky-100 text-sky-600" : "text-slate-300 hover:bg-sky-50 hover:text-sky-600"}`}
+                                >
+                                  ▸
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {convertingPendienteId === pendiente.id && (
+                            <PlanAsignacionForm
+                              personasCatalogo={people}
+                              defaultPersonaId={getPlanLeaderPersonaId(mp)}
+                              defaultRol={mp.lider}
+                              defaultTitulo={`SIG Plan — ${mp.nombre}: ${pendiente.titulo}`}
+                              onCancel={() => setConvertingPendienteId(null)}
+                              onConfirm={(payload) => handleCrearAsignacionPlan(mp, pendiente, payload)}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+
+            <HistorialTimelineModal
+              open={planHistorialOpen}
+              onClose={() => setPlanHistorialOpen(false)}
+              loading={planHistorialLoading}
+              entries={planHistorialEntries}
+              selectedProcess="Plan de implementación"
+            />
+          </section>
+        )}
       </div>
     </div>
   );
