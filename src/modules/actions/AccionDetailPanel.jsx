@@ -9,6 +9,7 @@ import {
   addAdjunto,
 } from "../../services/accionesService";
 import { canEditAccion } from "../../services/permissionsService";
+import { createWorkloadAssignment } from "../../services/workloadService";
 import {
   TIPOS_ACCION,
   NIVELES_ACCION,
@@ -67,6 +68,74 @@ function EditableSelect({ value, options, onSave, canEdit, labelFor = (v) => v }
   );
 }
 
+// Formulario compacto para crear la asignación en Balance de Carga — mismo
+// patrón (persona/rol/horas/fecha límite/prioridad) ya usado en Diagnóstico
+// SIG / Seguimiento Estratégico / Acuerdos S&OP para esta misma conexión.
+function AsignacionForm({ personas, defaultPersonaId, defaultTitulo, onConfirm, onCancel }) {
+  const [personaId, setPersonaId] = useState(defaultPersonaId || "");
+  const [titulo, setTitulo] = useState(defaultTitulo || "");
+  const [horas, setHoras] = useState(2);
+  const [fechaLimite, setFechaLimite] = useState("");
+  const [prioridad, setPrioridad] = useState("Media");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleConfirm() {
+    if (!personaId) { setError("Selecciona a quién se le asigna."); return; }
+    if (!titulo.trim()) { setError("El título no puede quedar vacío."); return; }
+    setError("");
+    setSaving(true);
+    const persona = personas.find((p) => String(p.id) === String(personaId));
+    const ok = await onConfirm({
+      personaId: Number(personaId),
+      personaNombre: persona?.nombre || "",
+      titulo: titulo.trim(),
+      horas: Number(horas) || 0,
+      fechaLimite: fechaLimite || null,
+      prioridad,
+    });
+    setSaving(false);
+    if (ok) onCancel();
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Persona
+          <select value={personaId} onChange={(e) => setPersonaId(e.target.value)} className="mt-1 h-9 w-48 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            <option value="">Selecciona...</option>
+            {personas.map((p) => (<option key={p.id} value={p.id}>{p.nombre}</option>))}
+          </select>
+        </label>
+        <label className="min-w-[180px] flex-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Título
+          <input type="text" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Horas
+          <input type="number" min="0.5" step="0.5" value={horas} onChange={(e) => setHoras(e.target.value)} className="mt-1 h-9 w-20 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Fecha límite
+          <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Prioridad
+          <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            {["Crítica", "Alta", "Media", "Baja"].map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={saving} onClick={handleConfirm} className="h-9 rounded-lg bg-[#111827] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+          {saving ? "Enviando..." : "Confirmar"}
+        </button>
+        <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+      </div>
+      {error && <p className="mt-1.5 text-[10px] font-bold text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 const SUB_TABS = [
   { key: "causa", label: "Análisis de causa" },
   { key: "historial", label: "Historial" },
@@ -87,6 +156,7 @@ export default function AccionDetailPanel({
   const [nuevoComentario, setNuevoComentario] = useState("");
   const [nuevoAdjunto, setNuevoAdjunto] = useState({ nombre: "", url: "" });
   const [loadingSub, setLoadingSub] = useState(true);
+  const [convertingToAssignment, setConvertingToAssignment] = useState(false);
 
   const proceso = accion.proceso_id ? procesosById[accion.proceso_id] : null;
   const canEdit = canEditAccion(currentUser, accion, proceso);
@@ -130,6 +200,30 @@ export default function AccionDetailPanel({
     if (!result?.ok) { console.error(result?.error); return; }
     setComentarios((current) => [...current, result.data]);
     setNuevoComentario("");
+  }
+
+  async function handleCrearAsignacion(payload) {
+    const result = await createWorkloadAssignment({
+      persona_id: payload.personaId,
+      responsable: payload.personaNombre,
+      rol: "Responsable de acción",
+      tipo: "Mejora",
+      prioridad: payload.prioridad,
+      gestion: "Otro",
+      titulo: payload.titulo,
+      descripcion: accion.descripcion || "",
+      revisara: "", aprobara: "", seguimiento: "",
+      carga_horas: payload.horas,
+      fecha_limite: payload.fechaLimite,
+      estado: "Pendiente",
+      asigna: currentUser?.nombre || currentUser?.usuario || "",
+      asigna_rol: "Centro de Gestión de Acciones",
+      horas_totales: payload.horas,
+      origen_estrategico: "Acciones",
+    });
+    if (!result?.ok) { console.error(result?.error); alert("No fue posible crear la asignación."); return false; }
+    alert(`Asignación creada para ${payload.personaNombre} en Balance de Carga.`);
+    return true;
   }
 
   async function handleAddAdjunto() {
@@ -256,10 +350,29 @@ export default function AccionDetailPanel({
                 </div>
 
                 {canEdit && (
-                  <div className="mt-3 flex justify-end border-t border-slate-100 pt-2">
-                    <button type="button" onClick={onDeactivate} className="rounded-lg border border-red-200 px-3 py-1 text-[10px] font-black text-red-500 transition hover:bg-red-50">
-                      Eliminar acción
-                    </button>
+                  <div className="mt-3 border-t border-slate-100 pt-2">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConvertingToAssignment((current) => !current)}
+                        title="Enviar a Asignaciones"
+                        className={`rounded-lg border px-3 py-1 text-[10px] font-black transition ${convertingToAssignment ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600"}`}
+                      >
+                        → Asignación
+                      </button>
+                      <button type="button" onClick={onDeactivate} className="rounded-lg border border-red-200 px-3 py-1 text-[10px] font-black text-red-500 transition hover:bg-red-50">
+                        Eliminar acción
+                      </button>
+                    </div>
+                    {convertingToAssignment && (
+                      <AsignacionForm
+                        personas={personas}
+                        defaultPersonaId={accion.responsable_persona_id || ""}
+                        defaultTitulo={accion.titulo}
+                        onCancel={() => setConvertingToAssignment(false)}
+                        onConfirm={handleCrearAsignacion}
+                      />
+                    )}
                   </div>
                 )}
               </div>

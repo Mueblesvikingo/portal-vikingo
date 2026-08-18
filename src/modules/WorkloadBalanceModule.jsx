@@ -6,10 +6,6 @@ import { getProyectos, updateProyecto, createRecordatorio, getPendingRecordatori
 import { mapProcesses as pmoProcessOptions } from "../services/processCatalog";
 import SemaforoDot from "../shared/components/SemaforoDot";
 
-const PMO_OBJETIVO =
-  "Proporcionar a la Dirección y a la PMO una visión integral, consolidada y actualizada del desempeño de los proyectos activos, mediante el seguimiento de su avance contra plan, estado, hitos, riesgos y desviaciones, con el propósito de facilitar la toma oportuna de decisiones, priorizar acciones y asegurar el cumplimiento de los objetivos estratégicos de la organización.";
-const PMO_ALCANCE =
-  "El Tablero Gerencial de Proyectos comprende el seguimiento transversal de los proyectos activos de la organización, desde una perspectiva estratégica y gerencial. Integra información proveniente de la gestión operativa de cada proyecto para presentar, de manera consolidada, su avance contra plan, etapa, semáforo de desempeño, próximos hitos, riesgos o situaciones críticas y decisiones requeridas por la Dirección. Aplica a los proyectos del portafolio bajo seguimiento de la PMO; no sustituye la gestión detallada de actividades, evidencias, responsables y entregables de cada proyecto, que se administra en las herramientas operativas correspondientes.";
 const PMO_SEMAFORO_STYLES = {
   Verde: "border-emerald-200 bg-emerald-50 text-emerald-700",
   Amarillo: "border-amber-200 bg-amber-50 text-amber-700",
@@ -886,62 +882,6 @@ function TeamCapacityOverview({ team, onSelectPerson }) {
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-function CapacityAvailabilityPopover({ hasSelectedPerson, pendingHours, weeklyCapacityHours, weeklyScheduledHours, days, onGoToPending, onGoToWeek }) {
-  const [open, setOpen] = useState(false);
-  if (!hasSelectedPerson) return null;
-  const weeklyAvailable = weeklyCapacityHours - weeklyScheduledHours;
-  const fitsPending = pendingHours <= Math.max(weeklyAvailable, 0);
-  const saturatedDays = days.filter((day) => day.capacityHours > 0 && day.scheduledHours > day.capacityHours);
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className={`flex items-center gap-1 rounded-lg border px-3 py-1 text-[10px] font-black uppercase tracking-wide shadow-sm transition ${saturatedDays.length > 0 ? "border-red-300 bg-red-50 text-red-600 hover:bg-red-100" : "border-white/20 bg-white text-[#001225] hover:bg-slate-100"}`}
-      >
-        {saturatedDays.length > 0 ? "⚠" : "ⓘ"} Disponibilidad
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-20 mt-1 w-72 space-y-2.5 rounded-xl border border-slate-200 bg-white p-3 text-slate-700 shadow-xl">
-            <button type="button" onClick={() => { setOpen(false); onGoToPending(); }} className="block w-full rounded-lg border border-slate-100 bg-slate-50/70 px-2.5 py-2 text-left transition hover:border-sky-200 hover:bg-sky-50">
-              <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className={`h-1.5 w-1.5 rounded-full ${fitsPending ? "bg-emerald-500" : "bg-red-500"}`} />Por programar vs. libre esta semana</span>
-              <span className="mt-0.5 block text-[12px] font-semibold text-[#001225]">{formatHours(pendingHours)} <span className="font-normal text-slate-400">de {formatHours(Math.max(weeklyAvailable, 0))} disponibles</span></span>
-            </button>
-            <div className="rounded-lg border border-slate-100 px-2.5 py-2">
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Libre por día</p>
-              <div className="mt-1.5 space-y-1">
-                {days.map((day) => {
-                  const available = day.capacityHours - day.scheduledHours;
-                  const occupation = day.capacityHours > 0 ? (day.scheduledHours / day.capacityHours) * 100 : 0;
-                  const status = getWorkloadStatus(occupation);
-                  return (
-                    <button
-                      key={day.name}
-                      type="button"
-                      onClick={() => { setOpen(false); onGoToWeek(); }}
-                      className="flex w-full items-center justify-between rounded-md px-1.5 py-0.5 text-left transition hover:bg-slate-50"
-                    >
-                      <span className="text-[10px] font-bold text-slate-600">{day.name}</span>
-                      <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-black ${status.pill}`}>{formatHours(Math.max(available, 0))} libres</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {saturatedDays.length > 0 && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[10px] font-semibold text-red-700">
-                <p className="text-[9px] font-black uppercase tracking-widest text-red-500">⚠ Días saturados</p>
-                {saturatedDays.map((day) => <p key={day.name} className="mt-0.5">{day.name}: {formatHours(day.scheduledHours)} / {formatHours(day.capacityHours)} ({formatHours(day.scheduledHours - day.capacityHours)} de más)</p>)}
-              </div>
-            )}
-          </div>
-        </>
-      )}
     </div>
   );
 }
@@ -2009,21 +1949,6 @@ export default function WorkloadBalanceModule({
     [visibleAssignments]
   );
   const weekOccurrences = useMemo(() => expandWeeklyOccurrences(scheduledWeeklyActivities).filter((activity) => WEEK_VISIBLE_TYPES.includes(activity.origen)).concat(scheduledAssignmentWeeklyActivities, manualProjects).sort(compareOrderCreated), [scheduledWeeklyActivities, scheduledAssignmentWeeklyActivities, manualProjects]);
-  const capacityInsightDays = useMemo(() => {
-    const scheduledByDay = WEEK_DAYS.reduce((acc, day) => { acc[day] = 0; return acc; }, {});
-    weekOccurrences.forEach((activity) => {
-      if (scheduledByDay[activity.diaTipico] !== undefined) scheduledByDay[activity.diaTipico] += Number(activity.duracionMinutos || 0) / 60;
-    });
-    return WEEK_DAYS.map((day) => ({
-      name: day,
-      capacityHours: selectedPersonCapacity.days[day]?.hours || 0,
-      scheduledHours: scheduledByDay[day],
-    }));
-  }, [weekOccurrences, selectedPersonCapacity]);
-  const capacityInsightWeeklyScheduledHours = useMemo(
-    () => capacityInsightDays.reduce((sum, day) => sum + day.scheduledHours, 0),
-    [capacityInsightDays]
-  );
   const planningMonthlyBlocks = monthlySnapshotMode ? monthlyBlocks : scheduledMonthlyBlocks.concat(scheduledAssignmentMonthlyBlocks, monthlyBlocks);
   const monthlyMatrix = useMemo(() => buildMonthlyMatrix({ weekOccurrences: [], monthlyBlocks: planningMonthlyBlocks }), [planningMonthlyBlocks]);
   const monthlyPlanningBaseBlocks = useMemo(() => monthlyMatrix.flatMap((row) =>
@@ -4338,7 +4263,6 @@ function canReviewPlan() {
                 <h2 className="text-[13px] font-black uppercase tracking-tight">Gestión de Carga y Capacidad</h2>
                 <button type="button" onClick={() => setShowWorkloadVideo(true)} className="rounded-lg bg-red-600 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-red-700">▶ Ver video</button>
                 <button type="button" onClick={() => window.open(WORKLOAD_MANUAL_URL, "_blank")} className="rounded-lg border border-white/20 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-wide text-[#001225] shadow-sm transition hover:bg-slate-100">📄 Manual</button>
-                {viewMode === "capacity" && <CapacityAvailabilityPopover hasSelectedPerson={effectivePersonFilter !== "all"} pendingHours={pendingTotalHours} weeklyCapacityHours={selectedPersonCapacity.weeklyHours} weeklyScheduledHours={capacityInsightWeeklyScheduledHours} days={capacityInsightDays} onGoToPending={() => setViewMode("pending")} onGoToWeek={() => setViewMode("week")} />}
               </div>
               <div className="flex gap-1 rounded-xl bg-white/10 p-0.5"><ViewTab active={viewMode === "capacity"} onClick={() => setViewMode("capacity")}>Capacidad</ViewTab><ViewTab active={viewMode === "assignments"} onClick={() => setViewMode("assignments")}>Asignaciones</ViewTab><ViewTab active={viewMode === "pending"} onClick={() => setViewMode("pending")}>Pendientes</ViewTab><ViewTab active={viewMode === "agenda"} onClick={() => setViewMode("agenda")}>Planificación</ViewTab><ViewTab active={viewMode === "week"} onClick={() => setViewMode("week")}>Semana</ViewTab><ViewTab active={viewMode === "month"} onClick={() => setViewMode("month")}>Mes</ViewTab><ViewTab active={viewMode === "projects"} onClick={() => setViewMode("projects")}>Proyectos</ViewTab></div>
             </div>
@@ -4375,12 +4299,6 @@ function canReviewPlan() {
                   </div>
                 )}
                 {pmoMessage && <div className="mb-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-[10px] font-bold text-sky-700">{pmoMessage}</div>}
-                <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Objetivo</p>
-                  <p className="mt-1 text-[11px] font-medium leading-relaxed text-slate-600">{PMO_OBJETIVO}</p>
-                  <p className="mt-2 text-[9px] font-black uppercase tracking-widest text-slate-400">Alcance</p>
-                  <p className="mt-1 text-[11px] font-medium leading-relaxed text-slate-600">{PMO_ALCANCE}</p>
-                </div>
                 {pmoLoading ? (
                   <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-400">Cargando tablero de proyectos…</div>
                 ) : (
