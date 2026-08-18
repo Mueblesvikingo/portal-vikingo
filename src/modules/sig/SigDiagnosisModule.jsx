@@ -141,8 +141,8 @@ let sigSections = [
     percent: 0,
     summary: "Corrección y mejora continua",
     groups: [
-      { subtitle: "10.1 Mejora", rows: [[1, "Oportunidades de mejora determinadas", "Planes de mejora documentados", "Evaluación desempeño", 0], [2, "Mejora continua promovida", "Iniciativas de mejora", "Dirección", 0]] },
-      { subtitle: "10.2 Acción correctiva", rows: [[3, "Acciones correctivas planteadas", "Plan de acciones", "Evaluación desempeño", 0], [4, "Acciones correctivas implementadas y evaluadas", "Plan de acciones", "Evaluación desempeño", 0], [5, "Causas de no conformidades analizadas", "Análisis de causas", "Evaluación desempeño", 0]] },
+      { subtitle: "10.1 Mejora", rows: [[1, "Oportunidades de mejora determinadas", "Planes de mejora documentados", "Todos", 0], [2, "Mejora continua promovida", "Iniciativas de mejora", "Todos", 0]] },
+      { subtitle: "10.2 Acción correctiva", rows: [[3, "Acciones correctivas planteadas", "Plan de acciones", "Todos", 0], [4, "Acciones correctivas implementadas y evaluadas", "Plan de acciones", "Todos", 0], [5, "Causas de no conformidades analizadas", "Análisis de causas", "Todos", 0]] },
     ],
   },
 ];
