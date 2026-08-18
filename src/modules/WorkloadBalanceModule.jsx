@@ -1439,6 +1439,7 @@ export default function WorkloadBalanceModule({
     }
   }
   const [personFilter, setPersonFilter] = useState(() => (currentUser?.persona_id ? String(currentUser.persona_id) : "all"));
+  const autoSelectedOwnPersonRef = useRef(false);
   const [roleFilter, setRoleFilter] = useState("all");
   const [jornadaInicio, setJornadaInicio] = useState("08:00");
   const [showScheduleColumn, setShowScheduleColumn] = useState(false);
@@ -1548,6 +1549,21 @@ export default function WorkloadBalanceModule({
     const currentName = normalizeText(currentUser?.name);
     return peopleOptions.find((person) => normalizeText(person.name) === currentName)?.id || "";
   }, [currentUser?.persona_id, currentUser?.name, peopleOptions]);
+  // `personFilter` se inicializa una sola vez (useState lazy) a partir de
+  // currentUser.persona_id. Si en ese primer render peopleCatalog aún no
+  // había cargado (o la sesión tardó en resolver el id), el filtro puede
+  // quedar en "all" aunque el usuario sí tenga una persona propia — lo que
+  // deja todo en modo solo lectura sin que se note por qué. Este efecto lo
+  // autocorrige UNA SOLA VEZ en cuanto currentUserPersonId esté disponible
+  // (guardado con un ref para no pisar después una selección real hacia
+  // "Todos"/otra persona, ej. un Director que sí quiere ver el equipo).
+  useEffect(() => {
+    if (!autoSelectedOwnPersonRef.current && personFilter === "all" && currentUserPersonId) {
+      autoSelectedOwnPersonRef.current = true;
+      setPersonFilter(String(currentUserPersonId));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserPersonId]);
   // Todos pueden VER la carga de cualquier persona (para eso está el filtro).
   // Solo pueden EDITAR/programar cuando están viendo su propia carga, salvo
   // los roles con acceso total (ver hasWorkloadFullAccess) o una excepción

@@ -387,6 +387,8 @@ export function hasWorkloadFullAccess(user) {
 // excepción por persona, no un rol general de "supervisor edita a su equipo".
 const WORKLOAD_SCOPED_EDITORS = {
   11: ["Inspector de Calidad"], // RUIZ CARREON BEATRIZ → persona_roles.rol de Laura y Sulidey
+  5: ["Auxiliar de Almacén", "Responsable / Encargado de Almacén"], // HERNANDO GONZALEZ KEVYN (Kevin) → persona_roles.rol de Erika y Erick
+  3: ["Chofer-Repartidor"], // HERNANDEZ ESCOBEDO EDUARDO (Coordinador de Distribución) → persona_roles.rol de su equipo de reparto
 };
 
 // `targetPersonRoles` son los `persona_roles.rol` (activos) de la persona
