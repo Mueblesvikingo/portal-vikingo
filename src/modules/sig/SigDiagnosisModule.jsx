@@ -3,6 +3,13 @@ import { supabase } from "../../services/supabase";
 import { isStrategicTeamMember } from "../../services/permissionsService";
 import { createWorkloadAssignment } from "../../services/workloadService";
 import { getEstados, upsertEstado, getHistorial, getChecks, createCheck } from "../../services/sigService";
+import { upsertResultado } from "../../services/performanceService";
+
+// Nombre/macroproceso del KPI en Desempeño Organizacional que refleja el
+// avance global del SIG — ya existía, no se crea uno nuevo. Se busca por
+// nombre en vez de id fijo por si el id difiere entre entornos.
+const SIG_KPI_MACROPROCESO = "Planeación estratégica del SIG";
+const SIG_KPI_NOMBRE = "% diagnóstico implementación SIG";
 
 let subnumeralDescriptions = {
   "4.1 Comprensión de la organización y su contexto": "Analizar entorno, riesgos y situación actual de la empresa.",
@@ -531,6 +538,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [historialLoading, setHistorialLoading] = useState(false);
   const [historialEntries, setHistorialEntries] = useState([]);
   const [convertingSection, setConvertingSection] = useState(null);
+  const [sigKpiId, setSigKpiId] = useState(null);
 
   const canEdit = isStrategicTeamMember(currentUser);
   // Espejo de lo último realmente guardado en Supabase (no lo que se va
@@ -558,9 +566,36 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     setPeople(data || []);
   }
 
+  async function loadSigKpiId() {
+    const { data, error } = await supabase
+      .from("desempeno_kpis")
+      .select("id")
+      .eq("macroproceso", SIG_KPI_MACROPROCESO)
+      .eq("nombre_indicador", SIG_KPI_NOMBRE)
+      .eq("activo", true)
+      .maybeSingle();
+    if (error) { console.error("Error al buscar el KPI de avance del SIG:", error); return; }
+    if (data) setSigKpiId(data.id);
+  }
+
+  // Empuja el % global del SIG (ya con el score recién guardado) al KPI de
+  // Desempeño Organizacional — se calcula en el momento (no depende de que
+  // React ya haya vuelto a renderizar) para no mandar un valor desfasado.
+  async function syncSigKpi(nextStatusOverrides) {
+    if (!sigKpiId) return;
+    const globalPct = globalAverageWithOverrides(sigSections, nextStatusOverrides);
+    const now = new Date();
+    const result = await upsertResultado(
+      { kpiId: sigKpiId, anio: now.getFullYear(), mes: now.getMonth() + 1, tipo: "real", valor: globalPct / 100 },
+      { actor: currentUser }
+    );
+    if (!result?.ok) console.error("Error al sincronizar el KPI de avance del SIG:", result?.error);
+  }
+
   useEffect(() => {
     loadEstados();
     loadPeople();
+    loadSigKpiId();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -600,12 +635,14 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     const key = stateKey(groupSubtitle, number, proceso);
     const previous = { score: statusOverrides[key], evidencia: evidenceOverrides[key] };
     const score = Number(nextScore);
-    setStatusOverrides((current) => ({ ...current, [key]: score }));
+    const nextStatusOverrides = { ...statusOverrides, [key]: score };
+    setStatusOverrides(nextStatusOverrides);
     const result = await upsertEstado(
       { subtitulo: groupSubtitle, numero: number, numeral, proceso, score, evidencia: evidenceOverrides[key] ?? "" },
       { actor: currentUser, previous }
     );
-    if (!result.ok) { console.error(result.error); setMessage("No fue posible guardar el cambio de estado."); }
+    if (!result.ok) { console.error(result.error); setMessage("No fue posible guardar el cambio de estado."); return; }
+    syncSigKpi(nextStatusOverrides);
   }
 
   async function updateEvidence(numeral, groupSubtitle, number, proceso, value) {
