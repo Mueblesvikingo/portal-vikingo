@@ -1379,6 +1379,12 @@ export default function WorkloadBalanceModule({
   // Tablero PMO: catálogo propio y pequeño (7-10 filas), no se mete al
   // Promise.all de loadWorkloadData (que se re-ejecuta tras cada mutación
   // de este módulo enorme) para no re-consultarlo sin necesidad.
+  // `pmoShowHistorico` se declara aquí (antes de loadPmoData/su efecto)
+  // porque el arreglo de dependencias del useEffect de abajo la referencia
+  // de inmediato durante el render — declararla más abajo con las demás
+  // banderas de pmo revienta el componente entero (ReferenceError de
+  // temporal dead zone) en cuanto se evalúa ese useEffect.
+  const [pmoShowHistorico, setPmoShowHistorico] = useState(false);
   async function loadPmoData() {
     setPmoLoading(true);
     const [proyectos, recordatorios] = await Promise.all([
@@ -1476,7 +1482,6 @@ export default function WorkloadBalanceModule({
   const [pmoMessage, setPmoMessage] = useState("");
   const [pmoRecordatorioFormFor, setPmoRecordatorioFormFor] = useState(null);
   const [pmoRecordatorioText, setPmoRecordatorioText] = useState("");
-  const [pmoShowHistorico, setPmoShowHistorico] = useState(false);
   const [pmoCreating, setPmoCreating] = useState(false);
   const [pmoNewNombre, setPmoNewNombre] = useState("");
   const [pmoNewAsignacionId, setPmoNewAsignacionId] = useState("");
