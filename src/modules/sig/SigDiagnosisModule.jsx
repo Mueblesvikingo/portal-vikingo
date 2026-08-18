@@ -1,4 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "../../services/supabase";
+import { isStrategicTeamMember } from "../../services/permissionsService";
+import { createWorkloadAssignment } from "../../services/workloadService";
+import { getEstados, upsertEstado, getHistorial, getChecks, createCheck } from "../../services/sigService";
 
 let subnumeralDescriptions = {
   "4.1 Comprensión de la organización y su contexto": "Analizar entorno, riesgos y situación actual de la empresa.",
@@ -163,7 +167,7 @@ let processLeaders = {
   "Planeación y control de la producción": { role: "Gerente Operaciones", person: "Hugo" },
   "Gestión de inventarios": { role: "Gerente Operaciones", person: "Hugo" },
   "Control de almacenes": { role: "Gerente Operaciones", person: "Hugo" },
-  Distribución: { role: "Gerente Operaciones", person: "Hugo" },
+  Distribución: { role: "Coordinador de Distribución", person: "Eduardo" },
   Calidad: { role: "Coordinador de Calidad", person: "Beatriz" },
   "Gestión de calidad": { role: "Coordinador de Calidad", person: "Beatriz" },
   "Producción/Calidad": { role: "Gerente Operaciones / Coordinador de Calidad", person: "Hugo / Beatriz" },
@@ -343,51 +347,228 @@ function getProcessInsights(selectedProcess, statusOverrides = {}) {
   return { strength, weakness, recommendation };
 }
 
-function runPreviewTests() {
-  console.assert(sigSections.length === 7, "Debe haber 7 numerales del 4 al 10");
-  console.assert(sigSections[0].numeral === "4", "El primer numeral debe ser 4");
-  console.assert(sigSections[sigSections.length - 1].numeral === "10", "El último numeral debe ser 10");
-  console.assert(globalAverageWithOverrides(sigSections, {}) === 38, "El resultado global esperado es 38%");
-  console.assert(statusTextColor(85) === "text-emerald-600", "85% debe ser verde");
-  console.assert(scoreMeaning(0) === "No implementado", "0 debe mostrarse como no implementado");
-  console.assert(scoreMeaning(10) === "Estandarizado", "10 debe mostrarse como estandarizado");
-  console.assert(groupAverage(sigSections[0].groups[0]) === 100, "El primer grupo debe estar al 100%");
-  console.assert(mapProcesses.length === 16, "El filtro debe incluir los 16 procesos del mapa del SIG");
-  console.assert(processApplies("Todos", "Control de almacenes"), "Los requisitos marcados como Todos deben aplicar a Control de almacenes");
-  console.assert(responsibleLabel("Ventas").person === "Alejandro", "Ventas debe mostrar a Alejandro como responsable");
-  console.assert(getDynamicAction(sigSections[0], "Todos").action === "Hay que mantener", "El numeral 4 debe sugerir mantener");
+// "Nombre de pila" contra el catálogo de personas (formato "APELLIDOS
+// NOMBRE") — mismo criterio que firstNameOnly() en OrgChartCanvas.jsx.
+function findPersonaByFirstName(personasCatalogo, firstName) {
+  if (!firstName) return null;
+  const target = firstName.trim().toLowerCase();
+  return personasCatalogo.find((persona) => {
+    const parts = String(persona.nombre || "").trim().split(/\s+/);
+    return parts[parts.length - 1]?.toLowerCase() === target;
+  }) || null;
 }
 
-runPreviewTests();
+function formatDateTime(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleString("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
 
-export default function DiagnosticoSIGPreview() {
+function HistorialTimelineModal({ open, onClose, loading, entries, selectedProcess }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between bg-[#111827] px-4 py-3 text-white">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest">Línea de tiempo de hitos</p>
+            <p className="text-[10px] font-bold text-slate-300">{selectedProcess === "Todos" ? "Todos los procesos" : selectedProcess}</p>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
+        </div>
+        <div className="max-h-[65vh] overflow-auto p-4">
+          {loading ? (
+            <div className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
+          ) : entries.length === 0 ? (
+            <div className="py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay hitos registrados para este proceso.</div>
+          ) : (
+            <div className="space-y-2">
+              {entries.map((entry) => (
+                <div key={entry.key} className="flex gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                  <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-black ${entry.type === "check" ? "bg-emerald-100 text-emerald-700" : "bg-sky-100 text-sky-700"}`}>
+                    {entry.type === "check" ? "✓" : "•"}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] font-black text-slate-800">{entry.title}</span>
+                      <span className="text-[9px] font-bold text-slate-400">{formatDateTime(entry.date)}</span>
+                    </div>
+                    <p className="mt-0.5 text-[10px] font-bold text-slate-500">{entry.detail} · {entry.nombre || "Usuario desconocido"}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function DiagnosticoSIGModule({ currentUser }) {
   const [selectedCell, setSelectedCell] = useState(null);
   const [selectedProcess, setSelectedProcess] = useState("Todos");
   const [statusOverrides, setStatusOverrides] = useState({});
   const [evidenceOverrides, setEvidenceOverrides] = useState({});
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [adminCode, setAdminCode] = useState("");
+  const [people, setPeople] = useState([]);
+  const [lastCheck, setLastCheck] = useState(null);
+  const [checkingProcess, setCheckingProcess] = useState(false);
+  const [message, setMessage] = useState("");
+  const [historialOpen, setHistorialOpen] = useState(false);
+  const [historialLoading, setHistorialLoading] = useState(false);
+  const [historialEntries, setHistorialEntries] = useState([]);
 
-  const requestAdminAccess = () => {
-    if (adminCode.trim() === "SIG-ADM") {
-      setIsAdmin(true);
-      setAdminCode("");
-    }
-  };
+  const canEdit = isStrategicTeamMember(currentUser);
+  // Espejo de lo último realmente guardado en Supabase (no lo que se va
+  // tecleando) — así commitEvidence puede saber qué cambió de verdad al
+  // hacer blur, sin depender del estado de UI que ya se actualizó en vivo.
+  const savedEvidenceRef = useRef({});
+
+  async function loadEstados() {
+    const estados = await getEstados();
+    const nextStatus = {};
+    const nextEvidence = {};
+    estados.forEach((row) => {
+      const key = rowKey(row.subtitulo, row.numero);
+      nextStatus[key] = row.score;
+      if (row.evidencia != null) nextEvidence[key] = row.evidencia;
+    });
+    setStatusOverrides(nextStatus);
+    setEvidenceOverrides(nextEvidence);
+    savedEvidenceRef.current = nextEvidence;
+  }
+
+  async function loadPeople() {
+    const { data, error } = await supabase.from("personas").select("id,nombre").order("nombre", { ascending: true });
+    if (error) { console.error("Error al cargar personas:", error); return; }
+    setPeople(data || []);
+  }
+
+  useEffect(() => {
+    loadEstados();
+    loadPeople();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (selectedProcess === "Todos") { setLastCheck(null); return; }
+    getChecks(selectedProcess).then((rows) => setLastCheck(rows[0] || null));
+  }, [selectedProcess]);
 
   const global = useMemo(() => globalAverageWithOverrides(sigSections, statusOverrides), [statusOverrides]);
   const maxGroups = useMemo(() => Math.max(...sigSections.map((section) => section.groups.length)), []);
   const processOptions = useMemo(() => ["Todos", ...mapProcesses], []);
 
-  const updateStatus = (groupSubtitle, number, nextScore) => {
-    if (!isAdmin) return;
-    setStatusOverrides((current) => ({ ...current, [rowKey(groupSubtitle, number)]: Number(nextScore) }));
-  };
+  async function updateStatus(numeral, groupSubtitle, number, nextScore) {
+    if (!canEdit) return;
+    const key = rowKey(groupSubtitle, number);
+    const previous = { score: statusOverrides[key], evidencia: evidenceOverrides[key] };
+    const score = Number(nextScore);
+    setStatusOverrides((current) => ({ ...current, [key]: score }));
+    const result = await upsertEstado(
+      { subtitulo: groupSubtitle, numero: number, numeral, score, evidencia: evidenceOverrides[key] ?? "" },
+      { actor: currentUser, previous }
+    );
+    if (!result.ok) { console.error(result.error); setMessage("No fue posible guardar el cambio de estado."); }
+  }
 
-  const updateEvidence = (groupSubtitle, number, value) => {
-    if (!isAdmin) return;
-    setEvidenceOverrides((current) => ({ ...current, [rowKey(groupSubtitle, number)]: value }));
-  };
+  async function updateEvidence(numeral, groupSubtitle, number, value) {
+    if (!canEdit) return;
+    const key = rowKey(groupSubtitle, number);
+    setEvidenceOverrides((current) => ({ ...current, [key]: value }));
+  }
+
+  async function commitEvidence(numeral, groupSubtitle, number) {
+    if (!canEdit) return;
+    const key = rowKey(groupSubtitle, number);
+    const nextEvidencia = evidenceOverrides[key] ?? "";
+    const previousEvidencia = savedEvidenceRef.current[key] ?? "";
+    if (previousEvidencia === nextEvidencia) return; // sin cambios reales, no re-guarda ni registra historial
+    const result = await upsertEstado(
+      { subtitulo: groupSubtitle, numero: number, numeral, score: statusOverrides[key], evidencia: nextEvidencia },
+      { actor: currentUser, previous: { score: statusOverrides[key], evidencia: previousEvidencia } }
+    );
+    if (!result.ok) { console.error(result.error); setMessage("No fue posible guardar la evidencia."); return; }
+    savedEvidenceRef.current = { ...savedEvidenceRef.current, [key]: nextEvidencia };
+  }
+
+  async function handleMarcarRevisado() {
+    if (!canEdit || selectedProcess === "Todos") return;
+    setCheckingProcess(true);
+    const result = await createCheck(selectedProcess, currentUser);
+    setCheckingProcess(false);
+    if (!result.ok) { console.error(result.error); setMessage("No fue posible registrar el check."); return; }
+    setLastCheck(result.data);
+  }
+
+  async function openHistorial() {
+    setHistorialOpen(true);
+    setHistorialLoading(true);
+    const [historial, checks] = await Promise.all([
+      getHistorial(),
+      selectedProcess === "Todos" ? Promise.resolve([]) : getChecks(selectedProcess),
+    ]);
+    const relevantHistorial = selectedProcess === "Todos"
+      ? historial
+      : historial.filter((entry) => {
+        const group = sigSections.flatMap((s) => s.groups).find((g) => g.subtitle === entry.subtitulo);
+        const row = group?.rows.find((r) => r[0] === entry.numero);
+        return row ? processApplies(row[3], selectedProcess) : false;
+      });
+    const merged = [
+      ...checks.map((c) => ({
+        key: `check-${c.id}`,
+        type: "check",
+        title: "Proceso marcado como revisado",
+        detail: c.proceso,
+        date: c.checked_at,
+        nombre: c.checked_by_nombre,
+      })),
+      ...relevantHistorial.map((h) => ({
+        key: `hist-${h.id}`,
+        type: "score",
+        title: h.campo === "score" ? `Estado actualizado: ${h.valor_anterior ?? "—"} → ${h.valor_nuevo ?? "—"}` : "Evidencia actualizada",
+        detail: cleanSubtitle(h.subtitulo),
+        date: h.created_at,
+        nombre: h.nombre,
+      })),
+    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+    setHistorialEntries(merged);
+    setHistorialLoading(false);
+  }
+
+  async function handleCrearAsignacion(section) {
+    if (!canEdit || selectedProcess === "Todos") return;
+    const leader = processLeaders[selectedProcess] || { role: "Por asignar", person: "" };
+    const persona = findPersonaByFirstName(people, leader.person);
+    if (!persona) {
+      alert(`No encontré a "${leader.person}" en el catálogo de personas. No se pudo crear la asignación.`);
+      return;
+    }
+    const dynamic = getDynamicAction(section, selectedProcess, statusOverrides);
+    if (!window.confirm(`¿Crear una asignación en Balance de Carga para ${persona.nombre} sobre "${section.numeral}. ${section.title}"?`)) return;
+
+    const result = await createWorkloadAssignment({
+      persona_id: persona.id,
+      responsable: persona.nombre,
+      rol: leader.role,
+      tipo: "Mejora",
+      prioridad: dynamic.processAverage <= 3 ? "Alta" : "Media",
+      gestion: "SIG",
+      titulo: `SIG ${section.numeral}. ${section.title} — ${selectedProcess}`,
+      descripcion: `${dynamic.action}. Avance actual del proceso en este numeral: ${dynamic.processAverage}0%.`,
+      revisara: "", aprobara: "", seguimiento: "",
+      carga_horas: 2,
+      fecha_limite: null,
+      estado: "Pendiente",
+      asigna: currentUser?.nombre || currentUser?.usuario || "",
+      asigna_rol: "Coordinador SIG",
+      horas_totales: 2,
+      origen_estrategico: "SIG",
+    });
+
+    if (!result.ok) { console.error(result.error); alert("No fue posible crear la asignación."); return; }
+    alert(`Asignación creada para ${persona.nombre} en Balance de Carga.`);
+  }
 
   return (
     <div className="min-h-screen bg-[#f4f5f7] p-5 text-slate-900">
@@ -427,22 +608,45 @@ export default function DiagnosticoSIGPreview() {
           </div>
         </section>
 
+        {message && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{message}</div>}
+
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white px-5 py-2 shadow-sm">
-          <div className="flex w-full items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2">
             <div className="shrink-0 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Filtro por proceso</div>
-            <div className="whitespace-nowrap text-xs font-semibold text-slate-600">Resalta subnumerales aplicables por proceso.</div>
             <select aria-label="Filtro por proceso" value={selectedProcess} onChange={(event) => setSelectedProcess(event.target.value)} className="min-w-0 max-w-full flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-slate-400">
               {processOptions.map((process) => <option key={process} value={process}>{process}</option>)}
             </select>
-            <div className="ml-2 flex shrink-0 items-center gap-2 border-l border-slate-200 pl-3">
-              {isAdmin ? (
-                <button type="button" onClick={() => setIsAdmin(false)} className="rounded-lg bg-slate-900 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-white" title="Cerrar modo administrador">Admin activo</button>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <input aria-label="Clave de administrador" type="password" value={adminCode} onChange={(event) => setAdminCode(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") requestAdminAccess(); }} placeholder="Clave adm." className="w-24 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] font-semibold text-slate-600 outline-none focus:border-slate-400" />
-                  <button type="button" onClick={requestAdminAccess} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-500 hover:bg-slate-50" title="Activar permisos de edición">Editar</button>
-                </div>
-              )}
+
+            {selectedProcess !== "Todos" && (
+              <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+                {lastCheck && (
+                  <span className="text-[9px] font-bold text-slate-400" title={formatDateTime(lastCheck.checked_at)}>
+                    Última revisión: {lastCheck.checked_by_nombre || "—"} · {formatDateTime(lastCheck.checked_at)}
+                  </span>
+                )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={handleMarcarRevisado}
+                    disabled={checkingProcess}
+                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-black text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    ✓ Marcar revisado
+                  </button>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={openHistorial}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+            >
+              ⏱ Línea de tiempo
+            </button>
+
+            <div className="ml-auto shrink-0">
+              {!canEdit && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold text-amber-700">Modo solo lectura</span>}
             </div>
           </div>
         </section>
@@ -469,7 +673,7 @@ export default function DiagnosticoSIGPreview() {
                   <th className="w-[15%] px-2 py-2 text-left font-black">Numeral</th>
                   <th className="w-[6%] px-2 py-2 text-center font-black">%</th>
                   {Array.from({ length: maxGroups }).map((_, index) => <th key={`group-head-${index}`} className="px-1 py-2 text-center font-black">Sub {index + 1}</th>)}
-                  <th className="w-[9%] px-2 py-2 text-center font-black">Acción</th>
+                  <th className="w-[10%] px-2 py-2 text-center font-black">Acción</th>
                 </tr>
               </thead>
               <tbody>
@@ -515,7 +719,21 @@ export default function DiagnosticoSIGPreview() {
                           </td>
                         );
                       })}
-                      <td className="px-3 py-2 text-center align-middle"><span className={`inline-flex rounded-lg px-2 py-[3px] text-[8px] leading-tight font-black ${statusBg(dynamic.processAverage * 10)}`}>{dynamic.action}</span></td>
+                      <td className="px-2 py-2 text-center align-middle">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span className={`inline-flex rounded-lg px-2 py-[3px] text-[8px] leading-tight font-black ${statusBg(dynamic.processAverage * 10)}`}>{dynamic.action}</span>
+                          {canEdit && selectedProcess !== "Todos" && (
+                            <button
+                              type="button"
+                              onClick={() => handleCrearAsignacion(section)}
+                              title={`Enviar a Asignaciones · ${responsibleLabel(selectedProcess).person}`}
+                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-300 transition hover:bg-sky-50 hover:text-sky-600"
+                            >
+                              ▸
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -566,9 +784,9 @@ export default function DiagnosticoSIGPreview() {
                             <td className="px-4 py-3 font-black text-slate-500">{number}</td>
                             <td className="px-4 py-2"><div className="max-w-[420px] text-[13px] font-medium leading-relaxed text-slate-700">{requirement}</div></td>
                             <td className="w-[260px] px-4 py-3"><div className="inline-flex min-w-[220px] flex-col gap-1 rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-left"><span className="text-[12px] font-semibold text-slate-700">{responsibleInfo.process}</span><span className="text-[10px] font-medium text-blue-600">{responsibleInfo.role}</span></div></td>
-                            <td className="w-[180px] px-4 py-3"><div className="group relative max-w-[170px] rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-medium leading-relaxed text-slate-600 shadow-sm transition hover:border-slate-300"><textarea value={evidenceOverrides[key] ?? evidence} onChange={(event) => updateEvidence(selectedCell.group.subtitle, number, event.target.value)} rows={2} disabled={!isAdmin} className={`w-full resize-none bg-transparent pr-5 text-[11px] font-medium leading-relaxed text-slate-600 outline-none ${isAdmin ? "cursor-text" : "cursor-default"}`} /><span className={`absolute right-2 top-2 text-[9px] text-slate-400 transition ${isAdmin ? "opacity-0 group-hover:opacity-100" : "opacity-0"}`}>✎</span></div></td>
+                            <td className="w-[180px] px-4 py-3"><div className="group relative max-w-[170px] rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-medium leading-relaxed text-slate-600 shadow-sm transition hover:border-slate-300"><textarea value={evidenceOverrides[key] ?? evidence} onChange={(event) => updateEvidence(selectedCell.section.numeral, selectedCell.group.subtitle, number, event.target.value)} onBlur={() => commitEvidence(selectedCell.section.numeral, selectedCell.group.subtitle, number)} rows={2} disabled={!canEdit} className={`w-full resize-none bg-transparent pr-5 text-[11px] font-medium leading-relaxed text-slate-600 outline-none ${canEdit ? "cursor-text" : "cursor-default"}`} /><span className={`absolute right-2 top-2 text-[9px] text-slate-400 transition ${canEdit ? "opacity-0 group-hover:opacity-100" : "opacity-0"}`}>✎</span></div></td>
                             <td className="px-4 py-3 text-center">
-                              <div className="group flex items-center justify-center gap-2"><span className={`inline-flex justify-center rounded-xl px-3 py-1.5 text-[11px] font-black shadow-sm transition-all ${cellStyle(currentScore)}`}>{currentScore} · {scoreMeaning(currentScore)}</span><select aria-label="Actualizar estatus" value={currentScore} onChange={(event) => updateStatus(selectedCell.group.subtitle, number, event.target.value)} disabled={!isAdmin} className={`rounded-md border border-transparent bg-slate-100/70 px-1.5 py-[2px] text-[9px] font-bold text-slate-500 outline-none transition-all hover:bg-slate-200/70 hover:text-slate-700 focus:opacity-100 ${isAdmin ? "opacity-0 group-hover:opacity-100" : "pointer-events-none opacity-0"}`}><option value={10}>10</option><option value={5}>5</option><option value={3}>3</option><option value={0}>0</option></select></div>
+                              <div className="group flex items-center justify-center gap-2"><span className={`inline-flex justify-center rounded-xl px-3 py-1.5 text-[11px] font-black shadow-sm transition-all ${cellStyle(currentScore)}`}>{currentScore} · {scoreMeaning(currentScore)}</span><select aria-label="Actualizar estatus" value={currentScore} onChange={(event) => updateStatus(selectedCell.section.numeral, selectedCell.group.subtitle, number, event.target.value)} disabled={!canEdit} className={`rounded-md border border-transparent bg-slate-100/70 px-1.5 py-[2px] text-[9px] font-bold text-slate-500 outline-none transition-all hover:bg-slate-200/70 hover:text-slate-700 focus:opacity-100 ${canEdit ? "opacity-0 group-hover:opacity-100" : "pointer-events-none opacity-0"}`}><option value={10}>10</option><option value={5}>5</option><option value={3}>3</option><option value={0}>0</option></select></div>
                             </td>
                           </tr>
                         );
@@ -580,6 +798,14 @@ export default function DiagnosticoSIGPreview() {
             </div>
           </div>
         ) : null}
+
+        <HistorialTimelineModal
+          open={historialOpen}
+          onClose={() => setHistorialOpen(false)}
+          loading={historialLoading}
+          entries={historialEntries}
+          selectedProcess={selectedProcess}
+        />
       </div>
     </div>
   );

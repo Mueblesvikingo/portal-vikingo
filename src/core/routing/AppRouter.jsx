@@ -124,7 +124,7 @@ export default function AppRouter({
 
           <Route
             path="/sig"
-            element={<SigDiagnosisModule />}
+            element={<SigDiagnosisModule currentUser={currentUser} />}
           />
         </Routes>
       </AppLayout>
