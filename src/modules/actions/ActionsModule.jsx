@@ -9,6 +9,7 @@ import {
 import { getMacroprocesos } from "../../services/performanceService";
 import { getPersonas } from "../../services/organizationCatalogService";
 import { getObjetivos } from "../../services/strategicDeploymentService";
+import { createWorkloadAssignment } from "../../services/workloadService";
 import { NIVELES_ACCION, TIPOS_ACCION, ESTADOS_ACCION, getFlujoConfig } from "./actionsHelpers";
 import DashboardTab from "./DashboardTab";
 import KanbanTab from "./KanbanTab";
@@ -100,6 +101,33 @@ export default function ActionsModule({ currentUser }) {
     setSelectedAccionId((current) => (current === id ? null : current));
   }
 
+  // Genérico para el botón "→ Asignación" — usado tanto desde la tabla
+  // (fila expandida) como desde el detalle de la acción, mismo destino en
+  // Balance de Carga → Asignaciones.
+  async function handleCrearAsignacion(accion, payload) {
+    const result = await createWorkloadAssignment({
+      persona_id: payload.personaId,
+      responsable: payload.personaNombre,
+      rol: "Responsable de acción",
+      tipo: "Mejora",
+      prioridad: payload.prioridad,
+      gestion: "Otro",
+      titulo: payload.titulo,
+      descripcion: accion.descripcion || "",
+      revisara: "", aprobara: "", seguimiento: "",
+      carga_horas: payload.horas,
+      fecha_limite: payload.fechaLimite,
+      estado: "Pendiente",
+      asigna: currentUser?.nombre || currentUser?.usuario || "",
+      asigna_rol: "Centro de Gestión de Acciones",
+      horas_totales: payload.horas,
+      origen_estrategico: "Acciones",
+    });
+    if (!result?.ok) { console.error(result?.error); alert("No fue posible crear la asignación."); return false; }
+    alert(`Asignación creada para ${payload.personaNombre} en Balance de Carga.`);
+    return true;
+  }
+
   const selectedAccion = acciones.find((a) => a.id === selectedAccionId) || null;
 
   const tabs = [
@@ -182,9 +210,12 @@ export default function ActionsModule({ currentUser }) {
             ) : (
               <TablaTab
                 acciones={filteredAcciones}
+                personas={personas}
                 personasById={personasById}
                 procesosById={procesosById}
+                currentUser={currentUser}
                 onSelectAccion={setSelectedAccionId}
+                onCreateAssignment={handleCrearAsignacion}
               />
             )}
           </div>
@@ -215,6 +246,7 @@ export default function ActionsModule({ currentUser }) {
           onUpdate={(updates) => handleUpdateAccion(selectedAccion.id, updates)}
           onDeactivate={() => handleDeactivateAccion(selectedAccion.id)}
           onClose={() => setSelectedAccionId(null)}
+          onCreateAssignment={handleCrearAsignacion}
         />
       )}
     </section>

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cancelAssignment, confirmMeetingAttendance, createWorkloadAssignment, createWorkloadSourceActivity, deleteAssignment, deleteSavedWorkloadPlan, finalizeAssignment, findExistingSavedMonth, findExistingSavedWeek, getLiderProcesoOverrides, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, pauseAssignment, programAssignmentHours, reactivateAssignment, recalculateAssignmentHours, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanHours, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanHours, updateWeeklyPlanOrder, updateWorkloadAssignment, updateWorkloadSourceActivity, upsertLiderProcesoOverride } from "../services/workloadService";
 import { hasWorkloadFullAccess, canEditWorkloadPendingActivities, canEditWorkloadForPersonRoles, isStrategicTeamMember, canEditPmoProyecto } from "../services/permissionsService";
 import { updateActivitySemaforo, getSubprocesosCatalog } from "../services/organizationalDesignService";
-import { getProyectos, updateProyecto, createRecordatorio, getPendingRecordatorios, markRecordatorioVisto } from "../services/pmoService";
+import { getProyectos, updateProyecto, createProyecto, closeProyecto, reopenProyecto, createRecordatorio, getPendingRecordatorios, markRecordatorioVisto } from "../services/pmoService";
 import { mapProcesses as pmoProcessOptions } from "../services/processCatalog";
 import SemaforoDot from "../shared/components/SemaforoDot";
 
@@ -1382,7 +1382,7 @@ export default function WorkloadBalanceModule({
   async function loadPmoData() {
     setPmoLoading(true);
     const [proyectos, recordatorios] = await Promise.all([
-      getProyectos(),
+      getProyectos(pmoShowHistorico),
       getPendingRecordatorios(currentUser?.persona_id),
     ]);
     setPmoProyectos(proyectos);
@@ -1392,7 +1392,40 @@ export default function WorkloadBalanceModule({
   useEffect(() => {
     loadPmoData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.persona_id]);
+  }, [currentUser?.persona_id, pmoShowHistorico]);
+
+  async function handleCreatePmoProyecto() {
+    const nombre = pmoNewNombre.trim();
+    if (!nombre) { setPmoMessage("Escribe un nombre para el proyecto."); return; }
+    const orden = (pmoProyectos.reduce((max, p) => Math.max(max, p.orden || 0), 0)) + 1;
+    const linkedAssignment = pmoNewAsignacionId ? assignments.find((a) => String(a.id) === String(pmoNewAsignacionId)) : null;
+    const result = await createProyecto(
+      {
+        nombre,
+        orden,
+        asignacionId: linkedAssignment?.id || null,
+        liderProyectoPersonaId: linkedAssignment?.personaId || null,
+      },
+      { actor: currentUser }
+    );
+    if (!result.ok) { console.error(result.error); setPmoMessage("No fue posible crear el proyecto."); return; }
+    setPmoProyectos((current) => [...current, result.data]);
+    setPmoCreating(false);
+    setPmoNewNombre("");
+    setPmoNewAsignacionId("");
+  }
+
+  async function handleClosePmoProyecto(proyecto) {
+    const result = await closeProyecto(proyecto.id, { actor: currentUser });
+    if (!result.ok) { console.error(result.error); setPmoMessage("No fue posible cerrar el proyecto."); return; }
+    setPmoProyectos((current) => current.filter((item) => item.id !== proyecto.id));
+  }
+
+  async function handleReopenPmoProyecto(proyecto) {
+    const result = await reopenProyecto(proyecto.id, { actor: currentUser });
+    if (!result.ok) { console.error(result.error); setPmoMessage("No fue posible reabrir el proyecto."); return; }
+    setPmoProyectos((current) => current.filter((item) => item.id !== proyecto.id));
+  }
 
   async function handleUpdatePmoProyecto(proyecto, changes) {
     if (!canEditPmoProyecto(currentUser, proyecto)) return;
@@ -1443,6 +1476,10 @@ export default function WorkloadBalanceModule({
   const [pmoMessage, setPmoMessage] = useState("");
   const [pmoRecordatorioFormFor, setPmoRecordatorioFormFor] = useState(null);
   const [pmoRecordatorioText, setPmoRecordatorioText] = useState("");
+  const [pmoShowHistorico, setPmoShowHistorico] = useState(false);
+  const [pmoCreating, setPmoCreating] = useState(false);
+  const [pmoNewNombre, setPmoNewNombre] = useState("");
+  const [pmoNewAsignacionId, setPmoNewAsignacionId] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [jornadaInicio, setJornadaInicio] = useState("08:00");
   const [showScheduleColumn, setShowScheduleColumn] = useState(false);
@@ -4299,6 +4336,49 @@ function canReviewPlan() {
                   </div>
                 )}
                 {pmoMessage && <div className="mb-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-[10px] font-bold text-sky-700">{pmoMessage}</div>}
+
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex gap-1 rounded-lg bg-slate-100 p-0.5 text-[10px] font-black uppercase tracking-wide">
+                    <button type="button" onClick={() => setPmoShowHistorico(false)} className={`rounded-md px-3 py-1.5 transition ${!pmoShowHistorico ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Activos</button>
+                    <button type="button" onClick={() => setPmoShowHistorico(true)} className={`rounded-md px-3 py-1.5 transition ${pmoShowHistorico ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Histórico</button>
+                  </div>
+                  {!pmoShowHistorico && isStrategicTeamMember(currentUser) && (
+                    <button type="button" onClick={() => setPmoCreating((current) => !current)} className="rounded-lg border border-dashed border-slate-300 px-3 py-1.5 text-[10px] font-black text-slate-500 transition hover:border-sky-300 hover:text-sky-600">
+                      + Nuevo proyecto
+                    </button>
+                  )}
+                </div>
+
+                {pmoCreating && (
+                  <div className="mb-3 rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5">
+                    <div className="flex flex-wrap items-end gap-2">
+                      <label className="min-w-[180px] flex-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Importar de Asignaciones (opcional)
+                        <select
+                          value={pmoNewAsignacionId}
+                          onChange={(e) => {
+                            setPmoNewAsignacionId(e.target.value);
+                            const linked = assignments.find((a) => String(a.id) === e.target.value);
+                            if (linked) setPmoNewNombre(linked.nombre);
+                          }}
+                          className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+                        >
+                          <option value="">Ninguna — proyecto nuevo</option>
+                          {assignments
+                            .filter((a) => a.tipo === "Proyecto" && !["Finalizado", "Cancelado"].includes(a.estadoProyecto) && !pmoProyectos.some((p) => String(p.asignacion_id) === String(a.id)))
+                            .map((a) => (<option key={a.id} value={a.id}>{a.nombre} · {a.responsable}</option>))}
+                        </select>
+                      </label>
+                      <label className="min-w-[200px] flex-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Nombre del proyecto
+                        <input type="text" value={pmoNewNombre} onChange={(e) => setPmoNewNombre(e.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+                      </label>
+                      <button type="button" onClick={handleCreatePmoProyecto} className="h-9 rounded-lg bg-[#111827] px-3 text-[10px] font-black text-white">Agregar</button>
+                      <button type="button" onClick={() => { setPmoCreating(false); setPmoNewNombre(""); setPmoNewAsignacionId(""); }} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+                    </div>
+                  </div>
+                )}
+
                 {pmoLoading ? (
                   <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-400">Cargando tablero de proyectos…</div>
                 ) : (
@@ -4414,16 +4494,25 @@ function canReviewPlan() {
                                   />
                                 </td>
                                 <td className="px-3 py-2 text-center">
-                                  {isStrategicTeamMember(currentUser) && proyecto.lider_proyecto_persona_id && (
-                                    <button
-                                      type="button"
-                                      onClick={() => { setPmoRecordatorioFormFor((current) => (current === proyecto.id ? null : proyecto.id)); setPmoRecordatorioText(""); }}
-                                      title="Enviar recordatorio al líder de proyecto"
-                                      className={`flex h-6 w-6 items-center justify-center rounded-full transition ${pmoRecordatorioFormFor === proyecto.id ? "bg-amber-100 text-amber-600" : "text-slate-300 hover:bg-amber-50 hover:text-amber-600"}`}
-                                    >
-                                      🔔
-                                    </button>
-                                  )}
+                                  <div className="flex items-center justify-center gap-1">
+                                    {isStrategicTeamMember(currentUser) && proyecto.lider_proyecto_persona_id && (
+                                      <button
+                                        type="button"
+                                        onClick={() => { setPmoRecordatorioFormFor((current) => (current === proyecto.id ? null : proyecto.id)); setPmoRecordatorioText(""); }}
+                                        title="Enviar recordatorio al líder de proyecto"
+                                        className={`flex h-6 w-6 items-center justify-center rounded-full transition ${pmoRecordatorioFormFor === proyecto.id ? "bg-amber-100 text-amber-600" : "text-slate-300 hover:bg-amber-50 hover:text-amber-600"}`}
+                                      >
+                                        🔔
+                                      </button>
+                                    )}
+                                    {isStrategicTeamMember(currentUser) && (
+                                      pmoShowHistorico ? (
+                                        <button type="button" onClick={() => handleReopenPmoProyecto(proyecto)} title="Reabrir proyecto" className="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition hover:bg-emerald-50 hover:text-emerald-600">↺</button>
+                                      ) : (
+                                        <button type="button" onClick={() => handleClosePmoProyecto(proyecto)} title="Cerrar proyecto (pasa al histórico)" className="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition hover:bg-slate-100 hover:text-slate-600">✓</button>
+                                      )
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                               {pmoRecordatorioFormFor === proyecto.id && (

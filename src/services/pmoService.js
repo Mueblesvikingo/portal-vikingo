@@ -9,12 +9,16 @@ function actorFields(actor) {
 
 const TRACKED_FIELDS = ["etapa", "avance_porcentaje", "semaforo", "proximo_hito", "fecha_hito", "decision_requerida"];
 
-export async function getProyectos() {
+// `cerrado` filtra entre el tablero activo (default) y el histórico de
+// proyectos ya cerrados — misma idea que el toggle de historial en
+// Balance de Carga → Asignaciones.
+export async function getProyectos(cerrado = false) {
   try {
     const { data, error } = await supabase
       .from("pmo_proyectos")
       .select("*, lider_proyecto:personas(id,nombre)")
       .eq("activo", true)
+      .eq("cerrado", cerrado)
       .order("orden");
     if (error) {
       console.error("Error al cargar proyectos del tablero PMO:", error);
@@ -24,6 +28,40 @@ export async function getProyectos() {
   } catch (err) {
     console.error("Error inesperado al cargar proyectos del tablero PMO:", err);
     return [];
+  }
+}
+
+export async function closeProyecto(proyectoId, { actor } = {}) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    const { data, error } = await supabase
+      .from("pmo_proyectos")
+      .update({ cerrado: true, cerrado_at: new Date().toISOString(), updated_by_persona_id: personaId, updated_by_nombre: nombre })
+      .eq("id", proyectoId)
+      .select("*, lider_proyecto:personas(id,nombre)")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al cerrar proyecto del tablero PMO:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function reopenProyecto(proyectoId, { actor } = {}) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    const { data, error } = await supabase
+      .from("pmo_proyectos")
+      .update({ cerrado: false, cerrado_at: null, updated_by_persona_id: personaId, updated_by_nombre: nombre })
+      .eq("id", proyectoId)
+      .select("*, lider_proyecto:personas(id,nombre)")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al reabrir proyecto del tablero PMO:", err);
+    return { ok: false, error: err, data: null };
   }
 }
 
@@ -63,12 +101,19 @@ export async function updateProyecto(proyectoId, changes, { actor, previous } = 
   }
 }
 
-export async function createProyecto({ nombre, orden }, { actor } = {}) {
+export async function createProyecto({ nombre, orden, asignacionId, liderProyectoPersonaId }, { actor } = {}) {
   try {
     const { personaId, nombre: actorNombre } = actorFields(actor);
     const { data, error } = await supabase
       .from("pmo_proyectos")
-      .insert({ nombre, orden, updated_by_persona_id: personaId, updated_by_nombre: actorNombre })
+      .insert({
+        nombre,
+        orden,
+        asignacion_id: asignacionId || null,
+        lider_proyecto_persona_id: liderProyectoPersonaId || null,
+        updated_by_persona_id: personaId,
+        updated_by_nombre: actorNombre,
+      })
       .select("*, lider_proyecto:personas(id,nombre)")
       .single();
     if (error) return { ok: false, error, data: null };

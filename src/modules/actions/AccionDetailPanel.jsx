@@ -9,7 +9,6 @@ import {
   addAdjunto,
 } from "../../services/accionesService";
 import { canEditAccion } from "../../services/permissionsService";
-import { createWorkloadAssignment } from "../../services/workloadService";
 import {
   TIPOS_ACCION,
   NIVELES_ACCION,
@@ -145,7 +144,7 @@ const SUB_TABS = [
 
 export default function AccionDetailPanel({
   accion, tiposFlujo, procesos, personas, objetivos, procesosById, personasById, objetivosById,
-  currentUser, onUpdate, onDeactivate, onClose,
+  currentUser, onUpdate, onDeactivate, onClose, onCreateAssignment,
 }) {
   const [subTab, setSubTab] = useState("causa");
   const [analisisList, setAnalisisList] = useState([]);
@@ -200,30 +199,6 @@ export default function AccionDetailPanel({
     if (!result?.ok) { console.error(result?.error); return; }
     setComentarios((current) => [...current, result.data]);
     setNuevoComentario("");
-  }
-
-  async function handleCrearAsignacion(payload) {
-    const result = await createWorkloadAssignment({
-      persona_id: payload.personaId,
-      responsable: payload.personaNombre,
-      rol: "Responsable de acción",
-      tipo: "Mejora",
-      prioridad: payload.prioridad,
-      gestion: "Otro",
-      titulo: payload.titulo,
-      descripcion: accion.descripcion || "",
-      revisara: "", aprobara: "", seguimiento: "",
-      carga_horas: payload.horas,
-      fecha_limite: payload.fechaLimite,
-      estado: "Pendiente",
-      asigna: currentUser?.nombre || currentUser?.usuario || "",
-      asigna_rol: "Centro de Gestión de Acciones",
-      horas_totales: payload.horas,
-      origen_estrategico: "Acciones",
-    });
-    if (!result?.ok) { console.error(result?.error); alert("No fue posible crear la asignación."); return false; }
-    alert(`Asignación creada para ${payload.personaNombre} en Balance de Carga.`);
-    return true;
   }
 
   async function handleAddAdjunto() {
@@ -370,7 +345,7 @@ export default function AccionDetailPanel({
                         defaultPersonaId={accion.responsable_persona_id || ""}
                         defaultTitulo={accion.titulo}
                         onCancel={() => setConvertingToAssignment(false)}
-                        onConfirm={handleCrearAsignacion}
+                        onConfirm={(payload) => onCreateAssignment(accion, payload)}
                       />
                     )}
                   </div>
