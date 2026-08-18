@@ -21,10 +21,12 @@ export async function getEstados() {
   }
 }
 
-// Guarda el score/evidencia actual del criterio (upsert por subtitulo+numero)
-// y registra en el historial solo los campos que realmente cambiaron —
+// Score y evidencia son independientes por (subtitulo, numero, proceso):
+// un criterio transversal ("Todos") lo ven varios procesos, pero cada uno
+// captura su propio avance/evidencia, no comparten el mismo registro.
+// Registra en el historial solo los campos que realmente cambiaron —
 // misma lógica que updateKpi en performanceService.js.
-export async function upsertEstado({ subtitulo, numero, numeral, score, evidencia }, { actor, previous } = {}) {
+export async function upsertEstado({ subtitulo, numero, numeral, proceso, score, evidencia }, { actor, previous } = {}) {
   try {
     const { personaId, nombre } = actorFields(actor);
     const { data, error } = await supabase
@@ -34,13 +36,14 @@ export async function upsertEstado({ subtitulo, numero, numeral, score, evidenci
           subtitulo,
           numero,
           numeral,
+          proceso,
           score,
           evidencia,
           updated_at: new Date().toISOString(),
           updated_by_persona_id: personaId,
           updated_by_nombre: nombre,
         },
-        { onConflict: "subtitulo,numero" }
+        { onConflict: "subtitulo,numero,proceso" }
       )
       .select("*")
       .single();
@@ -50,7 +53,7 @@ export async function upsertEstado({ subtitulo, numero, numeral, score, evidenci
     const historialEntries = [];
     if (previous?.score !== undefined && String(previous.score ?? "") !== String(score ?? "")) {
       historialEntries.push({
-        subtitulo, numero, numeral, campo: "score",
+        subtitulo, numero, numeral, proceso, campo: "score",
         valor_anterior: previous.score != null ? String(previous.score) : null,
         valor_nuevo: score != null ? String(score) : null,
         persona_id: personaId, nombre,
@@ -58,7 +61,7 @@ export async function upsertEstado({ subtitulo, numero, numeral, score, evidenci
     }
     if (previous?.evidencia !== undefined && String(previous.evidencia ?? "") !== String(evidencia ?? "")) {
       historialEntries.push({
-        subtitulo, numero, numeral, campo: "evidencia",
+        subtitulo, numero, numeral, proceso, campo: "evidencia",
         valor_anterior: previous.evidencia || null,
         valor_nuevo: evidencia || null,
         persona_id: personaId, nombre,

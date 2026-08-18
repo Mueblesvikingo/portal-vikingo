@@ -250,50 +250,72 @@ function rowKey(groupSubtitle, number) {
   return `${groupSubtitle}-${number}`;
 }
 
+// Score y evidencia son independientes por proceso: un criterio transversal
+// ("Todos") lo puede ver Ventas, Compras, etc., cada uno con su propio
+// avance — no comparten el mismo registro. Si hay un proceso filtrado, se
+// usa ese; si se está viendo "Todos" y el criterio es específico de un solo
+// proceso, se usa ese proceso (no hay ambigüedad); si es transversal Y se
+// está viendo "Todos", se usa un cajón general propio ("Todos"), separado
+// de cualquier proceso puntual.
+function resolveProceso(rowResponsible, selectedProcess) {
+  if (selectedProcess !== "Todos") return selectedProcess;
+  return rowResponsible;
+}
+
+function stateKey(groupSubtitle, number, proceso) {
+  return `${rowKey(groupSubtitle, number)}::${proceso}`;
+}
+
+function getRowScore(statusOverrides, group, row, selectedProcess) {
+  const proceso = resolveProceso(row[3], selectedProcess);
+  return statusOverrides[stateKey(group.subtitle, row[0], proceso)] ?? row[4];
+}
+
 function groupAverage(group) {
   const total = group.rows.reduce((sum, row) => sum + row[4], 0);
   return Math.round((total / (group.rows.length * 10)) * 100);
 }
 
-function groupAverageWithOverrides(group, statusOverrides) {
-  const total = group.rows.reduce((sum, row) => sum + (statusOverrides[rowKey(group.subtitle, row[0])] ?? row[4]), 0);
+function groupAverageWithOverrides(group, statusOverrides, selectedProcess = "Todos") {
+  const total = group.rows.reduce((sum, row) => sum + getRowScore(statusOverrides, group, row, selectedProcess), 0);
   return Math.round((total / (group.rows.length * 10)) * 100);
 }
 
-function sectionAverageWithOverrides(section, statusOverrides) {
+function sectionAverageWithOverrides(section, statusOverrides, selectedProcess = "Todos") {
   const rows = section.groups.flatMap((group) => group.rows.map((row) => ({ group, row })));
-  const total = rows.reduce((sum, item) => sum + (statusOverrides[rowKey(item.group.subtitle, item.row[0])] ?? item.row[4]), 0);
+  const total = rows.reduce((sum, item) => sum + getRowScore(statusOverrides, item.group, item.row, selectedProcess), 0);
   return rows.length ? Math.round((total / (rows.length * 10)) * 100) : 0;
 }
 
+// Promedio SIEMPRE en el contexto "Todos" — usado en la calificación global
+// fija (no se mueve con el filtro, a diferencia de la barra de progreso).
 function globalAverageWithOverrides(sections, statusOverrides) {
-  const total = sections.reduce((sum, section) => sum + sectionAverageWithOverrides(section, statusOverrides), 0);
+  const total = sections.reduce((sum, section) => sum + sectionAverageWithOverrides(section, statusOverrides, "Todos"), 0);
   return sections.length ? Math.round(total / sections.length) : 0;
 }
 
 // Promedio de los criterios aplicables a un solo proceso, a través de los 7
-// numerales — a diferencia de globalAverageWithOverrides (que promedia
-// TODO el SIG), esto es lo que ve la barra de progreso cuando hay un
-// proceso filtrado (distinto de "Todos").
+// numerales — esto es lo que ve la barra de progreso cuando hay un proceso
+// filtrado (distinto de "Todos").
 function processAverageWithOverrides(sections, selectedProcess, statusOverrides) {
   if (selectedProcess === "Todos") return globalAverageWithOverrides(sections, statusOverrides);
   const rows = sections.flatMap((section) =>
     section.groups.flatMap((group) => group.rows.filter((row) => processApplies(row[3], selectedProcess)).map((row) => ({ group, row })))
   );
   if (!rows.length) return 0;
-  const total = rows.reduce((sum, item) => sum + (statusOverrides[rowKey(item.group.subtitle, item.row[0])] ?? item.row[4]), 0);
+  const total = rows.reduce((sum, item) => sum + getRowScore(statusOverrides, item.group, item.row, selectedProcess), 0);
   return Math.round((total / (rows.length * 10)) * 100);
 }
 
-function getSectionDelta(section, statusOverrides) {
-  const current = sectionAverageWithOverrides(section, statusOverrides);
+function getSectionDelta(section, statusOverrides, selectedProcess = "Todos") {
+  const current = sectionAverageWithOverrides(section, statusOverrides, selectedProcess);
   const original = section.percent;
   return current - original;
 }
 
 function getDynamicAction(section, selectedProcess, statusOverrides = {}) {
   const sectionRows = section.groups.flatMap((group) => group.rows.filter((row) => processApplies(row[3], selectedProcess)).map((row) => ({ group, row })));
-  const processAverage = sectionRows.length ? Math.round(sectionRows.reduce((sum, item) => sum + (statusOverrides[rowKey(item.group.subtitle, item.row[0])] ?? item.row[4]), 0) / sectionRows.length) : 0;
+  const processAverage = sectionRows.length ? Math.round(sectionRows.reduce((sum, item) => sum + getRowScore(statusOverrides, item.group, item.row, selectedProcess), 0) / sectionRows.length) : 0;
   const action = processAverage >= 8 ? "Hay que mantener" : processAverage >= 5 ? "Hay que monitorear" : processAverage >= 3 ? "Hay pendientes" : "Hay que empezar";
   return { action, processAverage };
 }
@@ -304,12 +326,11 @@ function getProcessInsights(selectedProcess, statusOverrides = {}) {
       group.rows
         .filter((row) => processApplies(row[3], selectedProcess))
         .map((row) => {
-          const key = rowKey(group.subtitle, row[0]);
           return {
             section: section.title,
             numeral: section.numeral,
             subtitle: group.subtitle,
-            score: statusOverrides[key] ?? row[4],
+            score: getRowScore(statusOverrides, group, row, selectedProcess),
             requirement: row[1],
             process: row[3],
           };
@@ -522,7 +543,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     const nextStatus = {};
     const nextEvidence = {};
     estados.forEach((row) => {
-      const key = rowKey(row.subtitulo, row.numero);
+      const key = stateKey(row.subtitulo, row.numero, row.proceso);
       nextStatus[key] = row.score;
       if (row.evidencia != null) nextEvidence[key] = row.evidencia;
     });
@@ -574,33 +595,33 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const maxGroups = useMemo(() => Math.max(...sigSections.map((section) => section.groups.length)), []);
   const processOptions = useMemo(() => ["Todos", ...mapProcesses], []);
 
-  async function updateStatus(numeral, groupSubtitle, number, nextScore) {
+  async function updateStatus(numeral, groupSubtitle, number, proceso, nextScore) {
     if (!canEdit) return;
-    const key = rowKey(groupSubtitle, number);
+    const key = stateKey(groupSubtitle, number, proceso);
     const previous = { score: statusOverrides[key], evidencia: evidenceOverrides[key] };
     const score = Number(nextScore);
     setStatusOverrides((current) => ({ ...current, [key]: score }));
     const result = await upsertEstado(
-      { subtitulo: groupSubtitle, numero: number, numeral, score, evidencia: evidenceOverrides[key] ?? "" },
+      { subtitulo: groupSubtitle, numero: number, numeral, proceso, score, evidencia: evidenceOverrides[key] ?? "" },
       { actor: currentUser, previous }
     );
     if (!result.ok) { console.error(result.error); setMessage("No fue posible guardar el cambio de estado."); }
   }
 
-  async function updateEvidence(numeral, groupSubtitle, number, value) {
+  async function updateEvidence(numeral, groupSubtitle, number, proceso, value) {
     if (!canEdit) return;
-    const key = rowKey(groupSubtitle, number);
+    const key = stateKey(groupSubtitle, number, proceso);
     setEvidenceOverrides((current) => ({ ...current, [key]: value }));
   }
 
-  async function commitEvidence(numeral, groupSubtitle, number) {
+  async function commitEvidence(numeral, groupSubtitle, number, proceso) {
     if (!canEdit) return;
-    const key = rowKey(groupSubtitle, number);
+    const key = stateKey(groupSubtitle, number, proceso);
     const nextEvidencia = evidenceOverrides[key] ?? "";
     const previousEvidencia = savedEvidenceRef.current[key] ?? "";
     if (previousEvidencia === nextEvidencia) return; // sin cambios reales, no re-guarda ni registra historial
     const result = await upsertEstado(
-      { subtitulo: groupSubtitle, numero: number, numeral, score: statusOverrides[key], evidencia: nextEvidencia },
+      { subtitulo: groupSubtitle, numero: number, numeral, proceso, score: statusOverrides[key], evidencia: nextEvidencia },
       { actor: currentUser, previous: { score: statusOverrides[key], evidencia: previousEvidencia } }
     );
     if (!result.ok) { console.error(result.error); setMessage("No fue posible guardar la evidencia."); return; }
@@ -794,7 +815,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
               <tbody>
                 {sigSections.map((section) => {
                   const dynamic = getDynamicAction(section, selectedProcess, statusOverrides);
-                  const sectionPercent = sectionAverageWithOverrides(section, statusOverrides);
+                  const sectionPercent = sectionAverageWithOverrides(section, statusOverrides, selectedProcess);
                   const isConverting = convertingSection === section.numeral;
                   return (
                     <React.Fragment key={section.numeral}>
@@ -804,16 +825,16 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                       <td className="px-2 py-1 text-center align-middle">
                         <div className={`flex items-center justify-center gap-1 text-sm font-black ${statusTextColor(sectionPercent)}`}>
                           <span>{sectionPercent}%</span>
-                          {getSectionDelta(section, statusOverrides) !== 0 && (
+                          {getSectionDelta(section, statusOverrides, selectedProcess) !== 0 && (
                             <span
                               className={`text-[9px] font-black tracking-tight opacity-70 ${
-                                getSectionDelta(section, statusOverrides) > 0
+                                getSectionDelta(section, statusOverrides, selectedProcess) > 0
                                   ? "text-emerald-600"
                                   : "text-rose-500"
                               }`}
                             >
-                              {getSectionDelta(section, statusOverrides) > 0 ? "↑" : "↓"}
-                              {Math.abs(getSectionDelta(section, statusOverrides))}
+                              {getSectionDelta(section, statusOverrides, selectedProcess) > 0 ? "↑" : "↓"}
+                              {Math.abs(getSectionDelta(section, statusOverrides, selectedProcess))}
                             </span>
                           )}
                         </div>
@@ -821,7 +842,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                       {Array.from({ length: maxGroups }).map((_, index) => {
                         const group = section.groups[index];
                         if (!group) return <td key={`${section.numeral}-empty-${index}`} className="px-2 py-2 text-center align-middle"><div className="mx-auto h-7 w-7 rounded-lg bg-slate-50" /></td>;
-                        const avg = groupAverageWithOverrides(group, statusOverrides);
+                        const avg = groupAverageWithOverrides(group, statusOverrides, selectedProcess);
                         const filteredGroupRows = selectedProcess === "Todos" ? group.rows : group.rows.filter((row) => processApplies(row[3], selectedProcess));
                         const appliesToSelectedProcess = selectedProcess === "Todos" || filteredGroupRows.length > 0;
                         const criticalRows = filteredGroupRows.filter((row) => row[4] <= 3).length;
@@ -896,9 +917,9 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                   <div>
                     <div className="text-sm font-black tracking-tight text-slate-900">{selectedCell.group.subtitle}</div>
                     <div className="mt-1 text-[11px] font-medium leading-relaxed text-slate-500">{subnumeralDescriptions[selectedCell.group.subtitle]}</div>
-                    <div className="mt-1 text-xs font-semibold leading-relaxed text-slate-500">Promedio del criterio: {groupAverageWithOverrides(selectedCell.group, statusOverrides)}% • {selectedCell.group.rows.filter((row) => (statusOverrides[rowKey(selectedCell.group.subtitle, row[0])] ?? row[4]) <= 3).length} puntos críticos</div>
+                    <div className="mt-1 text-xs font-semibold leading-relaxed text-slate-500">Promedio del criterio: {groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess)}% • {selectedCell.group.rows.filter((row) => getRowScore(statusOverrides, selectedCell.group, row, selectedCell.selectedProcess) <= 3).length} puntos críticos</div>
                   </div>
-                  <span className={`rounded-2xl px-5 py-3 text-2xl font-black shadow-sm ${statusBg(groupAverageWithOverrides(selectedCell.group, statusOverrides))}`}>{groupAverageWithOverrides(selectedCell.group, statusOverrides)}%</span>
+                  <span className={`rounded-2xl px-5 py-3 text-2xl font-black shadow-sm ${statusBg(groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess))}`}>{groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess)}%</span>
                 </div>
                 <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                   <table className="w-full text-sm">
@@ -906,16 +927,23 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                     <tbody>
                       {(selectedCell.filteredRows?.length ? selectedCell.filteredRows : selectedCell.group.rows).map(([number, requirement, evidence, responsible, score]) => {
                         const responsibleInfo = responsibleLabel(responsible);
-                        const key = rowKey(selectedCell.group.subtitle, number);
+                        const proceso = resolveProceso(responsible, selectedCell.selectedProcess);
+                        const key = stateKey(selectedCell.group.subtitle, number, proceso);
                         const currentScore = statusOverrides[key] ?? score;
                         return (
                           <tr key={key} className="border-t border-slate-100 transition hover:bg-slate-50/70">
                             <td className="px-4 py-3 font-black text-slate-500">{number}</td>
                             <td className="px-4 py-2"><div className="max-w-[420px] text-[13px] font-medium leading-relaxed text-slate-700">{requirement}</div></td>
-                            <td className="w-[260px] px-4 py-3"><div className="inline-flex min-w-[220px] flex-col gap-1 rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-left"><span className="text-[12px] font-semibold text-slate-700">{responsibleInfo.process}</span><span className="text-[10px] font-medium text-blue-600">{responsibleInfo.role}</span></div></td>
-                            <td className="w-[180px] px-4 py-3"><div className="group relative max-w-[170px] rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-medium leading-relaxed text-slate-600 shadow-sm transition hover:border-slate-300"><textarea value={evidenceOverrides[key] ?? evidence} onChange={(event) => updateEvidence(selectedCell.section.numeral, selectedCell.group.subtitle, number, event.target.value)} onBlur={() => commitEvidence(selectedCell.section.numeral, selectedCell.group.subtitle, number)} rows={2} disabled={!canEdit} className={`w-full resize-none bg-transparent pr-5 text-[11px] font-medium leading-relaxed text-slate-600 outline-none ${canEdit ? "cursor-text" : "cursor-default"}`} /><span className={`absolute right-2 top-2 text-[9px] text-slate-400 transition ${canEdit ? "opacity-0 group-hover:opacity-100" : "opacity-0"}`}>✎</span></div></td>
+                            <td className="w-[260px] px-4 py-3">
+                              <div className="inline-flex min-w-[220px] flex-col gap-1 rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-left">
+                                <span className="text-[12px] font-semibold text-slate-700">{responsibleInfo.process}</span>
+                                <span className="text-[10px] font-medium text-blue-600">{responsibleInfo.role}</span>
+                                {responsible === "Todos" && <span className="text-[9px] font-black uppercase tracking-wide text-slate-400">Capturando para: {proceso}</span>}
+                              </div>
+                            </td>
+                            <td className="w-[180px] px-4 py-3"><div className="group relative max-w-[170px] rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-medium leading-relaxed text-slate-600 shadow-sm transition hover:border-slate-300"><textarea value={evidenceOverrides[key] ?? evidence} onChange={(event) => updateEvidence(selectedCell.section.numeral, selectedCell.group.subtitle, number, proceso, event.target.value)} onBlur={() => commitEvidence(selectedCell.section.numeral, selectedCell.group.subtitle, number, proceso)} rows={2} disabled={!canEdit} className={`w-full resize-none bg-transparent pr-5 text-[11px] font-medium leading-relaxed text-slate-600 outline-none ${canEdit ? "cursor-text" : "cursor-default"}`} /><span className={`absolute right-2 top-2 text-[9px] text-slate-400 transition ${canEdit ? "opacity-0 group-hover:opacity-100" : "opacity-0"}`}>✎</span></div></td>
                             <td className="px-4 py-3 text-center">
-                              <div className="group flex items-center justify-center gap-2"><span className={`inline-flex justify-center rounded-xl px-3 py-1.5 text-[11px] font-black shadow-sm transition-all ${cellStyle(currentScore)}`}>{currentScore} · {scoreMeaning(currentScore)}</span><select aria-label="Actualizar estatus" value={currentScore} onChange={(event) => updateStatus(selectedCell.section.numeral, selectedCell.group.subtitle, number, event.target.value)} disabled={!canEdit} className={`rounded-md border border-transparent bg-slate-100/70 px-1.5 py-[2px] text-[9px] font-bold text-slate-500 outline-none transition-all hover:bg-slate-200/70 hover:text-slate-700 focus:opacity-100 ${canEdit ? "opacity-0 group-hover:opacity-100" : "pointer-events-none opacity-0"}`}><option value={10}>10</option><option value={5}>5</option><option value={3}>3</option><option value={0}>0</option></select></div>
+                              <div className="group flex items-center justify-center gap-2"><span className={`inline-flex justify-center rounded-xl px-3 py-1.5 text-[11px] font-black shadow-sm transition-all ${cellStyle(currentScore)}`}>{currentScore} · {scoreMeaning(currentScore)}</span><select aria-label="Actualizar estatus" value={currentScore} onChange={(event) => updateStatus(selectedCell.section.numeral, selectedCell.group.subtitle, number, proceso, event.target.value)} disabled={!canEdit} className={`rounded-md border border-transparent bg-slate-100/70 px-1.5 py-[2px] text-[9px] font-bold text-slate-500 outline-none transition-all hover:bg-slate-200/70 hover:text-slate-700 focus:opacity-100 ${canEdit ? "opacity-0 group-hover:opacity-100" : "pointer-events-none opacity-0"}`}><option value={10}>10</option><option value={5}>5</option><option value={3}>3</option><option value={0}>0</option></select></div>
                             </td>
                           </tr>
                         );
