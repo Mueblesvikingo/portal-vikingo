@@ -271,6 +271,20 @@ function globalAverageWithOverrides(sections, statusOverrides) {
   return sections.length ? Math.round(total / sections.length) : 0;
 }
 
+// Promedio de los criterios aplicables a un solo proceso, a través de los 7
+// numerales — a diferencia de globalAverageWithOverrides (que promedia
+// TODO el SIG), esto es lo que ve la barra de progreso cuando hay un
+// proceso filtrado (distinto de "Todos").
+function processAverageWithOverrides(sections, selectedProcess, statusOverrides) {
+  if (selectedProcess === "Todos") return globalAverageWithOverrides(sections, statusOverrides);
+  const rows = sections.flatMap((section) =>
+    section.groups.flatMap((group) => group.rows.filter((row) => processApplies(row[3], selectedProcess)).map((row) => ({ group, row })))
+  );
+  if (!rows.length) return 0;
+  const total = rows.reduce((sum, item) => sum + (statusOverrides[rowKey(item.group.subtitle, item.row[0])] ?? item.row[4]), 0);
+  return Math.round((total / (rows.length * 10)) * 100);
+}
+
 function getSectionDelta(section, statusOverrides) {
   const current = sectionAverageWithOverrides(section, statusOverrides);
   const original = section.percent;
@@ -404,6 +418,85 @@ function HistorialTimelineModal({ open, onClose, loading, entries, selectedProce
   );
 }
 
+// Formulario compacto para crear la asignación en Balance de Carga —
+// mismo patrón que ConvertirEnAsignacionForm en Seguimiento Estratégico /
+// Acuerdos S&OP, adaptado a este módulo (persona/rol precargados con el
+// líder del proceso filtrado, pero editables antes de confirmar).
+function SigAsignacionForm({ colSpan, personasCatalogo, defaultPersonaId, defaultRol, defaultTitulo, onConfirm, onCancel }) {
+  const [personaId, setPersonaId] = useState(defaultPersonaId || "");
+  const [rol, setRol] = useState(defaultRol || "");
+  const [titulo, setTitulo] = useState(defaultTitulo || "");
+  const [horas, setHoras] = useState(2);
+  const [fechaLimite, setFechaLimite] = useState("");
+  const [prioridad, setPrioridad] = useState("Media");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleConfirm() {
+    if (!personaId) { setError("Selecciona a quién se le asigna."); return; }
+    if (!titulo.trim()) { setError("El título no puede quedar vacío."); return; }
+    setError("");
+    setSaving(true);
+    const persona = personasCatalogo.find((p) => String(p.id) === String(personaId));
+    const ok = await onConfirm({
+      personaId: Number(personaId),
+      personaNombre: persona?.nombre || "",
+      rol,
+      titulo: titulo.trim(),
+      horas: Number(horas) || 0,
+      fechaLimite: fechaLimite || null,
+      prioridad,
+    });
+    setSaving(false);
+    if (ok) onCancel();
+  }
+
+  return (
+    <tr className="border-b border-slate-100 bg-sky-50/50">
+      <td colSpan={colSpan} className="px-4 py-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Persona
+            <select value={personaId} onChange={(e) => setPersonaId(e.target.value)} className="mt-1 h-9 w-56 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              <option value="">Selecciona...</option>
+              {personasCatalogo.map((p) => (
+                <option key={p.id} value={p.id}>{p.nombre}</option>
+              ))}
+            </select>
+          </label>
+          <label className="min-w-[220px] flex-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Título
+            <input type="text" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+          </label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Rol
+            <input type="text" value={rol} onChange={(e) => setRol(e.target.value)} className="mt-1 h-9 w-40 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+          </label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Horas estimadas
+            <input type="number" min="0.5" step="0.5" value={horas} onChange={(e) => setHoras(e.target.value)} className="mt-1 h-9 w-24 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+          </label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Fecha límite
+            <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+          </label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Prioridad
+            <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              {["Crítica", "Alta", "Media", "Baja"].map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          <button type="button" disabled={saving} onClick={handleConfirm} className="h-9 rounded-lg bg-[#111827] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+            {saving ? "Enviando..." : "Confirmar asignación"}
+          </button>
+          <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+        </div>
+        {error && <p className="mt-1.5 text-[10px] font-bold text-red-600">{error}</p>}
+      </td>
+    </tr>
+  );
+}
+
 export default function DiagnosticoSIGModule({ currentUser }) {
   const [selectedCell, setSelectedCell] = useState(null);
   const [selectedProcess, setSelectedProcess] = useState("Todos");
@@ -416,6 +509,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [historialOpen, setHistorialOpen] = useState(false);
   const [historialLoading, setHistorialLoading] = useState(false);
   const [historialEntries, setHistorialEntries] = useState([]);
+  const [convertingSection, setConvertingSection] = useState(null);
 
   const canEdit = isStrategicTeamMember(currentUser);
   // Espejo de lo último realmente guardado en Supabase (no lo que se va
@@ -449,12 +543,34 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Si quien entra es líder de alguno de los 16 procesos del mapa (según
+  // processLeaders), el filtro arranca ya puesto en ese proceso en vez de
+  // "Todos" — no bloquea el selector, solo ahorra el primer clic.
+  useEffect(() => {
+    const fullName = currentUser?.persona_nombre || currentUser?.nombre || "";
+    const firstName = fullName.trim().split(/\s+/).pop()?.toLowerCase();
+    if (!firstName) return;
+    const ownProcess = mapProcesses.find((process) => {
+      const leader = processLeaders[process];
+      if (!leader) return false;
+      return leader.person.split(/\s*\/\s*/).some((name) => name.trim().toLowerCase() === firstName);
+    });
+    if (ownProcess) setSelectedProcess(ownProcess);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.persona_nombre, currentUser?.nombre]);
+
   useEffect(() => {
     if (selectedProcess === "Todos") { setLastCheck(null); return; }
     getChecks(selectedProcess).then((rows) => setLastCheck(rows[0] || null));
   }, [selectedProcess]);
 
   const global = useMemo(() => globalAverageWithOverrides(sigSections, statusOverrides), [statusOverrides]);
+  // La barra refleja el proceso filtrado (o el global si es "Todos"); la
+  // calificación global de la derecha siempre se queda como el SIG completo.
+  const displayedPercent = useMemo(
+    () => processAverageWithOverrides(sigSections, selectedProcess, statusOverrides),
+    [selectedProcess, statusOverrides]
+  );
   const maxGroups = useMemo(() => Math.max(...sigSections.map((section) => section.groups.length)), []);
   const processOptions = useMemo(() => ["Todos", ...mapProcesses], []);
 
@@ -536,38 +652,37 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     setHistorialLoading(false);
   }
 
-  async function handleCrearAsignacion(section) {
-    if (!canEdit || selectedProcess === "Todos") return;
+  function getDefaultLeaderPersonaId(section) {
     const leader = processLeaders[selectedProcess] || { role: "Por asignar", person: "" };
     const persona = findPersonaByFirstName(people, leader.person);
-    if (!persona) {
-      alert(`No encontré a "${leader.person}" en el catálogo de personas. No se pudo crear la asignación.`);
-      return;
-    }
-    const dynamic = getDynamicAction(section, selectedProcess, statusOverrides);
-    if (!window.confirm(`¿Crear una asignación en Balance de Carga para ${persona.nombre} sobre "${section.numeral}. ${section.title}"?`)) return;
+    return persona?.id || "";
+  }
 
+  async function handleCrearAsignacion(section, payload) {
+    if (!canEdit || selectedProcess === "Todos") return false;
+    const dynamic = getDynamicAction(section, selectedProcess, statusOverrides);
     const result = await createWorkloadAssignment({
-      persona_id: persona.id,
-      responsable: persona.nombre,
-      rol: leader.role,
+      persona_id: payload.personaId,
+      responsable: payload.personaNombre,
+      rol: payload.rol,
       tipo: "Mejora",
-      prioridad: dynamic.processAverage <= 3 ? "Alta" : "Media",
+      prioridad: payload.prioridad,
       gestion: "SIG",
-      titulo: `SIG ${section.numeral}. ${section.title} — ${selectedProcess}`,
+      titulo: payload.titulo,
       descripcion: `${dynamic.action}. Avance actual del proceso en este numeral: ${dynamic.processAverage}0%.`,
       revisara: "", aprobara: "", seguimiento: "",
-      carga_horas: 2,
-      fecha_limite: null,
+      carga_horas: payload.horas,
+      fecha_limite: payload.fechaLimite,
       estado: "Pendiente",
       asigna: currentUser?.nombre || currentUser?.usuario || "",
       asigna_rol: "Coordinador SIG",
-      horas_totales: 2,
+      horas_totales: payload.horas,
       origen_estrategico: "SIG",
     });
 
-    if (!result.ok) { console.error(result.error); alert("No fue posible crear la asignación."); return; }
-    alert(`Asignación creada para ${persona.nombre} en Balance de Carga.`);
+    if (!result.ok) { console.error(result.error); alert("No fue posible crear la asignación."); return false; }
+    alert(`Asignación creada para ${payload.personaNombre} en Balance de Carga.`);
+    return true;
   }
 
   return (
@@ -582,7 +697,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
           <div className="grid grid-cols-[4fr_1fr] items-center gap-4">
             <div>
               <div className="mb-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wide text-slate-500">
-                <span>Progreso global SIG</span>
+                <span>{selectedProcess === "Todos" ? "Progreso global SIG" : `Progreso — ${selectedProcess}`}</span>
                 <span />
               </div>
               <div className="relative h-4 w-full overflow-visible rounded-full bg-slate-200/70 shadow-inner ring-1 ring-slate-200">
@@ -590,11 +705,11 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                 <div className="absolute inset-y-0 left-1/4 w-px bg-white/80" />
                 <div className="absolute inset-y-0 left-1/2 w-px bg-white/80" />
                 <div className="absolute inset-y-0 left-3/4 w-px bg-white/80" />
-                <div className={`relative h-full rounded-full transition-all duration-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_10px_rgba(15,23,42,0.14)] ${global >= 80 ? "bg-gradient-to-r from-emerald-700 via-emerald-500 to-emerald-400" : global >= 50 ? "bg-gradient-to-r from-amber-700 via-amber-500 to-amber-400" : global > 0 ? "bg-gradient-to-r from-red-800 via-red-600 to-red-500" : "bg-gradient-to-r from-slate-600 to-slate-400"}`} style={{ width: `${global}%` }}>
+                <div className={`relative h-full rounded-full transition-all duration-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_10px_rgba(15,23,42,0.14)] ${displayedPercent >= 80 ? "bg-gradient-to-r from-emerald-700 via-emerald-500 to-emerald-400" : displayedPercent >= 50 ? "bg-gradient-to-r from-amber-700 via-amber-500 to-amber-400" : displayedPercent > 0 ? "bg-gradient-to-r from-red-800 via-red-600 to-red-500" : "bg-gradient-to-r from-slate-600 to-slate-400"}`} style={{ width: `${displayedPercent}%` }}>
                   <div className="absolute inset-0 rounded-full bg-[linear-gradient(110deg,rgba(255,255,255,0.38),rgba(255,255,255,0.05)_45%,rgba(0,0,0,0.08))]" />
                 </div>
-                <div className="absolute -top-6 -translate-x-1/2 rounded-md border border-white/40 bg-white/80 px-2 py-[1px] text-[9px] font-bold text-slate-700 shadow-[0_2px_6px_rgba(15,23,42,0.10)] backdrop-blur-sm" style={{ left: `${global}%` }}>{global}%</div>
-                <div className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-white/80 shadow-[0_2px_8px_rgba(15,23,42,0.18)] backdrop-blur-sm ring-2 ring-slate-300/40" style={{ left: `${global}%` }} />
+                <div className="absolute -top-6 -translate-x-1/2 rounded-md border border-white/40 bg-white/80 px-2 py-[1px] text-[9px] font-bold text-slate-700 shadow-[0_2px_6px_rgba(15,23,42,0.10)] backdrop-blur-sm" style={{ left: `${displayedPercent}%` }}>{displayedPercent}%</div>
+                <div className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-white/80 shadow-[0_2px_8px_rgba(15,23,42,0.18)] backdrop-blur-sm ring-2 ring-slate-300/40" style={{ left: `${displayedPercent}%` }} />
               </div>
               <div className="mt-1 flex justify-between text-[9px] font-semibold text-slate-400">
                 <span>Bajo</span><span>Medio</span><span>Alto</span>
@@ -680,8 +795,10 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                 {sigSections.map((section) => {
                   const dynamic = getDynamicAction(section, selectedProcess, statusOverrides);
                   const sectionPercent = sectionAverageWithOverrides(section, statusOverrides);
+                  const isConverting = convertingSection === section.numeral;
                   return (
-                    <tr key={section.numeral} className="h-[58px] border-b border-slate-100 hover:bg-slate-50">
+                    <React.Fragment key={section.numeral}>
+                    <tr className="h-[58px] border-b border-slate-100 hover:bg-slate-50">
                       <td className="px-2 py-1 align-middle font-black text-slate-500">{section.numeral}</td>
                       <td className="px-2 py-1 align-middle"><div className="cursor-help text-[11px] font-black leading-tight text-slate-900" title={section.summary}>{section.title}</div></td>
                       <td className="px-2 py-1 text-center align-middle">
@@ -725,9 +842,9 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                           {canEdit && selectedProcess !== "Todos" && (
                             <button
                               type="button"
-                              onClick={() => handleCrearAsignacion(section)}
+                              onClick={() => setConvertingSection((current) => (current === section.numeral ? null : section.numeral))}
                               title={`Enviar a Asignaciones · ${responsibleLabel(selectedProcess).person}`}
-                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-300 transition hover:bg-sky-50 hover:text-sky-600"
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition ${isConverting ? "bg-sky-100 text-sky-600" : "text-slate-300 hover:bg-sky-50 hover:text-sky-600"}`}
                             >
                               ▸
                             </button>
@@ -735,6 +852,18 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                         </div>
                       </td>
                     </tr>
+                    {isConverting && (
+                      <SigAsignacionForm
+                        colSpan={3 + maxGroups + 1}
+                        personasCatalogo={people}
+                        defaultPersonaId={getDefaultLeaderPersonaId(section)}
+                        defaultRol={responsibleLabel(selectedProcess).role}
+                        defaultTitulo={`SIG ${section.numeral}. ${section.title} — ${selectedProcess}`}
+                        onCancel={() => setConvertingSection(null)}
+                        onConfirm={(payload) => handleCrearAsignacion(section, payload)}
+                      />
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
