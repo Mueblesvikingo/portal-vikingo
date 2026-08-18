@@ -92,7 +92,7 @@ let sigSections = [
     percent: 52,
     summary: "Riesgos, metas y cambios",
     groups: [
-      { subtitle: "6.1 Riesgos y oportunidades", rows: [[1, "Se identifican riesgos y oportunidades del SIG", "SIG-MA-05 Riesgos y oportunidades", "Planeación Estratégica", 5], [2, "Se planifican acciones para tratar riesgos y oportunidades", "SIG-MA-05 Riesgos y oportunidades", "Planeación Estratégica", 3], [3, "Las acciones se integran dentro de los procesos", "Caracterizaciones / Modelado de procesos", "Todos", 3]] },
+      { subtitle: "6.1 Riesgos y oportunidades", rows: [[1, "Se identifican riesgos y oportunidades del SIG", "SIG-MA-05 Riesgos y oportunidades", "Todos", 5], [2, "Se planifican acciones para tratar riesgos y oportunidades", "SIG-MA-05 Riesgos y oportunidades", "Todos", 3], [3, "Las acciones se integran dentro de los procesos", "Caracterizaciones / Modelado de procesos", "Todos", 3]] },
       { subtitle: "6.2 Objetivos del SIG", rows: [[4, "Existen objetivos del SIG", "SIG-MP-01 Mapa estratégico", "Planeación Estratégica", 10], [5, "Se han planificado acciones para lograr los objetivos", "Iniciativas gestionadas como proyecto", "Dirección", 3], [6, "Existe registro del seguimiento de objetivos", "SIG-TC-01 Tablero de control", "Dirección", 10]] },
       { subtitle: "6.3 Cambios", rows: [[7, "Existe un proceso definido para gestionar los cambios del SIG", "SIG-P-02 Gestión de cambios", "Planeación Estratégica", 10], [8, "Se evalúan riesgos antes de implementar cambios", "Análisis de impactos", "Planeación Estratégica", 3], [9, "Se mantiene registro de los cambios", "Control de cambios", "Planeación Estratégica", 0]] },
     ],
@@ -104,7 +104,7 @@ let sigSections = [
     summary: "Recursos, capacitación y documentos",
     groups: [
       { subtitle: "7.1 Recursos", rows: [[1, "La organización determina y proporciona recursos para el SIG", "SIG-F-02 Presupuesto estrategia", "Dirección", 10], [2, "La organización asegura la infraestructura necesaria", "Hojas de vida de activos", "Dirección", 3], [3, "Se define y proporciona el personal necesario para cada proceso", "Análisis de capacidad / Plan de cobertura", "Dirección", 3]] },
-      { subtitle: "7.2 Competencias", rows: [[4, "Competencias por rol definidas", "GCO-M-01 Diccionario de competencias", "Gestión competencias", 5], [5, "Nivel requerido por proceso determinado", "Matriz de competencia por proceso", "Todos", 0], [6, "Brechas de competencia evaluadas", "Análisis de brechas", "Gestión competencias", 0]] },
+      { subtitle: "7.2 Competencias", rows: [[4, "Competencias por rol definidas", "GCO-M-01 Diccionario de competencias", "Todos", 5], [5, "Nivel requerido por proceso determinado", "Matriz de competencia por proceso", "Todos", 0], [6, "Brechas de competencia evaluadas", "Análisis de brechas", "Todos", 0]] },
       { subtitle: "7.3 Conciencia y comunicación", rows: [[7, "Personal conoce políticas del SIG", "Entrevistas / checklist", "Dirección", 5], [8, "Canales de comunicación definidos", "SIG-MA-06 Comunicaciones", "Planeación Estratégica", 5], [9, "Desempeño del SIG comunicado", "Informes / tableros", "Planeación Estratégica", 3]] },
       { subtitle: "7.5 Información documentada", rows: [[10, "Documentación del SIG controlada", "SIG-P-02 Control de información documentada", "Planeación Estratégica", 10], [11, "Lista maestra por proceso", "Lista maestra de documentos por proceso", "Todos", 3], [12, "Accesos y permisos controlados", "Administración de accesos", "Todos", 3]] },
     ],
@@ -115,7 +115,7 @@ let sigSections = [
     percent: 36,
     summary: "Operación, producción y calidad",
     groups: [
-      { subtitle: "8.1 Control operacional", rows: [[1, "Procesos operativos planificados", "Plan de producción / programación", "Planeación producción", 3], [2, "Controles operativos establecidos", "Procedimientos / instrucciones", "Planeación producción", 3]] },
+      { subtitle: "8.1 Control operacional", rows: [[1, "Procesos operativos planificados", "Plan de producción / programación", "Todos", 3], [2, "Controles operativos establecidos", "Procedimientos / instrucciones", "Todos", 3]] },
       { subtitle: "8.2 Cliente", rows: [[3, "Requisitos del cliente identificados", "Pedido / especificaciones", "Ventas", 5], [4, "Cambios de requisitos gestionados", "Modificación de pedido", "Ventas", 5], [5, "Comunicación con cliente mantenida", "Registros de comunicación", "Ventas", 5]] },
       { subtitle: "8.3 Diseño y desarrollo", rows: [[6, "Diseño planificado", "Plan de diseño / proyecto", "Desarrollo de productos", 5], [7, "Requisitos de diseño identificados", "Planos / fichas técnicas", "Desarrollo de productos", 5], [8, "Cambios de diseño controlados", "Registro de cambios de diseño", "Desarrollo de productos", 3]] },
       { subtitle: "8.4 Proveedores externos", rows: [[9, "Proveedores seleccionados con criterios", "Evaluación de proveedores", "Compras", 3], [10, "Desempeño de proveedores monitoreado", "Seguimiento de proveedores", "Compras", 3], [11, "Requisitos a proveedores comunicados", "Orden de compra / especificación", "Compras", 5]] },
@@ -129,7 +129,7 @@ let sigSections = [
     percent: 12,
     summary: "Medición, auditorías y seguimiento",
     groups: [
-      { subtitle: "9.1 Seguimiento y medición", rows: [[1, "Indicadores del SIG establecidos", "SIG-MA-07 Tablero de control", "Evaluación desempeño", 10], [2, "Datos de desempeño recopilados", "Tableros de control", "Todos", 0], [3, "Periodicidad de seguimiento definida", "Programa de revisión del SIG", "Evaluación desempeño", 0]] },
+      { subtitle: "9.1 Seguimiento y medición", rows: [[1, "Indicadores del SIG establecidos", "SIG-MA-07 Tablero de control", "Todos", 10], [2, "Datos de desempeño recopilados", "Tableros de control", "Todos", 0], [3, "Periodicidad de seguimiento definida", "Programa de revisión del SIG", "Todos", 0]] },
       { subtitle: "9.1.2 Satisfacción del cliente", rows: [[4, "Necesidades y expectativas del cliente monitoreadas", "Encuestas / reclamos", "Ventas", 3]] },
       { subtitle: "9.2 Auditoría interna", rows: [[5, "Programa de auditoría establecido", "Programas de auditoría", "Evaluación desempeño", 0], [6, "Criterios y alcance definidos", "Planes de auditoría", "Evaluación desempeño", 0], [7, "Informes de auditoría generados", "Informes de auditoría", "Evaluación desempeño", 0]] },
       { subtitle: "9.3 Revisión por la dirección", rows: [[8, "Revisión del SIG planificada", "Acta de revisión", "Dirección", 0], [9, "Decisiones y acciones generadas", "Informe de decisiones", "Dirección", 0]] },
