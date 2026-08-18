@@ -12,6 +12,76 @@ const PMO_SEMAFORO_STYLES = {
   Rojo: "border-red-200 bg-red-50 text-red-700",
 };
 
+// Formulario compacto para enviar una asignación a Balance de Carga desde
+// una fila del Tablero de Proyectos — mismo patrón (persona/título/horas/
+// fecha límite/prioridad) ya usado en Diagnóstico SIG y Acciones.
+function PmoAsignacionRowForm({ colSpan, personas, defaultPersonaId, defaultTitulo, onConfirm, onCancel }) {
+  const [personaId, setPersonaId] = useState(defaultPersonaId || "");
+  const [titulo, setTitulo] = useState(defaultTitulo || "");
+  const [horas, setHoras] = useState(2);
+  const [fechaLimite, setFechaLimite] = useState("");
+  const [prioridad, setPrioridad] = useState("Media");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleConfirm() {
+    if (!personaId) { setError("Selecciona a quién se le asigna."); return; }
+    if (!titulo.trim()) { setError("El título no puede quedar vacío."); return; }
+    setError("");
+    setSaving(true);
+    const persona = personas.find((p) => String(p.id) === String(personaId));
+    const ok = await onConfirm({
+      personaId: Number(personaId),
+      personaNombre: persona?.name || "",
+      titulo: titulo.trim(),
+      horas: Number(horas) || 0,
+      fechaLimite: fechaLimite || null,
+      prioridad,
+    });
+    setSaving(false);
+    if (ok) onCancel();
+  }
+
+  return (
+    <tr className="border-b border-slate-100 bg-sky-50/50">
+      <td colSpan={colSpan} className="px-2 py-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+            Persona
+            <select value={personaId} onChange={(e) => setPersonaId(e.target.value)} className="mt-1 h-8 w-40 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              <option value="">Selecciona...</option>
+              {personas.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
+            </select>
+          </label>
+          <label className="min-w-[160px] flex-1 text-[9px] font-black uppercase tracking-widest text-slate-400">
+            Título
+            <input type="text" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+          </label>
+          <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+            Horas
+            <input type="number" min="0.5" step="0.5" value={horas} onChange={(e) => setHoras(e.target.value)} className="mt-1 h-8 w-16 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+          </label>
+          <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+            Fecha límite
+            <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} className="mt-1 h-8 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+          </label>
+          <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+            Prioridad
+            <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="mt-1 h-8 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              {["Crítica", "Alta", "Media", "Baja"].map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          <button type="button" disabled={saving} onClick={handleConfirm} className="h-8 rounded-lg bg-[#111827] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+            {saving ? "Enviando..." : "Confirmar"}
+          </button>
+          <button type="button" onClick={onCancel} className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+        </div>
+        {error && <p className="mt-1.5 text-[10px] font-bold text-red-600">{error}</p>}
+      </td>
+    </tr>
+  );
+}
+
 const WORKLOAD_VIDEO_URL =
   "https://www.youtube.com/embed/bun2Ku2R1JI?autoplay=1&rel=0&modestbranding=1";
 const WORKLOAD_MANUAL_URL = "/manuales/Balance_de_Carga.pdf";
@@ -1421,6 +1491,30 @@ export default function WorkloadBalanceModule({
     setPmoNewAsignacionId("");
   }
 
+  async function handleCreatePmoAsignacion(proyecto, payload) {
+    const result = await createWorkloadAssignment({
+      persona_id: payload.personaId,
+      responsable: payload.personaNombre,
+      rol: "Responsable de proyecto",
+      tipo: "Proyecto",
+      prioridad: payload.prioridad,
+      gestion: "Otro",
+      titulo: payload.titulo,
+      descripcion: `Tablero de proyectos — ${proyecto.nombre}`,
+      revisara: "", aprobara: "", seguimiento: "",
+      carga_horas: payload.horas,
+      fecha_limite: payload.fechaLimite,
+      estado: "Pendiente",
+      asigna: currentUser?.nombre || currentUser?.usuario || "",
+      asigna_rol: "Tablero de Proyectos",
+      horas_totales: payload.horas,
+      origen_estrategico: "PMO",
+    });
+    if (!result?.ok) { console.error(result?.error); alert("No fue posible crear la asignación."); return false; }
+    alert(`Asignación creada para ${payload.personaNombre} en Balance de Carga.`);
+    return true;
+  }
+
   async function handleClosePmoProyecto(proyecto) {
     const result = await closeProyecto(proyecto.id, { actor: currentUser });
     if (!result.ok) { console.error(result.error); setPmoMessage("No fue posible cerrar el proyecto."); return; }
@@ -1482,6 +1576,7 @@ export default function WorkloadBalanceModule({
   const [pmoMessage, setPmoMessage] = useState("");
   const [pmoRecordatorioFormFor, setPmoRecordatorioFormFor] = useState(null);
   const [pmoRecordatorioText, setPmoRecordatorioText] = useState("");
+  const [pmoAsignacionFormFor, setPmoAsignacionFormFor] = useState(null);
   const [pmoCreating, setPmoCreating] = useState(false);
   const [pmoNewNombre, setPmoNewNombre] = useState("");
   const [pmoNewAsignacionId, setPmoNewAsignacionId] = useState("");
@@ -4387,20 +4482,20 @@ function canReviewPlan() {
                 {pmoLoading ? (
                   <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-400">Cargando tablero de proyectos…</div>
                 ) : (
-                  <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <table className="w-full min-w-[1100px] text-[11px]">
+                  <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <table className="w-full table-fixed text-[10px]">
                       <thead>
                         <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
-                          <th className="px-3 py-2 text-left font-black">Proyecto</th>
-                          <th className="px-3 py-2 text-left font-black">Líder de proyecto</th>
-                          <th className="px-3 py-2 text-left font-black">Líder de proceso</th>
-                          <th className="px-3 py-2 text-left font-black">Etapa</th>
-                          <th className="w-32 px-3 py-2 text-left font-black">Avance</th>
-                          <th className="px-3 py-2 text-left font-black">Semáforo</th>
-                          <th className="px-3 py-2 text-left font-black">Próximo hito</th>
-                          <th className="px-3 py-2 text-left font-black">Fecha</th>
-                          <th className="px-3 py-2 text-left font-black">Decisión requerida</th>
-                          <th className="px-3 py-2 text-center font-black">Acción</th>
+                          <th className="w-[15%] px-2 py-1.5 text-left font-black">Proyecto</th>
+                          <th className="w-[10%] px-2 py-1.5 text-left font-black">Líder proyecto</th>
+                          <th className="w-[10%] px-2 py-1.5 text-left font-black">Líder proceso</th>
+                          <th className="w-[10%] px-2 py-1.5 text-left font-black">Etapa</th>
+                          <th className="w-[9%] px-2 py-1.5 text-left font-black">Avance</th>
+                          <th className="w-[8%] px-2 py-1.5 text-left font-black">Semáforo</th>
+                          <th className="w-[11%] px-2 py-1.5 text-left font-black">Próx. hito</th>
+                          <th className="w-[9%] px-2 py-1.5 text-left font-black">Fecha</th>
+                          <th className="w-[12%] px-2 py-1.5 text-left font-black">Decisión</th>
+                          <th className="w-[6%] px-2 py-1.5 text-center font-black">Acción</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4411,40 +4506,41 @@ function canReviewPlan() {
                           return (
                             <React.Fragment key={proyecto.id}>
                               <tr className="border-b border-slate-100 align-top hover:bg-slate-50/60">
-                                <td className="max-w-[180px] px-3 py-2 font-black text-slate-800">{proyecto.nombre}</td>
-                                <td className="px-3 py-2">
+                                <td className="truncate px-2 py-1.5 font-black text-slate-800" title={proyecto.nombre}>{proyecto.nombre}</td>
+                                <td className="px-2 py-1.5">
                                   <select
                                     value={proyecto.lider_proyecto_persona_id || ""}
                                     disabled={!canEdit}
                                     onChange={(e) => handleUpdatePmoProyecto(proyecto, { lider_proyecto_persona_id: e.target.value ? Number(e.target.value) : null })}
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[9px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
                                   >
                                     <option value="">Sin asignar</option>
                                     {peopleOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                                   </select>
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="px-2 py-1.5">
                                   <select
                                     value={proyecto.lider_proceso || ""}
                                     disabled={!canEdit}
                                     onChange={(e) => handleUpdatePmoProyecto(proyecto, { lider_proceso: e.target.value || null })}
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[9px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
                                   >
                                     <option value="">Sin asignar</option>
                                     {pmoProcessOptions.map((p) => <option key={p} value={p}>{p}</option>)}
                                   </select>
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="px-2 py-1.5">
                                   <input
                                     type="text"
                                     defaultValue={proyecto.etapa || ""}
                                     disabled={!canEdit}
+                                    title={proyecto.etapa || ""}
                                     onBlur={(e) => e.target.value !== (proyecto.etapa || "") && handleUpdatePmoProyecto(proyecto, { etapa: e.target.value })}
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[9px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
                                   />
                                 </td>
-                                <td className="px-3 py-2">
-                                  <div className="flex items-center gap-1.5">
+                                <td className="px-2 py-1.5">
+                                  <div className="flex items-center gap-1">
                                     <input
                                       type="range" min="0" max="100" step="5"
                                       value={proyecto.avance_porcentaje}
@@ -4452,74 +4548,96 @@ function canReviewPlan() {
                                       onChange={(e) => setPmoProyectos((current) => current.map((item) => (item.id === proyecto.id ? { ...item, avance_porcentaje: Number(e.target.value) } : item)))}
                                       onMouseUp={(e) => handleUpdatePmoProyecto(proyecto, { avance_porcentaje: Number(e.target.value) })}
                                       onTouchEnd={(e) => handleUpdatePmoProyecto(proyecto, { avance_porcentaje: Number(e.target.value) })}
-                                      className="w-16 accent-[#001225] disabled:opacity-50"
+                                      className="w-10 min-w-0 accent-[#001225] disabled:opacity-50"
                                     />
-                                    <span className="w-8 shrink-0 text-[10px] font-black text-slate-600">{proyecto.avance_porcentaje}%</span>
+                                    <span className="shrink-0 text-[9px] font-black text-slate-600">{proyecto.avance_porcentaje}%</span>
                                   </div>
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="px-2 py-1.5">
                                   <select
                                     value={proyecto.semaforo}
                                     disabled={!canEdit}
                                     onChange={(e) => handleUpdatePmoProyecto(proyecto, { semaforo: e.target.value })}
-                                    className={`rounded-lg border px-2 py-1 text-[10px] font-black outline-none disabled:opacity-60 ${PMO_SEMAFORO_STYLES[proyecto.semaforo]}`}
+                                    className={`w-full rounded-lg border px-1.5 py-1 text-[9px] font-black outline-none disabled:opacity-60 ${PMO_SEMAFORO_STYLES[proyecto.semaforo]}`}
                                   >
                                     <option value="Verde">En curso</option>
                                     <option value="Amarillo">En riesgo</option>
                                     <option value="Rojo">Crítico</option>
                                   </select>
                                 </td>
-                                <td className="max-w-[160px] px-3 py-2">
+                                <td className="px-2 py-1.5">
                                   <input
                                     type="text"
                                     defaultValue={proyecto.proximo_hito || ""}
                                     disabled={!canEdit}
+                                    title={proyecto.proximo_hito || ""}
                                     onBlur={(e) => e.target.value !== (proyecto.proximo_hito || "") && handleUpdatePmoProyecto(proyecto, { proximo_hito: e.target.value })}
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[9px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
                                   />
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="px-2 py-1.5">
                                   <input
                                     type="date"
                                     defaultValue={proyecto.fecha_hito || ""}
                                     disabled={!canEdit}
                                     onChange={(e) => handleUpdatePmoProyecto(proyecto, { fecha_hito: e.target.value || null })}
-                                    className={`rounded-lg border px-2 py-1 text-[10px] font-bold outline-none disabled:bg-slate-50 disabled:text-slate-400 ${overdue ? "border-red-300 bg-red-50 text-red-700" : dueSoon ? "border-amber-300 bg-amber-50 text-amber-700" : "border-slate-200 bg-white text-slate-700"}`}
+                                    className={`w-full rounded-lg border px-1 py-1 text-[9px] font-bold outline-none disabled:bg-slate-50 disabled:text-slate-400 ${overdue ? "border-red-300 bg-red-50 text-red-700" : dueSoon ? "border-amber-300 bg-amber-50 text-amber-700" : "border-slate-200 bg-white text-slate-700"}`}
                                   />
-                                  {overdue && <div className="mt-0.5 text-[8px] font-black uppercase tracking-wide text-red-600">Atrasado</div>}
-                                  {dueSoon && <div className="mt-0.5 text-[8px] font-black uppercase tracking-wide text-amber-600">Próximo a vencer</div>}
+                                  {overdue && <div className="mt-0.5 text-[7px] font-black uppercase tracking-wide text-red-600">Atrasado</div>}
+                                  {dueSoon && <div className="mt-0.5 text-[7px] font-black uppercase tracking-wide text-amber-600">Por vencer</div>}
                                 </td>
-                                <td className="max-w-[180px] px-3 py-2">
+                                <td className="px-2 py-1.5">
                                   <textarea
                                     defaultValue={proyecto.decision_requerida || ""}
                                     disabled={!canEdit}
                                     rows={1}
+                                    title={proyecto.decision_requerida || ""}
                                     onBlur={(e) => e.target.value !== (proyecto.decision_requerida || "") && handleUpdatePmoProyecto(proyecto, { decision_requerida: e.target.value })}
-                                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[9px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
                                   />
                                 </td>
-                                <td className="px-3 py-2 text-center">
-                                  <div className="flex items-center justify-center gap-1">
+                                <td className="px-1 py-1.5 text-center">
+                                  <div className="flex items-center justify-center gap-0.5">
+                                    {isStrategicTeamMember(currentUser) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => { setPmoAsignacionFormFor((current) => (current === proyecto.id ? null : proyecto.id)); setPmoRecordatorioFormFor(null); }}
+                                        title="Enviar a Asignaciones"
+                                        className={`flex h-5 w-5 items-center justify-center rounded-full transition ${pmoAsignacionFormFor === proyecto.id ? "bg-sky-100 text-sky-600" : "text-slate-300 hover:bg-sky-50 hover:text-sky-600"}`}
+                                      >
+                                        →
+                                      </button>
+                                    )}
                                     {isStrategicTeamMember(currentUser) && proyecto.lider_proyecto_persona_id && (
                                       <button
                                         type="button"
-                                        onClick={() => { setPmoRecordatorioFormFor((current) => (current === proyecto.id ? null : proyecto.id)); setPmoRecordatorioText(""); }}
+                                        onClick={() => { setPmoRecordatorioFormFor((current) => (current === proyecto.id ? null : proyecto.id)); setPmoAsignacionFormFor(null); setPmoRecordatorioText(""); }}
                                         title="Enviar recordatorio al líder de proyecto"
-                                        className={`flex h-6 w-6 items-center justify-center rounded-full transition ${pmoRecordatorioFormFor === proyecto.id ? "bg-amber-100 text-amber-600" : "text-slate-300 hover:bg-amber-50 hover:text-amber-600"}`}
+                                        className={`flex h-5 w-5 items-center justify-center rounded-full transition ${pmoRecordatorioFormFor === proyecto.id ? "bg-amber-100 text-amber-600" : "text-slate-300 hover:bg-amber-50 hover:text-amber-600"}`}
                                       >
                                         🔔
                                       </button>
                                     )}
                                     {isStrategicTeamMember(currentUser) && (
                                       pmoShowHistorico ? (
-                                        <button type="button" onClick={() => handleReopenPmoProyecto(proyecto)} title="Reabrir proyecto" className="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition hover:bg-emerald-50 hover:text-emerald-600">↺</button>
+                                        <button type="button" onClick={() => handleReopenPmoProyecto(proyecto)} title="Reabrir proyecto" className="flex h-5 w-5 items-center justify-center rounded-full text-slate-300 transition hover:bg-emerald-50 hover:text-emerald-600">↺</button>
                                       ) : (
-                                        <button type="button" onClick={() => handleClosePmoProyecto(proyecto)} title="Cerrar proyecto (pasa al histórico)" className="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition hover:bg-slate-100 hover:text-slate-600">✓</button>
+                                        <button type="button" onClick={() => handleClosePmoProyecto(proyecto)} title="Cerrar proyecto (pasa al histórico)" className="flex h-5 w-5 items-center justify-center rounded-full text-slate-300 transition hover:bg-red-50 hover:text-red-500">✗</button>
                                       )
                                     )}
                                   </div>
                                 </td>
                               </tr>
+                              {pmoAsignacionFormFor === proyecto.id && (
+                                <PmoAsignacionRowForm
+                                  colSpan={10}
+                                  personas={peopleOptions}
+                                  defaultPersonaId={proyecto.lider_proyecto_persona_id || ""}
+                                  defaultTitulo={proyecto.nombre}
+                                  onCancel={() => setPmoAsignacionFormFor(null)}
+                                  onConfirm={(payload) => handleCreatePmoAsignacion(proyecto, payload)}
+                                />
+                              )}
                               {pmoRecordatorioFormFor === proyecto.id && (
                                 <tr className="border-b border-slate-100 bg-amber-50/50">
                                   <td colSpan={10} className="px-3 py-2">
