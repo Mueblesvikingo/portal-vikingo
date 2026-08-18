@@ -1,8 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cancelAssignment, confirmMeetingAttendance, createWorkloadAssignment, createWorkloadSourceActivity, deleteAssignment, deleteSavedWorkloadPlan, finalizeAssignment, findExistingSavedMonth, findExistingSavedWeek, getLiderProcesoOverrides, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, pauseAssignment, programAssignmentHours, reactivateAssignment, recalculateAssignmentHours, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanHours, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanHours, updateWeeklyPlanOrder, updateWorkloadAssignment, updateWorkloadSourceActivity, upsertLiderProcesoOverride } from "../services/workloadService";
-import { hasWorkloadFullAccess, canEditWorkloadPendingActivities, canEditWorkloadForPersonRoles, isStrategicTeamMember } from "../services/permissionsService";
+import { hasWorkloadFullAccess, canEditWorkloadPendingActivities, canEditWorkloadForPersonRoles, isStrategicTeamMember, canEditPmoProyecto } from "../services/permissionsService";
 import { updateActivitySemaforo, getSubprocesosCatalog } from "../services/organizationalDesignService";
+import { getProyectos, updateProyecto, createRecordatorio, getPendingRecordatorios, markRecordatorioVisto } from "../services/pmoService";
+import { mapProcesses as pmoProcessOptions } from "../services/processCatalog";
 import SemaforoDot from "../shared/components/SemaforoDot";
+
+const PMO_OBJETIVO =
+  "Proporcionar a la Dirección y a la PMO una visión integral, consolidada y actualizada del desempeño de los proyectos activos, mediante el seguimiento de su avance contra plan, estado, hitos, riesgos y desviaciones, con el propósito de facilitar la toma oportuna de decisiones, priorizar acciones y asegurar el cumplimiento de los objetivos estratégicos de la organización.";
+const PMO_ALCANCE =
+  "El Tablero Gerencial de Proyectos comprende el seguimiento transversal de los proyectos activos de la organización, desde una perspectiva estratégica y gerencial. Integra información proveniente de la gestión operativa de cada proyecto para presentar, de manera consolidada, su avance contra plan, etapa, semáforo de desempeño, próximos hitos, riesgos o situaciones críticas y decisiones requeridas por la Dirección. Aplica a los proyectos del portafolio bajo seguimiento de la PMO; no sustituye la gestión detallada de actividades, evidencias, responsables y entregables de cada proyecto, que se administra en las herramientas operativas correspondientes.";
+const PMO_SEMAFORO_STYLES = {
+  Verde: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  Amarillo: "border-amber-200 bg-amber-50 text-amber-700",
+  Rojo: "border-red-200 bg-red-50 text-red-700",
+};
 
 const WORKLOAD_VIDEO_URL =
   "https://www.youtube.com/embed/bun2Ku2R1JI?autoplay=1&rel=0&modestbranding=1";
@@ -1002,7 +1014,7 @@ function QuickBlockForm({ day, editingProjectId, quickProjectType, setQuickProje
 }
 function AddBlockButton({ onClick, className = "" }) { return <button type="button" onClick={onClick} className={`w-full rounded-lg border border-dashed border-slate-200 py-1 text-[10px] font-bold text-slate-400 transition hover:border-sky-200 hover:text-sky-600 ${className}`}>+ Bloque</button>; }
 function getViewGuideText(viewMode) {
-  const guides = { capacity: "Vista consolidada de distribución de carga por origen. Identifica dónde se concentra el esfuerzo operativo, estratégico y de apoyo.", week: "Semana típica de trabajo. Arrastra actividades entre días, reorganiza prioridades y ajusta proyectos o formación según la capacidad disponible.", month: "Mes típico basado en cuatro semanas de capacidad. Visualiza carga mensual por procesos, proyectos y formación, incluyendo bloques recurrentes.", assignments: "Centro de asignaciones. Registra encargos autorizados y déjalos disponibles para programarse en una semana específica.", pending: "Bandeja de actividades activas asociadas a la persona seleccionada que aún no están programadas en Semana o Mes típico.", agenda: "Programación semanal y mensual. Los líderes planifican el viernes, Dirección da VOBO el lunes y durante la semana se palomean los avances." };
+  const guides = { capacity: "Vista consolidada de distribución de carga por origen. Identifica dónde se concentra el esfuerzo operativo, estratégico y de apoyo.", week: "Semana típica de trabajo. Arrastra actividades entre días, reorganiza prioridades y ajusta proyectos o formación según la capacidad disponible.", month: "Mes típico basado en cuatro semanas de capacidad. Visualiza carga mensual por procesos, proyectos y formación, incluyendo bloques recurrentes.", assignments: "Centro de asignaciones. Registra encargos autorizados y déjalos disponibles para programarse en una semana específica.", pending: "Bandeja de actividades activas asociadas a la persona seleccionada que aún no están programadas en Semana o Mes típico.", agenda: "Programación semanal y mensual. Los líderes planifican el viernes, Dirección da VOBO el lunes y durante la semana se palomean los avances.", projects: "Tablero Gerencial de Proyectos. Visión consolidada del portafolio activo para Dirección y la PMO — no sustituye la gestión operativa detallada de cada proyecto." };
   return guides[viewMode] || "Consulta y ajusta la carga de trabajo según la capacidad disponible.";
 }
 function PendingActivitiesView({ hasSelectedPerson, activities, excludedActivities, totalHours, canEditActivities, onOpenSchedule, onEditActivity, onRestoreExcludedActivity, subprocesosCatalog }) {
@@ -1423,6 +1435,51 @@ export default function WorkloadBalanceModule({
   useEffect(() => {
     loadWorkloadData();
   }, []);
+
+  // Tablero PMO: catálogo propio y pequeño (7-10 filas), no se mete al
+  // Promise.all de loadWorkloadData (que se re-ejecuta tras cada mutación
+  // de este módulo enorme) para no re-consultarlo sin necesidad.
+  async function loadPmoData() {
+    setPmoLoading(true);
+    const [proyectos, recordatorios] = await Promise.all([
+      getProyectos(),
+      getPendingRecordatorios(currentUser?.persona_id),
+    ]);
+    setPmoProyectos(proyectos);
+    setPmoRecordatorios(recordatorios);
+    setPmoLoading(false);
+  }
+  useEffect(() => {
+    loadPmoData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.persona_id]);
+
+  async function handleUpdatePmoProyecto(proyecto, changes) {
+    if (!canEditPmoProyecto(currentUser, proyecto)) return;
+    const result = await updateProyecto(proyecto.id, changes, { actor: currentUser, previous: proyecto });
+    if (!result.ok) { console.error(result.error); setPmoMessage("No fue posible guardar el cambio del proyecto."); return; }
+    setPmoProyectos((current) => current.map((item) => (item.id === proyecto.id ? result.data : item)));
+  }
+
+  async function handleCreatePmoRecordatorio(proyecto) {
+    if (!isStrategicTeamMember(currentUser) || !proyecto.lider_proyecto_persona_id) return;
+    const mensaje = pmoRecordatorioText.trim();
+    if (!mensaje) return;
+    const result = await createRecordatorio(
+      { proyectoId: proyecto.id, destinatarioPersonaId: proyecto.lider_proyecto_persona_id, mensaje },
+      { actor: currentUser }
+    );
+    if (!result.ok) { console.error(result.error); setPmoMessage("No fue posible enviar el recordatorio."); return; }
+    setPmoRecordatorioFormFor(null);
+    setPmoRecordatorioText("");
+    setPmoMessage(`Recordatorio enviado a ${proyecto.lider_proyecto?.nombre || "el líder del proyecto"}.`);
+  }
+
+  async function handleDismissPmoRecordatorio(recordatorioId) {
+    const result = await markRecordatorioVisto(recordatorioId);
+    if (!result.ok) { console.error(result.error); return; }
+    setPmoRecordatorios((current) => current.filter((item) => item.id !== recordatorioId));
+  }
   // Semáforo: un solo campo compartido en la actividad maestra
   // (proceso_actividades.semaforo), no una copia por bloque/ocurrencia —
   // por eso el cambio se aplica a TODAS las apariciones de esa actividad
@@ -1440,6 +1497,12 @@ export default function WorkloadBalanceModule({
   }
   const [personFilter, setPersonFilter] = useState(() => (currentUser?.persona_id ? String(currentUser.persona_id) : "all"));
   const autoSelectedOwnPersonRef = useRef(false);
+  const [pmoProyectos, setPmoProyectos] = useState([]);
+  const [pmoRecordatorios, setPmoRecordatorios] = useState([]);
+  const [pmoLoading, setPmoLoading] = useState(false);
+  const [pmoMessage, setPmoMessage] = useState("");
+  const [pmoRecordatorioFormFor, setPmoRecordatorioFormFor] = useState(null);
+  const [pmoRecordatorioText, setPmoRecordatorioText] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [jornadaInicio, setJornadaInicio] = useState("08:00");
   const [showScheduleColumn, setShowScheduleColumn] = useState(false);
@@ -4277,7 +4340,7 @@ function canReviewPlan() {
                 <button type="button" onClick={() => window.open(WORKLOAD_MANUAL_URL, "_blank")} className="rounded-lg border border-white/20 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-wide text-[#001225] shadow-sm transition hover:bg-slate-100">📄 Manual</button>
                 {viewMode === "capacity" && <CapacityAvailabilityPopover hasSelectedPerson={effectivePersonFilter !== "all"} pendingHours={pendingTotalHours} weeklyCapacityHours={selectedPersonCapacity.weeklyHours} weeklyScheduledHours={capacityInsightWeeklyScheduledHours} days={capacityInsightDays} onGoToPending={() => setViewMode("pending")} onGoToWeek={() => setViewMode("week")} />}
               </div>
-              <div className="flex gap-1 rounded-xl bg-white/10 p-0.5"><ViewTab active={viewMode === "capacity"} onClick={() => setViewMode("capacity")}>Capacidad</ViewTab><ViewTab active={viewMode === "assignments"} onClick={() => setViewMode("assignments")}>Asignaciones</ViewTab><ViewTab active={viewMode === "pending"} onClick={() => setViewMode("pending")}>Pendientes</ViewTab><ViewTab active={viewMode === "agenda"} onClick={() => setViewMode("agenda")}>Planificación</ViewTab><ViewTab active={viewMode === "week"} onClick={() => setViewMode("week")}>Semana</ViewTab><ViewTab active={viewMode === "month"} onClick={() => setViewMode("month")}>Mes</ViewTab></div>
+              <div className="flex gap-1 rounded-xl bg-white/10 p-0.5"><ViewTab active={viewMode === "capacity"} onClick={() => setViewMode("capacity")}>Capacidad</ViewTab><ViewTab active={viewMode === "assignments"} onClick={() => setViewMode("assignments")}>Asignaciones</ViewTab><ViewTab active={viewMode === "pending"} onClick={() => setViewMode("pending")}>Pendientes</ViewTab><ViewTab active={viewMode === "agenda"} onClick={() => setViewMode("agenda")}>Planificación</ViewTab><ViewTab active={viewMode === "week"} onClick={() => setViewMode("week")}>Semana</ViewTab><ViewTab active={viewMode === "month"} onClick={() => setViewMode("month")}>Mes</ViewTab><ViewTab active={viewMode === "projects"} onClick={() => setViewMode("projects")}>Proyectos</ViewTab></div>
             </div>
             <div className="border-b border-slate-200 bg-slate-50 px-4 py-1"><p className="text-[10px] font-semibold text-slate-500">{getViewGuideText(viewMode)}</p></div>
             {!canEditSelectedPerson && <div className="mx-3 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-700">Modo solo lectura: estás viendo la carga de {selectedPersonName || "otra persona"}. Solo puedes editar tu propia carga.</div>}
@@ -4298,6 +4361,179 @@ function canReviewPlan() {
 
             {viewMode === "capacity" && filteredActivities.length === 0 && <div className="px-5 py-10 text-center text-sm font-bold text-slate-400">No hay actividades con los filtros seleccionados.</div>}
             </div>
+
+            {viewMode === "projects" && (
+              <div className="p-3">
+                {pmoRecordatorios.length > 0 && (
+                  <div className="mb-3 space-y-1.5">
+                    {pmoRecordatorios.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-800">
+                        <span>🔔 <strong>{r.proyecto?.nombre || "Proyecto"}:</strong> {r.mensaje}</span>
+                        <button type="button" onClick={() => handleDismissPmoRecordatorio(r.id)} className="shrink-0 rounded-md border border-amber-300 bg-white px-2 py-0.5 text-[9px] font-black text-amber-700 hover:bg-amber-100">Visto</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {pmoMessage && <div className="mb-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-[10px] font-bold text-sky-700">{pmoMessage}</div>}
+                <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Objetivo</p>
+                  <p className="mt-1 text-[11px] font-medium leading-relaxed text-slate-600">{PMO_OBJETIVO}</p>
+                  <p className="mt-2 text-[9px] font-black uppercase tracking-widest text-slate-400">Alcance</p>
+                  <p className="mt-1 text-[11px] font-medium leading-relaxed text-slate-600">{PMO_ALCANCE}</p>
+                </div>
+                {pmoLoading ? (
+                  <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-400">Cargando tablero de proyectos…</div>
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <table className="w-full min-w-[1100px] text-[11px]">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                          <th className="px-3 py-2 text-left font-black">Proyecto</th>
+                          <th className="px-3 py-2 text-left font-black">Líder de proyecto</th>
+                          <th className="px-3 py-2 text-left font-black">Líder de proceso</th>
+                          <th className="px-3 py-2 text-left font-black">Etapa</th>
+                          <th className="w-32 px-3 py-2 text-left font-black">Avance</th>
+                          <th className="px-3 py-2 text-left font-black">Semáforo</th>
+                          <th className="px-3 py-2 text-left font-black">Próximo hito</th>
+                          <th className="px-3 py-2 text-left font-black">Fecha</th>
+                          <th className="px-3 py-2 text-left font-black">Decisión requerida</th>
+                          <th className="px-3 py-2 text-center font-black">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pmoProyectos.map((proyecto) => {
+                          const canEdit = canEditPmoProyecto(currentUser, proyecto);
+                          const overdue = proyecto.fecha_hito && new Date(proyecto.fecha_hito) < new Date() && proyecto.avance_porcentaje < 100;
+                          const dueSoon = !overdue && proyecto.fecha_hito && (new Date(proyecto.fecha_hito) - new Date()) / 86400000 <= 7 && (new Date(proyecto.fecha_hito) - new Date()) / 86400000 >= 0;
+                          return (
+                            <React.Fragment key={proyecto.id}>
+                              <tr className="border-b border-slate-100 align-top hover:bg-slate-50/60">
+                                <td className="max-w-[180px] px-3 py-2 font-black text-slate-800">{proyecto.nombre}</td>
+                                <td className="px-3 py-2">
+                                  <select
+                                    value={proyecto.lider_proyecto_persona_id || ""}
+                                    disabled={!canEdit}
+                                    onChange={(e) => handleUpdatePmoProyecto(proyecto, { lider_proyecto_persona_id: e.target.value ? Number(e.target.value) : null })}
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                  >
+                                    <option value="">Sin asignar</option>
+                                    {peopleOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                  </select>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <select
+                                    value={proyecto.lider_proceso || ""}
+                                    disabled={!canEdit}
+                                    onChange={(e) => handleUpdatePmoProyecto(proyecto, { lider_proceso: e.target.value || null })}
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                  >
+                                    <option value="">Sin asignar</option>
+                                    {pmoProcessOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+                                  </select>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="text"
+                                    defaultValue={proyecto.etapa || ""}
+                                    disabled={!canEdit}
+                                    onBlur={(e) => e.target.value !== (proyecto.etapa || "") && handleUpdatePmoProyecto(proyecto, { etapa: e.target.value })}
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="range" min="0" max="100" step="5"
+                                      value={proyecto.avance_porcentaje}
+                                      disabled={!canEdit}
+                                      onChange={(e) => setPmoProyectos((current) => current.map((item) => (item.id === proyecto.id ? { ...item, avance_porcentaje: Number(e.target.value) } : item)))}
+                                      onMouseUp={(e) => handleUpdatePmoProyecto(proyecto, { avance_porcentaje: Number(e.target.value) })}
+                                      onTouchEnd={(e) => handleUpdatePmoProyecto(proyecto, { avance_porcentaje: Number(e.target.value) })}
+                                      className="w-16 accent-[#001225] disabled:opacity-50"
+                                    />
+                                    <span className="w-8 shrink-0 text-[10px] font-black text-slate-600">{proyecto.avance_porcentaje}%</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <select
+                                    value={proyecto.semaforo}
+                                    disabled={!canEdit}
+                                    onChange={(e) => handleUpdatePmoProyecto(proyecto, { semaforo: e.target.value })}
+                                    className={`rounded-lg border px-2 py-1 text-[10px] font-black outline-none disabled:opacity-60 ${PMO_SEMAFORO_STYLES[proyecto.semaforo]}`}
+                                  >
+                                    <option value="Verde">En curso</option>
+                                    <option value="Amarillo">En riesgo</option>
+                                    <option value="Rojo">Crítico</option>
+                                  </select>
+                                </td>
+                                <td className="max-w-[160px] px-3 py-2">
+                                  <input
+                                    type="text"
+                                    defaultValue={proyecto.proximo_hito || ""}
+                                    disabled={!canEdit}
+                                    onBlur={(e) => e.target.value !== (proyecto.proximo_hito || "") && handleUpdatePmoProyecto(proyecto, { proximo_hito: e.target.value })}
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="date"
+                                    defaultValue={proyecto.fecha_hito || ""}
+                                    disabled={!canEdit}
+                                    onChange={(e) => handleUpdatePmoProyecto(proyecto, { fecha_hito: e.target.value || null })}
+                                    className={`rounded-lg border px-2 py-1 text-[10px] font-bold outline-none disabled:bg-slate-50 disabled:text-slate-400 ${overdue ? "border-red-300 bg-red-50 text-red-700" : dueSoon ? "border-amber-300 bg-amber-50 text-amber-700" : "border-slate-200 bg-white text-slate-700"}`}
+                                  />
+                                  {overdue && <div className="mt-0.5 text-[8px] font-black uppercase tracking-wide text-red-600">Atrasado</div>}
+                                  {dueSoon && <div className="mt-0.5 text-[8px] font-black uppercase tracking-wide text-amber-600">Próximo a vencer</div>}
+                                </td>
+                                <td className="max-w-[180px] px-3 py-2">
+                                  <textarea
+                                    defaultValue={proyecto.decision_requerida || ""}
+                                    disabled={!canEdit}
+                                    rows={1}
+                                    onBlur={(e) => e.target.value !== (proyecto.decision_requerida || "") && handleUpdatePmoProyecto(proyecto, { decision_requerida: e.target.value })}
+                                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                  />
+                                </td>
+                                <td className="px-3 py-2 text-center">
+                                  {isStrategicTeamMember(currentUser) && proyecto.lider_proyecto_persona_id && (
+                                    <button
+                                      type="button"
+                                      onClick={() => { setPmoRecordatorioFormFor((current) => (current === proyecto.id ? null : proyecto.id)); setPmoRecordatorioText(""); }}
+                                      title="Enviar recordatorio al líder de proyecto"
+                                      className={`flex h-6 w-6 items-center justify-center rounded-full transition ${pmoRecordatorioFormFor === proyecto.id ? "bg-amber-100 text-amber-600" : "text-slate-300 hover:bg-amber-50 hover:text-amber-600"}`}
+                                    >
+                                      🔔
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                              {pmoRecordatorioFormFor === proyecto.id && (
+                                <tr className="border-b border-slate-100 bg-amber-50/50">
+                                  <td colSpan={10} className="px-3 py-2">
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={pmoRecordatorioText}
+                                        onChange={(e) => setPmoRecordatorioText(e.target.value)}
+                                        placeholder={`Mensaje para ${proyecto.lider_proyecto?.nombre || "el líder"}...`}
+                                        className="h-8 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-bold text-slate-700 outline-none"
+                                      />
+                                      <button type="button" onClick={() => handleCreatePmoRecordatorio(proyecto)} className="h-8 rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white">Enviar</button>
+                                      <button type="button" onClick={() => setPmoRecordatorioFormFor(null)} className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

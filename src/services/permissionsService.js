@@ -400,6 +400,16 @@ export function canEditWorkloadForPersonRoles(user, targetPersonRoles = []) {
   return targetPersonRoles.some((rol) => allowedRoles.includes(rol));
 }
 
+// Tablero Gerencial de Proyectos (PMO): el equipo estratégico edita
+// cualquier fila; el líder de proyecto asignado a esa fila puede editar
+// solo la suya (avance, semáforo, etapa, próximo hito, decisión) — mismo
+// criterio de "auto-servicio sobre lo propio" que Diagnóstico SIG.
+export function canEditPmoProyecto(user, proyecto) {
+  if (isStrategicTeamMember(user)) return true;
+  if (!proyecto?.lider_proyecto_persona_id) return false;
+  return String(user?.persona_id) === String(proyecto.lider_proyecto_persona_id);
+}
+
 export function canEditWorkloadPendingActivities(user) {
   const userOverride = getUserModuleOverride(user, "workload-balance");
   if (userOverride && typeof userOverride.editar === "boolean") return userOverride.editar;
