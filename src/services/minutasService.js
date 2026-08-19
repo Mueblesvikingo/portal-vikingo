@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { supabase } from "./supabase";
+import { VIKINGO_LOGO_PNG_BASE64 } from "../assets/vikingoLogoBase64";
 
 function actorFields(actor) {
   return {
@@ -8,11 +9,21 @@ function actorFields(actor) {
   };
 }
 
-const TIPO_COLOR = {
-  Acuerdo: [37, 99, 235],
-  Seguimiento: [16, 185, 129],
-  "Revisión": [217, 119, 6],
-};
+// Identidad Vikingo (negro + rojo oscuro) y encabezado de documento controlado
+// del SIG, siguiendo el formato de SIG-P-02/SIG-P-03. Código asignado revisando
+// la carpeta "04) Documentación del SIG" / "03) Formatos": el único SIG-F
+// existente es SIG-F-01 (Presupuesto Estrategia), por lo que a esta minuta
+// (primer Formato del proceso "Planeación estratégica del SIG" para Seguimiento
+// Estratégico) le corresponde el siguiente consecutivo.
+const NEGRO = [23, 23, 23];
+const ROJO = [124, 20, 22];
+const GRIS = [120, 120, 120];
+const GRIS_LINEA = [205, 205, 205];
+const DOC_CODIGO = "SIG-F-02";
+const DOC_EDICION = "01";
+const DOC_FECHA_EDICION = "19/08/2026";
+const DOC_APLICACION = "Seguimiento Estratégico";
+const LOGO_RATIO = 432 / 122;
 
 export async function getMinutas() {
   try {
@@ -134,76 +145,198 @@ export async function removePunto(puntoId) {
 function buildPdfDoc(minuta) {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const color = TIPO_COLOR[minuta.tipo] || TIPO_COLOR.Acuerdo;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginX = 40;
+  const contentWidth = pageWidth - marginX * 2;
+  const bottomLimit = pageHeight - 50;
+  const paginaSpots = [];
 
-  doc.setFillColor(color[0], color[1], color[2]);
-  doc.rect(0, 0, pageWidth, 90, "F");
+  // Encabezado de documento controlado del SIG: logo + nombre del documento +
+  // ficha (Código/Estado/Edición/Aplicación/Fecha/Página), replicando la
+  // estructura del encabezado usado en SIG-P-02/SIG-P-03.
+  function drawHeader() {
+    const top = 30;
+    const headerHeight = 80;
+    const logoColWidth = 105;
+    const metaColWidth = 150;
+    const metaX = pageWidth - marginX - metaColWidth;
+    const middleX = marginX + logoColWidth + 12;
+    const middleWidth = metaX - middleX - 12;
+
+    doc.setDrawColor(...NEGRO);
+    doc.setLineWidth(1);
+    doc.rect(marginX, top, contentWidth, headerHeight);
+    doc.line(marginX + logoColWidth, top, marginX + logoColWidth, top + headerHeight);
+    doc.line(metaX, top, metaX, top + headerHeight);
+
+    const logoW = 82;
+    const logoH = logoW / LOGO_RATIO;
+    doc.addImage(
+      `data:image/png;base64,${VIKINGO_LOGO_PNG_BASE64}`,
+      "PNG",
+      marginX + (logoColWidth - logoW) / 2,
+      top + (headerHeight - logoH) / 2,
+      logoW,
+      logoH
+    );
+
+    doc.setTextColor(...NEGRO);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text("MINUTA DE REUNIÓN", middleX, top + 30, { maxWidth: middleWidth });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...ROJO);
+    doc.text("Sistema Integrado de Gestión", middleX, top + 46, { maxWidth: middleWidth });
+    doc.setTextColor(...GRIS);
+    doc.text(`Aplicación: ${DOC_APLICACION}`, middleX, top + 60, { maxWidth: middleWidth });
+
+    const metaRows = [
+      ["Código:", DOC_CODIGO],
+      ["Estado:", "Vigente"],
+      ["Edición:", DOC_EDICION],
+      ["Fecha:", DOC_FECHA_EDICION],
+      ["Página:", "__PAGINA__"],
+    ];
+    const rowH = headerHeight / metaRows.length;
+    metaRows.forEach((row, i) => {
+      const rowY = top + i * rowH;
+      if (i > 0) {
+        doc.setDrawColor(...GRIS_LINEA);
+        doc.setLineWidth(0.5);
+        doc.line(metaX, rowY, pageWidth - marginX, rowY);
+      }
+      const textY = rowY + rowH / 2 + 3;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...ROJO);
+      doc.text(row[0], metaX + 8, textY);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...NEGRO);
+      if (row[1] === "__PAGINA__") {
+        const pageNum = doc.internal.getCurrentPageInfo().pageNumber;
+        paginaSpots.push({ page: pageNum, x: metaX + 48, y: textY });
+      } else {
+        doc.text(String(row[1]), metaX + 48, textY);
+      }
+    });
+
+    return top + headerHeight;
+  }
+
+  function newPageWithHeader() {
+    doc.addPage();
+    return drawHeader() + 24;
+  }
+
+  function ensureSpace(y, needed) {
+    if (y + needed > bottomLimit) return newPageWithHeader();
+    return y;
+  }
+
+  let y = drawHeader() + 24;
+
+  // Franja con los datos propios de la reunión (tipo, título, fecha, proceso).
+  // El título admite hasta 2 líneas: la franja crece según lo que ocupe.
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  const tituloLines = doc.splitTextToSize(minuta.titulo || "", contentWidth - 28).slice(0, 2);
+  const bandHeight = 30 + tituloLines.length * 17 + (minuta.proceso_relacionado ? 8 : 0);
+  doc.setFillColor(...ROJO);
+  doc.rect(marginX, y, contentWidth, bandHeight, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text((minuta.tipo || "Acuerdo").toUpperCase(), 40, 30);
-  doc.setFontSize(18);
-  doc.text(minuta.titulo || "", 40, 55);
+  doc.setFontSize(9);
+  doc.text((minuta.tipo || "Acuerdo").toUpperCase(), marginX + 14, y + 18);
+  doc.setFontSize(15);
+  doc.text(tituloLines, marginX + 14, y + 34);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(`Fecha: ${minuta.fecha || ""}${minuta.proceso_relacionado ? "   ·   Proceso: " + minuta.proceso_relacionado : ""}`, 40, 75);
+  doc.setFontSize(9);
+  const infoLinea = `Fecha de la reunión: ${minuta.fecha || ""}${minuta.proceso_relacionado ? "   ·   Proceso: " + minuta.proceso_relacionado : ""}`;
+  doc.text(infoLinea, marginX + 14, y + bandHeight - 10, { maxWidth: contentWidth - 28 });
+  y += bandHeight + 22;
 
-  let y = 120;
-  doc.setTextColor(30, 30, 30);
+  doc.setTextColor(...ROJO);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.text("Puntos tratados", 40, y);
-  y += 20;
+  doc.text("Puntos tratados", marginX, y);
+  y += 18;
   doc.setFontSize(10);
 
   if (!minuta.puntos?.length) {
+    doc.setTextColor(...GRIS);
     doc.setFont("helvetica", "italic");
-    doc.text("Sin puntos registrados.", 40, y);
+    doc.text("Sin puntos registrados.", marginX, y);
     y += 20;
   }
 
   (minuta.puntos || []).forEach((p, index) => {
-    if (y > 700) { doc.addPage(); y = 40; }
+    y = ensureSpace(y, 30);
+    doc.setTextColor(...NEGRO);
     doc.setFont("helvetica", "bold");
-    const titleLines = doc.splitTextToSize(`${index + 1}. ${p.descripcion}`, pageWidth - 80);
-    doc.text(titleLines, 40, y);
+    const titleLines = doc.splitTextToSize(`${index + 1}. ${p.descripcion}`, contentWidth - 10);
+    doc.text(titleLines, marginX, y);
     y += titleLines.length * 14;
     if (p.acuerdo) {
+      y = ensureSpace(y, 16);
       doc.setFont("helvetica", "normal");
-      const lines = doc.splitTextToSize(`Acuerdo: ${p.acuerdo}`, pageWidth - 90);
-      doc.text(lines, 50, y);
+      const lines = doc.splitTextToSize(`Acuerdo: ${p.acuerdo}`, contentWidth - 20);
+      doc.text(lines, marginX + 10, y);
       y += lines.length * 14;
     }
     if (p.responsable?.nombre || p.fecha_compromiso) {
+      y = ensureSpace(y, 16);
       doc.setFont("helvetica", "italic");
       doc.setFontSize(9);
+      doc.setTextColor(...GRIS);
       doc.text(
         `${p.responsable?.nombre ? "Responsable: " + p.responsable.nombre : ""}${p.fecha_compromiso ? "   Fecha compromiso: " + p.fecha_compromiso : ""}`,
-        50, y
+        marginX + 10, y
       );
       doc.setFontSize(10);
+      doc.setTextColor(...NEGRO);
       y += 16;
     }
     y += 10;
   });
 
-  y += 10;
-  if (y > 680) { doc.addPage(); y = 40; }
+  y = ensureSpace(y + 6, 40);
+  doc.setTextColor(...ROJO);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.text("Firmas", 40, y);
-  y += 20;
+  doc.text("Firmas", marginX, y);
+  y += 18;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   (minuta.participantes || []).forEach((p) => {
-    if (y > 700) { doc.addPage(); y = 40; }
-    doc.text(p.persona?.nombre || "—", 40, y);
-    doc.text(
-      p.firmado ? `Firmado · ${new Date(p.firmado_at).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}` : "Sin firmar",
-      320, y
-    );
+    y = ensureSpace(y, 18);
+    doc.setDrawColor(...GRIS_LINEA);
+    doc.setLineWidth(0.5);
+    doc.line(marginX, y + 4, pageWidth - marginX, y + 4);
+    doc.setTextColor(...NEGRO);
+    doc.text(p.persona?.nombre || "—", marginX, y);
+    if (p.firmado) {
+      doc.setTextColor(...ROJO);
+      doc.text(
+        `Firmado · ${new Date(p.firmado_at).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}`,
+        marginX + 320, y
+      );
+    } else {
+      doc.setTextColor(...GRIS);
+      doc.text("Sin firmar", marginX + 320, y);
+    }
     y += 18;
   });
+
+  const totalPages = doc.internal.getNumberOfPages();
+  paginaSpots.forEach((spot) => {
+    doc.setPage(spot.page);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...NEGRO);
+    doc.text(`${spot.page} de ${totalPages}`, spot.x, spot.y);
+  });
+  doc.setPage(totalPages);
 
   return doc;
 }
