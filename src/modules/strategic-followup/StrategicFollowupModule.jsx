@@ -196,6 +196,57 @@ function AsignacionButton({ onClick, disabled, active }) {
   );
 }
 
+// Desplegable compacto de selección múltiple — antes se mostraban todas
+// las personas como bloques sueltos (expandía muchísimo el formulario);
+// ahora se colapsa en un botón y solo se despliega mientras se está
+// eligiendo.
+function MultiSelectDropdown({ options, selectedIds, onToggle, placeholder = "Selecciona..." }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selected = options.filter((o) => selectedIds.includes(o.id));
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="mt-1 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-[12px] font-bold normal-case tracking-normal text-slate-700 outline-none focus:border-sky-300"
+      >
+        <span className="truncate">{selected.length ? `${selected.length} seleccionado${selected.length > 1 ? "s" : ""}` : placeholder}</span>
+        <span className="shrink-0 text-slate-400">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {selected.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {selected.map((p) => (
+            <span key={p.id} className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-white">{p.nombre}</span>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+          {options.map((p) => (
+            <label key={p.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] font-bold normal-case tracking-normal text-slate-700 hover:bg-slate-50">
+              <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => onToggle(p.id)} />
+              {p.nombre}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Formulario compacto para convertir una fila de Enfoque o Sesión en una
 // asignación real de Balance de Carga, para cualquier persona del catálogo —
 // mismo patrón que `ConvertirEnAsignacionForm` en
@@ -363,6 +414,7 @@ export default function StrategicFollowupModule({ currentUser }) {
 
   const canManageMinutas = isStrategicTeamMember(currentUser);
   const [minutas, setMinutas] = useState(null);
+  const [minutaParticipanteOptions, setMinutaParticipanteOptions] = useState([]);
   const [minutasLoading, setMinutasLoading] = useState(false);
   const [minutaMessage, setMinutaMessage] = useState("");
   const [minutaCreating, setMinutaCreating] = useState(false);
@@ -379,8 +431,18 @@ export default function StrategicFollowupModule({ currentUser }) {
     setMinutasLoading(false);
   }
 
+  // Catálogo aparte, solo con personas reales (excluye placeholders como
+  // "Cliente", "Externo", "Falta por definir" que sí aparecen en el
+  // catálogo general de `people`) — no tiene sentido que esos "firmen".
+  async function loadMinutaParticipanteOptions() {
+    const { data, error } = await supabase.from("personas").select("id,nombre").eq("tipo", "persona").eq("activo", true).order("nombre");
+    if (error) { console.error("Error al cargar personas para minutas:", error); return; }
+    setMinutaParticipanteOptions(data || []);
+  }
+
   useEffect(() => {
     if (activeTab === "MINUTAS" && minutas === null) loadMinutasList();
+    if (activeTab === "MINUTAS" && minutaParticipanteOptions.length === 0) loadMinutaParticipanteOptions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
@@ -1048,6 +1110,7 @@ export default function StrategicFollowupModule({ currentUser }) {
         </div>
       )}
 
+      {activeTab !== "MINUTAS" && (
       <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs font-black text-slate-500">
@@ -1126,6 +1189,7 @@ export default function StrategicFollowupModule({ currentUser }) {
             </div>
           )}
       </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         {activeTab === "ENFOQUE" && (
@@ -1409,13 +1473,12 @@ export default function StrategicFollowupModule({ currentUser }) {
 
                 <div className="mt-3">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Participantes (firmarán la minuta)</p>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {people.map((p) => (
-                      <button key={p.id} type="button" onClick={() => toggleParticipante(p.id)} className={`rounded-full border px-3 py-1 text-[11px] font-bold transition ${minutaNewDraft.participantesPersonaIds.includes(p.id) ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
-                        {p.nombre}
-                      </button>
-                    ))}
-                  </div>
+                  <MultiSelectDropdown
+                    options={minutaParticipanteOptions}
+                    selectedIds={minutaNewDraft.participantesPersonaIds}
+                    onToggle={toggleParticipante}
+                    placeholder="Selecciona participantes..."
+                  />
                 </div>
 
                 <div className="mt-3 space-y-2">
@@ -1427,7 +1490,7 @@ export default function StrategicFollowupModule({ currentUser }) {
                         <input type="text" value={punto.acuerdo} onChange={(e) => updateDraftPunto(index, "acuerdo", e.target.value)} placeholder="Acuerdo / conclusión (opcional)" className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium normal-case tracking-normal text-slate-600 outline-none" />
                         <select value={punto.responsablePersonaId} onChange={(e) => updateDraftPunto(index, "responsablePersonaId", e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-bold normal-case tracking-normal text-slate-600 outline-none">
                           <option value="">Sin responsable</option>
-                          {people.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                          {minutaParticipanteOptions.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                         </select>
                         <input type="date" value={punto.fechaCompromiso} onChange={(e) => updateDraftPunto(index, "fechaCompromiso", e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-bold text-slate-600 outline-none" />
                       </div>
@@ -1521,7 +1584,7 @@ export default function StrategicFollowupModule({ currentUser }) {
                             <input type="text" value={nuevoPuntoDraft.acuerdo} onChange={(e) => setNuevoPuntoDraft((d) => ({ ...d, acuerdo: e.target.value }))} placeholder="Acuerdo (opcional)" className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] font-medium normal-case tracking-normal text-slate-600 outline-none" />
                             <select value={nuevoPuntoDraft.responsablePersonaId} onChange={(e) => setNuevoPuntoDraft((d) => ({ ...d, responsablePersonaId: e.target.value }))} className="rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-[11px] font-bold normal-case tracking-normal text-slate-600 outline-none">
                               <option value="">Sin responsable</option>
-                              {people.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                              {minutaParticipanteOptions.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                             </select>
                             <input type="date" value={nuevoPuntoDraft.fechaCompromiso} onChange={(e) => setNuevoPuntoDraft((d) => ({ ...d, fechaCompromiso: e.target.value }))} className="rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-[11px] font-bold text-slate-600 outline-none" />
                             <button type="button" onClick={handleAddPuntoExistente} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">+ Agregar</button>
