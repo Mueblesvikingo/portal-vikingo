@@ -253,13 +253,22 @@ function groupAverage(group) {
   return Math.round((total / (group.rows.length * 10)) * 100);
 }
 
+// Al filtrar por un proceso específico, solo deben promediarse los
+// criterios que realmente le aplican (los suyos + los transversales
+// "Todos") — antes se promediaban TODAS las filas de la sección/subnumeral
+// sin filtrar, así que criterios de otros procesos (ej. Ventas, Compras)
+// diluían el % con su valor base fijo (row[4]) y el número se sentía
+// "pegado" sin importar qué proceso se seleccionara.
 function groupAverageWithOverrides(group, statusOverrides, selectedProcess = "Todos") {
-  const total = group.rows.reduce((sum, row) => sum + getRowScore(statusOverrides, group, row, selectedProcess), 0);
-  return Math.round((total / (group.rows.length * 10)) * 100);
+  const rows = selectedProcess === "Todos" ? group.rows : group.rows.filter((row) => processApplies(row[3], selectedProcess));
+  if (!rows.length) return 0;
+  const total = rows.reduce((sum, row) => sum + getRowScore(statusOverrides, group, row, selectedProcess), 0);
+  return Math.round((total / (rows.length * 10)) * 100);
 }
 
 function sectionAverageWithOverrides(section, statusOverrides, selectedProcess = "Todos") {
-  const rows = section.groups.flatMap((group) => group.rows.map((row) => ({ group, row })));
+  const allRows = section.groups.flatMap((group) => group.rows.map((row) => ({ group, row })));
+  const rows = selectedProcess === "Todos" ? allRows : allRows.filter((item) => processApplies(item.row[3], selectedProcess));
   const total = rows.reduce((sum, item) => sum + getRowScore(statusOverrides, item.group, item.row, selectedProcess), 0);
   return rows.length ? Math.round((total / (rows.length * 10)) * 100) : 0;
 }
