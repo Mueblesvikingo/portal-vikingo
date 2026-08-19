@@ -8,7 +8,7 @@ import { createStrategicDecision } from "../../services/decisionService";
 import { createWorkloadAssignment } from "../../services/workloadService";
 import { isStrategicTeamMember } from "../../services/permissionsService";
 import { mapProcesses } from "../../services/processCatalog";
-import { getMinutas, getMinutaDetalle, createMinuta, addPunto, removePunto, firmarMinuta } from "../../services/minutasService";
+import { getMinutas, getMinutaDetalle, createMinuta, addPunto, removePunto, firmarMinuta, downloadMinutaPdfPreview } from "../../services/minutasService";
 
 const tabs = ["ENFOQUE", "INSUMOS", "SESIÓN", "MINUTAS"];
 
@@ -423,6 +423,25 @@ export default function StrategicFollowupModule({ currentUser }) {
   const [selectedMinutaId, setSelectedMinutaId] = useState(null);
   const [selectedMinuta, setSelectedMinuta] = useState(null);
   const [nuevoPuntoDraft, setNuevoPuntoDraft] = useState({ descripcion: "", acuerdo: "", responsablePersonaId: "", fechaCompromiso: "" });
+  const [minutaFiltroPersona, setMinutaFiltroPersona] = useState("");
+  const [minutaFiltroProceso, setMinutaFiltroProceso] = useState("");
+  const [minutaFiltroDesde, setMinutaFiltroDesde] = useState("");
+  const [minutaFiltroHasta, setMinutaFiltroHasta] = useState("");
+
+  const minutaProcesosDisponibles = useMemo(
+    () => [...new Set((minutas || []).map((m) => m.proceso_relacionado).filter(Boolean))],
+    [minutas]
+  );
+
+  const minutasFiltradas = useMemo(() => {
+    return (minutas || []).filter((m) => {
+      if (minutaFiltroPersona && !m.participantes.some((p) => String(p.persona_id) === String(minutaFiltroPersona))) return false;
+      if (minutaFiltroProceso && m.proceso_relacionado !== minutaFiltroProceso) return false;
+      if (minutaFiltroDesde && m.fecha < minutaFiltroDesde) return false;
+      if (minutaFiltroHasta && m.fecha > minutaFiltroHasta) return false;
+      return true;
+    });
+  }, [minutas, minutaFiltroPersona, minutaFiltroProceso, minutaFiltroDesde, minutaFiltroHasta]);
 
   async function loadMinutasList() {
     setMinutasLoading(true);
@@ -1508,29 +1527,62 @@ export default function StrategicFollowupModule({ currentUser }) {
               </div>
             )}
 
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Filtrar:</span>
+              <select value={minutaFiltroPersona} onChange={(e) => setMinutaFiltroPersona(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-600 outline-none">
+                <option value="">Persona</option>
+                {minutaParticipanteOptions.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+              <select value={minutaFiltroProceso} onChange={(e) => setMinutaFiltroProceso(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-600 outline-none">
+                <option value="">Proceso</option>
+                {minutaProcesosDisponibles.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <label className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
+                Desde
+                <input type="date" value={minutaFiltroDesde} onChange={(e) => setMinutaFiltroDesde(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-1.5 text-[10px] font-bold text-slate-600 outline-none" />
+              </label>
+              <label className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
+                Hasta
+                <input type="date" value={minutaFiltroHasta} onChange={(e) => setMinutaFiltroHasta(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-1.5 text-[10px] font-bold text-slate-600 outline-none" />
+              </label>
+              {(minutaFiltroPersona || minutaFiltroProceso || minutaFiltroDesde || minutaFiltroHasta) && (
+                <button type="button" onClick={() => { setMinutaFiltroPersona(""); setMinutaFiltroProceso(""); setMinutaFiltroDesde(""); setMinutaFiltroHasta(""); }} className="text-[10px] font-black text-red-500 hover:text-red-600">
+                  Quitar filtros
+                </button>
+              )}
+              <span className="ml-auto text-[10px] font-bold text-slate-400">{minutasFiltradas.length} de {(minutas || []).length}</span>
+            </div>
+
             {minutasLoading ? (
               <div className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center text-[12px] font-bold text-slate-400">Cargando minutas…</div>
-            ) : (minutas || []).length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-10 text-center text-[12px] font-bold text-slate-300">Aún no hay minutas registradas.</div>
+            ) : minutasFiltradas.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-10 text-center text-[12px] font-bold text-slate-300">
+                {(minutas || []).length === 0 ? "Aún no hay minutas registradas." : "Ninguna minuta coincide con los filtros."}
+              </div>
             ) : (
-              <div className="grid gap-3 md:grid-cols-2">
-                {(minutas || []).map((m) => {
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                {minutasFiltradas.map((m, index) => {
                   const info = minutaTipoInfo(m.tipo);
                   const firmados = m.participantes.filter((p) => p.firmado).length;
                   return (
-                    <button key={m.id} type="button" onClick={() => openMinuta(m.id)} className="rounded-3xl border-2 border-slate-100 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-black ${info.accent}`}>{info.icon} {m.tipo}</span>
-                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-wide ${m.cerrada ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{m.cerrada ? "Cerrada" : "Abierta"}</span>
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => openMinuta(m.id)}
+                      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50 ${index !== 0 ? "border-t border-slate-100" : ""}`}
+                    >
+                      <span className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-black ${info.accent}`}>{info.icon} {m.tipo}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] font-black text-slate-900">{m.titulo}</p>
+                        <p className="truncate text-[10px] font-bold text-slate-400">{formatDate(m.fecha)}{m.proceso_relacionado ? ` · ${m.proceso_relacionado}` : ""}</p>
                       </div>
-                      <p className="mt-2 text-[14px] font-black leading-tight text-slate-900">{m.titulo}</p>
-                      <p className="mt-1 text-[11px] font-bold text-slate-400">{formatDate(m.fecha)}{m.proceso_relacionado ? ` · ${m.proceso_relacionado}` : ""}</p>
-                      <div className="mt-2 flex items-center gap-1.5">
+                      <div className="hidden w-28 shrink-0 items-center gap-1.5 sm:flex">
                         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
                           <div className={`h-full rounded-full ${info.solid}`} style={{ width: `${m.participantes.length ? (firmados / m.participantes.length) * 100 : 0}%` }} />
                         </div>
-                        <span className="shrink-0 text-[10px] font-black text-slate-500">{firmados}/{m.participantes.length} firmas</span>
+                        <span className="shrink-0 text-[9px] font-black text-slate-500">{firmados}/{m.participantes.length}</span>
                       </div>
+                      <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-wide ${m.cerrada ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{m.cerrada ? "Cerrada" : "Abierta"}</span>
                     </button>
                   );
                 })}
@@ -1552,10 +1604,14 @@ export default function StrategicFollowupModule({ currentUser }) {
                   </div>
 
                   <div className="space-y-4 p-5">
-                    {selectedMinuta.pdf_url && (
+                    {selectedMinuta.pdf_url ? (
                       <a href={selectedMinuta.pdf_url} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-[12px] font-black text-emerald-700 hover:bg-emerald-100">
                         📄 Descargar PDF firmado
                       </a>
+                    ) : (
+                      <button type="button" onClick={() => downloadMinutaPdfPreview(selectedMinuta)} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[12px] font-black text-slate-600 hover:bg-slate-100">
+                        📄 Descargar borrador PDF ({selectedMinuta.participantes.filter((p) => p.firmado).length}/{selectedMinuta.participantes.length} firmas)
+                      </button>
                     )}
 
                     <div>

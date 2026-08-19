@@ -208,6 +208,17 @@ function buildPdfDoc(minuta) {
   return doc;
 }
 
+// Descarga directa en el navegador de un PDF "en el momento" — no se sube
+// a Storage ni se guarda en el registro. Sirve para consultar/compartir un
+// borrador mientras la minuta sigue abierta (con las firmas que ya haya al
+// momento de descargar); la versión oficial del histórico es la que se
+// genera y sube automáticamente al cerrarse (ver firmarMinuta).
+export function downloadMinutaPdfPreview(minuta) {
+  const doc = buildPdfDoc(minuta);
+  const safeTitle = (minuta.titulo || "minuta").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
+  doc.save(`minuta-${safeTitle}-${minuta.fecha || ""}.pdf`);
+}
+
 // Se sube al bucket público "minutas" (mismo criterio de acceso permisivo
 // ya usado en el resto del proyecto) y se guarda la URL pública en el
 // registro — así queda descargable desde el histórico sin firmar URLs.
