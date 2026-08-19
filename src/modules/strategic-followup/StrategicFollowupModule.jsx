@@ -1012,7 +1012,7 @@ export default function StrategicFollowupModule({ currentUser }) {
     SESIÓN:
       "Documente los acuerdos, decisiones y conclusiones generadas durante la sesión estratégica.",
     MINUTAS:
-      "Minutas de reunión del equipo estratégico hacia los líderes de proceso — acuerdos, seguimiento o revisiones, firmadas por cada participante y guardadas en PDF.",
+      "Minutas con líderes de proceso — acuerdos, seguimiento o revisiones, firmadas y guardadas en PDF.",
   };
 
   const focusSummary = useMemo(() => {
