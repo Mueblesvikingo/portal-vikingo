@@ -1,10 +1,7 @@
-import React, { useMemo, useState } from "react";
-
-const COLORS = {
-  estrategicos: "#991b1b",
-  operativos: "#203f73",
-  apoyo: "#c96d1a",
-};
+import React, { useEffect, useMemo, useState } from "react";
+import { supabase } from "../../services/supabase";
+import { isStrategicTeamMember } from "../../services/permissionsService";
+import { getProcesos, updateProceso, getHistorial } from "../../services/madurezService";
 
 const maturityLevels = {
   1: { label: "Inicial", alt: "Ejecutado", desc: "Solamente se realiza el trabajo", color: "#dc2626" },
@@ -31,78 +28,30 @@ const maturityImprovementIdeas = {
 };
 
 const phases = [
-  {
-    key: "bpmn",
-    label: "BPMN",
-    desc: "Macroproceso y subprocesos modelados en BIZAGI",
-    info: "Representación visual del flujo operativo del proceso bajo metodología BPMN institucional.",
-  },
-  {
-    key: "caracterizacion",
-    label: "Caracterización",
-    desc: "Caracterización del macroproceso y subprocesos documentados y alineados al SIG",
-    info: "Definir formalmente el macroproceso y los subprocesos, estableciendo objetivo, alcance, proveedor, insumos, actividades, responsables, clientes, productos, sistemas y documentos aplicables.",
-  },
-  {
-    key: "documentacion",
-    label: "Documentación",
-    desc: "Documentación institucional controlada",
-    info: "Desarrollo y control de procedimientos, matrices de cumplimiento SIG, formatos, políticas y lineamientos del proceso.",
-  },
-  {
-    key: "validacion",
-    label: "Validación",
-    desc: "Proceso validado y liberado · Nivel 3 alcanzado",
-    info: "Revisión técnica, validación y liberación formal del proceso conforme al Sistema Integrado de Gestión.",
-  },
-  {
-    key: "implementacion",
-    label: "Implementación",
-    desc: "Proceso implementado y adoptado operativamente",
-    info: "Capacitación, aplicación y adopción operativa del proceso por todo el equipo involucrado.",
-  },
-  {
-    key: "digitalizacion",
-    label: "Digitalización",
-    desc: "Proceso digitalizado y actividades automatizadas",
-    info: "Integración tecnológica, automatización y trazabilidad digital del proceso.",
-  },
-  {
-    key: "evaluacion",
-    label: "Evaluación",
-    desc: "Proceso medido y controlado · Nivel 4 alcanzado",
-    info: "Monitoreo mediante indicadores, auditorías y acciones de mejora continua.",
-  },
-  {
-    key: "optimizacion",
-    label: "Optimización",
-    desc: "Mejora continua institucionalizada · Nivel 5 alcanzado",
-    info: "Etapa enfocada en la mejora continua del proceso mediante acciones preventivas, correctivas e iniciativas de mejora organizacional.",
-  },
+  { key: "bpmn", label: "BPMN", desc: "Macroproceso y subprocesos modelados en BIZAGI", info: "Representación visual del flujo operativo del proceso bajo metodología BPMN institucional." },
+  { key: "caracterizacion", label: "Caracterización", desc: "Caracterización del macroproceso y subprocesos documentados y alineados al SIG", info: "Definir formalmente el macroproceso y los subprocesos, estableciendo objetivo, alcance, proveedor, insumos, actividades, responsables, clientes, productos, sistemas y documentos aplicables." },
+  { key: "documentacion", label: "Documentación", desc: "Documentación institucional controlada", info: "Desarrollo y control de procedimientos, matrices de cumplimiento SIG, formatos, políticas y lineamientos del proceso." },
+  { key: "validacion", label: "Validación", desc: "Proceso validado y liberado · Nivel 3 alcanzado", info: "Revisión técnica, validación y liberación formal del proceso conforme al Sistema Integrado de Gestión." },
+  { key: "implementacion", label: "Implementación", desc: "Proceso implementado y adoptado operativamente", info: "Capacitación, aplicación y adopción operativa del proceso por todo el equipo involucrado." },
+  { key: "digitalizacion", label: "Digitalización", desc: "Proceso digitalizado y actividades automatizadas", info: "Integración tecnológica, automatización y trazabilidad digital del proceso." },
+  { key: "evaluacion", label: "Evaluación", desc: "Proceso medido y controlado · Nivel 4 alcanzado", info: "Monitoreo mediante indicadores, auditorías y acciones de mejora continua." },
+  { key: "optimizacion", label: "Optimización", desc: "Mejora continua institucionalizada · Nivel 5 alcanzado", info: "Etapa enfocada en la mejora continua del proceso mediante acciones preventivas, correctivas e iniciativas de mejora organizacional." },
 ];
 
-const processes = [
-  { name: "Planeación estratégica del SIG", type: "estrategicos", leader: "Cristian", level: 3, objectives: ["OBJ-11", "OBJ-14"], phases: { bpmn: true, caracterizacion: true, documentacion: true, validacion: true, implementacion: true, digitalizacion: true } },
-  { name: "Planeación financiera", type: "estrategicos", leader: "Samantha", level: 2, objectives: ["OBJ-01", "OBJ-03", "OBJ-04"], phases: { bpmn: true, caracterizacion: true, documentacion: true } },
-  { name: "Gestión de competencias", type: "estrategicos", leader: "Jacqueline", level: 2, objectives: ["OBJ-12", "OBJ-13"], phases: { bpmn: true, caracterizacion: true } },
-  { name: "Evaluación desempeño del SIG", type: "estrategicos", leader: "Cristian", level: 3, objectives: ["GLOBAL"], phases: { bpmn: true, caracterizacion: true, documentacion: true, validacion: true, implementacion: true, digitalizacion: true } },
-  { name: "Ingeniería/Desarrollo de productos", type: "operativos", leader: "Beatriz", level: 0, objectives: ["OBJ-10"], phases: {} },
-  { name: "Ventas", type: "operativos", leader: "Alejandro", level: 2, objectives: ["OBJ-02", "OBJ-05", "OBJ-06", "OBJ-09", "OBJ-10"], phases: { bpmn: true, caracterizacion: true, documentacion: true, implementacion: "warning" } },
-  { name: "Control de almacenes", type: "operativos", leader: "Hugo", level: 2, objectives: ["OBJ-06"], phases: { implementacion: "warning" } },
-  { name: "Gestión de inventarios", type: "operativos", leader: "Hugo", level: 2, objectives: ["OBJ-01", "OBJ-02", "OBJ-03", "OBJ-06"], phases: { implementacion: "warning" } },
-  { name: "Planeación y control de la producción", type: "operativos", leader: "Hugo", level: 2, objectives: ["OBJ-01", "OBJ-02", "OBJ-05", "OBJ-06", "OBJ-09", "OBJ-10"], phases: { bpmn: true, caracterizacion: true, implementacion: "warning" } },
-  { name: "Compras", type: "operativos", leader: "Hugo", level: 2, objectives: ["OBJ-01", "OBJ-09", "OBJ-11"], phases: { bpmn: true, implementacion: "warning" } },
-  { name: "Gestión de calidad", type: "operativos", leader: "Beatriz", level: 0, objectives: ["OBJ-05", "OBJ-06", "OBJ-07"], phases: {} },
-  { name: "Distribución", type: "operativos", leader: "Hugo", level: 2, objectives: ["OBJ-01", "OBJ-02", "OBJ-06", "OBJ-07"], phases: { implementacion: "warning" } },
-  { name: "Contabilidad y cumplimiento fiscal", type: "apoyo", leader: "Samantha", level: 2, objectives: ["OBJ-03", "OBJ-04"], phases: { implementacion: "warning" } },
-  { name: "Recursos humanos", type: "apoyo", leader: "Aurora", level: 2, objectives: ["OBJ-12", "OBJ-13"], phases: { bpmn: true, caracterizacion: true, implementacion: "warning" } },
-  { name: "Gestión de SST", type: "apoyo", leader: "Aurora", level: 2, objectives: ["OBJ-12"], phases: { bpmn: true, caracterizacion: true, documentacion: true, implementacion: "warning" } },
-  { name: "Transformación digital", type: "apoyo", leader: "Elizabeth", level: 2, objectives: ["OBJ-14"], phases: { implementacion: "warning" } },
-];
+const PHASE_CYCLE = ["no", "si", "advertencia"];
+
+// El catálogo de personas guarda "APELLIDOS NOMBRE"; la tabla de madurez
+// siempre mostró solo el nombre de pila (ej. "Cristian") — mismo criterio
+// de último-token que findPersonaByFirstName en el resto del portal.
+function firstName(fullName) {
+  if (!fullName) return "";
+  const parts = String(fullName).trim().split(/\s+/);
+  const last = parts[parts.length - 1] || "";
+  return last.charAt(0) + last.slice(1).toLowerCase();
+}
 
 function Progress({ value }) {
   const safeValue = Number.isFinite(Number(value)) ? Math.max(0, Math.min(100, Number(value))) : 0;
-
   return (
     <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
       <div className="h-full rounded-full bg-[#203f73]" style={{ width: `${safeValue}%` }} />
@@ -110,7 +59,9 @@ function Progress({ value }) {
   );
 }
 
-function CheckCell({ checked, warning = false }) {
+function CheckCell({ value, canEdit, onCycle }) {
+  const checked = value === "si";
+  const warning = value === "advertencia";
   const classes = warning
     ? "bg-amber-100 border-amber-300 text-green-700"
     : checked
@@ -119,16 +70,17 @@ function CheckCell({ checked, warning = false }) {
 
   return (
     <div className="relative group inline-flex mx-auto">
-      <div className={`relative w-5 h-5 rounded-md flex items-center justify-center border text-[11px] font-black ${classes}`}>
+      <button
+        type="button"
+        disabled={!canEdit}
+        onClick={onCycle}
+        className={`relative w-5 h-5 rounded-md flex items-center justify-center border text-[11px] font-black ${classes} ${canEdit ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
+      >
         {(checked || warning) ? "✓" : ""}
-
         {warning && (
-          <span className="absolute -bottom-[2px] -right-[1px] text-[7px] leading-none text-amber-700 font-black">
-            ⚠
-          </span>
+          <span className="absolute -bottom-[2px] -right-[1px] text-[7px] leading-none text-amber-700 font-black">⚠</span>
         )}
-      </div>
-
+      </button>
       {warning && (
         <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50 whitespace-nowrap rounded-lg bg-[#111827] px-2 py-1 text-[10px] font-bold text-white shadow-xl">
           Implementado sin validación
@@ -138,8 +90,8 @@ function CheckCell({ checked, warning = false }) {
   );
 }
 
-function getPhaseCompletion(process) {
-  return Math.round((phases.filter((phase) => process.phases[phase.key]).length / phases.length) * 100);
+function getPhaseCompletion(proceso) {
+  return Math.round((phases.filter((phase) => proceso[phase.key] === "si").length / phases.length) * 100);
 }
 
 function getMaturityLevel(level) {
@@ -160,49 +112,98 @@ function getCellClass(phaseKey) {
   return "";
 }
 
-function runPreviewTests() {
-  console.assert(processes.length === 16, "Debe haber 16 procesos en la matriz de madurez");
-  console.assert(Object.keys(maturityLevels).length === 5, "Debe existir escala de madurez del 1 al 5");
-  console.assert(phases.length === 8, "Debe haber 8 fases de implementación");
-  console.assert(getPhaseCompletion(processes[0]) === 75, "Planeación estratégica del SIG debe tener avance aproximado de 75%");
-  console.assert(processes.some((process) => process.name === "Transformación digital"), "Debe existir el proceso Transformación digital");
-  console.assert(maturityImprovementIdeas[1].includes("Planear"), "Nivel 1 debe orientar la mejora hacia la planeación del proceso");
-  console.assert(maturityInterpretations[5].includes("mejora continua"), "Nivel 5 debe explicar mejora continua");
-  console.assert(getMaturityLevel(0).label === "No iniciado", "Nivel 0 debe mostrarse como No iniciado");
-  console.assert(getHeaderClass("optimizacion").includes("yellow"), "Optimización debe mostrarse en color dorado/amarillo");
-  console.assert(getCellClass("evaluacion").includes("green"), "Evaluación debe mostrarse en verde");
-  console.assert(processes.filter((process) => process.leader === "Hugo").length > 0, "Debe existir filtro por líder");
+function formatDateTime(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleString("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-runPreviewTests();
-
-export default function App() {
+export default function MaturityModule({ currentUser }) {
+  const [procesos, setProcesos] = useState([]);
+  const [personas, setPersonas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
   const [selectedMaturity, setSelectedMaturity] = useState(null);
   const [showIntroVideo, setShowIntroVideo] = useState(false);
   const [playIntroVideo, setPlayIntroVideo] = useState(false);
   const [selectedPhase, setSelectedPhase] = useState(null);
   const [showLeaderInfo, setShowLeaderInfo] = useState(false);
   const [leaderFilter, setLeaderFilter] = useState("Todos");
+  const [historialOpen, setHistorialOpen] = useState(false);
+  const [historialLoading, setHistorialLoading] = useState(false);
+  const [historialEntries, setHistorialEntries] = useState([]);
 
-  const averageLevel = useMemo(() => {
-    const total = processes.reduce((acc, process) => acc + process.level, 0);
-    return (total / processes.length).toFixed(1);
+  const canEdit = isStrategicTeamMember(currentUser);
+
+  async function loadAll() {
+    setLoading(true);
+    const [procesosData, { data: personasData }] = await Promise.all([
+      getProcesos(),
+      supabase.from("personas").select("id,nombre").eq("tipo", "persona").eq("activo", true).order("nombre"),
+    ]);
+    setProcesos(procesosData);
+    setPersonas(personasData || []);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const leaders = ["Todos", ...new Set(processes.map((process) => process.leader).filter(Boolean))];
+  const averageLevel = useMemo(() => {
+    if (!procesos.length) return "0.0";
+    const total = procesos.reduce((acc, proceso) => acc + Number(proceso.nivel || 0), 0);
+    return (total / procesos.length).toFixed(1);
+  }, [procesos]);
 
-  const filteredProcesses = leaderFilter === "Todos"
-    ? processes
-    : processes.filter((process) => process.leader === leaderFilter);
+  const leaders = useMemo(
+    () => ["Todos", ...new Set(procesos.map((p) => firstName(p.lider?.nombre)).filter(Boolean))],
+    [procesos]
+  );
+
+  const filteredProcesos = leaderFilter === "Todos"
+    ? procesos
+    : procesos.filter((proceso) => firstName(proceso.lider?.nombre) === leaderFilter);
+
+  async function handleUpdateProceso(proceso, changes) {
+    if (!canEdit) return;
+    const result = await updateProceso(proceso.id, changes, { actor: currentUser, previous: proceso });
+    if (!result.ok) { console.error(result.error); setMessage("No fue posible guardar el cambio."); return; }
+    setProcesos((current) => current.map((item) => (item.id === proceso.id ? result.data : item)));
+  }
+
+  function handleCyclePhase(proceso, phaseKey) {
+    const current = proceso[phaseKey] || "no";
+    const next = PHASE_CYCLE[(PHASE_CYCLE.indexOf(current) + 1) % PHASE_CYCLE.length];
+    handleUpdateProceso(proceso, { [phaseKey]: next });
+  }
+
+  async function openHistorial() {
+    setHistorialOpen(true);
+    setHistorialLoading(true);
+    const entries = await getHistorial();
+    const nombrePorId = new Map(procesos.map((p) => [p.id, p.nombre]));
+    setHistorialEntries(entries.map((h) => ({ ...h, procesoNombre: nombrePorId.get(h.proceso_id) || "Proceso" })));
+    setHistorialLoading(false);
+  }
 
   return (
    <div className="space-y-5">
       <main className="w-full">
-      
-
         <section className="p-3 space-y-5">
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
             <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 relative text-center">
+              <div className="absolute left-3 top-2 flex items-center gap-1.5">
+                <button
+                  onClick={openHistorial}
+                  className="px-3 py-1 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-500 text-[10px] font-black transition-all"
+                >
+                  ⏱ Historial
+                </button>
+                {!canEdit && (
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[9px] font-bold text-amber-700">Modo solo lectura</span>
+                )}
+              </div>
               <button
                 onClick={() => setShowIntroVideo(true)}
                 className="absolute right-3 top-2 px-3 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[10px] font-black transition-all"
@@ -237,27 +238,27 @@ export default function App() {
             </div>
           </div>
 
+          {message && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{message}</div>}
+
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="h-11 bg-[#111827] text-white px-4 flex items-center justify-between text-sm font-black">
               <div>HEATMAP DE IMPLEMENTACIÓN POR PROCESO</div>
-
               <div className="flex items-center gap-2">
-                
-
                 <select
                   value={leaderFilter}
                   onChange={(e) => setLeaderFilter(e.target.value)}
                   className="bg-white text-gray-700 text-[10px] rounded-md px-1.5 py-0.5 border border-gray-300 font-semibold h-6"
                 >
                   {leaders.map((leader) => (
-                    <option key={leader} value={leader}>
-                      {leader}
-                    </option>
+                    <option key={leader} value={leader}>{leader}</option>
                   ))}
                 </select>
               </div>
             </div>
 
+            {loading ? (
+              <div className="py-10 text-center text-[11px] font-bold text-gray-300">Cargando…</div>
+            ) : (
             <div className="overflow-auto">
               <table className="w-full text-[11px]">
                 <thead>
@@ -278,7 +279,6 @@ export default function App() {
                         className={`text-center px-[2px] py-1 font-black w-[78px] cursor-pointer hover:bg-gray-100 transition-all ${getHeaderClass(phase.key)}`}
                       >
                         <div className="text-[9px] leading-tight uppercase">{phase.label}</div>
-
                         {(phase.key === "validacion" || phase.key === "evaluacion" || phase.key === "optimizacion") && (
                           <div className="text-[11px] mt-[2px] leading-none font-black">
                             {phase.key === "optimizacion" ? "🏆" : "🚩"}
@@ -290,21 +290,45 @@ export default function App() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-200">
-                  {filteredProcesses.map((process, index) => (
-                    <tr key={process.name} className="border-b border-gray-100 hover:bg-red-50 transition-all">
+                  {filteredProcesos.map((proceso, index) => (
+                    <tr key={proceso.id} className="border-b border-gray-100 hover:bg-red-50 transition-all">
                       <td className="px-3 py-2 font-bold text-gray-500">{index + 1}</td>
                       <td className="px-2 py-2 min-w-[180px] max-w-[180px]">
-                        <div className="font-black leading-tight text-[10px]">{process.name}</div>
+                        <div className="font-black leading-tight text-[10px]">{proceso.nombre}</div>
                       </td>
                       <td className="text-center px-2 py-2">
-                        <span className="font-black" style={{ color: maturityLevels[process.level]?.color || "#6b7280" }}>
-                          {process.level}
-                        </span>
+                        {canEdit ? (
+                          <select
+                            value={proceso.nivel}
+                            onChange={(e) => handleUpdateProceso(proceso, { nivel: Number(e.target.value) })}
+                            className="w-12 rounded-md border border-gray-200 bg-white px-1 py-0.5 text-[10px] font-black outline-none"
+                            style={{ color: maturityLevels[proceso.nivel]?.color || "#6b7280" }}
+                          >
+                            {[0, 1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        ) : (
+                          <span className="font-black" style={{ color: maturityLevels[proceso.nivel]?.color || "#6b7280" }}>
+                            {proceso.nivel}
+                          </span>
+                        )}
                       </td>
-                      <td className="px-2 py-2 font-semibold text-gray-600 min-w-[90px]">{process.leader || "Pendiente"}</td>
+                      <td className="px-2 py-2 font-semibold text-gray-600 min-w-[90px]">
+                        {canEdit ? (
+                          <select
+                            value={proceso.lider_persona_id || ""}
+                            onChange={(e) => handleUpdateProceso(proceso, { lider_persona_id: e.target.value ? Number(e.target.value) : null })}
+                            className="w-full rounded-md border border-gray-200 bg-white px-1 py-0.5 text-[9.5px] font-bold outline-none"
+                          >
+                            <option value="">Sin asignar</option>
+                            {personas.map((p) => <option key={p.id} value={p.id}>{firstName(p.nombre)}</option>)}
+                          </select>
+                        ) : (
+                          firstName(proceso.lider?.nombre) || "Pendiente"
+                        )}
+                      </td>
                       {phases.map((phase) => (
                         <td key={phase.key} className={`px-1 py-1 ${getCellClass(phase.key)}`}>
-                          <CheckCell checked={process.phases[phase.key] === true} warning={process.phases[phase.key] === "warning"} />
+                          <CheckCell value={proceso[phase.key]} canEdit={canEdit} onCycle={() => handleCyclePhase(proceso, phase.key)} />
                         </td>
                       ))}
                     </tr>
@@ -312,6 +336,7 @@ export default function App() {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
 
           {showIntroVideo && (
@@ -320,10 +345,7 @@ export default function App() {
                 <div className="h-12 bg-red-600 text-white px-5 flex items-center justify-between text-sm font-black">
                   <div>Video explicativo — Madurez organizacional</div>
                   <button
-                    onClick={() => {
-  setShowIntroVideo(false);
-  setPlayIntroVideo(false);
-}}
+                    onClick={() => { setShowIntroVideo(false); setPlayIntroVideo(false); }}
                     className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 transition-all"
                   >
                     ×
@@ -331,32 +353,30 @@ export default function App() {
                 </div>
 
                 <div className="aspect-video bg-black relative flex items-center justify-center overflow-hidden">
-                  
-               {playIntroVideo ? (
-  <iframe
-    src="https://www.youtube.com/embed/UWCAbLdF-RU?autoplay=1&rel=0"
-    title="Video madurez organizacional"
-    className="w-full h-full"
-    allow="autoplay; encrypted-media"
-    allowFullScreen
-  />
-) : (
-  <>
-  <img
-  src="https://img.youtube.com/vi/UWCAbLdF-RU/maxresdefault.jpg"
-  alt="Video"
-  className="w-full h-full object-cover opacity-80"
-/>
-
-<div className="absolute inset-0 bg-black/30" />
-    <button
-      onClick={() => setPlayIntroVideo(true)}
-      className="absolute px-6 py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black"
-    >
-      ▶ Reproducir video
-    </button>
-  </>
-)}
+                  {playIntroVideo ? (
+                    <iframe
+                      src="https://www.youtube.com/embed/UWCAbLdF-RU?autoplay=1&rel=0"
+                      title="Video madurez organizacional"
+                      className="w-full h-full"
+                      allow="autoplay; encrypted-media"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <>
+                      <img
+                        src="https://img.youtube.com/vi/UWCAbLdF-RU/maxresdefault.jpg"
+                        alt="Video"
+                        className="w-full h-full object-cover opacity-80"
+                      />
+                      <div className="absolute inset-0 bg-black/30" />
+                      <button
+                        onClick={() => setPlayIntroVideo(true)}
+                        className="absolute px-6 py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black"
+                      >
+                        ▶ Reproducir video
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -367,28 +387,17 @@ export default function App() {
               <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200">
                 <div className="h-12 bg-[#203f73] text-white px-5 flex items-center justify-between text-sm font-black">
                   <div>Líder de proceso</div>
-                  <button
-                    onClick={() => setShowLeaderInfo(false)}
-                    className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-all"
-                  >
-                    ×
-                  </button>
+                  <button onClick={() => setShowLeaderInfo(false)} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-all">×</button>
                 </div>
-
                 <div className="p-5 space-y-4">
                   <div>
-                    <div className="text-xs uppercase font-black text-gray-400 mb-2">
-                      ¿Qué significa?
-                    </div>
+                    <div className="text-xs uppercase font-black text-gray-400 mb-2">¿Qué significa?</div>
                     <div className="text-sm text-gray-700 leading-relaxed font-semibold">
                       Es la persona responsable de asegurar que el proceso se defina, ejecute, controle y mejore conforme al Sistema Integrado de Gestión.
                     </div>
                   </div>
-
                   <div className="rounded-2xl bg-gray-50 border border-gray-200 p-4">
-                    <div className="text-xs uppercase font-black text-gray-400 mb-2">
-                      Rol principal
-                    </div>
+                    <div className="text-xs uppercase font-black text-gray-400 mb-2">Rol principal</div>
                     <div className="text-sm text-gray-600 leading-relaxed font-medium">
                       Coordina la implementación del proceso, promueve su adopción por el equipo, da seguimiento a indicadores y gestiona ajustes, riesgos y oportunidades de mejora.
                     </div>
@@ -403,20 +412,13 @@ export default function App() {
               <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200">
                 <div className="h-12 bg-[#111827] text-white px-5 flex items-center justify-between text-sm font-black">
                   <div>{selectedPhase.label}</div>
-                  <button
-                    onClick={() => setSelectedPhase(null)}
-                    className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-all"
-                  >
-                    ×
-                  </button>
+                  <button onClick={() => setSelectedPhase(null)} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-all">×</button>
                 </div>
-
                 <div className="p-5 space-y-4">
                   <div>
                     <div className="text-xs uppercase font-black text-gray-400 mb-2">Objetivo de la fase</div>
                     <div className="text-sm text-gray-700 leading-relaxed font-semibold">{selectedPhase.info}</div>
                   </div>
-
                   <div className="rounded-2xl bg-gray-50 border border-gray-200 p-4">
                     <div className="text-xs uppercase font-black text-gray-400 mb-2">Resultado esperado</div>
                     <div className="text-sm text-gray-600 leading-relaxed font-medium">{selectedPhase.desc}</div>
@@ -435,34 +437,56 @@ export default function App() {
                       <div className="text-xs uppercase font-black opacity-80">Nivel de madurez</div>
                       <div className="text-3xl font-black mt-1">{selectedMaturity.level}</div>
                     </div>
-                    <button
-                      onClick={() => setSelectedMaturity(null)}
-                      className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 transition-all"
-                    >
-                      ×
-                    </button>
+                    <button onClick={() => setSelectedMaturity(null)} className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 transition-all">×</button>
                   </div>
                 </div>
-
                 <div className="p-5 space-y-4">
                   <div>
                     <div className="text-lg font-black text-gray-900">{selectedMaturity.label}</div>
                     <div className="text-sm text-gray-500 font-semibold mt-1">{selectedMaturity.desc}</div>
                   </div>
-
                   <div className="rounded-2xl bg-gray-50 border border-gray-200 p-4">
                     <div className="text-xs uppercase font-black text-gray-400 mb-2">Interpretación</div>
-                    <div className="text-sm text-gray-600 leading-relaxed font-medium">
-                      {maturityInterpretations[selectedMaturity.level]}
-                    </div>
+                    <div className="text-sm text-gray-600 leading-relaxed font-medium">{maturityInterpretations[selectedMaturity.level]}</div>
                   </div>
-
                   <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-4">
                     <div className="text-xs uppercase font-black text-gray-400 mb-2">Idea clave para avanzar</div>
-                    <div className="text-sm text-gray-700 leading-relaxed font-semibold">
-                      {maturityImprovementIdeas[selectedMaturity.level]}
-                    </div>
+                    <div className="text-sm text-gray-700 leading-relaxed font-semibold">{maturityImprovementIdeas[selectedMaturity.level]}</div>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {historialOpen && (
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[65] flex items-center justify-center p-4">
+              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200">
+                <div className="h-12 bg-[#111827] text-white px-5 flex items-center justify-between text-sm font-black">
+                  <div>Historial de cambios — Madurez organizacional</div>
+                  <button onClick={() => setHistorialOpen(false)} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-all">×</button>
+                </div>
+                <div className="max-h-[60vh] overflow-auto p-4">
+                  {historialLoading ? (
+                    <div className="py-8 text-center text-[11px] font-bold text-gray-300">Cargando…</div>
+                  ) : historialEntries.length === 0 ? (
+                    <div className="py-8 text-center text-[11px] font-bold text-gray-300">Aún no hay cambios registrados.</div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {historialEntries.map((entry) => (
+                        <div key={entry.id} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-[10px]">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black text-gray-700">{entry.procesoNombre} · {entry.campo}</span>
+                            <span className="text-[9px] font-bold text-gray-400">{formatDateTime(entry.created_at)}</span>
+                          </div>
+                          <p className="text-[9px] font-bold text-gray-500">{entry.nombre || "Usuario desconocido"}</p>
+                          <p className="mt-0.5 text-[10px]">
+                            <span className="text-gray-400 line-through">{entry.valor_anterior || "—"}</span>{" → "}
+                            <span className="font-bold text-gray-700">{entry.valor_nuevo || "—"}</span>
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

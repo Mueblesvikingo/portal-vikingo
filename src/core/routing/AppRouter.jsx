@@ -119,7 +119,7 @@ export default function AppRouter({
 
           <Route
             path="/maturity"
-            element={<MaturityModule />}
+            element={<MaturityModule currentUser={currentUser} />}
           />
 
           <Route
