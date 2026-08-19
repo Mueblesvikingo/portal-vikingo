@@ -6,6 +6,11 @@ import { getEstados, upsertEstado, getHistorial, getChecks, createCheck } from "
 import { getPlanMacroprocesos, updatePendienteEstado, getPlanHistorial } from "../../services/sigPlanService";
 import { upsertResultado } from "../../services/performanceService";
 import { mapProcesses, processLeaders } from "../../services/processCatalog";
+import {
+  getCambios, createCambio, updateCambio, sendToDecisionCenter,
+  createAccionCorrectivaPorCambio, getHistorial as getCambiosHistorial,
+} from "../../services/cambiosService";
+import { canEvaluateCambio, canApproveCambio, canImplementCambio } from "../../services/permissionsService";
 
 // Nombre/macroproceso del KPI en Desempeño Organizacional que refleja el
 // avance global del SIG — ya existía, no se crea uno nuevo. Se busca por
@@ -587,6 +592,242 @@ function PlanAsignacionForm({ personasCatalogo, defaultPersonaId, defaultRol, de
   );
 }
 
+// Control de Cambios (SIG-P-03): estados en el orden del BPMN del
+// procedimiento — se usa para saber qué tramos del formulario ya se
+// alcanzaron y mostrarlos como historial aunque ya no sean editables.
+const CAMBIO_ESTADO_BADGE = {
+  Solicitado: "border-slate-200 bg-slate-100 text-slate-600",
+  "En evaluación": "border-sky-200 bg-sky-50 text-sky-700",
+  "En aprobación": "border-amber-200 bg-amber-50 text-amber-700",
+  Rechazado: "border-red-200 bg-red-50 text-red-700",
+  Aprobado: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  "En implementación": "border-indigo-200 bg-indigo-50 text-indigo-700",
+  "En seguimiento": "border-violet-200 bg-violet-50 text-violet-700",
+  "Cerrado - Eficaz": "border-emerald-300 bg-emerald-100 text-emerald-800",
+  "Cerrado - No eficaz": "border-red-300 bg-red-100 text-red-800",
+};
+const CAMBIO_ESTADO_ORDER = ["Solicitado", "En evaluación", "En aprobación", "Aprobado", "En implementación", "En seguimiento"];
+function getCambioStageIndex(estado) {
+  if (estado === "Rechazado") return -1;
+  if (estado === "Cerrado - Eficaz" || estado === "Cerrado - No eficaz") return 5;
+  return CAMBIO_ESTADO_ORDER.indexOf(estado);
+}
+
+function CambioDetailModal({
+  cambio, people,
+  canEvaluate, canApprove, canImplement,
+  onClose, onSaveSolicitud, onIniciarEvaluacion, onGuardarEvaluacion, onEnviarAprobacion,
+  onAprobar, onRechazar, onGuardarImplementacion, onPasarASeguimiento, onCerrarSeguimiento, onGenerarAccionCorrectiva,
+}) {
+  const [solicitudDraft, setSolicitudDraft] = useState({
+    descripcion: cambio.descripcion || "", proceso_impactado: cambio.proceso_impactado || "",
+    beneficios_esperados: cambio.beneficios_esperados || "", riesgos: cambio.riesgos || "",
+  });
+  const [evalDraft, setEvalDraft] = useState({
+    impacto_objetivos_sig: cambio.impacto_objetivos_sig || "", impacto_legal: cambio.impacto_legal || "",
+    impacto_riesgos_oportunidades: cambio.impacto_riesgos_oportunidades || "", recursos_necesarios: cambio.recursos_necesarios || "",
+    informe_analisis: cambio.informe_analisis || "",
+  });
+  const [aprobacionDraft, setAprobacionDraft] = useState({
+    responsable_implementacion_persona_id: cambio.responsable_implementacion_persona_id || "",
+    plazo_implementacion: cambio.plazo_implementacion || "", recursos_asignados: cambio.recursos_asignados || "",
+    rechazo_justificacion: "",
+  });
+  const [implDraft, setImplDraft] = useState({
+    plan_ejecucion: cambio.plan_ejecucion || "", documentacion_actualizada: cambio.documentacion_actualizada || false,
+    comunicado: cambio.comunicado || false, documentacion_obsoleta_retirada: cambio.documentacion_obsoleta_retirada || false,
+    registrado_en_matriz: cambio.registrado_en_matriz || false,
+  });
+  const [seguimientoDraft, setSeguimientoDraft] = useState({
+    indicadores_verificacion: cambio.indicadores_verificacion || "", decision_seguimiento: cambio.decision_seguimiento || "",
+  });
+
+  const estadoIndex = getCambioStageIndex(cambio.estado);
+  const isRechazado = cambio.estado === "Rechazado";
+  const isCerrado = cambio.estado?.startsWith("Cerrado");
+  const inputCls = "mt-1 w-full resize-none rounded-xl border px-3 py-2 text-[11px] font-medium normal-case tracking-normal text-slate-700 outline-none";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between bg-[#111827] px-5 py-3 text-white">
+          <div>
+            <p className="text-[9px] font-bold text-slate-300">Control de cambios SIG-P-03</p>
+            <p className="text-sm font-black">{cambio.titulo}</p>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
+        </div>
+
+        <div className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${CAMBIO_ESTADO_BADGE[cambio.estado] || ""}`}>{cambio.estado}</span>
+            {cambio.proceso_impactado && <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-slate-500">{cambio.proceso_impactado}</span>}
+            <span className="text-[10px] font-bold text-slate-400">Solicitó: {cambio.solicitante?.nombre || cambio.solicitante_nombre || "—"}</span>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">1. Solicitud</p>
+            <div className="mt-2 grid gap-2 md:grid-cols-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-2">
+                Motivo / descripción
+                <textarea rows={2} disabled={cambio.estado !== "Solicitado"} value={solicitudDraft.descripcion} onChange={(e) => setSolicitudDraft((d) => ({ ...d, descripcion: e.target.value }))} className={`${inputCls} border-slate-200 bg-slate-50 disabled:bg-white`} />
+              </label>
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Proceso impactado
+                <select disabled={cambio.estado !== "Solicitado"} value={solicitudDraft.proceso_impactado} onChange={(e) => setSolicitudDraft((d) => ({ ...d, proceso_impactado: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:bg-white">
+                  <option value="">Sin definir</option>
+                  {mapProcesses.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </label>
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Beneficios esperados
+                <textarea rows={2} disabled={cambio.estado !== "Solicitado"} value={solicitudDraft.beneficios_esperados} onChange={(e) => setSolicitudDraft((d) => ({ ...d, beneficios_esperados: e.target.value }))} className={`${inputCls} border-slate-200 bg-slate-50 disabled:bg-white`} />
+              </label>
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-2">
+                Riesgos del cambio
+                <textarea rows={2} disabled={cambio.estado !== "Solicitado"} value={solicitudDraft.riesgos} onChange={(e) => setSolicitudDraft((d) => ({ ...d, riesgos: e.target.value }))} className={`${inputCls} border-slate-200 bg-slate-50 disabled:bg-white`} />
+              </label>
+            </div>
+            {cambio.estado === "Solicitado" && (
+              <div className="mt-2 flex justify-end gap-2">
+                <button type="button" onClick={() => onSaveSolicitud(solicitudDraft)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 hover:bg-slate-50">Guardar</button>
+                {canEvaluate && <button type="button" onClick={onIniciarEvaluacion} className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white">Iniciar evaluación →</button>}
+              </div>
+            )}
+          </div>
+
+          {estadoIndex >= 1 && (
+            <div className="rounded-2xl border border-sky-200 bg-sky-50/40 p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-sky-700">2. Evaluación · Coordinador SIG</p>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                {[
+                  ["impacto_objetivos_sig", "Impacto en objetivos del SIG"],
+                  ["impacto_legal", "Cumplimiento legal / normativo"],
+                  ["impacto_riesgos_oportunidades", "Riesgos y oportunidades"],
+                  ["recursos_necesarios", "Recursos necesarios"],
+                ].map(([field, label]) => (
+                  <label key={field} className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {label}
+                    <textarea rows={2} disabled={!canEvaluate || cambio.estado !== "En evaluación"} value={evalDraft[field]} onChange={(e) => setEvalDraft((d) => ({ ...d, [field]: e.target.value }))} className={`${inputCls} border-sky-100 bg-white disabled:bg-sky-50/60`} />
+                  </label>
+                ))}
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-2">
+                  Informe del análisis
+                  <textarea rows={2} disabled={!canEvaluate || cambio.estado !== "En evaluación"} value={evalDraft.informe_analisis} onChange={(e) => setEvalDraft((d) => ({ ...d, informe_analisis: e.target.value }))} className={`${inputCls} border-sky-100 bg-white disabled:bg-sky-50/60`} />
+                </label>
+              </div>
+              {canEvaluate && cambio.estado === "En evaluación" && (
+                <div className="mt-2 flex justify-end gap-2">
+                  <button type="button" onClick={() => onGuardarEvaluacion(evalDraft)} className="rounded-lg border border-sky-200 bg-white px-3 py-1.5 text-[10px] font-black text-sky-700 hover:bg-sky-50">Guardar evaluación</button>
+                  <button type="button" onClick={() => onEnviarAprobacion(evalDraft)} className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white">Enviar a Dirección →</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {(estadoIndex >= 2 || isRechazado) && (
+            <div className={`rounded-2xl border p-3 ${isRechazado ? "border-red-200 bg-red-50/40" : "border-amber-200 bg-amber-50/40"}`}>
+              <p className={`text-[10px] font-black uppercase tracking-widest ${isRechazado ? "text-red-700" : "text-amber-700"}`}>3. Aprobación · Director General</p>
+              {cambio.decision_id && <p className="mt-1 text-[10px] font-bold text-slate-400">Visible en la Bandeja de Centro de Decisiones.</p>}
+              {isRechazado ? (
+                <p className="mt-2 text-[11px] font-medium text-slate-700">Justificación del rechazo: {cambio.rechazo_justificacion || "—"}</p>
+              ) : cambio.estado === "En aprobación" && canApprove ? (
+                <div className="mt-2 space-y-2">
+                  <div className="grid gap-2 md:grid-cols-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Responsable de implementación
+                      <select value={aprobacionDraft.responsable_implementacion_persona_id} onChange={(e) => setAprobacionDraft((d) => ({ ...d, responsable_implementacion_persona_id: e.target.value }))} className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-2 py-1.5 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                        <option value="">Sin asignar</option>
+                        {people.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Plazo
+                      <input type="date" value={aprobacionDraft.plazo_implementacion} onChange={(e) => setAprobacionDraft((d) => ({ ...d, plazo_implementacion: e.target.value }))} className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-2 py-1.5 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+                    </label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Recursos asignados
+                      <input type="text" value={aprobacionDraft.recursos_asignados} onChange={(e) => setAprobacionDraft((d) => ({ ...d, recursos_asignados: e.target.value }))} className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-2 py-1.5 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+                    </label>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <input type="text" placeholder="Justificación si se rechaza..." value={aprobacionDraft.rechazo_justificacion} onChange={(e) => setAprobacionDraft((d) => ({ ...d, rechazo_justificacion: e.target.value }))} className="h-9 flex-1 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold text-slate-700 outline-none" />
+                    <button type="button" onClick={() => onRechazar(aprobacionDraft.rechazo_justificacion)} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[10px] font-black text-red-600 hover:bg-red-50">Rechazar</button>
+                    <button type="button" onClick={() => onAprobar(aprobacionDraft)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-black text-white hover:bg-emerald-700">Aprobar</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] font-bold text-slate-600">
+                  <span>Responsable: {cambio.responsable_implementacion?.nombre || "—"}</span>
+                  <span>Plazo: {cambio.plazo_implementacion || "—"}</span>
+                  <span>Recursos: {cambio.recursos_asignados || "—"}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {estadoIndex >= 3 && (
+            <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-indigo-700">4. Implementación · Líder de proceso</p>
+              <label className="mt-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Plan de ejecución
+                <textarea rows={2} disabled={!canImplement || !["Aprobado", "En implementación"].includes(cambio.estado)} value={implDraft.plan_ejecucion} onChange={(e) => setImplDraft((d) => ({ ...d, plan_ejecucion: e.target.value }))} className={`${inputCls} border-indigo-100 bg-white disabled:bg-indigo-50/60`} />
+              </label>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                {[
+                  ["documentacion_actualizada", "Documentación actualizada"],
+                  ["comunicado", "Cambio comunicado a partes interesadas"],
+                  ["documentacion_obsoleta_retirada", "Documentación obsoleta retirada"],
+                  ["registrado_en_matriz", "Registrado en Matriz de Control de Cambios"],
+                ].map(([field, label]) => (
+                  <label key={field} className="flex items-center gap-2 text-[10px] font-bold text-slate-600">
+                    <input type="checkbox" disabled={!canImplement || !["Aprobado", "En implementación"].includes(cambio.estado)} checked={implDraft[field]} onChange={(e) => setImplDraft((d) => ({ ...d, [field]: e.target.checked }))} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {canImplement && ["Aprobado", "En implementación"].includes(cambio.estado) && (
+                <div className="mt-2 flex justify-end gap-2">
+                  <button type="button" onClick={() => onGuardarImplementacion(implDraft)} className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-[10px] font-black text-indigo-700 hover:bg-indigo-50">Guardar</button>
+                  <button type="button" onClick={() => onPasarASeguimiento(implDraft)} className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white">Pasar a seguimiento →</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {estadoIndex >= 4 && (
+            <div className="rounded-2xl border border-violet-200 bg-violet-50/40 p-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-violet-700">5. Seguimiento y cierre</p>
+              <label className="mt-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Indicadores / evidencia de verificación
+                <textarea rows={2} disabled={!canImplement || isCerrado} value={seguimientoDraft.indicadores_verificacion} onChange={(e) => setSeguimientoDraft((d) => ({ ...d, indicadores_verificacion: e.target.value }))} className={`${inputCls} border-violet-100 bg-white disabled:bg-violet-50/60`} />
+              </label>
+              {!isCerrado && canImplement && cambio.estado === "En seguimiento" && (
+                <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                  <select value={seguimientoDraft.decision_seguimiento} onChange={(e) => setSeguimientoDraft((d) => ({ ...d, decision_seguimiento: e.target.value }))} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-600 outline-none">
+                    <option value="">Si no es eficaz…</option>
+                    <option value="Ajustar el cambio">Ajustar el cambio</option>
+                    <option value="Revertir al estado anterior">Revertir al estado anterior</option>
+                    <option value="Diseñar nuevo plan">Diseñar nuevo plan</option>
+                  </select>
+                  <button type="button" onClick={() => onCerrarSeguimiento({ ...seguimientoDraft, eficaz: false })} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[10px] font-black text-red-600 hover:bg-red-50">No fue eficaz</button>
+                  <button type="button" onClick={() => onCerrarSeguimiento({ ...seguimientoDraft, eficaz: true })} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-black text-white hover:bg-emerald-700">Fue eficaz ✓</button>
+                </div>
+              )}
+              {cambio.estado === "Cerrado - No eficaz" && !cambio.accion_correctiva_id && canImplement && (
+                <div className="mt-2 flex justify-end">
+                  <button type="button" onClick={onGenerarAccionCorrectiva} className="rounded-lg bg-red-600 px-3 py-1.5 text-[10px] font-black text-white hover:bg-red-700">Generar acción correctiva →</button>
+                </div>
+              )}
+              {cambio.accion_correctiva_id && <p className="mt-2 text-[10px] font-bold text-slate-400">Acción correctiva generada en Centro de Gestión de Acciones.</p>}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DiagnosticoSIGModule({ currentUser }) {
   const [selectedCell, setSelectedCell] = useState(null);
   const [selectedProcess, setSelectedProcess] = useState("Todos");
@@ -611,6 +852,16 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [planHistorialOpen, setPlanHistorialOpen] = useState(false);
   const [planHistorialLoading, setPlanHistorialLoading] = useState(false);
   const [planHistorialEntries, setPlanHistorialEntries] = useState([]);
+
+  const [cambios, setCambios] = useState(null);
+  const [cambiosLoading, setCambiosLoading] = useState(false);
+  const [cambiosMessage, setCambiosMessage] = useState("");
+  const [cambioCreating, setCambioCreating] = useState(false);
+  const [cambioNewDraft, setCambioNewDraft] = useState({ titulo: "", descripcion: "", procesoImpactado: "", beneficiosEsperados: "", riesgos: "" });
+  const [selectedCambio, setSelectedCambio] = useState(null);
+  const [cambiosHistorialOpen, setCambiosHistorialOpen] = useState(false);
+  const [cambiosHistorialLoading, setCambiosHistorialLoading] = useState(false);
+  const [cambiosHistorialEntries, setCambiosHistorialEntries] = useState([]);
 
   const canEdit = isStrategicTeamMember(currentUser);
   // Espejo de lo último realmente guardado en Supabase (no lo que se va
@@ -705,6 +956,123 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     if (view === "plan" && planMacroprocesos === null) loadPlan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
+
+  async function loadCambios() {
+    setCambiosLoading(true);
+    const data = await getCambios();
+    setCambios(data);
+    setCambiosLoading(false);
+  }
+
+  useEffect(() => {
+    if (view === "cambios" && cambios === null) loadCambios();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  async function handleCreateCambio() {
+    if (!cambioNewDraft.titulo.trim()) { setCambiosMessage("El motivo del cambio no puede quedar vacío."); return; }
+    const result = await createCambio(
+      { titulo: cambioNewDraft.titulo.trim(), descripcion: cambioNewDraft.descripcion, procesoImpactado: cambioNewDraft.procesoImpactado, beneficiosEsperados: cambioNewDraft.beneficiosEsperados, riesgos: cambioNewDraft.riesgos },
+      currentUser
+    );
+    if (!result.ok) { console.error(result.error); setCambiosMessage("No fue posible crear la solicitud."); return; }
+    setCambios((current) => [result.data, ...(current || [])]);
+    setCambioCreating(false);
+    setCambioNewDraft({ titulo: "", descripcion: "", procesoImpactado: "", beneficiosEsperados: "", riesgos: "" });
+  }
+
+  function applyCambioUpdate(result) {
+    if (!result.ok) { console.error(result.error); setCambiosMessage("No fue posible guardar el cambio."); return null; }
+    setCambios((current) => (current || []).map((item) => (item.id === result.data.id ? result.data : item)));
+    setSelectedCambio(result.data);
+    return result.data;
+  }
+
+  async function handleSaveSolicitud(cambio, draft) {
+    applyCambioUpdate(await updateCambio(cambio.id, {
+      descripcion: draft.descripcion, proceso_impactado: draft.proceso_impactado || null,
+      beneficios_esperados: draft.beneficios_esperados, riesgos: draft.riesgos,
+    }, { actor: currentUser, previous: cambio }));
+  }
+
+  async function handleIniciarEvaluacion(cambio) {
+    applyCambioUpdate(await updateCambio(cambio.id, { estado: "En evaluación" }, { actor: currentUser, previous: cambio }));
+  }
+
+  async function handleGuardarEvaluacion(cambio, draft) {
+    applyCambioUpdate(await updateCambio(cambio.id, { ...draft }, { actor: currentUser, previous: cambio }));
+  }
+
+  async function handleEnviarAprobacion(cambio, draft) {
+    const evaluado = await updateCambio(cambio.id, {
+      ...draft, evaluado_por_persona_id: currentUser?.persona_id || null, evaluado_por_nombre: currentUser?.nombre || currentUser?.usuario || null, evaluado_at: new Date().toISOString(),
+    }, { actor: currentUser, previous: cambio });
+    if (!evaluado.ok) { console.error(evaluado.error); setCambiosMessage("No fue posible guardar la evaluación."); return; }
+    const result = await sendToDecisionCenter(evaluado.data, currentUser);
+    applyCambioUpdate(result);
+    if (result.ok) setCambiosMessage("Solicitud enviada a la Bandeja de Centro de Decisiones.");
+  }
+
+  async function handleAprobarCambio(cambio, draft) {
+    applyCambioUpdate(await updateCambio(cambio.id, {
+      estado: "Aprobado",
+      responsable_implementacion_persona_id: draft.responsable_implementacion_persona_id ? Number(draft.responsable_implementacion_persona_id) : null,
+      plazo_implementacion: draft.plazo_implementacion || null,
+      recursos_asignados: draft.recursos_asignados || null,
+      aprobado_por_nombre: currentUser?.nombre || currentUser?.usuario || null,
+      aprobado_at: new Date().toISOString(),
+    }, { actor: currentUser, previous: cambio }));
+  }
+
+  async function handleRechazarCambio(cambio, justificacion) {
+    applyCambioUpdate(await updateCambio(cambio.id, {
+      estado: "Rechazado", rechazo_justificacion: justificacion || null,
+      aprobado_por_nombre: currentUser?.nombre || currentUser?.usuario || null, aprobado_at: new Date().toISOString(),
+    }, { actor: currentUser, previous: cambio }));
+  }
+
+  async function handleGuardarImplementacion(cambio, draft) {
+    applyCambioUpdate(await updateCambio(cambio.id, {
+      ...draft, estado: cambio.estado === "Aprobado" ? "En implementación" : cambio.estado,
+    }, { actor: currentUser, previous: cambio }));
+  }
+
+  async function handlePasarASeguimiento(cambio, draft) {
+    applyCambioUpdate(await updateCambio(cambio.id, { ...draft, estado: "En seguimiento" }, { actor: currentUser, previous: cambio }));
+  }
+
+  async function handleCerrarSeguimiento(cambio, draft) {
+    applyCambioUpdate(await updateCambio(cambio.id, {
+      indicadores_verificacion: draft.indicadores_verificacion,
+      decision_seguimiento: draft.decision_seguimiento || null,
+      eficaz: draft.eficaz,
+      estado: draft.eficaz ? "Cerrado - Eficaz" : "Cerrado - No eficaz",
+    }, { actor: currentUser, previous: cambio }));
+  }
+
+  async function handleGenerarAccionCorrectiva(cambio) {
+    const result = await createAccionCorrectivaPorCambio(cambio, currentUser);
+    if (!result.ok) { console.error(result.error); setCambiosMessage("No fue posible generar la acción correctiva."); return; }
+    setCambios((current) => (current || []).map((item) => (item.id === cambio.id ? { ...item, accion_correctiva_id: result.data.id } : item)));
+    setSelectedCambio((current) => (current ? { ...current, accion_correctiva_id: result.data.id } : current));
+    alert(`Acción correctiva ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
+  }
+
+  async function openCambiosHistorial() {
+    setCambiosHistorialOpen(true);
+    setCambiosHistorialLoading(true);
+    const entries = await getCambiosHistorial();
+    const tituloPorId = new Map((cambios || []).map((c) => [c.id, c.titulo]));
+    setCambiosHistorialEntries(entries.map((h) => ({
+      key: `cambio-hist-${h.id}`,
+      type: "score",
+      title: `${h.campo}: ${h.valor_anterior ?? "—"} → ${h.valor_nuevo ?? "—"}`,
+      detail: tituloPorId.get(h.cambio_id) || "Cambio",
+      date: h.created_at,
+      nombre: h.nombre,
+    })));
+    setCambiosHistorialLoading(false);
+  }
 
   const planStats = useMemo(() => {
     const all = (planMacroprocesos || []).flatMap((mp) => mp.pendientes);
@@ -943,9 +1311,16 @@ export default function DiagnosticoSIGModule({ currentUser }) {
           <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-0.5 text-[10px] font-black uppercase tracking-wide">
             <button type="button" onClick={() => setView("diagnostico")} className={`rounded-md px-3 py-1.5 transition ${view === "diagnostico" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Diagnóstico HLS</button>
             <button type="button" onClick={() => setView("plan")} className={`rounded-md px-3 py-1.5 transition ${view === "plan" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Plan de implementación</button>
+            <button type="button" onClick={() => setView("cambios")} className={`rounded-md px-3 py-1.5 transition ${view === "cambios" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Control de cambios</button>
           </div>
           {view === "plan" && (
             <button type="button" onClick={openPlanHistorial} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 transition hover:border-slate-300 hover:text-slate-700">⏱ Historial del plan</button>
+          )}
+          {view === "cambios" && (
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={openCambiosHistorial} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 transition hover:border-slate-300 hover:text-slate-700">⏱ Historial</button>
+              <button type="button" onClick={() => setCambioCreating((current) => !current)} className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 px-3 py-1.5 text-[10px] font-black text-sky-700 transition hover:border-sky-400 hover:bg-sky-100">+ Nueva solicitud</button>
+            </div>
           )}
         </section>
 
@@ -1263,6 +1638,96 @@ export default function DiagnosticoSIGModule({ currentUser }) {
               loading={planHistorialLoading}
               entries={planHistorialEntries}
               selectedProcess="Plan de implementación"
+            />
+          </section>
+        )}
+
+        {view === "cambios" && (
+          <section className="space-y-3">
+            {cambiosMessage && <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-[10px] font-bold text-sky-700">{cambiosMessage}</div>}
+
+            {cambioCreating && (
+              <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-3">
+                <div className="grid gap-2 md:grid-cols-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-2">
+                    Motivo del cambio
+                    <input type="text" value={cambioNewDraft.titulo} onChange={(e) => setCambioNewDraft((d) => ({ ...d, titulo: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Proceso impactado
+                    <select value={cambioNewDraft.procesoImpactado} onChange={(e) => setCambioNewDraft((d) => ({ ...d, procesoImpactado: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                      <option value="">Sin definir</option>
+                      {mapProcesses.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Beneficios esperados
+                    <input type="text" value={cambioNewDraft.beneficiosEsperados} onChange={(e) => setCambioNewDraft((d) => ({ ...d, beneficiosEsperados: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-2">
+                    Descripción / riesgos
+                    <textarea rows={2} value={cambioNewDraft.descripcion} onChange={(e) => setCambioNewDraft((d) => ({ ...d, descripcion: e.target.value }))} className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium normal-case tracking-normal text-slate-700 outline-none" />
+                  </label>
+                </div>
+                <div className="mt-2 flex justify-end gap-2">
+                  <button type="button" onClick={handleCreateCambio} className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white">Crear solicitud</button>
+                  <button type="button" onClick={() => setCambioCreating(false)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button>
+                </div>
+              </div>
+            )}
+
+            {cambiosLoading ? (
+              <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-400 shadow-sm">Cargando control de cambios…</div>
+            ) : (cambios || []).length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-300 shadow-sm">Aún no hay solicitudes de cambio registradas.</div>
+            ) : (
+              <div className="space-y-2">
+                {(cambios || []).map((cambio) => (
+                  <button
+                    key={cambio.id}
+                    type="button"
+                    onClick={() => setSelectedCambio(cambio)}
+                    className="flex w-full flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-sky-200 hover:bg-sky-50/40"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-black text-slate-800">{cambio.titulo}</p>
+                      <p className="mt-0.5 text-[10px] font-bold text-slate-400">
+                        {cambio.proceso_impactado || "Proceso sin definir"} · Solicitó {cambio.solicitante?.nombre || cambio.solicitante_nombre || "—"}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black ${CAMBIO_ESTADO_BADGE[cambio.estado] || ""}`}>{cambio.estado}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {selectedCambio && (
+              <CambioDetailModal
+                cambio={selectedCambio}
+                people={people}
+                canEvaluate={canEvaluateCambio(currentUser)}
+                canApprove={canApproveCambio(currentUser)}
+                canImplement={canImplementCambio(currentUser, selectedCambio)}
+                onClose={() => setSelectedCambio(null)}
+                onSaveSolicitud={(draft) => handleSaveSolicitud(selectedCambio, draft)}
+                onIniciarEvaluacion={() => handleIniciarEvaluacion(selectedCambio)}
+                onGuardarEvaluacion={(draft) => handleGuardarEvaluacion(selectedCambio, draft)}
+                onEnviarAprobacion={(draft) => handleEnviarAprobacion(selectedCambio, draft)}
+                onAprobar={(draft) => handleAprobarCambio(selectedCambio, draft)}
+                onRechazar={(justificacion) => handleRechazarCambio(selectedCambio, justificacion)}
+                onGuardarImplementacion={(draft) => handleGuardarImplementacion(selectedCambio, draft)}
+                onPasarASeguimiento={(draft) => handlePasarASeguimiento(selectedCambio, draft)}
+                onCerrarSeguimiento={(draft) => handleCerrarSeguimiento(selectedCambio, draft)}
+                onGenerarAccionCorrectiva={() => handleGenerarAccionCorrectiva(selectedCambio)}
+              />
+            )}
+
+            <HistorialTimelineModal
+              open={cambiosHistorialOpen}
+              onClose={() => setCambiosHistorialOpen(false)}
+              loading={cambiosHistorialLoading}
+              entries={cambiosHistorialEntries}
+              selectedProcess="Control de cambios"
             />
           </section>
         )}

@@ -410,6 +410,27 @@ export function canEditPmoProyecto(user, proyecto) {
   return String(user?.persona_id) === String(proyecto.lider_proyecto_persona_id);
 }
 
+// Control de Cambios SIG (SIG-P-03): cualquier usuario logueado puede
+// levantar una solicitud (colaborador o líder de proceso, según el
+// procedimiento) — no se gatea la creación. Evaluar el impacto y resolver
+// la aprobación sí quedan reservados al equipo estratégico (que incluye a
+// Coordinador SIG y Director General). Implementar/dar seguimiento lo hace
+// el equipo estratégico o la persona asignada como responsable de
+// implementación de ese cambio puntual.
+export function canEvaluateCambio(user) {
+  return isStrategicTeamMember(user);
+}
+
+export function canApproveCambio(user) {
+  return isStrategicTeamMember(user);
+}
+
+export function canImplementCambio(user, cambio) {
+  if (isStrategicTeamMember(user)) return true;
+  if (!cambio?.responsable_implementacion_persona_id) return false;
+  return String(user?.persona_id) === String(cambio.responsable_implementacion_persona_id);
+}
+
 export function canEditWorkloadPendingActivities(user) {
   const userOverride = getUserModuleOverride(user, "workload-balance");
   if (userOverride && typeof userOverride.editar === "boolean") return userOverride.editar;
