@@ -6,6 +6,21 @@ import { getProyectos, updateProyecto, createProyecto, closeProyecto, reopenProy
 import { mapProcesses as pmoProcessOptions } from "../services/processCatalog";
 import SemaforoDot from "../shared/components/SemaforoDot";
 
+// Los campos de texto libre del Tablero de Proyectos (etapa, próximo hito,
+// decisión) son celdas angostas — sin esto el texto se desbordaba oculto
+// hacia la izquierda dentro del input de una sola línea. En vez de eso, la
+// fila crece hacia abajo con el contenido, como un textarea que se
+// autoajusta a su propio scrollHeight.
+function autoGrowTextareaRef(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
+}
+function handleAutoGrowInput(event) {
+  event.target.style.height = "auto";
+  event.target.style.height = `${event.target.scrollHeight}px`;
+}
+
 const PMO_SEMAFORO_STYLES = {
   Verde: "border-emerald-200 bg-emerald-50 text-emerald-700",
   Amarillo: "border-amber-200 bg-amber-50 text-amber-700",
@@ -4530,13 +4545,14 @@ function canReviewPlan() {
                                   </select>
                                 </td>
                                 <td className="px-2 py-1.5">
-                                  <input
-                                    type="text"
+                                  <textarea
                                     defaultValue={proyecto.etapa || ""}
                                     disabled={!canEdit}
-                                    title={proyecto.etapa || ""}
+                                    rows={1}
+                                    ref={autoGrowTextareaRef}
+                                    onInput={handleAutoGrowInput}
                                     onBlur={(e) => e.target.value !== (proyecto.etapa || "") && handleUpdatePmoProyecto(proyecto, { etapa: e.target.value })}
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[9px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                    className="w-full resize-none overflow-hidden rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[9px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
                                   />
                                 </td>
                                 <td className="px-2 py-1.5">
@@ -4566,13 +4582,14 @@ function canReviewPlan() {
                                   </select>
                                 </td>
                                 <td className="px-2 py-1.5">
-                                  <input
-                                    type="text"
+                                  <textarea
                                     defaultValue={proyecto.proximo_hito || ""}
                                     disabled={!canEdit}
-                                    title={proyecto.proximo_hito || ""}
+                                    rows={1}
+                                    ref={autoGrowTextareaRef}
+                                    onInput={handleAutoGrowInput}
                                     onBlur={(e) => e.target.value !== (proyecto.proximo_hito || "") && handleUpdatePmoProyecto(proyecto, { proximo_hito: e.target.value })}
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[9px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                    className="w-full resize-none overflow-hidden rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[9px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
                                   />
                                 </td>
                                 <td className="px-2 py-1.5">
@@ -4591,9 +4608,10 @@ function canReviewPlan() {
                                     defaultValue={proyecto.decision_requerida || ""}
                                     disabled={!canEdit}
                                     rows={1}
-                                    title={proyecto.decision_requerida || ""}
+                                    ref={autoGrowTextareaRef}
+                                    onInput={handleAutoGrowInput}
                                     onBlur={(e) => e.target.value !== (proyecto.decision_requerida || "") && handleUpdatePmoProyecto(proyecto, { decision_requerida: e.target.value })}
-                                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[9px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                                    className="w-full resize-none overflow-hidden rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[9px] font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-400"
                                   />
                                 </td>
                                 <td className="px-1 py-1.5 text-center">
