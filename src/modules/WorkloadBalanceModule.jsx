@@ -4521,7 +4521,7 @@ function canReviewPlan() {
                           return (
                             <React.Fragment key={proyecto.id}>
                               <tr className="border-b border-slate-100 align-top hover:bg-slate-50/60">
-                                <td className="truncate px-2 py-1.5 font-black text-slate-800" title={proyecto.nombre}>{proyecto.nombre}</td>
+                                <td className="break-words px-2 py-1.5 font-black text-slate-800">{proyecto.nombre}</td>
                                 <td className="px-2 py-1.5">
                                   <select
                                     value={proyecto.lider_proyecto_persona_id || ""}
