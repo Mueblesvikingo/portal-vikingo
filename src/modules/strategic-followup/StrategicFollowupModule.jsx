@@ -1091,14 +1091,16 @@ export default function StrategicFollowupModule({ currentUser }) {
           {tabDescription[activeTab]}
         </p>
 
-        <button
-          type="button"
-          onClick={addRow}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-600 text-xl font-black text-white shadow-sm transition hover:bg-red-700"
-          title="Agregar fila"
-        >
-          +
-        </button>
+        {activeTab !== "MINUTAS" && (
+          <button
+            type="button"
+            onClick={addRow}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-600 text-xl font-black text-white shadow-sm transition hover:bg-red-700"
+            title="Agregar fila"
+          >
+            +
+          </button>
+        )}
       </div>
 
       {activeTab === "ENFOQUE" && (
