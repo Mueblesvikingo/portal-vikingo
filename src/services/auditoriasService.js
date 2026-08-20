@@ -97,29 +97,28 @@ export async function deleteAuditoria(id) {
   }
 }
 
-// Mismo mecanismo que createAccionCorrectivaPorCambio en cambiosService.js:
-// el hallazgo de auditoría se convierte en una Acción Correctiva real del
-// Centro de Gestión de Acciones, con análisis de causa y verificación de
-// eficacia exigidos por default (es una acción nacida de auditoría, no un
-// ajuste menor).
-export async function createAccionCorrectivaPorAuditoria(auditoria, actor) {
-  const result = await createAccion(
+// Un hallazgo se convierte en una Acción Correctiva real del Centro de
+// Gestión de Acciones, con análisis de causa y verificación de eficacia
+// exigidos por default (nace de auditoría, no es un ajuste menor). Una
+// auditoría puede tener varios hallazgos, así que esto se puede llamar
+// varias veces para la misma auditoría — el vínculo vive en origen_tabla/
+// origen_id de `acciones` (mismo patrón que Control de Cambios), no en una
+// sola columna de sig_auditorias.
+export async function createAccionDesdeHallazgo(auditoria, formValues, actor) {
+  return createAccion(
     {
       tipo: "Acción Correctiva",
       nivel: "Operativa",
       origenModulo: "Programa de Auditorías SIG",
       origenTabla: "sig_auditorias",
       origenId: auditoria.id,
-      titulo: `Hallazgo de auditoría — ${auditoria.macroproceso}`,
-      descripcion: auditoria.notas || "",
-      prioridad: "Alta",
+      titulo: formValues.titulo?.trim() || `Hallazgo de auditoría — ${auditoria.macroproceso}`,
+      descripcion: formValues.descripcion || "",
+      responsablePersonaId: formValues.responsablePersonaId ? Number(formValues.responsablePersonaId) : null,
+      prioridad: formValues.prioridad || "Alta",
       requiereAnalisisCausa: true,
       requiereVerificacionEficacia: true,
     },
     actor
   );
-  if (!result?.ok) return result;
-  const updateResult = await updateAuditoria(auditoria.id, { accion_correctiva_id: result.data.id });
-  if (!updateResult.ok) return updateResult;
-  return result;
 }

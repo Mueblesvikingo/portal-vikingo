@@ -12,8 +12,9 @@ import {
 } from "../../services/cambiosService";
 import { canEvaluateCambio, canApproveCambio, canImplementCambio } from "../../services/permissionsService";
 import {
-  getAuditorias, createAuditoria, updateAuditoria, deleteAuditoria, createAccionCorrectivaPorAuditoria,
+  getAuditorias, createAuditoria, updateAuditoria, deleteAuditoria, createAccionDesdeHallazgo,
 } from "../../services/auditoriasService";
+import { getAcciones } from "../../services/accionesService";
 
 const ESTADOS_AUDITORIA = ["Programada", "En curso", "Cerrada"];
 const AUDITORIA_ESTADO_BADGE = {
@@ -21,6 +22,10 @@ const AUDITORIA_ESTADO_BADGE = {
   "En curso": "border-amber-200 bg-amber-50 text-amber-700",
   Cerrada: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
+
+// El equipo auditor (no el auditor líder) se restringe a este grupo por
+// pedido explícito: Alejandro, Jacqueline, Elizabeth.
+const AUDITORIA_EQUIPO_PERSONA_IDS = [14, 12, 1];
 
 // Nombre/macroproceso del KPI en Desempeño Organizacional que refleja el
 // avance global del SIG — ya existía, no se crea uno nuevo. Se busca por
@@ -1007,6 +1012,9 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [auditoriaNewDraft, setAuditoriaNewDraft] = useState({ macroproceso: "", fechaProgramada: "", auditorLiderPersonaId: "", equipoPersonaIds: [], reporteUrl: "", notas: "" });
   const [auditoriaAsignandoId, setAuditoriaAsignandoId] = useState(null);
   const [auditoriaPersonaOptions, setAuditoriaPersonaOptions] = useState([]);
+  const [accionesPorAuditoria, setAccionesPorAuditoria] = useState({});
+  const [auditoriaAccionFormId, setAuditoriaAccionFormId] = useState(null);
+  const [auditoriaAccionDraft, setAuditoriaAccionDraft] = useState({ titulo: "", descripcion: "", responsablePersonaId: "", prioridad: "Alta" });
 
   const canEdit = isStrategicTeamMember(currentUser);
   // Espejo de lo último realmente guardado en Supabase (no lo que se va
@@ -1135,10 +1143,25 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     setAuditoriaPersonaOptions(data || []);
   }
 
+  // Una auditoría puede tener varios hallazgos y cada uno su propia Acción
+  // Correctiva — se agrupan por origen_id igual que ya hace Control de
+  // Cambios con una sola acción, aquí puede haber varias por auditoría.
+  async function loadAuditoriaAcciones() {
+    const todas = await getAcciones();
+    const agrupadas = {};
+    (todas || []).forEach((accion) => {
+      if (accion.origen_tabla !== "sig_auditorias" || !accion.origen_id) return;
+      if (!agrupadas[accion.origen_id]) agrupadas[accion.origen_id] = [];
+      agrupadas[accion.origen_id].push(accion);
+    });
+    setAccionesPorAuditoria(agrupadas);
+  }
+
   useEffect(() => {
     if (view === "auditorias" && auditorias === null) {
       loadAuditorias();
       loadAuditoriaPersonaOptions();
+      loadAuditoriaAcciones();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
@@ -1181,12 +1204,21 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     setAuditorias((current) => (current || []).filter((a) => a.id !== id));
   }
 
+  function openAuditoriaAccionForm(auditoria) {
+    setAuditoriaAccionFormId((current) => (current === auditoria.id ? null : auditoria.id));
+    setAuditoriaAccionDraft({ titulo: `Hallazgo de auditoría — ${auditoria.macroproceso}`, descripcion: "", responsablePersonaId: "", prioridad: "Alta" });
+  }
+
+  // Una auditoría puede tener 1 o varios hallazgos, así que este formulario
+  // se puede volver a abrir y enviar tantas veces como haga falta sobre la
+  // misma auditoría — no se oculta ni se deshabilita después de la primera.
   async function handleCrearAccionAuditoria(auditoria) {
-    if (!window.confirm(`¿Crear una acción correctiva en el Centro de Gestión de Acciones a partir del hallazgo de "${auditoria.macroproceso}"?`)) return;
-    const result = await createAccionCorrectivaPorAuditoria(auditoria, currentUser);
-    if (!result?.ok) { console.error(result?.error); alert("No fue posible crear la acción."); return; }
-    updateAuditoriaLocal(auditoria.id, { accion_correctiva_id: result.data.id });
-    alert(`Acción ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
+    if (!auditoriaAccionDraft.titulo.trim()) { setAuditoriasMessage("Describe el hallazgo antes de crear la acción."); return; }
+    const result = await createAccionDesdeHallazgo(auditoria, auditoriaAccionDraft, currentUser);
+    if (!result?.ok) { console.error(result?.error); setAuditoriasMessage("No fue posible crear la acción."); return; }
+    setAccionesPorAuditoria((current) => ({ ...current, [auditoria.id]: [...(current[auditoria.id] || []), result.data] }));
+    setAuditoriaAccionFormId(null);
+    setAuditoriasMessage(`Acción ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
   }
 
   // Mismo mecanismo que handleConvertToAssignment en
@@ -2019,7 +2051,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Equipo auditor
                     <MultiSelectDropdown
-                      options={auditoriaPersonaOptions.filter((p) => String(p.id) !== String(auditoriaNewDraft.auditorLiderPersonaId))}
+                      options={auditoriaPersonaOptions.filter((p) => AUDITORIA_EQUIPO_PERSONA_IDS.includes(p.id) && String(p.id) !== String(auditoriaNewDraft.auditorLiderPersonaId))}
                       selectedIds={auditoriaNewDraft.equipoPersonaIds}
                       onToggle={(id) => setAuditoriaNewDraft((d) => ({
                         ...d,
@@ -2060,7 +2092,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                       <th className="px-3 py-2">Equipo</th>
                       <th className="px-3 py-2">Hallazgos</th>
                       <th className="px-3 py-2">Reporte</th>
-                      <th className="px-3 py-2">Acción correctiva</th>
+                      <th className="px-3 py-2">Acciones generadas</th>
                       {canEdit && <th className="px-3 py-2 text-right">Acciones</th>}
                     </tr>
                   </thead>
@@ -2103,13 +2135,15 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                             )}
                           </td>
                           <td className="px-3 py-2.5">
-                            {auditoria.accion_correctiva_id ? (
-                              <span className="font-bold text-emerald-600">Generada</span>
-                            ) : canEdit ? (
-                              <button type="button" onClick={() => handleCrearAccionAuditoria(auditoria)} className="font-black text-slate-400 hover:text-sky-600">▸ Crear acción</button>
-                            ) : (
-                              <span className="text-slate-300">—</span>
-                            )}
+                            <div className="flex flex-col gap-1">
+                              {(accionesPorAuditoria[auditoria.id] || []).map((accion) => (
+                                <span key={accion.id} className="font-bold text-emerald-600">{accion.codigo}</span>
+                              ))}
+                              {canEdit && (
+                                <button type="button" onClick={() => openAuditoriaAccionForm(auditoria)} className="text-left font-black text-slate-400 hover:text-sky-600">▸ Nueva acción</button>
+                              )}
+                              {!canEdit && !(accionesPorAuditoria[auditoria.id] || []).length && <span className="text-slate-300">—</span>}
+                            </div>
                           </td>
                           {canEdit && (
                             <td className="px-3 py-2.5">
@@ -2131,6 +2165,41 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                                 onConfirm={(payload) => handleConvertAuditoriaToAssignment(auditoria, payload)}
                                 onCancel={() => setAuditoriaAsignandoId(null)}
                               />
+                            </td>
+                          </tr>
+                        )}
+                        {auditoriaAccionFormId === auditoria.id && (
+                          <tr>
+                            <td colSpan={9} className="px-3 pb-3">
+                              <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-3">
+                                <div className="grid gap-2 md:grid-cols-2">
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-2">
+                                    Hallazgo / título de la acción
+                                    <input type="text" value={auditoriaAccionDraft.titulo} onChange={(e) => setAuditoriaAccionDraft((d) => ({ ...d, titulo: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+                                  </label>
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                    Responsable
+                                    <select value={auditoriaAccionDraft.responsablePersonaId} onChange={(e) => setAuditoriaAccionDraft((d) => ({ ...d, responsablePersonaId: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                                      <option value="">Sin asignar</option>
+                                      {auditoriaPersonaOptions.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                                    </select>
+                                  </label>
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                    Prioridad
+                                    <select value={auditoriaAccionDraft.prioridad} onChange={(e) => setAuditoriaAccionDraft((d) => ({ ...d, prioridad: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                                      {["Crítica", "Alta", "Media", "Baja"].map((p) => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                  </label>
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-2">
+                                    Descripción del hallazgo
+                                    <textarea rows={2} value={auditoriaAccionDraft.descripcion} onChange={(e) => setAuditoriaAccionDraft((d) => ({ ...d, descripcion: e.target.value }))} className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium normal-case tracking-normal text-slate-700 outline-none" />
+                                  </label>
+                                </div>
+                                <div className="mt-2 flex justify-end gap-2">
+                                  <button type="button" onClick={() => handleCrearAccionAuditoria(auditoria)} className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white">Crear acción</button>
+                                  <button type="button" onClick={() => setAuditoriaAccionFormId(null)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button>
+                                </div>
+                              </div>
                             </td>
                           </tr>
                         )}
