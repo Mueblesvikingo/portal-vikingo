@@ -81,12 +81,24 @@ export function getResultadoValue(resultados, kpiId, anio, mes, tipo, semana = n
   return row ? Number(row.valor) : null;
 }
 
+// Cuenta los lunes del mes: la forma más simple y explicable de saber si un
+// mes tiene 4 o 5 semanas (nunca menos de 4, a veces 5).
+export function getWeeksInMonth(anio, mes) {
+  let count = 0;
+  const daysInMonth = new Date(anio, mes, 0).getDate();
+  for (let day = 1; day <= daysInMonth; day++) {
+    if (new Date(anio, mes - 1, day).getDay() === 1) count += 1;
+  }
+  return count;
+}
+
 // El "real" mensual de un KPI de captura semanal es el promedio de las
-// semanas 1-4 capturadas ese mes (la Meta sigue siendo un solo valor
-// mensual sin importar la periodicidad del KPI).
+// semanas capturadas ese mes (4 o 5 según el mes — ver getWeeksInMonth). La
+// Meta sigue siendo un solo valor mensual sin importar la periodicidad.
 export function getMonthlyRealValue(resultados, kpi, anio, mes) {
   if (kpi.periodicidad === "Semanal") {
-    const semanas = [1, 2, 3, 4]
+    const totalSemanas = getWeeksInMonth(anio, mes);
+    const semanas = Array.from({ length: totalSemanas }, (_, i) => i + 1)
       .map((semana) => getResultadoValue(resultados, kpi.id, anio, mes, "real", semana))
       .filter((v) => v !== null);
     if (semanas.length === 0) return null;

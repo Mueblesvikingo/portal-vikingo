@@ -1,5 +1,8 @@
 import { Fragment, useState } from "react";
-import { MESES, PERSPECTIVAS, PERSPECTIVA_COLOR, formatKpiValue, getResultadoRow, formatDateTime } from "./performanceHelpers";
+import {
+  MESES, PERSPECTIVAS, PERSPECTIVA_COLOR, formatKpiValue, getResultadoRow, formatDateTime,
+  getWeeksInMonth, getMonthlyRealValue, getResultadoValue, getCumplimientoStatus,
+} from "./performanceHelpers";
 
 function EditableValue({ kpi, mesIndex, tipo, semana = null, resultados, anio, canEdit, onSave, compact = false }) {
   const [editing, setEditing] = useState(false);
@@ -52,20 +55,44 @@ function EditableValue({ kpi, mesIndex, tipo, semana = null, resultados, anio, c
   );
 }
 
-// Un KPI de captura semanal muestra 4 mini-celdas (S1-S4) en vez de un solo
-// valor por mes — el "Real" mensual que ve el gauge es el promedio de estas.
+// Un KPI de captura semanal muestra una mini-celda por cada semana del mes
+// (4 o 5 según corresponda — ver getWeeksInMonth) en vez de un solo valor.
+// El "Real" mensual que ve el gauge es el promedio de esas semanas; aquí
+// además se muestra ese % contra la Meta mensual, para no tener que ir a
+// otra pantalla a ver si el mes va bien.
 function WeeklyRealCells({ kpi, mesIndex, resultados, anio, canEdit, onSave }) {
+  const mes = mesIndex + 1;
+  const totalSemanas = getWeeksInMonth(anio, mes);
+  const semanas = Array.from({ length: totalSemanas }, (_, i) => i + 1);
+  const real = getMonthlyRealValue(resultados, kpi, anio, mes);
+  const meta = getResultadoValue(resultados, kpi.id, anio, mes, "meta");
+  const pct = real !== null && meta ? Math.round((real / meta) * 100) : null;
+  const status = getCumplimientoStatus(pct);
+
   return (
-    <div className="grid grid-cols-2 gap-0.5">
-      {[1, 2, 3, 4].map((semana) => (
-        <div key={semana} className="flex items-center gap-0.5">
-          <span className="text-[7px] font-black text-slate-300">S{semana}</span>
-          <EditableValue kpi={kpi} mesIndex={mesIndex} tipo="real" semana={semana} resultados={resultados} anio={anio} canEdit={canEdit} onSave={onSave} compact />
+    <div>
+      <div className="grid grid-cols-2 gap-0.5">
+        {semanas.map((semana) => (
+          <div key={semana} className="flex items-center gap-0.5">
+            <span className="text-[7px] font-black text-slate-300">S{semana}</span>
+            <EditableValue kpi={kpi} mesIndex={mesIndex} tipo="real" semana={semana} resultados={resultados} anio={anio} canEdit={canEdit} onSave={onSave} compact />
+          </div>
+        ))}
+      </div>
+      {pct !== null && (
+        <div title={`Real ${real.toFixed(1)} vs Meta ${meta} · ${status.label}`} className="mt-0.5 rounded px-1 py-0 text-center text-[8px] font-black" style={{ color: status.color, background: `${status.color}18` }}>
+          {pct}%
         </div>
-      ))}
+      )}
     </div>
   );
 }
+
+// La tabla de captura ya no necesita Ene-Jul: por pedido explícito, solo se
+// captura de Agosto en adelante. El resto del módulo (cumplimiento, gráficas,
+// mes anterior) sigue usando MESES completo — esto solo acorta lo que se
+// muestra/edita aquí.
+const VISIBLE_MESES = MESES.map((label, index) => ({ label, index })).slice(7);
 
 export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onSaveResultado }) {
   const isEstrategico = scope === "ESTRATEGICO";
@@ -79,12 +106,12 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <table className="w-full min-w-[1100px] border-collapse text-[10px]">
+      <table className="w-full min-w-[560px] border-collapse text-[10px]">
         <thead>
           <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
             <th className="sticky left-0 bg-[#001225] px-3 py-2 text-white">KPI</th>
             <th className="px-2 py-2">Tipo</th>
-            {MESES.map((m) => <th key={m} className="px-2 py-2 text-right">{m}</th>)}
+            {VISIBLE_MESES.map(({ label }) => <th key={label} className="px-2 py-2 text-right">{label}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -94,7 +121,7 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
             <Fragment key={group.label}>
               {showGroupHeader && (
                 <tr>
-                  <td colSpan={14} className="px-3 py-1.5" style={{ background: `${groupColor}14` }}>
+                  <td colSpan={2 + VISIBLE_MESES.length} className="px-3 py-1.5" style={{ background: `${groupColor}14` }}>
                     <span className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest" style={{ color: groupColor }}>
                       <span className="h-2 w-2 rounded-full" style={{ background: groupColor }} />
                       {group.label}
@@ -112,20 +139,20 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
                       )}
                     </td>
                     <td className="px-2 py-1 text-slate-400">Meta</td>
-                    {MESES.map((_, i) => (
-                      <td key={i} className="px-2 py-1">
-                        <EditableValue kpi={kpi} mesIndex={i} tipo="meta" resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} />
+                    {VISIBLE_MESES.map(({ index }) => (
+                      <td key={index} className="px-2 py-1">
+                        <EditableValue kpi={kpi} mesIndex={index} tipo="meta" resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} />
                       </td>
                     ))}
                   </tr>
                   <tr className="border-b border-slate-100">
                     <td className="px-2 py-1 text-slate-400">Real</td>
-                    {MESES.map((_, i) => (
-                      <td key={i} className="px-2 py-1">
+                    {VISIBLE_MESES.map(({ index }) => (
+                      <td key={index} className="px-2 py-1">
                         {kpi.periodicidad === "Semanal" ? (
-                          <WeeklyRealCells kpi={kpi} mesIndex={i} resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} />
+                          <WeeklyRealCells kpi={kpi} mesIndex={index} resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} />
                         ) : (
-                          <EditableValue kpi={kpi} mesIndex={i} tipo="real" resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} />
+                          <EditableValue kpi={kpi} mesIndex={index} tipo="real" resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} />
                         )}
                       </td>
                     ))}
@@ -136,7 +163,7 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
             );
           })}
           {kpis.length === 0 && (
-            <tr><td colSpan={14} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay KPIs para capturar resultados.</td></tr>
+            <tr><td colSpan={2 + VISIBLE_MESES.length} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay KPIs para capturar resultados.</td></tr>
           )}
         </tbody>
       </table>
