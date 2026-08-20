@@ -16,6 +16,7 @@ import { PERSPECTIVAS, ESTRATEGICO_SCOPE, MESES, getResultadoValue, formatDateTi
 import TableroTab from "./TableroTab";
 import ResultadosTab from "./ResultadosTab";
 import PerspectivaChartsTab from "./PerspectivaChartsTab";
+import ProcesoChartsTab from "./ProcesoChartsTab";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -175,6 +176,7 @@ export default function PerformanceModule({ currentUser }) {
     : [
       { key: "tablero", label: "Tablero" },
       { key: "resultados", label: "Resultados" },
+      { key: "graficas", label: "Gráficas" },
     ];
 
   useEffect(() => {
@@ -316,6 +318,8 @@ export default function PerformanceModule({ currentUser }) {
                 canEditKpi={canEditKpi}
                 onSaveResultado={handleSaveResultado}
               />
+            ) : activeTab === "graficas" ? (
+              <ProcesoChartsTab kpis={activeScopedKpis} resultados={resultados} anio={CURRENT_YEAR} />
             ) : (
               <PerspectivaChartsTab
                 kpis={activeScopedKpis}
