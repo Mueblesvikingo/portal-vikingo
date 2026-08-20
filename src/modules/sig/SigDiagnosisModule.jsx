@@ -838,6 +838,56 @@ function CambioDetailModal({
   );
 }
 
+// Desplegable compacto de selección múltiple para el equipo auditor —
+// mismo componente ya usado para participantes de Minutas en
+// src/modules/strategic-followup/StrategicFollowupModule.jsx.
+function MultiSelectDropdown({ options, selectedIds, onToggle, placeholder = "Selecciona..." }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selected = options.filter((o) => selectedIds.includes(o.id));
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="mt-1 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+      >
+        <span className="truncate">{selected.length ? `${selected.length} seleccionado${selected.length > 1 ? "s" : ""}` : placeholder}</span>
+        <span className="shrink-0 text-slate-400">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {selected.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {selected.map((p) => (
+            <span key={p.id} className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-white">{p.nombre}</span>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+          {options.map((p) => (
+            <label key={p.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] font-bold normal-case tracking-normal text-slate-700 hover:bg-slate-50">
+              <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => onToggle(p.id)} />
+              {p.nombre}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Botón compacto para apartar el tiempo de una auditoría como asignación
 // real en Balance de Carga — mismo patrón visual que AsignacionButton en
 // src/modules/strategic-followup/StrategicFollowupModule.jsx.
@@ -954,7 +1004,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [auditoriasLoading, setAuditoriasLoading] = useState(false);
   const [auditoriasMessage, setAuditoriasMessage] = useState("");
   const [auditoriaCreating, setAuditoriaCreating] = useState(false);
-  const [auditoriaNewDraft, setAuditoriaNewDraft] = useState({ macroproceso: "", fechaProgramada: "", auditorPersonaId: "", reporteUrl: "", notas: "" });
+  const [auditoriaNewDraft, setAuditoriaNewDraft] = useState({ macroproceso: "", fechaProgramada: "", auditorLiderPersonaId: "", equipoPersonaIds: [], reporteUrl: "", notas: "" });
   const [auditoriaAsignandoId, setAuditoriaAsignandoId] = useState(null);
   const [auditoriaPersonaOptions, setAuditoriaPersonaOptions] = useState([]);
 
@@ -1102,8 +1152,11 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     setAuditoriasMessage("");
     const result = await createAuditoria(auditoriaNewDraft, currentUser);
     if (!result.ok) { console.error(result.error); setAuditoriasMessage("No fue posible programar la auditoría."); return; }
-    setAuditorias((current) => [...(current || []), result.data].sort((a, b) => (a.fecha_programada || "").localeCompare(b.fecha_programada || "")));
-    setAuditoriaNewDraft({ macroproceso: "", fechaProgramada: "", auditorPersonaId: "", reporteUrl: "", notas: "" });
+    // Se recarga la lista completa (en vez de insertar result.data localmente)
+    // porque el equipo auditor recién guardado necesita el join con personas
+    // que solo trae getAuditorias().
+    await loadAuditorias();
+    setAuditoriaNewDraft({ macroproceso: "", fechaProgramada: "", auditorLiderPersonaId: "", equipoPersonaIds: [], reporteUrl: "", notas: "" });
     setAuditoriaCreating(false);
   }
 
@@ -1957,11 +2010,23 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                     <input type="date" value={auditoriaNewDraft.fechaProgramada} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, fechaProgramada: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
                   </label>
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Auditor
-                    <select value={auditoriaNewDraft.auditorPersonaId} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, auditorPersonaId: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                    Auditor líder
+                    <select value={auditoriaNewDraft.auditorLiderPersonaId} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, auditorLiderPersonaId: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
                       <option value="">Sin asignar</option>
                       {auditoriaPersonaOptions.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                     </select>
+                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Equipo auditor
+                    <MultiSelectDropdown
+                      options={auditoriaPersonaOptions.filter((p) => String(p.id) !== String(auditoriaNewDraft.auditorLiderPersonaId))}
+                      selectedIds={auditoriaNewDraft.equipoPersonaIds}
+                      onToggle={(id) => setAuditoriaNewDraft((d) => ({
+                        ...d,
+                        equipoPersonaIds: d.equipoPersonaIds.includes(id) ? d.equipoPersonaIds.filter((x) => x !== id) : [...d.equipoPersonaIds, id],
+                      }))}
+                      placeholder="Sin equipo adicional"
+                    />
                   </label>
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Reporte (link a SharePoint)
@@ -1991,7 +2056,8 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                       <th className="px-3 py-2">Macroproceso</th>
                       <th className="px-3 py-2">Fecha</th>
                       <th className="px-3 py-2">Estado</th>
-                      <th className="px-3 py-2">Auditor</th>
+                      <th className="px-3 py-2">Auditor líder</th>
+                      <th className="px-3 py-2">Equipo</th>
                       <th className="px-3 py-2">Hallazgos</th>
                       <th className="px-3 py-2">Reporte</th>
                       <th className="px-3 py-2">Acción correctiva</th>
@@ -2015,7 +2081,10 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                               {auditoria.estado}
                             </button>
                           </td>
-                          <td className="px-3 py-2.5 font-semibold text-slate-500">{auditoria.auditor?.nombre || "Sin asignar"}</td>
+                          <td className="px-3 py-2.5 font-semibold text-slate-500">{auditoria.auditor_lider?.nombre || "Sin asignar"}</td>
+                          <td className="px-3 py-2.5 font-semibold text-slate-500">
+                            {auditoria.equipo?.length ? auditoria.equipo.map((e) => e.persona?.nombre).filter(Boolean).join(", ") : <span className="text-slate-300">—</span>}
+                          </td>
                           <td className="px-3 py-2.5">
                             <input
                               type="number"
@@ -2056,7 +2125,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                         </tr>
                         {auditoriaAsignandoId === auditoria.id && (
                           <tr>
-                            <td colSpan={8} className="px-3 pb-3">
+                            <td colSpan={9} className="px-3 pb-3">
                               <AuditoriaAsignacionForm
                                 personasCatalogo={auditoriaPersonaOptions}
                                 onConfirm={(payload) => handleConvertAuditoriaToAssignment(auditoria, payload)}
