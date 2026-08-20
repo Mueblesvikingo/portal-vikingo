@@ -1,19 +1,42 @@
 import { supabase } from "./supabase";
 
+// Supabase/PostgREST solo devuelve 1000 filas por llamada por default. Estas
+// tablas ya superan esa cantidad (proceso_actividades, workload_plan_semanal_
+// detalle y workload_plan_mensual todas pasan de 1000 registros), así que un
+// solo .select("*") sin paginar recorta la respuesta en silencio — sin error,
+// simplemente faltan filas. Eso es lo que hacía "desaparecer" bloques ya
+// guardados: no se perdían en la base de datos, nunca llegaban a cargarse.
+// buildQuery debe traer el .select()/.order() ya armados; se le agrega
+// .range() aquí. El .order() de cada llamada YA incluye un desempate por
+// "id" para que la paginación sea determinista (sin eso, filas con el mismo
+// valor de orden podrían repetirse o saltarse entre páginas).
+async function fetchAllRows(buildQuery, pageSize = 1000) {
+  let allRows = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    allRows = allRows.concat(data || []);
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return { data: allRows, error: null };
+}
+
 export async function getWorkloadActivities() {
   try {
-    const { data, error } = await supabase
-      .from("proceso_actividades")
-      .select("*")
-      .order("orden_flujo", { ascending: true });
+    const { data, error } = await fetchAllRows(() =>
+      supabase
+        .from("proceso_actividades")
+        .select("*")
+        .order("orden_flujo", { ascending: true })
+        .order("id", { ascending: true })
+    );
 
     if (error) {
       console.error("Error al cargar actividades:", error);
       return [];
     }
-
-    console.log("=== DATOS RECIBIDOS DESDE SUPABASE ===");
-    console.log(data);
 
     return data || [];
   } catch (err) {
@@ -205,11 +228,14 @@ export async function upsertLiderProcesoOverride({ personaId, actividadId, durac
 
 export async function getWorkloadWeeklyPlans() {
   try {
-    const { data, error } = await supabase
-      .from("workload_plan_semanal_detalle")
-      .select("*")
-      .order("orden", { ascending: true, nullsFirst: false })
-      .order("created_at", { ascending: true });
+    const { data, error } = await fetchAllRows(() =>
+      supabase
+        .from("workload_plan_semanal_detalle")
+        .select("*")
+        .order("orden", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+    );
 
     if (error) {
       console.error("Error al cargar plan semanal:", error);
@@ -225,11 +251,14 @@ export async function getWorkloadWeeklyPlans() {
 
 export async function getWorkloadMonthlyPlans() {
   try {
-    const { data, error } = await supabase
-      .from("workload_plan_mensual")
-      .select("*")
-      .order("orden", { ascending: true, nullsFirst: false })
-      .order("created_at", { ascending: true });
+    const { data, error } = await fetchAllRows(() =>
+      supabase
+        .from("workload_plan_mensual")
+        .select("*")
+        .order("orden", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+    );
 
     if (error) {
       console.error("Error al cargar plan mensual:", error);
