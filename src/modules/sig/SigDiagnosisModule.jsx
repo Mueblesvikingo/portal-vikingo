@@ -11,6 +11,16 @@ import {
   createAccionCorrectivaPorCambio, getHistorial as getCambiosHistorial,
 } from "../../services/cambiosService";
 import { canEvaluateCambio, canApproveCambio, canImplementCambio } from "../../services/permissionsService";
+import {
+  getAuditorias, createAuditoria, updateAuditoria, deleteAuditoria, createAccionCorrectivaPorAuditoria,
+} from "../../services/auditoriasService";
+
+const ESTADOS_AUDITORIA = ["Programada", "En curso", "Cerrada"];
+const AUDITORIA_ESTADO_BADGE = {
+  Programada: "border-slate-200 bg-slate-50 text-slate-500",
+  "En curso": "border-amber-200 bg-amber-50 text-amber-700",
+  Cerrada: "border-emerald-200 bg-emerald-50 text-emerald-700",
+};
 
 // Nombre/macroproceso del KPI en Desempeño Organizacional que refleja el
 // avance global del SIG — ya existía, no se crea uno nuevo. Se busca por
@@ -828,6 +838,83 @@ function CambioDetailModal({
   );
 }
 
+// Botón compacto para apartar el tiempo de una auditoría como asignación
+// real en Balance de Carga — mismo patrón visual que AsignacionButton en
+// src/modules/strategic-followup/StrategicFollowupModule.jsx.
+function AuditoriaAsignacionButton({ onClick, active }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Convertir en asignación de Balance de Carga"
+      className={`text-sm font-black leading-none transition ${active ? "text-amber-600" : "text-slate-300 hover:text-amber-600"}`}
+    >
+      ◆
+    </button>
+  );
+}
+
+// Mismo formulario compacto (persona/horas/fecha límite/prioridad) ya usado
+// en Acuerdos S&OP y Seguimiento Estratégico para convertir un renglón en
+// una asignación real, adaptado a una fila de auditoría.
+function AuditoriaAsignacionForm({ personasCatalogo, onConfirm, onCancel }) {
+  const [personaId, setPersonaId] = useState("");
+  const [horas, setHoras] = useState(4);
+  const [fechaLimite, setFechaLimite] = useState("");
+  const [prioridad, setPrioridad] = useState("Alta");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleConfirm() {
+    if (!personaId) { setError("Selecciona a quién se le asigna."); return; }
+    setError("");
+    setSaving(true);
+    const persona = personasCatalogo.find((p) => String(p.id) === String(personaId));
+    const ok = await onConfirm({
+      personaId: Number(personaId),
+      personaNombre: persona?.nombre || "",
+      horas: Number(horas) || 0,
+      fechaLimite: fechaLimite || null,
+      prioridad,
+    });
+    setSaving(false);
+    if (ok) onCancel();
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-amber-100 bg-amber-50/50 p-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Persona
+          <select value={personaId} onChange={(e) => setPersonaId(e.target.value)} className="mt-1 h-9 w-52 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            <option value="">Selecciona...</option>
+            {personasCatalogo.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Horas estimadas
+          <input type="number" min="0.5" step="0.5" value={horas} onChange={(e) => setHoras(e.target.value)} className="mt-1 h-9 w-24 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Fecha límite
+          <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Prioridad
+          <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            {["Crítica", "Alta", "Media", "Baja"].map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={saving} onClick={handleConfirm} className="h-9 rounded-lg bg-[#111827] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+          {saving ? "Enviando..." : "Confirmar asignación"}
+        </button>
+        <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+      </div>
+      {error && <p className="mt-1.5 text-[10px] font-bold text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 export default function DiagnosticoSIGModule({ currentUser }) {
   const [selectedCell, setSelectedCell] = useState(null);
   const [selectedProcess, setSelectedProcess] = useState("Todos");
@@ -862,6 +949,14 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [cambiosHistorialOpen, setCambiosHistorialOpen] = useState(false);
   const [cambiosHistorialLoading, setCambiosHistorialLoading] = useState(false);
   const [cambiosHistorialEntries, setCambiosHistorialEntries] = useState([]);
+
+  const [auditorias, setAuditorias] = useState(null);
+  const [auditoriasLoading, setAuditoriasLoading] = useState(false);
+  const [auditoriasMessage, setAuditoriasMessage] = useState("");
+  const [auditoriaCreating, setAuditoriaCreating] = useState(false);
+  const [auditoriaNewDraft, setAuditoriaNewDraft] = useState({ macroproceso: "", fechaProgramada: "", auditorPersonaId: "", reporteUrl: "", notas: "" });
+  const [auditoriaAsignandoId, setAuditoriaAsignandoId] = useState(null);
+  const [auditoriaPersonaOptions, setAuditoriaPersonaOptions] = useState([]);
 
   const canEdit = isStrategicTeamMember(currentUser);
   // Espejo de lo último realmente guardado en Supabase (no lo que se va
@@ -968,6 +1063,109 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     if (view === "cambios" && cambios === null) loadCambios();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
+
+  async function loadAuditorias() {
+    setAuditoriasLoading(true);
+    const data = await getAuditorias();
+    setAuditorias(data);
+    setAuditoriasLoading(false);
+  }
+
+  // Mismo criterio ya usado para Minutas: solo personas reales y activas
+  // (tipo='persona'), no los renglones placeholder de personas (CLIENTE,
+  // EXTERNO, etc.) que también viven en la tabla `personas`.
+  async function loadAuditoriaPersonaOptions() {
+    const { data, error } = await supabase
+      .from("personas")
+      .select("id,nombre")
+      .eq("tipo", "persona")
+      .eq("activo", true)
+      .order("nombre", { ascending: true });
+    if (error) { console.error("Error al cargar personas para auditorías:", error); return; }
+    setAuditoriaPersonaOptions(data || []);
+  }
+
+  useEffect(() => {
+    if (view === "auditorias" && auditorias === null) {
+      loadAuditorias();
+      loadAuditoriaPersonaOptions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  function updateAuditoriaLocal(id, patch) {
+    setAuditorias((current) => (current || []).map((a) => (a.id === id ? { ...a, ...patch } : a)));
+  }
+
+  async function handleCreateAuditoria() {
+    if (!auditoriaNewDraft.macroproceso) { setAuditoriasMessage("Selecciona el macroproceso a auditar."); return; }
+    setAuditoriasMessage("");
+    const result = await createAuditoria(auditoriaNewDraft, currentUser);
+    if (!result.ok) { console.error(result.error); setAuditoriasMessage("No fue posible programar la auditoría."); return; }
+    setAuditorias((current) => [...(current || []), result.data].sort((a, b) => (a.fecha_programada || "").localeCompare(b.fecha_programada || "")));
+    setAuditoriaNewDraft({ macroproceso: "", fechaProgramada: "", auditorPersonaId: "", reporteUrl: "", notas: "" });
+    setAuditoriaCreating(false);
+  }
+
+  async function handleCycleAuditoriaEstado(auditoria) {
+    const idx = ESTADOS_AUDITORIA.indexOf(auditoria.estado);
+    const next = ESTADOS_AUDITORIA[(idx + 1) % ESTADOS_AUDITORIA.length];
+    updateAuditoriaLocal(auditoria.id, { estado: next });
+    const result = await updateAuditoria(auditoria.id, { estado: next });
+    if (!result.ok) { console.error(result.error); updateAuditoriaLocal(auditoria.id, { estado: auditoria.estado }); }
+  }
+
+  async function handleSaveAuditoriaField(auditoria, field, value) {
+    updateAuditoriaLocal(auditoria.id, { [field]: value });
+    const result = await updateAuditoria(auditoria.id, { [field]: value });
+    if (!result.ok) console.error(result.error);
+  }
+
+  async function handleDeleteAuditoria(id) {
+    if (!window.confirm("¿Eliminar esta auditoría programada?")) return;
+    const result = await deleteAuditoria(id);
+    if (!result.ok) { console.error(result.error); alert("No fue posible eliminar la auditoría."); return; }
+    setAuditorias((current) => (current || []).filter((a) => a.id !== id));
+  }
+
+  async function handleCrearAccionAuditoria(auditoria) {
+    if (!window.confirm(`¿Crear una acción correctiva en el Centro de Gestión de Acciones a partir del hallazgo de "${auditoria.macroproceso}"?`)) return;
+    const result = await createAccionCorrectivaPorAuditoria(auditoria, currentUser);
+    if (!result?.ok) { console.error(result?.error); alert("No fue posible crear la acción."); return; }
+    updateAuditoriaLocal(auditoria.id, { accion_correctiva_id: result.data.id });
+    alert(`Acción ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
+  }
+
+  // Mismo mecanismo que handleConvertToAssignment en
+  // src/modules/strategic-followup/StrategicFollowupModule.jsx — aparta el
+  // tiempo de la auditoría como una asignación real en Balance de Carga.
+  async function handleConvertAuditoriaToAssignment(auditoria, payload) {
+    const result = await createWorkloadAssignment({
+      persona_id: payload.personaId,
+      responsable: payload.personaNombre,
+      rol: "Coordinación SIG",
+      tipo: "Proyecto",
+      prioridad: payload.prioridad || "Alta",
+      gestion: "Otro",
+      titulo: `Auditoría interna — ${auditoria.macroproceso}`,
+      descripcion: auditoria.notas || "",
+      revisara: "",
+      aprobara: "",
+      seguimiento: "",
+      carga_horas: payload.horas,
+      fecha_limite: payload.fechaLimite || auditoria.fecha_programada || null,
+      estado: "Pendiente",
+      asigna: currentUser?.nombre || currentUser?.usuario || "",
+      asigna_rol: "Coordinación SIG",
+      horas_totales: payload.horas,
+      origen_estrategico: "Auditoría",
+    });
+    if (!result.ok) { console.error(result.error); alert("No fue posible crear la asignación."); return false; }
+    const upd = await updateAuditoria(auditoria.id, { asignacion_id: result.data?.id || null });
+    if (upd.ok) updateAuditoriaLocal(auditoria.id, { asignacion_id: upd.data.asignacion_id });
+    alert("Asignación creada en Balance de Carga.");
+    return true;
+  }
 
   async function handleCreateCambio() {
     if (!cambioNewDraft.titulo.trim()) { setCambiosMessage("El motivo del cambio no puede quedar vacío."); return; }
@@ -1312,6 +1510,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
             <button type="button" onClick={() => setView("diagnostico")} className={`rounded-md px-3 py-1.5 transition ${view === "diagnostico" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Diagnóstico HLS</button>
             <button type="button" onClick={() => setView("plan")} className={`rounded-md px-3 py-1.5 transition ${view === "plan" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Plan de implementación</button>
             <button type="button" onClick={() => setView("cambios")} className={`rounded-md px-3 py-1.5 transition ${view === "cambios" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Control de cambios</button>
+            <button type="button" onClick={() => setView("auditorias")} className={`rounded-md px-3 py-1.5 transition ${view === "auditorias" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Programa de auditorías</button>
           </div>
           {view === "plan" && (
             <button type="button" onClick={openPlanHistorial} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 transition hover:border-slate-300 hover:text-slate-700">⏱ Historial del plan</button>
@@ -1321,6 +1520,9 @@ export default function DiagnosticoSIGModule({ currentUser }) {
               <button type="button" onClick={openCambiosHistorial} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 transition hover:border-slate-300 hover:text-slate-700">⏱ Historial</button>
               <button type="button" onClick={() => setCambioCreating((current) => !current)} className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 px-3 py-1.5 text-[10px] font-black text-sky-700 transition hover:border-sky-400 hover:bg-sky-100">+ Nueva solicitud</button>
             </div>
+          )}
+          {view === "auditorias" && canEdit && (
+            <button type="button" onClick={() => setAuditoriaCreating((current) => !current)} className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 px-3 py-1.5 text-[10px] font-black text-sky-700 transition hover:border-sky-400 hover:bg-sky-100">+ Nueva auditoría</button>
           )}
         </section>
 
@@ -1729,6 +1931,146 @@ export default function DiagnosticoSIGModule({ currentUser }) {
               entries={cambiosHistorialEntries}
               selectedProcess="Control de cambios"
             />
+          </section>
+        )}
+
+        {view === "auditorias" && (
+          <section className="space-y-3">
+            <p className="text-[10px] font-bold text-slate-400">
+              El detalle de cada auditoría (checklist, evidencia, hallazgos redactados) vive en SharePoint — aquí solo se rastrea cuándo toca auditar qué, quién audita, y hacia dónde va cada hallazgo.
+            </p>
+
+            {auditoriasMessage && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{auditoriasMessage}</div>}
+
+            {auditoriaCreating && (
+              <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-3">
+                <div className="grid gap-2 md:grid-cols-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Macroproceso
+                    <select value={auditoriaNewDraft.macroproceso} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, macroproceso: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                      <option value="">Selecciona...</option>
+                      {mapProcesses.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Fecha programada
+                    <input type="date" value={auditoriaNewDraft.fechaProgramada} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, fechaProgramada: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Auditor
+                    <select value={auditoriaNewDraft.auditorPersonaId} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, auditorPersonaId: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                      <option value="">Sin asignar</option>
+                      {auditoriaPersonaOptions.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Reporte (link a SharePoint)
+                    <input type="text" value={auditoriaNewDraft.reporteUrl} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, reporteUrl: e.target.value }))} placeholder="https://..." className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-2">
+                    Notas
+                    <textarea rows={2} value={auditoriaNewDraft.notas} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, notas: e.target.value }))} className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium normal-case tracking-normal text-slate-700 outline-none" />
+                  </label>
+                </div>
+                <div className="mt-2 flex justify-end gap-2">
+                  <button type="button" onClick={handleCreateAuditoria} className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white">Programar auditoría</button>
+                  <button type="button" onClick={() => setAuditoriaCreating(false)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button>
+                </div>
+              </div>
+            )}
+
+            {auditoriasLoading ? (
+              <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-400 shadow-sm">Cargando programa de auditorías…</div>
+            ) : (auditorias || []).length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-300 shadow-sm">Aún no hay auditorías programadas.</div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <table className="min-w-full text-left text-[11px]">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                      <th className="px-3 py-2">Macroproceso</th>
+                      <th className="px-3 py-2">Fecha</th>
+                      <th className="px-3 py-2">Estado</th>
+                      <th className="px-3 py-2">Auditor</th>
+                      <th className="px-3 py-2">Hallazgos</th>
+                      <th className="px-3 py-2">Reporte</th>
+                      <th className="px-3 py-2">Acción correctiva</th>
+                      {canEdit && <th className="px-3 py-2 text-right">Acciones</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(auditorias || []).map((auditoria) => (
+                      <React.Fragment key={auditoria.id}>
+                        <tr className="border-b border-slate-50">
+                          <td className="px-3 py-2.5 font-bold text-slate-700">{auditoria.macroproceso}</td>
+                          <td className="px-3 py-2.5 font-semibold text-slate-500">{auditoria.fecha_programada || "Sin fecha"}</td>
+                          <td className="px-3 py-2.5">
+                            <button
+                              type="button"
+                              disabled={!canEdit}
+                              onClick={() => handleCycleAuditoriaEstado(auditoria)}
+                              title={canEdit ? "Clic para avanzar el estado" : ""}
+                              className={`rounded-full border px-2.5 py-1 text-[10px] font-black disabled:cursor-default ${AUDITORIA_ESTADO_BADGE[auditoria.estado] || ""}`}
+                            >
+                              {auditoria.estado}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2.5 font-semibold text-slate-500">{auditoria.auditor?.nombre || "Sin asignar"}</td>
+                          <td className="px-3 py-2.5">
+                            <input
+                              type="number"
+                              min="0"
+                              disabled={!canEdit}
+                              value={auditoria.hallazgos ?? 0}
+                              onChange={(e) => handleSaveAuditoriaField(auditoria, "hallazgos", Number(e.target.value) || 0)}
+                              className="h-8 w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none disabled:bg-white"
+                            />
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {auditoria.reporte_url ? (
+                              <a href={auditoria.reporte_url} target="_blank" rel="noreferrer" className="font-black text-sky-600 hover:underline">Ver reporte ↗</a>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {auditoria.accion_correctiva_id ? (
+                              <span className="font-bold text-emerald-600">Generada</span>
+                            ) : canEdit ? (
+                              <button type="button" onClick={() => handleCrearAccionAuditoria(auditoria)} className="font-black text-slate-400 hover:text-sky-600">▸ Crear acción</button>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+                          {canEdit && (
+                            <td className="px-3 py-2.5">
+                              <div className="flex items-center justify-end gap-2">
+                                <AuditoriaAsignacionButton
+                                  active={Boolean(auditoria.asignacion_id)}
+                                  onClick={() => setAuditoriaAsignandoId((current) => (current === auditoria.id ? null : auditoria.id))}
+                                />
+                                <button type="button" onClick={() => handleDeleteAuditoria(auditoria.id)} title="Eliminar" className="text-sm font-black leading-none text-slate-300 transition hover:text-red-600">×</button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                        {auditoriaAsignandoId === auditoria.id && (
+                          <tr>
+                            <td colSpan={8} className="px-3 pb-3">
+                              <AuditoriaAsignacionForm
+                                personasCatalogo={auditoriaPersonaOptions}
+                                onConfirm={(payload) => handleConvertAuditoriaToAssignment(auditoria, payload)}
+                                onCancel={() => setAuditoriaAsignandoId(null)}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         )}
       </div>
