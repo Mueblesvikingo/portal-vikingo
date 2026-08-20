@@ -23,9 +23,12 @@ const AUDITORIA_ESTADO_BADGE = {
   Cerrada: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
-// El equipo auditor (no el auditor líder) se restringe a este grupo por
-// pedido explícito: Alejandro, Jacqueline, Elizabeth.
+// El equipo auditor se restringe a este grupo por pedido explícito:
+// Alejandro, Jacqueline, Elizabeth.
 const AUDITORIA_EQUIPO_PERSONA_IDS = [14, 12, 1];
+// El auditor líder puede ser cualquiera del equipo anterior, más Cristian
+// (Coordinador SIG) — también por pedido explícito.
+const AUDITORIA_LIDER_PERSONA_IDS = [...AUDITORIA_EQUIPO_PERSONA_IDS, 15];
 
 // Nombre/macroproceso del KPI en Desempeño Organizacional que refleja el
 // avance global del SIG — ya existía, no se crea uno nuevo. Se busca por
@@ -2045,7 +2048,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                     Auditor líder
                     <select value={auditoriaNewDraft.auditorLiderPersonaId} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, auditorLiderPersonaId: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
                       <option value="">Sin asignar</option>
-                      {auditoriaPersonaOptions.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                      {auditoriaPersonaOptions.filter((p) => AUDITORIA_LIDER_PERSONA_IDS.includes(p.id)).map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                     </select>
                   </label>
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
