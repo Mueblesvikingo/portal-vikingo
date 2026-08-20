@@ -400,14 +400,15 @@ export function canEditWorkloadForPersonRoles(user, targetPersonRoles = []) {
   return targetPersonRoles.some((rol) => allowedRoles.includes(rol));
 }
 
-// Tablero Gerencial de Proyectos (PMO): el equipo estratégico edita
-// cualquier fila; el líder de proyecto asignado a esa fila puede editar
-// solo la suya (avance, semáforo, etapa, próximo hito, decisión) — mismo
-// criterio de "auto-servicio sobre lo propio" que Diagnóstico SIG.
-export function canEditPmoProyecto(user, proyecto) {
-  if (isStrategicTeamMember(user)) return true;
-  if (!proyecto?.lider_proyecto_persona_id) return false;
-  return String(user?.persona_id) === String(proyecto.lider_proyecto_persona_id);
+// Tablero Gerencial de Proyectos (PMO): por pedido explícito, solo PM y
+// Director General pueden editar — el resto del equipo estratégico
+// (Coordinador SIG, Analista de Procesos) y el líder de proyecto asignado a
+// su propia fila ya NO tienen edición, solo lectura. `proyecto` se conserva
+// en la firma sin usarse para no tener que tocar cada sitio donde se llama.
+const PMO_PROYECTOS_EDIT_ROLES = ["PM", "Director General"];
+export function canEditPmoProyecto(user, _proyecto) {
+  const roles = getApplicableRoles(user);
+  return roles.some((role) => PMO_PROYECTOS_EDIT_ROLES.includes(role));
 }
 
 // Control de Cambios SIG (SIG-P-03): cualquier usuario logueado puede
