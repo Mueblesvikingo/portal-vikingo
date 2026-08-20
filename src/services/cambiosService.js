@@ -130,7 +130,7 @@ export async function sendToDecisionCenter(cambio, actor) {
   }
 }
 
-// Genera la acción correctiva en el Centro de Gestión de Acciones cuando
+// Genera la acción correctiva en Acciones de Mejora cuando
 // el cambio resulta no eficaz (procedimiento de No Conformidad de SIG-P-03).
 export async function createAccionCorrectivaPorCambio(cambio, actor) {
   const result = await createAccion(

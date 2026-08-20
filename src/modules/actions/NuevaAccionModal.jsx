@@ -45,7 +45,7 @@ export default function NuevaAccionModal({ procesos, personas, objetivos, onSave
         <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
           <div>
             <p className="text-xs font-black uppercase tracking-widest">Nueva acción</p>
-            <p className="text-[10px] font-bold text-slate-300">Registrar en el Centro de Gestión de Acciones</p>
+            <p className="text-[10px] font-bold text-slate-300">Registrar en Acciones de Mejora</p>
           </div>
           <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
         </div>

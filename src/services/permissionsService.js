@@ -347,7 +347,7 @@ export function canApproveSopEtapa(user, etapa) {
   return ids.includes(Number(user?.persona_id));
 }
 
-// Centro de Gestión de Acciones: el nivel de la acción determina quién la
+// Acciones de Mejora: el nivel de la acción determina quién la
 // edita. Estratégica/Táctica → equipo estratégico (Dirección, PM,
 // Coordinador SIG, Analista de Procesos — mismos STRATEGIC_TEAM_ROLES ya
 // usados en el resto del portal). Operativa → además el responsable real

@@ -436,7 +436,7 @@ export default function SopModule({ currentUser }) {
 
   // Si la decisión ya es una acción concreta, se manda directo a Balance de
   // Carga como una asignación (proyecto) para la persona que elijas, sin
-  // pasar por Centro de Decisiones ni por Centro de Gestión de Acciones.
+  // pasar por Centro de Decisiones ni por Acciones de Mejora.
   async function handleConvertToAssignment(decision, { personaId, personaNombre, horas, fechaLimite, prioridad }, actor) {
     const result = await createWorkloadAssignment({
       persona_id: personaId,

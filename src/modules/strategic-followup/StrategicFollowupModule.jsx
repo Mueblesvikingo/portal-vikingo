@@ -158,7 +158,7 @@ function CreateAccionButton({ onClick, disabled }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={disabled ? "Guarda la semana antes de crear una acción" : "Crear Acción en el Centro de Gestión de Acciones"}
+      title={disabled ? "Guarda la semana antes de crear una acción" : "Crear Acción en el Acciones de Mejora"}
       className="text-sm font-black leading-none text-slate-300 transition hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-30"
     >
       ▸
@@ -539,7 +539,7 @@ export default function StrategicFollowupModule({ currentUser }) {
       alert("Guarda la semana primero para poder crear una acción a partir de este tema.");
       return;
     }
-    if (!window.confirm(`¿Crear una acción en el Centro de Gestión de Acciones a partir de "${row.tema}"?`)) return;
+    if (!window.confirm(`¿Crear una acción en el Acciones de Mejora a partir de "${row.tema}"?`)) return;
 
     const flujo = getFlujoConfig(tiposFlujoAcciones, "Acuerdo Directivo");
     const result = await createAccion(
@@ -564,7 +564,7 @@ export default function StrategicFollowupModule({ currentUser }) {
       alert("No fue posible crear la acción.");
       return;
     }
-    alert(`Acción ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
+    alert(`Acción ${result.data.codigo} creada en el Acciones de Mejora.`);
   }
 
   async function handleCrearAccionSesion(row) {
@@ -572,7 +572,7 @@ export default function StrategicFollowupModule({ currentUser }) {
       alert("Guarda la semana primero para poder crear una acción a partir de este acuerdo.");
       return;
     }
-    if (!window.confirm(`¿Crear una acción en el Centro de Gestión de Acciones a partir de "${row.tema}"?`)) return;
+    if (!window.confirm(`¿Crear una acción en el Acciones de Mejora a partir de "${row.tema}"?`)) return;
 
     const flujo = getFlujoConfig(tiposFlujoAcciones, "Acuerdo Directivo");
     const result = await createAccion(
@@ -609,7 +609,7 @@ export default function StrategicFollowupModule({ currentUser }) {
       SESIÓN: current.SESIÓN.map((r) => (r.id === row.id ? { ...r, accionId: result.data.id } : r)),
     }));
 
-    alert(`Acción ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
+    alert(`Acción ${result.data.codigo} creada en el Acciones de Mejora.`);
   }
 
   // Envía una fila de Enfoque o Sesión a la Bandeja del Centro de Decisiones

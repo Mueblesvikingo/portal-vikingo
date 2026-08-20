@@ -11,7 +11,7 @@ const menuItems = [
   { label: "Organigrama", route: "/organigrama", moduleKey: "organigrama" },
   { label: "Seguimiento Estratégico", route: "/strategic-followup", moduleKey: "strategic-followup" },
   { label: "Centro de Decisiones", route: "/decision-center", moduleKey: "decision-center" },
-  { label: "Centro de Gestión de Acciones", route: "/acciones", moduleKey: "acciones" },
+  { label: "Acciones de Mejora", route: "/acciones", moduleKey: "acciones" },
   { label: "Madurez Organizacional", route: "/maturity", moduleKey: "maturity" },
   { label: "Diagnóstico SIG", route: "/sig", moduleKey: "sig" },
   { label: "Catálogo Organizacional", route: "/organization-catalog", moduleKey: "organization-catalog" },

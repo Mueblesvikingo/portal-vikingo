@@ -837,7 +837,7 @@ function CambioDetailModal({
                   <button type="button" onClick={onGenerarAccionCorrectiva} className="rounded-lg bg-red-600 px-3 py-1.5 text-[10px] font-black text-white hover:bg-red-700">Generar acción correctiva →</button>
                 </div>
               )}
-              {cambio.accion_correctiva_id && <p className="mt-2 text-[10px] font-bold text-slate-400">Acción correctiva generada en Centro de Gestión de Acciones.</p>}
+              {cambio.accion_correctiva_id && <p className="mt-2 text-[10px] font-bold text-slate-400">Acción correctiva generada en Acciones de Mejora.</p>}
             </div>
           )}
         </div>
@@ -1221,7 +1221,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     if (!result?.ok) { console.error(result?.error); setAuditoriasMessage("No fue posible crear la acción."); return; }
     setAccionesPorAuditoria((current) => ({ ...current, [auditoria.id]: [...(current[auditoria.id] || []), result.data] }));
     setAuditoriaAccionFormId(null);
-    setAuditoriasMessage(`Acción ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
+    setAuditoriasMessage(`Acción ${result.data.codigo} creada en el Acciones de Mejora.`);
   }
 
   // Mismo mecanismo que handleConvertToAssignment en
@@ -1341,7 +1341,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     if (!result.ok) { console.error(result.error); setCambiosMessage("No fue posible generar la acción correctiva."); return; }
     setCambios((current) => (current || []).map((item) => (item.id === cambio.id ? { ...item, accion_correctiva_id: result.data.id } : item)));
     setSelectedCambio((current) => (current ? { ...current, accion_correctiva_id: result.data.id } : current));
-    alert(`Acción correctiva ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
+    alert(`Acción correctiva ${result.data.codigo} creada en el Acciones de Mejora.`);
   }
 
   async function openCambiosHistorial() {

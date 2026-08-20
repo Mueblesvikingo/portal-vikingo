@@ -269,7 +269,7 @@ export default function DecisionCenterModule({ currentUser }) {
     Boolean(decision?.executionType) || ["Decidida", "Escalada a PM"].includes(decision?.status);
 
   const handleGenerarAccion = async (decision) => {
-    if (!window.confirm(`¿Generar una acción en el Centro de Gestión de Acciones a partir de "${decision.decision}"?`)) return;
+    if (!window.confirm(`¿Generar una acción en el Acciones de Mejora a partir de "${decision.decision}"?`)) return;
 
     setGenerandoAccion(true);
     const tipo = EXECUTION_TYPE_TO_ACCION_TIPO[decision.executionType] || "Acción Operativa";
@@ -300,7 +300,7 @@ export default function DecisionCenterModule({ currentUser }) {
       alert("No fue posible generar la acción.");
       return;
     }
-    alert(`Acción ${result.data.codigo} creada en el Centro de Gestión de Acciones.`);
+    alert(`Acción ${result.data.codigo} creada en el Acciones de Mejora.`);
     setSelectedDecision(null);
   };
 

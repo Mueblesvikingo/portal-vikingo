@@ -119,7 +119,7 @@ export default function ActionsModule({ currentUser }) {
       fecha_limite: payload.fechaLimite,
       estado: "Pendiente",
       asigna: currentUser?.nombre || currentUser?.usuario || "",
-      asigna_rol: "Centro de Gestión de Acciones",
+      asigna_rol: "Acciones de Mejora",
       horas_totales: payload.horas,
       origen_estrategico: "Acciones",
     });
@@ -177,7 +177,7 @@ export default function ActionsModule({ currentUser }) {
 
         <div className="mt-2 overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-3 bg-[#001225] px-4 py-1.5 text-white">
-            <h2 className="text-[13px] font-black uppercase tracking-tight">Centro de Gestión de Acciones</h2>
+            <h2 className="text-[13px] font-black uppercase tracking-tight">Acciones de Mejora</h2>
             <div className="flex gap-1 rounded-xl bg-white/10 p-0.5">
               {tabs.map((tab) => (
                 <button
