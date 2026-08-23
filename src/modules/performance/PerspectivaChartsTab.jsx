@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -14,13 +15,33 @@ import {
   Legend,
 } from "recharts";
 import {
+  MESES,
   buildMonthlySeries,
   computeCumplimiento,
   getCumplimientoStatus,
   formatAxisValue,
   formatKpiValue,
   getKpiColor,
+  getWeeksInMonth,
+  getResultadoValue,
 } from "./performanceHelpers";
+
+// Mismo rango que se captura en Resultados (Ago-Dic) — no tiene sentido
+// ofrecer meses sin captura habilitada en el selector de la vista semanal.
+const WEEKLY_MESES = MESES.map((label, index) => ({ label, index })).slice(7);
+
+// Serie semanal de un mes puntual: una barra/punto por semana capturada (4 o
+// 5 según el mes), con la Meta mensual repetida en cada semana como
+// referencia (no existe meta por semana, solo mensual).
+function buildWeeklySeries(resultados, kpi, anio, mes) {
+  const totalSemanas = getWeeksInMonth(anio, mes);
+  const meta = getResultadoValue(resultados, kpi.id, anio, mes, "meta");
+  return Array.from({ length: totalSemanas }, (_, i) => i + 1).map((semana) => ({
+    mes: `S${semana}`,
+    meta,
+    real: getResultadoValue(resultados, kpi.id, anio, mes, "real", semana),
+  }));
+}
 
 function ChartTooltip({ active, payload, label, unidad }) {
   if (!active || !payload?.length) return null;
@@ -37,7 +58,12 @@ function ChartTooltip({ active, payload, label, unidad }) {
 }
 
 export function KpiChartCard({ kpi, resultados, anio, color }) {
-  const serie = buildMonthlySeries(resultados, kpi, anio);
+  const isSemanal = kpi.periodicidad === "Semanal" && kpi.tipo_grafico !== "circular";
+  const [weeklyView, setWeeklyView] = useState(false);
+  const currentMonth = new Date().getMonth() + 1; // 1-12
+  const [selectedMes, setSelectedMes] = useState(currentMonth >= 8 ? currentMonth : 8);
+
+  const serie = weeklyView ? buildWeeklySeries(resultados, kpi, anio, selectedMes) : buildMonthlySeries(resultados, kpi, anio);
   const { real, meta, cumplimiento } = computeCumplimiento(resultados, kpi, anio);
   const status = getCumplimientoStatus(cumplimiento);
 
@@ -48,10 +74,38 @@ export function KpiChartCard({ kpi, resultados, anio, color }) {
           <p className="text-[11px] font-black text-slate-900">{kpi.nombre_indicador}</p>
           <p className="text-[9px] font-bold text-slate-400">{kpi.objetivo_estrategico}</p>
         </div>
-        <span className="shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black" style={{ borderColor: status.color, color: status.color }}>
-          {cumplimiento === null ? "Sin datos" : `${cumplimiento}%`}
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {isSemanal && (
+            <button
+              type="button"
+              onClick={() => setWeeklyView((v) => !v)}
+              title={weeklyView ? "Volver a vista mensual" : "Ver por semana"}
+              className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wide transition ${
+                weeklyView ? "border-violet-300 bg-violet-50 text-violet-600" : "border-slate-200 text-slate-400 hover:border-violet-200 hover:text-violet-500"
+              }`}
+            >
+              {weeklyView ? "↩ Mensual" : "▤ Semanal"}
+            </button>
+          )}
+          <span className="rounded-full border px-2 py-0.5 text-[9px] font-black" style={{ borderColor: status.color, color: status.color }}>
+            {cumplimiento === null ? "Sin datos" : `${cumplimiento}%`}
+          </span>
+        </div>
       </div>
+      {weeklyView && (
+        <div className="mb-2 flex items-center gap-1.5">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Mes</span>
+          <select
+            value={selectedMes}
+            onChange={(event) => setSelectedMes(Number(event.target.value))}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-700 outline-none"
+          >
+            {WEEKLY_MESES.map(({ label, index }) => (
+              <option key={index} value={index + 1}>{label}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="mb-2 flex gap-4 text-[10px] font-bold text-slate-500">
         <span>Real: <span className="text-slate-800">{formatKpiValue(real, kpi.unidad_medida)}</span></span>
         <span>Meta: <span className="text-slate-800">{formatKpiValue(meta, kpi.unidad_medida)}</span></span>
