@@ -114,7 +114,7 @@ function DetailField({ label, children }) {
   );
 }
 
-export default function TableroTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onUpdateKpi, onToggleKpiActivo }) {
+export default function TableroTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onUpdateKpi, onToggleKpiActivo, onEscalarKpi }) {
   const [openKpiId, setOpenKpiId] = useState(null);
   const isEstrategico = scope === "ESTRATEGICO";
   const mesActualLabel = getCurrentMonthInfo().label;
@@ -209,7 +209,17 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                           </span>
                         </td>
                         {canEditKpi(kpi) && (
-                          <td className="px-3 py-1.5 text-right">
+                          <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                            {!isInactivo && status.label === "Crítico" && (
+                              <button
+                                type="button"
+                                onClick={() => onEscalarKpi(kpi, { real, meta, cumplimiento })}
+                                title="Escalar este KPI crítico a Dirección"
+                                className="mr-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-red-600 hover:bg-red-100"
+                              >
+                                ⚠ Escalar
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => onToggleKpiActivo(kpi)}

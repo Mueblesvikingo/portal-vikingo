@@ -9,6 +9,7 @@ import {
   addAdjunto,
 } from "../../services/accionesService";
 import { canEditAccion } from "../../services/permissionsService";
+import { createStrategicDecision } from "../../services/decisionService";
 import {
   TIPOS_ACCION,
   NIVELES_ACCION,
@@ -18,6 +19,7 @@ import {
   TIPO_COLOR,
   HERRAMIENTAS_MVP,
   getFlujoEtapas,
+  isVencida,
   formatDate,
   formatDateTime,
 } from "./actionsHelpers";
@@ -156,10 +158,43 @@ export default function AccionDetailPanel({
   const [nuevoAdjunto, setNuevoAdjunto] = useState({ nombre: "", url: "" });
   const [loadingSub, setLoadingSub] = useState(true);
   const [convertingToAssignment, setConvertingToAssignment] = useState(false);
+  const [escalando, setEscalando] = useState(false);
 
   const proceso = accion.proceso_id ? procesosById[accion.proceso_id] : null;
   const canEdit = canEditAccion(currentUser, accion, proceso);
   const etapas = getFlujoEtapas(tiposFlujo, accion.tipo);
+  const vencida = isVencida(accion);
+  const esCritica = accion.prioridad === "Crítica";
+
+  // Escalar la acción al Centro de Decisiones — mismo mecanismo
+  // (createStrategicDecision, status "Solicitud") que ya usan S&OP,
+  // Seguimiento Estratégico y Desempeño Organizacional. Pensado sobre todo
+  // para acciones críticas atascadas o vencidas que Dirección debería ver,
+  // pero disponible para cualquier acción con permiso de edición.
+  async function handleEscalarDireccion() {
+    if (!window.confirm(`¿Escalar "${accion.titulo}" a Dirección?`)) return;
+    setEscalando(true);
+    const responsableNombre = accion.responsable_persona_id ? personasById[accion.responsable_persona_id]?.nombre : null;
+    try {
+      await createStrategicDecision({
+        title: accion.titulo,
+        owner: responsableNombre || "",
+        risk: accion.prioridad === "Crítica" ? "Alto" : accion.prioridad === "Baja" ? "Bajo" : "Moderado",
+        status: "Solicitud",
+        executionType: null,
+        dueDate: accion.fecha_compromiso || null,
+        consequence: accion.descripcion || "",
+        recommendation: `Acción ${accion.codigo} (${accion.tipo}) — estado actual: ${accion.estado}${vencida ? ", vencida" : ""}.`,
+        wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
+        process: "Acciones de Mejora",
+      });
+      alert("Acción escalada a la Bandeja del Centro de Decisiones.");
+    } catch (err) {
+      console.error(err);
+      alert("No fue posible escalar la acción a Dirección.");
+    }
+    setEscalando(false);
+  }
 
   useEffect(() => {
     async function load() {
@@ -327,6 +362,17 @@ export default function AccionDetailPanel({
                 {canEdit && (
                   <div className="mt-3 border-t border-slate-100 pt-2">
                     <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        disabled={escalando}
+                        onClick={handleEscalarDireccion}
+                        title={esCritica && vencida ? "Acción crítica vencida — escalar a Dirección" : "Escalar a Dirección"}
+                        className={`rounded-lg border px-3 py-1 text-[10px] font-black transition disabled:opacity-50 ${
+                          esCritica && vencida ? "border-red-300 bg-red-50 text-red-600 hover:bg-red-100" : "border-slate-200 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                        }`}
+                      >
+                        {escalando ? "Enviando…" : "→ Dirección"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => setConvertingToAssignment((current) => !current)}

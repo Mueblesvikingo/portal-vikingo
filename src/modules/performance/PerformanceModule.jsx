@@ -12,7 +12,8 @@ import {
   upsertResultado,
 } from "../../services/performanceService";
 import { isStrategicTeamMember, canEditStrategicKpis } from "../../services/permissionsService";
-import { PERSPECTIVAS, ESTRATEGICO_SCOPE, MESES, getResultadoValue, formatDateTime } from "./performanceHelpers";
+import { createStrategicDecision } from "../../services/decisionService";
+import { PERSPECTIVAS, ESTRATEGICO_SCOPE, MESES, getResultadoValue, formatDateTime, formatKpiValue } from "./performanceHelpers";
 import TableroTab from "./TableroTab";
 import ResultadosTab from "./ResultadosTab";
 import PerspectivaChartsTab from "./PerspectivaChartsTab";
@@ -229,6 +230,34 @@ export default function PerformanceModule({ currentUser }) {
     });
   }
 
+  // Escalar un KPI en estado Crítico al Centro de Decisiones — mismo
+  // mecanismo (createStrategicDecision con status "Solicitud") que ya usan
+  // S&OP y Seguimiento Estratégico para mandar solicitudes a la Bandeja de
+  // Dirección.
+  async function handleEscalarKpi(kpi, { real, meta, cumplimiento }) {
+    const scopeLabel = isEstrategico ? "Estratégico" : scope;
+    if (!window.confirm(`¿Escalar "${kpi.nombre_indicador}" (${scopeLabel}) a Dirección por estar en estado Crítico?`)) return;
+    try {
+      await createStrategicDecision({
+        title: `KPI crítico: ${kpi.nombre_indicador}`,
+        owner: kpi.responsable_rol || currentUser?.nombre || currentUser?.usuario || "",
+        risk: "Alto",
+        status: "Solicitud",
+        executionType: null,
+        dueDate: null,
+        consequence: kpi.objetivo_estrategico || "",
+        recommendation: `Tablero: ${scopeLabel}. Real: ${formatKpiValue(real, kpi.unidad_medida)} vs Meta: ${formatKpiValue(meta, kpi.unidad_medida)} (cumplimiento ${cumplimiento === null ? "sin datos" : `${cumplimiento}%`}).`,
+        wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
+        process: "Desempeño Organizacional",
+      });
+      setMessage("");
+      alert("KPI escalado a la Bandeja del Centro de Decisiones.");
+    } catch (err) {
+      console.error(err);
+      setMessage("No fue posible escalar el KPI a Dirección.");
+    }
+  }
+
   async function openHistorial() {
     setHistorialOpen(true);
     setHistorialLoading(true);
@@ -327,6 +356,7 @@ export default function PerformanceModule({ currentUser }) {
                 canEditKpi={canEditKpi}
                 onUpdateKpi={handleUpdateKpi}
                 onToggleKpiActivo={handleToggleKpiActivo}
+                onEscalarKpi={handleEscalarKpi}
               />
             ) : activeTab === "resultados" ? (
               <ResultadosTab
