@@ -724,7 +724,7 @@ export default function DecisionCenterModule({ currentUser }) {
               </button>
             </div>
 
-            <div className="space-y-2 p-4">
+            <div className="max-h-[75vh] space-y-2 overflow-y-auto p-4">
               <div className="flex items-center justify-between px-1">
                 <div className="text-[11px] font-semibold text-gray-500">
                   Método WRAP · Pensamiento estratégico estructurado
