@@ -8,13 +8,6 @@ import {
 import { createAccion, getTiposFlujo } from "../../services/accionesService";
 import { getFlujoConfig, TIPOS_ACCION, PRIORIDADES_ACCION } from "../actions/actionsHelpers";
 
-const EXECUTION_TYPE_TO_ACCION_TIPO = {
-  "Acción puntual": "Acción Operativa",
-  "Seguimiento ejecutivo": "Acuerdo Directivo",
-  "Iniciativa estratégica": "Proyecto Estratégico",
-  "Proyecto PM": "Proyecto Estratégico",
-};
-
 const emptyWrap = {
   options: [""],
   evidence: "",
@@ -24,6 +17,24 @@ const emptyWrap = {
 };
 
 const emptyWrapAccionDraft = { titulo: "", tipo: "Acuerdo Directivo", prioridad: "Alta", descripcion: "" };
+
+// wrap_options se guarda en una columna de texto plano (no arreglo/jsonb), así
+// que Supabase la devuelve como el string JSON serializado (ej.
+// '["a","b"]') en vez de un arreglo real. Se vuelve a parsear aquí para
+// separar cada opción en su propia línea; si no es JSON válido (registros
+// antiguos guardados como texto suelto), se trata como una sola línea.
+function parseWrapOptions(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string" && value.trim().startsWith("[")) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // no era JSON válido, cae al tratamiento como línea única abajo
+    }
+  }
+  return [value || ""];
+}
 
 const statusOptions = [
   "Solicitud",
@@ -44,10 +55,9 @@ export default function DecisionCenterModule({ currentUser }) {
   const [wrapForm, setWrapForm] = useState(emptyWrap);
   const [decisionView, setDecisionView] = useState("resultados");
   const [tiposFlujoAcciones, setTiposFlujoAcciones] = useState([]);
-  const [generandoAccion, setGenerandoAccion] = useState(false);
-  const [wrapAccionFormOpen, setWrapAccionFormOpen] = useState(false);
-  const [wrapAccionDraft, setWrapAccionDraft] = useState(emptyWrapAccionDraft);
-  const [creandoAccionWrap, setCreandoAccionWrap] = useState(false);
+  const [accionFormOpen, setAccionFormOpen] = useState(false);
+  const [accionDraft, setAccionDraft] = useState(emptyWrapAccionDraft);
+  const [creandoAccion, setCreandoAccion] = useState(false);
 
   useEffect(() => {
     loadDecisions();
@@ -242,72 +252,37 @@ export default function DecisionCenterModule({ currentUser }) {
     }
   };
 
-  const puedeGenerarAccion = (decision) =>
-    Boolean(decision?.executionType) || ["Decidida", "Escalada a PM"].includes(decision?.status);
-
-  const handleGenerarAccion = async (decision) => {
-    if (!window.confirm(`¿Generar una acción en el Acciones de Mejora a partir de "${decision.decision}"?`)) return;
-
-    setGenerandoAccion(true);
-    const tipo = EXECUTION_TYPE_TO_ACCION_TIPO[decision.executionType] || "Acción Operativa";
-    const flujo = getFlujoConfig(tiposFlujoAcciones, tipo);
+  // Botón "+ Crear Acción" en el detalle de la decisión — reemplaza al
+  // antiguo "Generar Acción" de un solo clic. Se puede enviar varias veces
+  // sobre la misma decisión (una decisión puede requerir más de una acción
+  // de seguimiento), y cada acción creada ya queda lista para convertirse en
+  // Asignación desde Acciones de Mejora (mismo flujo "→ Asignación" que ya
+  // existe ahí). Vive en el detalle (no en el WRAP) porque documentar la
+  // decisión y generar sus acciones de ejecución son dos actos distintos: el
+  // primero es reflexivo y ocurre una vez, el segundo puede repetirse
+  // conforme avanza la decisión.
+  const handleCrearAccion = async () => {
+    if (!accionDraft.titulo.trim()) { alert("Escribe un título para la acción."); return; }
+    setCreandoAccion(true);
+    const flujo = getFlujoConfig(tiposFlujoAcciones, accionDraft.tipo);
     const result = await createAccion(
       {
-        tipo,
+        tipo: accionDraft.tipo,
         nivel: "Estratégica",
         origenModulo: "Centro de Decisiones",
         origenTabla: "decisiones_estrategicas",
-        origenId: decision.id,
-        titulo: decision.decision,
-        descripcion: [decision.recommendation, decision.owner ? `Responsable sugerido: ${decision.owner}` : null]
-          .filter(Boolean)
-          .join("\n\n"),
-        prioridad: decision.risk === "Alto" ? "Crítica" : decision.risk === "Bajo" ? "Media" : "Alta",
-        fechaCompromiso: decision.dueDate || null,
+        origenId: selectedDecision.id,
+        titulo: accionDraft.titulo,
+        descripcion: accionDraft.descripcion,
+        prioridad: accionDraft.prioridad,
+        fechaCompromiso: selectedDecision.dueDate || null,
         requiereAnalisisCausa: flujo.requiere_analisis_causa,
         requiereVerificacionEficacia: flujo.requiere_verificacion_eficacia,
         requiereAprobacion: flujo.requiere_aprobacion,
       },
       currentUser
     );
-    setGenerandoAccion(false);
-
-    if (!result?.ok) {
-      console.error(result?.error);
-      alert("No fue posible generar la acción.");
-      return;
-    }
-    alert(`Acción ${result.data.codigo} creada en el Acciones de Mejora.`);
-    setSelectedDecision(null);
-  };
-
-  // Botón "+ Crear Acción" dentro del WRAP — reemplaza al antiguo selector
-  // "Tipo de ejecución". Se puede enviar varias veces sobre la misma
-  // decisión (una decisión puede requerir más de una acción de seguimiento),
-  // y cada acción creada ya queda lista para convertirse en Asignación desde
-  // Acciones de Mejora (mismo flujo "→ Asignación" que ya existe ahí).
-  const handleCrearAccionWrap = async () => {
-    if (!wrapAccionDraft.titulo.trim()) { alert("Escribe un título para la acción."); return; }
-    setCreandoAccionWrap(true);
-    const flujo = getFlujoConfig(tiposFlujoAcciones, wrapAccionDraft.tipo);
-    const result = await createAccion(
-      {
-        tipo: wrapAccionDraft.tipo,
-        nivel: "Estratégica",
-        origenModulo: "Centro de Decisiones",
-        origenTabla: "decisiones_estrategicas",
-        origenId: wrapDecision.id,
-        titulo: wrapAccionDraft.titulo,
-        descripcion: wrapAccionDraft.descripcion,
-        prioridad: wrapAccionDraft.prioridad,
-        fechaCompromiso: wrapDecision.dueDate || null,
-        requiereAnalisisCausa: flujo.requiere_analisis_causa,
-        requiereVerificacionEficacia: flujo.requiere_verificacion_eficacia,
-        requiereAprobacion: flujo.requiere_aprobacion,
-      },
-      currentUser
-    );
-    setCreandoAccionWrap(false);
+    setCreandoAccion(false);
 
     if (!result?.ok) {
       console.error(result?.error);
@@ -315,15 +290,24 @@ export default function DecisionCenterModule({ currentUser }) {
       return;
     }
     alert(`Acción ${result.data.codigo} creada en Acciones de Mejora. Desde ahí se puede convertir en una asignación de Balance de Carga.`);
-    setWrapAccionFormOpen(false);
+    setAccionFormOpen(false);
+  };
+
+  const openDetalle = (decision) => {
+    setSelectedDecision(decision);
+    setAccionFormOpen(false);
+    setAccionDraft({
+      titulo: decision.decision || "",
+      tipo: "Acuerdo Directivo",
+      prioridad: decision.risk === "Alto" ? "Crítica" : decision.risk === "Bajo" ? "Media" : "Alta",
+      descripcion: decision.recommendation || "",
+    });
   };
 
   const openWrap = (decision) => {
     setWrapDecision(decision);
     setWrapForm({
-      options: Array.isArray(decision.wrap?.options)
-        ? decision.wrap.options
-        : [decision.wrap?.options || ""],
+      options: parseWrapOptions(decision.wrap?.options),
       evidence: Array.isArray(decision.wrap?.evidence)
         ? decision.wrap.evidence.join("\n")
         : decision.wrap?.evidence || "",
@@ -334,13 +318,6 @@ export default function DecisionCenterModule({ currentUser }) {
         ? decision.wrap.prevention.join("\n")
         : decision.wrap?.prevention || "",
       finalDecision: decision.wrap?.finalDecision || "",
-    });
-    setWrapAccionFormOpen(false);
-    setWrapAccionDraft({
-      titulo: decision.decision || "",
-      tipo: "Acuerdo Directivo",
-      prioridad: decision.risk === "Alto" ? "Crítica" : decision.risk === "Bajo" ? "Media" : "Alta",
-      descripcion: decision.recommendation || "",
     });
     setSelectedDecision(null);
   };
@@ -484,9 +461,9 @@ export default function DecisionCenterModule({ currentUser }) {
               key={item.id}
               role="button"
               tabIndex={0}
-              onClick={() => setSelectedDecision(item)}
+              onClick={() => openDetalle(item)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") setSelectedDecision(item);
+                if (event.key === "Enter") openDetalle(item);
               }}
               className={`grid w-full items-center gap-4 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left transition-all hover:border-red-200 hover:bg-red-50/40 ${
                 decisionView === "bandeja"
@@ -625,7 +602,7 @@ export default function DecisionCenterModule({ currentUser }) {
               </button>
             </div>
 
-            <div className="space-y-3 p-4">
+            <div className="max-h-[75vh] space-y-3 overflow-y-auto p-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
                   <div className="text-[10px] font-black uppercase text-gray-400">
@@ -685,17 +662,81 @@ export default function DecisionCenterModule({ currentUser }) {
                     : "Documentar decisión estratégica"}
                 </button>
 
-                {puedeGenerarAccion(selectedDecision) && (
-                  <button
-                    type="button"
-                    disabled={generandoAccion}
-                    onClick={() => handleGenerarAccion(selectedDecision)}
-                    className="flex-1 rounded-2xl border border-[#001225] bg-white px-5 py-3 text-sm font-black text-[#001225] transition-all hover:bg-[#001225] hover:text-white disabled:opacity-50"
-                  >
-                    {generandoAccion ? "Generando…" : "Generar Acción"}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setAccionFormOpen((v) => !v)}
+                  className={`flex-1 rounded-2xl border px-5 py-3 text-sm font-black transition-all ${
+                    accionFormOpen ? "border-[#001225] bg-[#001225] text-white" : "border-[#001225] bg-white text-[#001225] hover:bg-[#001225] hover:text-white"
+                  }`}
+                >
+                  + Crear Acción
+                </button>
               </div>
+
+              {accionFormOpen && (
+                <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-sky-600">
+                    Nueva acción · se podrá convertir en asignación desde Acciones de Mejora
+                  </p>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 md:col-span-2">
+                      Título
+                      <input
+                        type="text"
+                        value={accionDraft.titulo}
+                        onChange={(e) => setAccionDraft((d) => ({ ...d, titulo: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                      />
+                    </label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                      Tipo
+                      <select
+                        value={accionDraft.tipo}
+                        onChange={(e) => setAccionDraft((d) => ({ ...d, tipo: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                      >
+                        {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                      Prioridad
+                      <select
+                        value={accionDraft.prioridad}
+                        onChange={(e) => setAccionDraft((d) => ({ ...d, prioridad: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                      >
+                        {PRIORIDADES_ACCION.map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 md:col-span-2">
+                      Descripción
+                      <textarea
+                        rows={2}
+                        value={accionDraft.descripcion}
+                        onChange={(e) => setAccionDraft((d) => ({ ...d, descripcion: e.target.value }))}
+                        className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[#0f172a] outline-none focus:border-sky-300"
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      disabled={creandoAccion}
+                      onClick={handleCrearAccion}
+                      className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white disabled:opacity-50"
+                    >
+                      {creandoAccion ? "Creando…" : "Crear acción"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAccionFormOpen(false)}
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black text-gray-500"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -837,89 +878,14 @@ export default function DecisionCenterModule({ currentUser }) {
                 </label>
               </div>
 
-              <div className="mt-4 space-y-3">
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setWrapAccionFormOpen((v) => !v)}
-                    className="w-[220px] rounded-2xl border border-[#001225] bg-white px-4 py-3 text-sm font-black text-[#001225] transition-all hover:bg-[#001225] hover:text-white"
-                  >
-                    + Crear Acción
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={saveWrapDecision}
-                    className="flex-1 rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-700"
-                  >
-                    Guardar decisión documentada
-                  </button>
-                </div>
-
-                {wrapAccionFormOpen && (
-                  <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
-                    <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-sky-600">
-                      Nueva acción · se podrá convertir en asignación desde Acciones de Mejora
-                    </p>
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 md:col-span-2">
-                        Título
-                        <input
-                          type="text"
-                          value={wrapAccionDraft.titulo}
-                          onChange={(e) => setWrapAccionDraft((d) => ({ ...d, titulo: e.target.value }))}
-                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
-                        />
-                      </label>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                        Tipo
-                        <select
-                          value={wrapAccionDraft.tipo}
-                          onChange={(e) => setWrapAccionDraft((d) => ({ ...d, tipo: e.target.value }))}
-                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
-                        >
-                          {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                      </label>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                        Prioridad
-                        <select
-                          value={wrapAccionDraft.prioridad}
-                          onChange={(e) => setWrapAccionDraft((d) => ({ ...d, prioridad: e.target.value }))}
-                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
-                        >
-                          {PRIORIDADES_ACCION.map((p) => <option key={p} value={p}>{p}</option>)}
-                        </select>
-                      </label>
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 md:col-span-2">
-                        Descripción
-                        <textarea
-                          rows={2}
-                          value={wrapAccionDraft.descripcion}
-                          onChange={(e) => setWrapAccionDraft((d) => ({ ...d, descripcion: e.target.value }))}
-                          className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[#0f172a] outline-none focus:border-sky-300"
-                        />
-                      </label>
-                    </div>
-                    <div className="mt-2 flex justify-end gap-2">
-                      <button
-                        type="button"
-                        disabled={creandoAccionWrap}
-                        onClick={handleCrearAccionWrap}
-                        className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white disabled:opacity-50"
-                      >
-                        {creandoAccionWrap ? "Creando…" : "Crear acción"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setWrapAccionFormOpen(false)}
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black text-gray-500"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )}
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={saveWrapDecision}
+                  className="w-full rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-700"
+                >
+                  Guardar decisión documentada
+                </button>
               </div>
             </div>
           </div>
