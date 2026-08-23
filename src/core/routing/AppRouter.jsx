@@ -37,7 +37,11 @@ export default function AppRouter({
               restrictedStart ? (
                 <Navigate to="/capacity" replace />
               ) : (
-                <ExecutiveHome currentUser={currentUser} />
+                // Temporal: Inicio Ejecutivo se oculta mientras se pule —
+                // Centro de Decisiones es el primer módulo que debe ver
+                // Dirección. Revertir a <ExecutiveHome currentUser={currentUser} />
+                // cuando Inicio Ejecutivo esté listo.
+                <Navigate to="/decision-center" replace />
               )
             }
           />

@@ -2,7 +2,10 @@
 import { canViewModule } from "../services/permissionsService";
 
 const menuItems = [
-  { label: "Inicio Ejecutivo", route: "/", moduleKey: "home" },
+  // Temporal: Inicio Ejecutivo se oculta del menú mientras se pule.
+  // Restaurar esta línea arriba de Centro de Decisiones cuando esté listo.
+  // { label: "Inicio Ejecutivo", route: "/", moduleKey: "home" },
+  { label: "Centro de Decisiones", route: "/decision-center", moduleKey: "decision-center" },
   { label: "Despliegue Estratégico", route: "/strategic-deployment", moduleKey: "strategic-deployment" },
   { label: "S&OP", route: "/sop", moduleKey: "sop" },
   { label: "Desempeño Organizacional", route: "/performance", moduleKey: "performance" },
@@ -10,7 +13,6 @@ const menuItems = [
   { label: "Balance de Carga", route: "/workload-balance", moduleKey: "workload-balance" },
   { label: "Organigrama", route: "/organigrama", moduleKey: "organigrama" },
   { label: "Seguimiento Estratégico", route: "/strategic-followup", moduleKey: "strategic-followup" },
-  { label: "Centro de Decisiones", route: "/decision-center", moduleKey: "decision-center" },
   { label: "Acciones de Mejora", route: "/acciones", moduleKey: "acciones" },
   { label: "Madurez Organizacional", route: "/maturity", moduleKey: "maturity" },
   { label: "Diagnóstico SIG", route: "/sig", moduleKey: "sig" },

@@ -11,6 +11,8 @@ import {
 } from "../../services/decisionService";
 import { createAccion, getTiposFlujo } from "../../services/accionesService";
 import { getFlujoConfig, TIPOS_ACCION, PRIORIDADES_ACCION } from "../actions/actionsHelpers";
+import { getPersonas } from "../../services/organizationCatalogService";
+import { createWorkloadAssignment } from "../../services/workloadService";
 
 const ORIGEN_COLOR = {
   "S&OP": "#0369a1",
@@ -32,6 +34,7 @@ const emptyWrap = {
 };
 
 const emptyWrapAccionDraft = { titulo: "", tipo: "Acuerdo Directivo", prioridad: "Alta", descripcion: "" };
+const emptyAsignacionDraft = { titulo: "", personaId: "", horas: 2, fechaLimite: "", prioridad: "Alta" };
 
 // wrap_options se guarda en una columna de texto plano (no arreglo/jsonb), así
 // que Supabase la devuelve como el string JSON serializado (ej.
@@ -75,10 +78,16 @@ export default function DecisionCenterModule({ currentUser }) {
   const [creandoAccion, setCreandoAccion] = useState(false);
   const [filtroOrigen, setFiltroOrigen] = useState("all");
   const [filtroRiesgo, setFiltroRiesgo] = useState("all");
+  const [accionDestino, setAccionDestino] = useState("acciones");
+  const [asignacionDraft, setAsignacionDraft] = useState(emptyAsignacionDraft);
+  const [personas, setPersonas] = useState([]);
 
   useEffect(() => {
     loadDecisions();
     getTiposFlujo().then(setTiposFlujoAcciones);
+    getPersonas()
+      .then((data) => setPersonas((data || []).filter((p) => p.activo !== false && (!p.tipo || p.tipo === "persona"))))
+      .catch((err) => { console.error("Error al cargar personas:", err); setPersonas([]); });
   }, []);
 
   useEffect(() => {
@@ -315,15 +324,57 @@ export default function DecisionCenterModule({ currentUser }) {
     setAccionFormOpen(false);
   };
 
+  // Alternativa al flujo formal de Acciones de Mejora: no toda decisión
+  // necesita análisis de causa/verificación de eficacia — a veces solo hace
+  // falta una tarea simple, así que esto crea la asignación de Balance de
+  // Carga directamente, sin pasar por un registro de Acción.
+  const handleCrearAsignacionDirecta = async () => {
+    if (!asignacionDraft.personaId) { alert("Selecciona a quién se le asigna la tarea."); return; }
+    if (!asignacionDraft.titulo.trim()) { alert("Escribe un título para la tarea."); return; }
+    setCreandoAccion(true);
+    const persona = personas.find((p) => String(p.id) === String(asignacionDraft.personaId));
+    const result = await createWorkloadAssignment({
+      persona_id: Number(asignacionDraft.personaId),
+      responsable: persona?.nombre || "",
+      rol: "Centro de Decisiones",
+      tipo: "Proyecto",
+      prioridad: asignacionDraft.prioridad,
+      gestion: "Otro",
+      titulo: asignacionDraft.titulo,
+      descripcion: accionDraft.descripcion || "",
+      revisara: "",
+      aprobara: "",
+      seguimiento: "",
+      carga_horas: Number(asignacionDraft.horas) || 0,
+      fecha_limite: asignacionDraft.fechaLimite || null,
+      estado: "Pendiente",
+      asigna: currentUser?.nombre || currentUser?.usuario || "",
+      asigna_rol: "Centro de Decisiones",
+      horas_totales: Number(asignacionDraft.horas) || 0,
+      origen_estrategico: "Estrategia",
+    });
+    setCreandoAccion(false);
+
+    if (!result?.ok) {
+      console.error(result?.error);
+      alert("No fue posible crear la tarea.");
+      return;
+    }
+    alert(`Tarea creada para ${persona?.nombre} en Balance de Carga.`);
+    setAccionFormOpen(false);
+  };
+
   const openDetalle = (decision) => {
     setSelectedDecision(decision);
     setAccionFormOpen(false);
+    setAccionDestino("acciones");
     setAccionDraft({
       titulo: decision.decision || "",
       tipo: "Acuerdo Directivo",
       prioridad: decision.risk === "Alto" ? "Crítica" : decision.risk === "Bajo" ? "Media" : "Alta",
       descripcion: decision.recommendation || "",
     });
+    setAsignacionDraft({ ...emptyAsignacionDraft, titulo: decision.decision || "", fechaLimite: decision.dueDate || "" });
   };
 
   const openWrap = (decision) => {
@@ -822,66 +873,151 @@ export default function DecisionCenterModule({ currentUser }) {
 
               {accionFormOpen && (
                 <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
-                  <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-sky-600">
-                    Nueva acción · se podrá convertir en asignación desde Acciones de Mejora
-                  </p>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 md:col-span-2">
-                      Título
-                      <input
-                        type="text"
-                        value={accionDraft.titulo}
-                        onChange={(e) => setAccionDraft((d) => ({ ...d, titulo: e.target.value }))}
-                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
-                      />
-                    </label>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                      Tipo
-                      <select
-                        value={accionDraft.tipo}
-                        onChange={(e) => setAccionDraft((d) => ({ ...d, tipo: e.target.value }))}
-                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
-                      >
-                        {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </label>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                      Prioridad
-                      <select
-                        value={accionDraft.prioridad}
-                        onChange={(e) => setAccionDraft((d) => ({ ...d, prioridad: e.target.value }))}
-                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
-                      >
-                        {PRIORIDADES_ACCION.map((p) => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </label>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 md:col-span-2">
-                      Descripción
-                      <textarea
-                        rows={2}
-                        value={accionDraft.descripcion}
-                        onChange={(e) => setAccionDraft((d) => ({ ...d, descripcion: e.target.value }))}
-                        className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[#0f172a] outline-none focus:border-sky-300"
-                      />
-                    </label>
-                  </div>
-                  <div className="mt-2 flex justify-end gap-2">
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-sky-600">¿A dónde se envía?</p>
+                  <div className="mb-3 flex gap-2">
                     <button
                       type="button"
-                      disabled={creandoAccion}
-                      onClick={handleCrearAccion}
-                      className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white disabled:opacity-50"
+                      onClick={() => setAccionDestino("acciones")}
+                      className={`rounded-lg border px-3 py-1.5 text-[10px] font-black transition ${accionDestino === "acciones" ? "border-sky-300 bg-sky-100 text-sky-700" : "border-gray-200 bg-white text-gray-500 hover:border-sky-200"}`}
                     >
-                      {creandoAccion ? "Creando…" : "Crear acción"}
+                      Acciones de Mejora
                     </button>
                     <button
                       type="button"
-                      onClick={() => setAccionFormOpen(false)}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black text-gray-500"
+                      onClick={() => setAccionDestino("asignacion")}
+                      className={`rounded-lg border px-3 py-1.5 text-[10px] font-black transition ${accionDestino === "asignacion" ? "border-sky-300 bg-sky-100 text-sky-700" : "border-gray-200 bg-white text-gray-500 hover:border-sky-200"}`}
                     >
-                      Cancelar
+                      Tarea simple (Asignación)
                     </button>
                   </div>
+
+                  {accionDestino === "acciones" ? (
+                    <>
+                      <p className="mb-2 text-[10px] font-semibold text-gray-400">Pasa por el flujo formal de Acciones de Mejora (análisis de causa, verificación de eficacia, etc. según el tipo).</p>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 md:col-span-2">
+                          Título
+                          <input
+                            type="text"
+                            value={accionDraft.titulo}
+                            onChange={(e) => setAccionDraft((d) => ({ ...d, titulo: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                          />
+                        </label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                          Tipo
+                          <select
+                            value={accionDraft.tipo}
+                            onChange={(e) => setAccionDraft((d) => ({ ...d, tipo: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                          >
+                            {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                          Prioridad
+                          <select
+                            value={accionDraft.prioridad}
+                            onChange={(e) => setAccionDraft((d) => ({ ...d, prioridad: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                          >
+                            {PRIORIDADES_ACCION.map((p) => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 md:col-span-2">
+                          Descripción
+                          <textarea
+                            rows={2}
+                            value={accionDraft.descripcion}
+                            onChange={(e) => setAccionDraft((d) => ({ ...d, descripcion: e.target.value }))}
+                            className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[#0f172a] outline-none focus:border-sky-300"
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-2 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={creandoAccion}
+                          onClick={handleCrearAccion}
+                          className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white disabled:opacity-50"
+                        >
+                          {creandoAccion ? "Creando…" : "Crear acción"}
+                        </button>
+                        <button type="button" onClick={() => setAccionFormOpen(false)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black text-gray-500">
+                          Cancelar
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mb-2 text-[10px] font-semibold text-gray-400">Crea directamente una tarea en Balance de Carga, sin pasar por Acciones de Mejora.</p>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 md:col-span-2">
+                          Título
+                          <input
+                            type="text"
+                            value={asignacionDraft.titulo}
+                            onChange={(e) => setAsignacionDraft((d) => ({ ...d, titulo: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                          />
+                        </label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                          Persona
+                          <select
+                            value={asignacionDraft.personaId}
+                            onChange={(e) => setAsignacionDraft((d) => ({ ...d, personaId: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                          >
+                            <option value="">Selecciona...</option>
+                            {personas.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                          </select>
+                        </label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                          Horas
+                          <input
+                            type="number"
+                            min="0.5"
+                            step="0.5"
+                            value={asignacionDraft.horas}
+                            onChange={(e) => setAsignacionDraft((d) => ({ ...d, horas: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                          />
+                        </label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                          Fecha límite
+                          <input
+                            type="date"
+                            value={asignacionDraft.fechaLimite}
+                            onChange={(e) => setAsignacionDraft((d) => ({ ...d, fechaLimite: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                          />
+                        </label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                          Prioridad
+                          <select
+                            value={asignacionDraft.prioridad}
+                            onChange={(e) => setAsignacionDraft((d) => ({ ...d, prioridad: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                          >
+                            {PRIORIDADES_ACCION.map((p) => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </label>
+                      </div>
+                      <div className="mt-2 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={creandoAccion}
+                          onClick={handleCrearAsignacionDirecta}
+                          className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white disabled:opacity-50"
+                        >
+                          {creandoAccion ? "Creando…" : "Crear tarea"}
+                        </button>
+                        <button type="button" onClick={() => setAccionFormOpen(false)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black text-gray-500">
+                          Cancelar
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -1307,15 +1443,17 @@ function DecisionTab({ active, children, onClick }) {
 
 function ResultCard({ title, value, note, color }) {
   return (
-    <div className={`rounded-2xl border px-4 py-4 shadow-sm ${color}`}>
-      <p className="text-[10px] font-black uppercase tracking-widest opacity-70">
-        {title}
-      </p>
-      <p className="mt-2 text-4xl font-black leading-none">
+    <div className={`flex items-center justify-between gap-2 rounded-2xl border px-4 py-2 shadow-sm ${color}`}>
+      <div>
+        <p className="text-[9px] font-black uppercase tracking-widest opacity-70">
+          {title}
+        </p>
+        <p className="text-[10px] font-semibold opacity-75">
+          {note}
+        </p>
+      </div>
+      <p className="text-2xl font-black leading-none">
         {value}
-      </p>
-      <p className="mt-2 text-xs font-semibold opacity-75">
-        {note}
       </p>
     </div>
   );
