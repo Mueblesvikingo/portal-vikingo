@@ -1,4 +1,8 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  PieChart, Pie, Cell, Legend,
+} from "recharts";
 import {
   createStrategicDecision,
   deleteStrategicDecision,
@@ -7,6 +11,17 @@ import {
 } from "../../services/decisionService";
 import { createAccion, getTiposFlujo } from "../../services/accionesService";
 import { getFlujoConfig, TIPOS_ACCION, PRIORIDADES_ACCION } from "../actions/actionsHelpers";
+
+const ORIGEN_COLOR = {
+  "S&OP": "#0369a1",
+  "Seguimiento Estratégico": "#7c3aed",
+  "Control de cambios SIG": "#0f766e",
+  "Gestión Estratégica": "#b91c1c",
+  "Sin origen": "#6b7280",
+};
+function origenColor(origen) {
+  return ORIGEN_COLOR[origen] || "#334155";
+}
 
 const emptyWrap = {
   options: [""],
@@ -58,6 +73,8 @@ export default function DecisionCenterModule({ currentUser }) {
   const [accionFormOpen, setAccionFormOpen] = useState(false);
   const [accionDraft, setAccionDraft] = useState(emptyWrapAccionDraft);
   const [creandoAccion, setCreandoAccion] = useState(false);
+  const [filtroOrigen, setFiltroOrigen] = useState("all");
+  const [filtroRiesgo, setFiltroRiesgo] = useState("all");
 
   useEffect(() => {
     loadDecisions();
@@ -95,6 +112,8 @@ export default function DecisionCenterModule({ currentUser }) {
         dueDate: item.fecha_compromiso,
         consequence: item.consecuencia,
         recommendation: item.recomendacion,
+        process: item.proceso || "Sin origen",
+        createdAt: item.created_at,
         wrap: {
           options: item.wrap_options,
           evidence: item.wrap_evidence,
@@ -345,6 +364,54 @@ export default function DecisionCenterModule({ currentUser }) {
   const activeDecisions = decisions.filter((item) => !inboxDecisions.includes(item) && ["Decidida", "Escalada a PM"].includes(item.status));
   const closedDecisions = decisions.filter((item) => item.status === "Cerrada");
   const pendingDecisions = decisions.filter((item) => !inboxDecisions.includes(item) && !closedDecisions.includes(item) && !activeDecisions.includes(item));
+
+  // Dashboard filtrable de la pestaña Resultados — origen y riesgo se
+  // aplican sobre el universo completo de decisiones, independiente de qué
+  // pestaña de lista (Bandeja/Activas/...) esté seleccionada.
+  const origenOptions = useMemo(() => [...new Set(decisions.map((d) => d.process))].sort(), [decisions]);
+  const resultadosDecisions = useMemo(
+    () =>
+      decisions.filter(
+        (d) => (filtroOrigen === "all" || d.process === filtroOrigen) && (filtroRiesgo === "all" || d.risk === filtroRiesgo)
+      ),
+    [decisions, filtroOrigen, filtroRiesgo]
+  );
+  const resultadosInbox = resultadosDecisions.filter((item) => ["Solicitud", "Stand by"].includes(item.status));
+  const resultadosActivas = resultadosDecisions.filter((item) => !resultadosInbox.includes(item) && ["Decidida", "Escalada a PM"].includes(item.status));
+  const resultadosCerradas = resultadosDecisions.filter((item) => item.status === "Cerrada");
+  const resultadosPendientes = resultadosDecisions.filter((item) => !resultadosInbox.includes(item) && !resultadosCerradas.includes(item) && !resultadosActivas.includes(item));
+
+  const origenChartData = useMemo(
+    () =>
+      origenOptions
+        .map((origen) => ({ origen, total: resultadosDecisions.filter((d) => d.process === origen).length }))
+        .filter((row) => row.total > 0),
+    [origenOptions, resultadosDecisions]
+  );
+
+  // "Desempeño de Dirección": qué tan al día está la resolución de
+  // decisiones respecto a su fecha compromiso, con el estado actual de cada
+  // una (no requiere fecha de cierre, que hoy no se registra en la tabla).
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const desempenoDireccionData = useMemo(() => {
+    let resuelta = 0, vencida = 0, enPlazo = 0, sinFecha = 0;
+    resultadosDecisions.forEach((item) => {
+      const isResuelta = ["Decidida", "Escalada a PM", "Cerrada"].includes(item.status);
+      if (isResuelta) { resuelta += 1; return; }
+      if (!item.dueDate) { sinFecha += 1; return; }
+      const due = new Date(item.dueDate); due.setHours(0, 0, 0, 0);
+      if (due < hoy) vencida += 1; else enPlazo += 1;
+    });
+    return [
+      { name: "Resuelta", value: resuelta, color: "#059669" },
+      { name: "Vencida sin resolver", value: vencida, color: "#dc2626" },
+      { name: "En plazo", value: enPlazo, color: "#0284c7" },
+      { name: "Sin fecha compromiso", value: sinFecha, color: "#9ca3af" },
+    ].filter((row) => row.value > 0);
+  }, [resultadosDecisions, hoy]);
+  const totalDireccion = desempenoDireccionData.reduce((sum, row) => sum + row.value, 0);
+  const vencidasDireccion = desempenoDireccionData.find((r) => r.name === "Vencida sin resolver")?.value || 0;
+  const pctAtencion = totalDireccion > 0 ? Math.round(((totalDireccion - vencidasDireccion) / totalDireccion) * 100) : null;
   const visibleDecisions =
     decisionView === "bandeja"
       ? inboxDecisions
@@ -447,12 +514,86 @@ export default function DecisionCenterModule({ currentUser }) {
 
         <div className="space-y-2 p-3">
           {decisionView === "resultados" && (
-            <div className="grid gap-3 lg:grid-cols-5">
-              <ResultCard title="Bandeja" value={inboxDecisions.length} note="Solicitudes por revisar" color="border-indigo-100 bg-indigo-50/60 text-indigo-700" />
-              <ResultCard title="Activas" value={activeDecisions.length} note="En gestión ejecutiva" color="border-sky-100 bg-sky-50/60 text-sky-700" />
-              <ResultCard title="Pendientes" value={pendingDecisions.length} note="Por análisis o decisión" color="border-amber-100 bg-amber-50/70 text-amber-700" />
-              <ResultCard title="Cerradas" value={closedDecisions.length} note="Con ciclo completado" color="border-emerald-100 bg-emerald-50/70 text-emerald-700" />
-              <ResultCard title="Críticas" value={decisions.filter((item) => item.risk === "Alto").length} note="Riesgo alto" color="border-red-100 bg-red-50/70 text-red-700" />
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                  Origen
+                  <select value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)} className="ml-2 h-8 rounded-lg border border-gray-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-gray-700 outline-none">
+                    <option value="all">Todos</option>
+                    {origenOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </label>
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                  Riesgo
+                  <select value={filtroRiesgo} onChange={(e) => setFiltroRiesgo(e.target.value)} className="ml-2 h-8 rounded-lg border border-gray-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-gray-700 outline-none">
+                    <option value="all">Todos</option>
+                    <option value="Alto">Alto</option>
+                    <option value="Moderado">Moderado</option>
+                    <option value="Bajo">Bajo</option>
+                  </select>
+                </label>
+                {(filtroOrigen !== "all" || filtroRiesgo !== "all") && (
+                  <button type="button" onClick={() => { setFiltroOrigen("all"); setFiltroRiesgo("all"); }} className="text-[10px] font-black text-red-500 hover:text-red-700">
+                    Quitar filtros
+                  </button>
+                )}
+                <span className="ml-auto text-[10px] font-bold text-gray-400">{resultadosDecisions.length} decisiones en este filtro</span>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-5">
+                <ResultCard title="Bandeja" value={resultadosInbox.length} note="Solicitudes por revisar" color="border-indigo-100 bg-indigo-50/60 text-indigo-700" />
+                <ResultCard title="Activas" value={resultadosActivas.length} note="En gestión ejecutiva" color="border-sky-100 bg-sky-50/60 text-sky-700" />
+                <ResultCard title="Pendientes" value={resultadosPendientes.length} note="Por análisis o decisión" color="border-amber-100 bg-amber-50/70 text-amber-700" />
+                <ResultCard title="Cerradas" value={resultadosCerradas.length} note="Con ciclo completado" color="border-emerald-100 bg-emerald-50/70 text-emerald-700" />
+                <ResultCard title="Críticas" value={resultadosDecisions.filter((item) => item.risk === "Alto").length} note="Riesgo alto" color="border-red-100 bg-red-50/70 text-red-700" />
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Desempeño de Dirección</p>
+                    {pctAtencion !== null && (
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${pctAtencion >= 80 ? "bg-emerald-50 text-emerald-700" : pctAtencion >= 60 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600"}`}>
+                        {pctAtencion}% al día
+                      </span>
+                    )}
+                  </div>
+                  <p className="mb-2 text-[10px] font-semibold text-gray-400">Resueltas vs. vencidas sin resolver, sobre su fecha compromiso</p>
+                  {totalDireccion === 0 ? (
+                    <div className="flex h-[220px] items-center justify-center text-[11px] font-bold text-gray-300">Sin decisiones en este filtro.</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie data={desempenoDireccionData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={2} stroke="none">
+                          {desempenoDireccionData.map((row) => <Cell key={row.name} fill={row.color} />)}
+                        </Pie>
+                        <Tooltip formatter={(value, name) => [`${value} decisiones`, name]} />
+                        <Legend wrapperStyle={{ fontSize: 10 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Decisiones por origen</p>
+                  <p className="mb-2 text-[10px] font-semibold text-gray-400">Qué proceso le está generando más decisiones a Dirección</p>
+                  {origenChartData.length === 0 ? (
+                    <div className="flex h-[220px] items-center justify-center text-[11px] font-bold text-gray-300">Sin decisiones en este filtro.</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={origenChartData} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                        <YAxis type="category" dataKey="origen" width={140} tick={{ fontSize: 10, fill: "#374151" }} axisLine={false} tickLine={false} />
+                        <Tooltip formatter={(value) => [`${value} decisiones`, "Total"]} cursor={{ fill: "#f3f4f6" }} />
+                        <Bar dataKey="total" radius={[0, 6, 6, 0]}>
+                          {origenChartData.map((row) => <Cell key={row.origen} fill={origenColor(row.origen)} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -475,6 +616,12 @@ export default function DecisionCenterModule({ currentUser }) {
                 <div className="text-[15px] font-black leading-tight text-[#0f172a]">
                   {item.decision}
                 </div>
+                <span
+                  className="mt-1 inline-block rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide"
+                  style={{ color: origenColor(item.process), backgroundColor: `${origenColor(item.process)}1a` }}
+                >
+                  {item.process}
+                </span>
               </div>
 
               <div className="flex justify-center text-center text-[13px] font-semibold text-gray-700 whitespace-nowrap">
