@@ -6,7 +6,7 @@ import {
   updateStrategicDecision,
 } from "../../services/decisionService";
 import { createAccion, getTiposFlujo } from "../../services/accionesService";
-import { getFlujoConfig } from "../actions/actionsHelpers";
+import { getFlujoConfig, TIPOS_ACCION, PRIORIDADES_ACCION } from "../actions/actionsHelpers";
 
 const EXECUTION_TYPE_TO_ACCION_TIPO = {
   "Acción puntual": "Acción Operativa",
@@ -21,19 +21,9 @@ const emptyWrap = {
   distance: "",
   prevention: "",
   finalDecision: "",
-  executionType: "",
-  pmOwner: "",
-  pmPlatform: "",
-  pmTransferDate: "",
-  pmCode: "",
 };
 
-const executionTypes = [
-  "Acción puntual",
-  "Seguimiento ejecutivo",
-  "Iniciativa estratégica",
-  "Proyecto PM",
-];
+const emptyWrapAccionDraft = { titulo: "", tipo: "Acuerdo Directivo", prioridad: "Alta", descripcion: "" };
 
 const statusOptions = [
   "Solicitud",
@@ -55,6 +45,9 @@ export default function DecisionCenterModule({ currentUser }) {
   const [decisionView, setDecisionView] = useState("resultados");
   const [tiposFlujoAcciones, setTiposFlujoAcciones] = useState([]);
   const [generandoAccion, setGenerandoAccion] = useState(false);
+  const [wrapAccionFormOpen, setWrapAccionFormOpen] = useState(false);
+  const [wrapAccionDraft, setWrapAccionDraft] = useState(emptyWrapAccionDraft);
+  const [creandoAccionWrap, setCreandoAccionWrap] = useState(false);
 
   useEffect(() => {
     loadDecisions();
@@ -217,22 +210,7 @@ export default function DecisionCenterModule({ currentUser }) {
 
   const getWrapStatus = () => {
     const hasFinalDecision = Boolean(wrapForm.finalDecision?.trim());
-    const hasExecutionType = Boolean(wrapForm.executionType);
-    const hasPmData = Boolean(
-      wrapForm.pmOwner?.trim() &&
-        wrapForm.pmPlatform &&
-        wrapForm.pmTransferDate
-    );
-
-    if (wrapForm.executionType === "Proyecto PM" && hasPmData) {
-      return "Escalada a PM";
-    }
-
-    if (hasFinalDecision && hasExecutionType) {
-      return "Decidida";
-    }
-
-    return "En análisis";
+    return hasFinalDecision ? "Decidida" : "En análisis";
   };
 
   const saveWrapDecision = async () => {
@@ -244,7 +222,6 @@ export default function DecisionCenterModule({ currentUser }) {
         responsable: wrapDecision.owner,
         riesgo: wrapDecision.risk,
         estado: nextStatus,
-        execution_type: wrapForm.executionType || null,
         consecuencia: wrapDecision.consequence,
         recomendacion: wrapDecision.recommendation,
         fecha_compromiso: wrapDecision.dueDate || null,
@@ -304,6 +281,43 @@ export default function DecisionCenterModule({ currentUser }) {
     setSelectedDecision(null);
   };
 
+  // Botón "+ Crear Acción" dentro del WRAP — reemplaza al antiguo selector
+  // "Tipo de ejecución". Se puede enviar varias veces sobre la misma
+  // decisión (una decisión puede requerir más de una acción de seguimiento),
+  // y cada acción creada ya queda lista para convertirse en Asignación desde
+  // Acciones de Mejora (mismo flujo "→ Asignación" que ya existe ahí).
+  const handleCrearAccionWrap = async () => {
+    if (!wrapAccionDraft.titulo.trim()) { alert("Escribe un título para la acción."); return; }
+    setCreandoAccionWrap(true);
+    const flujo = getFlujoConfig(tiposFlujoAcciones, wrapAccionDraft.tipo);
+    const result = await createAccion(
+      {
+        tipo: wrapAccionDraft.tipo,
+        nivel: "Estratégica",
+        origenModulo: "Centro de Decisiones",
+        origenTabla: "decisiones_estrategicas",
+        origenId: wrapDecision.id,
+        titulo: wrapAccionDraft.titulo,
+        descripcion: wrapAccionDraft.descripcion,
+        prioridad: wrapAccionDraft.prioridad,
+        fechaCompromiso: wrapDecision.dueDate || null,
+        requiereAnalisisCausa: flujo.requiere_analisis_causa,
+        requiereVerificacionEficacia: flujo.requiere_verificacion_eficacia,
+        requiereAprobacion: flujo.requiere_aprobacion,
+      },
+      currentUser
+    );
+    setCreandoAccionWrap(false);
+
+    if (!result?.ok) {
+      console.error(result?.error);
+      alert("No fue posible crear la acción.");
+      return;
+    }
+    alert(`Acción ${result.data.codigo} creada en Acciones de Mejora. Desde ahí se puede convertir en una asignación de Balance de Carga.`);
+    setWrapAccionFormOpen(false);
+  };
+
   const openWrap = (decision) => {
     setWrapDecision(decision);
     setWrapForm({
@@ -320,11 +334,13 @@ export default function DecisionCenterModule({ currentUser }) {
         ? decision.wrap.prevention.join("\n")
         : decision.wrap?.prevention || "",
       finalDecision: decision.wrap?.finalDecision || "",
-      executionType: decision.executionType || "",
-      pmOwner: "",
-      pmPlatform: "",
-      pmTransferDate: "",
-      pmCode: "",
+    });
+    setWrapAccionFormOpen(false);
+    setWrapAccionDraft({
+      titulo: decision.decision || "",
+      tipo: "Acuerdo Directivo",
+      prioridad: decision.risk === "Alto" ? "Crítica" : decision.risk === "Bajo" ? "Media" : "Alta",
+      descripcion: decision.recommendation || "",
     });
     setSelectedDecision(null);
   };
@@ -349,7 +365,7 @@ export default function DecisionCenterModule({ currentUser }) {
   };
 
   const inboxDecisions = decisions.filter((item) => ["Solicitud", "Stand by"].includes(item.status));
-  const activeDecisions = decisions.filter((item) => !inboxDecisions.includes(item) && (["Acción puntual", "Seguimiento ejecutivo", "Iniciativa estratégica", "Proyecto PM"].includes(item.executionType) || item.status === "Escalada a PM"));
+  const activeDecisions = decisions.filter((item) => !inboxDecisions.includes(item) && ["Decidida", "Escalada a PM"].includes(item.status));
   const closedDecisions = decisions.filter((item) => item.status === "Cerrada");
   const pendingDecisions = decisions.filter((item) => !inboxDecisions.includes(item) && !closedDecisions.includes(item) && !activeDecisions.includes(item));
   const visibleDecisions =
@@ -823,23 +839,13 @@ export default function DecisionCenterModule({ currentUser }) {
 
               <div className="mt-4 space-y-3">
                 <div className="flex items-center gap-3">
-                  <select
-                    value={wrapForm.executionType || ""}
-                    onChange={(e) =>
-                      setWrapForm((prev) => ({
-                        ...prev,
-                        executionType: e.target.value,
-                      }))
-                    }
-                    className="w-[280px] rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-[#0f172a] outline-none focus:border-red-300"
+                  <button
+                    type="button"
+                    onClick={() => setWrapAccionFormOpen((v) => !v)}
+                    className="w-[220px] rounded-2xl border border-[#001225] bg-white px-4 py-3 text-sm font-black text-[#001225] transition-all hover:bg-[#001225] hover:text-white"
                   >
-                    <option value="">Tipo de ejecución</option>
-                    {executionTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
+                    + Crear Acción
+                  </button>
 
                   <button
                     type="button"
@@ -850,70 +856,68 @@ export default function DecisionCenterModule({ currentUser }) {
                   </button>
                 </div>
 
-                {wrapForm.executionType === "Proyecto PM" && (
-                  <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
-                    <div className="mb-3 text-[10px] uppercase font-black tracking-[0.2em] text-blue-600">
-                      Escalamiento PM
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <input
-                        placeholder="PM asignado"
-                        value={wrapForm.pmOwner || ""}
-                        onChange={(e) =>
-                          setWrapForm((prev) => ({
-                            ...prev,
-                            pmOwner: e.target.value,
-                          }))
-                        }
-                        className="rounded-xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300"
-                      />
-
-                      <select
-                        value={wrapForm.pmPlatform || ""}
-                        onChange={(e) =>
-                          setWrapForm((prev) => ({
-                            ...prev,
-                            pmPlatform: e.target.value,
-                          }))
-                        }
-                        className="rounded-xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300"
-                      >
-                        <option value="">Plataforma</option>
-                        <option value="Teams">Teams</option>
-                        <option value="Planner">Planner</option>
-                        <option value="ClickUp">ClickUp</option>
-                        <option value="Monday">Monday</option>
-                      </select>
-
-                      <input
-                        type="date"
-                        value={wrapForm.pmTransferDate || ""}
-                        onChange={(e) =>
-                          setWrapForm((prev) => ({
-                            ...prev,
-                            pmTransferDate: e.target.value,
-                          }))
-                        }
-                        className="rounded-xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300"
-                      />
-
-                      <input
-                        placeholder="Código iniciativa"
-                        value={wrapForm.pmCode || ""}
-                        onChange={(e) =>
-                          setWrapForm((prev) => ({
-                            ...prev,
-                            pmCode: e.target.value,
-                          }))
-                        }
-                        className="rounded-xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300"
-                      />
-                    </div>
-
-                    <p className="mt-3 text-xs leading-relaxed text-blue-700/80">
-                      Estos campos solo clasifican el escalamiento. La gestión formal del proyecto se realiza fuera del Centro de Decisiones.
+                {wrapAccionFormOpen && (
+                  <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-sky-600">
+                      Nueva acción · se podrá convertir en asignación desde Acciones de Mejora
                     </p>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 md:col-span-2">
+                        Título
+                        <input
+                          type="text"
+                          value={wrapAccionDraft.titulo}
+                          onChange={(e) => setWrapAccionDraft((d) => ({ ...d, titulo: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                        />
+                      </label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                        Tipo
+                        <select
+                          value={wrapAccionDraft.tipo}
+                          onChange={(e) => setWrapAccionDraft((d) => ({ ...d, tipo: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                        >
+                          {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                        Prioridad
+                        <select
+                          value={wrapAccionDraft.prioridad}
+                          onChange={(e) => setWrapAccionDraft((d) => ({ ...d, prioridad: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-sky-300"
+                        >
+                          {PRIORIDADES_ACCION.map((p) => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 md:col-span-2">
+                        Descripción
+                        <textarea
+                          rows={2}
+                          value={wrapAccionDraft.descripcion}
+                          onChange={(e) => setWrapAccionDraft((d) => ({ ...d, descripcion: e.target.value }))}
+                          className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[#0f172a] outline-none focus:border-sky-300"
+                        />
+                      </label>
+                    </div>
+                    <div className="mt-2 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        disabled={creandoAccionWrap}
+                        onClick={handleCrearAccionWrap}
+                        className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white disabled:opacity-50"
+                      >
+                        {creandoAccionWrap ? "Creando…" : "Crear acción"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWrapAccionFormOpen(false)}
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-black text-gray-500"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
