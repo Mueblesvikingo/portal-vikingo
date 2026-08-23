@@ -12,6 +12,7 @@ export async function createStrategicDecision(data) {
         execution_type: data.executionType,
         fecha_compromiso: data.dueDate || null,
         consecuencia: data.consequence,
+        impacto_no_actuar: data.impactoNoActuar || null,
         recomendacion: data.recommendation,
         wrap_options: data.wrap.options,
         wrap_evidence: data.wrap.evidence,

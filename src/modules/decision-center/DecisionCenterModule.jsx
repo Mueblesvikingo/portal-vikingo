@@ -111,6 +111,7 @@ export default function DecisionCenterModule({ currentUser }) {
         executionType: item.execution_type,
         dueDate: item.fecha_compromiso,
         consequence: item.consecuencia,
+        impactoNoActuar: item.impacto_no_actuar,
         recommendation: item.recomendacion,
         process: item.proceso || "Sin origen",
         createdAt: item.created_at,
@@ -139,6 +140,7 @@ export default function DecisionCenterModule({ currentUser }) {
           estado: updatedDecision.status,
           execution_type: updatedDecision.executionType,
           consecuencia: updatedDecision.consequence,
+          impacto_no_actuar: updatedDecision.impactoNoActuar,
           recomendacion: updatedDecision.recommendation,
           fecha_compromiso: updatedDecision.dueDate || null,
           wrap_options: updatedDecision.wrap?.options,
@@ -156,6 +158,7 @@ export default function DecisionCenterModule({ currentUser }) {
           executionType: updatedDecision.executionType || "",
           dueDate: updatedDecision.dueDate,
           consequence: updatedDecision.consequence,
+          impactoNoActuar: updatedDecision.impactoNoActuar,
           recommendation: updatedDecision.recommendation,
           process: "Gestión Estratégica",
           wrap: {
@@ -495,6 +498,7 @@ export default function DecisionCenterModule({ currentUser }) {
                   dueDate: "",
                   executionType: "",
                   consequence: "",
+                  impactoNoActuar: "",
                   recommendation: "",
                   wrap: null,
                 })
@@ -757,7 +761,7 @@ export default function DecisionCenterModule({ currentUser }) {
                   </div>
 
                   <p className="mt-2 text-sm leading-relaxed text-gray-600">
-                    {(selectedDecision.consequence || "Sin información registrada.").split("\n\n")[0]}
+                    {selectedDecision.consequence || "Sin información registrada."}
                   </p>
                 </div>
 
@@ -767,11 +771,7 @@ export default function DecisionCenterModule({ currentUser }) {
                   </div>
 
                   <p className="mt-2 text-sm leading-relaxed text-gray-600">
-                    {selectedDecision.risk === "Alto"
-                      ? "Existe riesgo de afectación operativa, financiera y organizacional."
-                      : selectedDecision.risk === "Moderado" || selectedDecision.risk === "Medio"
-                        ? "La situación podría generar desviaciones operativas progresivas."
-                        : "La situación requiere seguimiento para evitar desviaciones futuras."}
+                    {selectedDecision.impactoNoActuar || "Sin información registrada."}
                   </p>
                 </div>
               </div>
@@ -1140,7 +1140,19 @@ export default function DecisionCenterModule({ currentUser }) {
                     consequence: e.target.value,
                   })
                 }
-                placeholder="Consecuencia"
+                placeholder="¿Qué está pasando?"
+                className="h-20 w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 p-3 text-sm outline-none focus:border-red-300"
+              />
+
+              <textarea
+                value={editingDecision.impactoNoActuar || ""}
+                onChange={(e) =>
+                  setEditingDecision({
+                    ...editingDecision,
+                    impactoNoActuar: e.target.value,
+                  })
+                }
+                placeholder="¿Qué pasa si no se actúa?"
                 className="h-20 w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 p-3 text-sm outline-none focus:border-red-300"
               />
 
