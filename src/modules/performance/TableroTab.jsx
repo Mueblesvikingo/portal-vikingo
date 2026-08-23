@@ -8,7 +8,7 @@ import {
   PERIODICIDAD_OPTIONS,
   computeCumplimiento,
   getCumplimientoStatus,
-  getPreviousMonthInfo,
+  getCurrentMonthInfo,
   formatKpiValue,
   formatDateTime,
 } from "./performanceHelpers";
@@ -117,7 +117,7 @@ function DetailField({ label, children }) {
 export default function TableroTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onUpdateKpi, onToggleKpiActivo }) {
   const [openKpiId, setOpenKpiId] = useState(null);
   const isEstrategico = scope === "ESTRATEGICO";
-  const mesAnteriorLabel = getPreviousMonthInfo().label;
+  const mesActualLabel = getCurrentMonthInfo().label;
   // Los inactivos (visibles solo para quien puede editarlos, ver
   // PerformanceModule) siempre se ordenan al final de su grupo — sort
   // estable, así que el orden entre activos (y entre inactivos) no cambia.
@@ -156,8 +156,8 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
           <thead>
             <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
               <th className="px-3 py-2 text-white">Indicador</th>
-              <th className="px-3 py-2 text-right text-white">Real <span className="font-bold normal-case text-white/40">({mesAnteriorLabel})</span></th>
-              <th className="px-3 py-2 text-right">Meta <span className="font-bold normal-case text-white/40">({mesAnteriorLabel})</span></th>
+              <th className="px-3 py-2 text-right text-white">Real <span className="font-bold normal-case text-white/40">({mesActualLabel})</span></th>
+              <th className="px-3 py-2 text-right">Meta <span className="font-bold normal-case text-white/40">({mesActualLabel})</span></th>
               <th className="px-3 py-2 text-right">Cumpl.</th>
               {canEdit && <th className="px-3 py-2"></th>}
             </tr>

@@ -115,22 +115,23 @@ export function buildMonthlySeries(resultados, kpi, anio) {
   }));
 }
 
-// El "mes anterior" es siempre el mes calendario previo al actual (no el
-// último mes con dato capturado) — así Real/Meta se muestran automáticamente
-// sin que el usuario tenga que buscar el mes correcto.
-export function getPreviousMonthInfo() {
+// El mes "actual" es siempre el mes calendario en curso — así el Tablero y
+// las Gráficas reflejan de inmediato lo que se va capturando en Resultados,
+// sin esperar a que el mes cierre (igual que ya hace el % semanal de
+// Resultados, que también se calcula contra la meta del mes en curso).
+export function getCurrentMonthInfo() {
   const now = new Date();
   const currentMonth = now.getMonth() + 1; // 1-12
   const currentYear = now.getFullYear();
-  if (currentMonth === 1) return { mes: 12, anio: currentYear - 1, label: MESES[11] };
-  return { mes: currentMonth - 1, anio: currentYear, label: MESES[currentMonth - 2] };
+  return { mes: currentMonth, anio: currentYear, label: MESES[currentMonth - 1] };
 }
 
-// Real/Meta del mes anterior (calendario), contra ese mismo mes. `kpi` es el
-// objeto completo (no solo el id) porque el real de un KPI de captura
-// semanal se calcula distinto (promedio de semanas, ver getMonthlyRealValue).
+// Real/Meta del mes en curso, contra ese mismo mes. `kpi` es el objeto
+// completo (no solo el id) porque el real de un KPI de captura semanal se
+// calcula distinto (promedio de semanas capturadas hasta ahora, ver
+// getMonthlyRealValue).
 export function computeCumplimiento(resultados, kpi, anio) {
-  const { mes, anio: mesAnio, label } = getPreviousMonthInfo();
+  const { mes, anio: mesAnio, label } = getCurrentMonthInfo();
   const targetAnio = mesAnio ?? anio;
   const real = getMonthlyRealValue(resultados, kpi, targetAnio, mes);
   const meta = getResultadoValue(resultados, kpi.id, targetAnio, mes, "meta");
