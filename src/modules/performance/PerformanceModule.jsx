@@ -20,6 +20,9 @@ import ProcesoChartsTab from "./ProcesoChartsTab";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+const PERFORMANCE_VIDEO_URL = "https://www.youtube.com/embed/STiz1vJ9EWU?autoplay=1&rel=0&modestbranding=1";
+const PERFORMANCE_MANUAL_URL = "/manuales/Manual_Desempeno_Organizacional.pdf";
+
 const KPI_FIELD_LABELS = {
   nombre_indicador: "Indicador",
   objetivo_estrategico: "Objetivo estratégico",
@@ -105,6 +108,7 @@ export default function PerformanceModule({ currentUser }) {
   const [historialOpen, setHistorialOpen] = useState(false);
   const [historialLoading, setHistorialLoading] = useState(false);
   const [historialEntries, setHistorialEntries] = useState([]);
+  const [showVideo, setShowVideo] = useState(false);
 
   const isStrategic = isStrategicTeamMember(currentUser);
 
@@ -277,7 +281,23 @@ export default function PerformanceModule({ currentUser }) {
 
         <div className="mt-2 overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-3 bg-[#001225] px-4 py-1.5 text-white">
-            <h2 className="text-[13px] font-black uppercase tracking-tight">Desempeño Organizacional {isEstrategico ? "· Estratégico" : `· ${scope}`}</h2>
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-[13px] font-black uppercase tracking-tight">Desempeño Organizacional {isEstrategico ? "· Estratégico" : `· ${scope}`}</h2>
+              <button
+                type="button"
+                onClick={() => setShowVideo(true)}
+                className="rounded-lg bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/20"
+              >
+                ▶ Guía en video
+              </button>
+              <button
+                type="button"
+                onClick={() => window.open(PERFORMANCE_MANUAL_URL, "_blank")}
+                className="rounded-lg bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/20"
+              >
+                📄 Guía en PDF
+              </button>
+            </div>
             <div className="flex gap-1 rounded-xl bg-white/10 p-0.5">
               {tabs.map((tab) => (
                 <button
@@ -338,6 +358,22 @@ export default function PerformanceModule({ currentUser }) {
         entries={historialEntries}
         kpisById={kpisById}
       />
+      {showVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-4xl overflow-hidden rounded-[24px] bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-[#001225] px-5 py-3 text-white">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">Video tutorial</p>
+                <h3 className="text-lg font-black">Desempeño Organizacional</h3>
+              </div>
+              <button type="button" onClick={() => setShowVideo(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-lg font-black text-white hover:bg-red-700">×</button>
+            </div>
+            <div className="aspect-video w-full bg-black">
+              <iframe className="h-full w-full" src={PERFORMANCE_VIDEO_URL} title="Video Desempeño Organizacional" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
