@@ -78,12 +78,30 @@ function workloadPayload(activity) {
 }
 
 export async function getSubprocesosCatalog() {
-  const { data, error } = await supabase.from("subprocesos").select("proceso, codigo, nombre");
+  const { data, error } = await supabase.from("subprocesos").select("id, proceso, codigo, nombre, prioridad_carga");
   if (error) {
     console.error("SUPABASE subprocesos ERROR:", error);
     return [];
   }
   return data || [];
+}
+
+// Prioridad de carga a Semana Típica — solo Dirección General la define
+// (gate en el propio módulo que llama esto), un número por subproceso que
+// da visibilidad de a cuál conviene programar primero desde Pendientes.
+export async function updateSubprocesoPrioridad(subprocesoId, prioridad) {
+  try {
+    const { data, error } = await supabase
+      .from("subprocesos")
+      .update({ prioridad_carga: prioridad })
+      .eq("id", subprocesoId)
+      .select("id, prioridad_carga")
+      .single();
+    if (error) return { ok: false, error };
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
 }
 
 export async function getOrganizationalDesignData() {
