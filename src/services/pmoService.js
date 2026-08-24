@@ -182,6 +182,30 @@ export async function getPendingRecordatorios(personaId) {
   }
 }
 
+// Para quien envía el recordatorio (la PM/equipo estratégico): historial
+// completo por proyecto, vistos y sin ver, para saber si el líder ya lo leyó
+// y cuándo — getPendingRecordatorios solo trae lo no visto y del lado del
+// destinatario, esto es la vista del remitente.
+export async function getRecordatoriosByProyecto(proyectoId) {
+  if (!proyectoId) return [];
+  try {
+    const { data, error } = await supabase
+      .from("pmo_recordatorios")
+      .select("*, destinatario:personas(nombre)")
+      .eq("proyecto_id", proyectoId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) {
+      console.error("Error al cargar historial de recordatorios del tablero PMO:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar historial de recordatorios del tablero PMO:", err);
+    return [];
+  }
+}
+
 export async function markRecordatorioVisto(recordatorioId) {
   try {
     const { error } = await supabase

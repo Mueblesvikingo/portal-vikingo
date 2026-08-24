@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cancelAssignment, confirmMeetingAttendance, createWorkloadAssignment, createWorkloadSourceActivity, deleteAssignment, deleteSavedWorkloadPlan, finalizeAssignment, findExistingSavedMonth, findExistingSavedWeek, getLiderProcesoOverrides, getSavedMonthlyPlans, getSavedWeeklyPlans, getWorkloadActivities, getWorkloadAssignments, getWorkloadMonthlyPlans, getWorkloadPeople, getWorkloadPersonRoles, getWorkloadWeeklyPlans, moveMonthlyPlanActivity, moveWeeklyPlanActivity, pauseAssignment, programAssignmentHours, reactivateAssignment, recalculateAssignmentHours, removeMonthlyPlanActivity, removeWeeklyPlanActivity, saveWorkloadPlan, scheduleActivityInMonthlyPlan, scheduleActivityInWeeklyPlan, updateMonthlyPlanHours, updateMonthlyPlanOrder, updateSavedWorkloadPlan, updateWeeklyPlanHours, updateWeeklyPlanOrder, updateWorkloadAssignment, updateWorkloadSourceActivity, upsertLiderProcesoOverride } from "../services/workloadService";
 import { hasWorkloadFullAccess, canEditWorkloadPendingActivities, canEditWorkloadForPersonRoles, isStrategicTeamMember, canEditPmoProyecto } from "../services/permissionsService";
 import { updateActivitySemaforo, getSubprocesosCatalog } from "../services/organizationalDesignService";
-import { getProyectos, updateProyecto, createProyecto, closeProyecto, reopenProyecto, createRecordatorio, getPendingRecordatorios, markRecordatorioVisto } from "../services/pmoService";
+import { getProyectos, updateProyecto, createProyecto, closeProyecto, reopenProyecto, createRecordatorio, getPendingRecordatorios, markRecordatorioVisto, getRecordatoriosByProyecto } from "../services/pmoService";
 import { mapProcesses as pmoProcessOptions } from "../services/processCatalog";
 import SemaforoDot from "../shared/components/SemaforoDot";
 
@@ -1567,15 +1567,30 @@ export default function WorkloadBalanceModule({
       { actor: currentUser }
     );
     if (!result.ok) { console.error(result.error); setPmoMessage("No fue posible enviar el recordatorio."); return; }
-    setPmoRecordatorioFormFor(null);
     setPmoRecordatorioText("");
     setPmoMessage(`Recordatorio enviado a ${proyecto.lider_proyecto?.nombre || "el líder del proyecto"}.`);
+    setPmoRecordatorioHistory(await getRecordatoriosByProyecto(proyecto.id));
   }
 
   async function handleDismissPmoRecordatorio(recordatorioId) {
     const result = await markRecordatorioVisto(recordatorioId);
     if (!result.ok) { console.error(result.error); return; }
     setPmoRecordatorios((current) => current.filter((item) => item.id !== recordatorioId));
+  }
+
+  // La PM abre el mismo panel para enviar un recordatorio nuevo y para ver
+  // si los anteriores ya fueron vistos por el líder (y cuándo) — se carga al
+  // abrir, no se mantiene en polling constante como el resto del módulo.
+  async function handleTogglePmoRecordatorioPanel(proyecto) {
+    if (pmoRecordatorioFormFor === proyecto.id) { setPmoRecordatorioFormFor(null); return; }
+    setPmoAsignacionFormFor(null);
+    setPmoRecordatorioText("");
+    setPmoRecordatorioFormFor(proyecto.id);
+    setPmoRecordatorioHistory([]);
+    setPmoRecordatorioHistoryLoading(true);
+    const history = await getRecordatoriosByProyecto(proyecto.id);
+    setPmoRecordatorioHistoryLoading(false);
+    setPmoRecordatorioHistory(history);
   }
   // Semáforo: un solo campo compartido en la actividad maestra
   // (proceso_actividades.semaforo), no una copia por bloque/ocurrencia —
@@ -1600,6 +1615,8 @@ export default function WorkloadBalanceModule({
   const [pmoMessage, setPmoMessage] = useState("");
   const [pmoRecordatorioFormFor, setPmoRecordatorioFormFor] = useState(null);
   const [pmoRecordatorioText, setPmoRecordatorioText] = useState("");
+  const [pmoRecordatorioHistory, setPmoRecordatorioHistory] = useState([]);
+  const [pmoRecordatorioHistoryLoading, setPmoRecordatorioHistoryLoading] = useState(false);
   const [pmoAsignacionFormFor, setPmoAsignacionFormFor] = useState(null);
   const [pmoCreating, setPmoCreating] = useState(false);
   const [pmoNewNombre, setPmoNewNombre] = useState("");
@@ -4647,7 +4664,7 @@ function canReviewPlan() {
                                     {isStrategicTeamMember(currentUser) && proyecto.lider_proyecto_persona_id && (
                                       <button
                                         type="button"
-                                        onClick={() => { setPmoRecordatorioFormFor((current) => (current === proyecto.id ? null : proyecto.id)); setPmoAsignacionFormFor(null); setPmoRecordatorioText(""); }}
+                                        onClick={() => handleTogglePmoRecordatorioPanel(proyecto)}
                                         title="Enviar recordatorio al líder de proyecto"
                                         className={`flex h-5 w-5 items-center justify-center rounded-full border text-[9px] transition ${pmoRecordatorioFormFor === proyecto.id ? "border-amber-300 bg-amber-100" : "border-amber-200 bg-amber-50 hover:bg-amber-100"}`}
                                       >
@@ -4687,6 +4704,30 @@ function canReviewPlan() {
                                       />
                                       <button type="button" onClick={() => handleCreatePmoRecordatorio(proyecto)} className="h-8 rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white">Enviar</button>
                                       <button type="button" onClick={() => setPmoRecordatorioFormFor(null)} className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+                                    </div>
+                                    <div className="mt-2 border-t border-amber-100 pt-2">
+                                      <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-amber-700">Recordatorios enviados a este proyecto</p>
+                                      {pmoRecordatorioHistoryLoading ? (
+                                        <p className="text-[10px] font-bold text-slate-400">Cargando…</p>
+                                      ) : pmoRecordatorioHistory.length === 0 ? (
+                                        <p className="text-[10px] font-bold text-slate-400">Aún no se le ha enviado ningún recordatorio.</p>
+                                      ) : (
+                                        <div className="space-y-1">
+                                          {pmoRecordatorioHistory.map((item) => (
+                                            <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-2 py-1">
+                                              <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-slate-600" title={item.mensaje}>{item.mensaje}</span>
+                                              <span className="shrink-0 text-[9px] font-bold text-slate-400">{item.created_at ? new Date(item.created_at).toLocaleDateString("es-MX", { day: "2-digit", month: "short" }) : ""}</span>
+                                              {item.visto ? (
+                                                <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-black text-emerald-700" title={item.visto_at ? new Date(item.visto_at).toLocaleString("es-MX") : ""}>
+                                                  ✓ Visto {item.visto_at ? new Date(item.visto_at).toLocaleDateString("es-MX", { day: "2-digit", month: "short" }) : ""}
+                                                </span>
+                                              ) : (
+                                                <span className="shrink-0 rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[9px] font-black text-amber-700">Sin leer</span>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
                                   </td>
                                 </tr>

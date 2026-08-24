@@ -5,6 +5,7 @@ import {
   getPendingMeetingConfirmations,
   getPendingPreMeetingReminders,
 } from "../services/workloadService";
+import { getPendingRecordatorios, markRecordatorioVisto } from "../services/pmoService";
 
 const POLL_INTERVAL_MS = 25000;
 const SNOOZE_MS = 90000;
@@ -12,6 +13,7 @@ const BEEP_INTERVAL_MS = 2400;
 const PRE_MEETING_WINDOW_MS = 45 * 60 * 1000;
 const ATTENDANCE_TITLE = "⚠️ CONFIRMA TU ASISTENCIA";
 const PRE_MEETING_TITLE = "⏰ TU REUNIÓN ESTÁ POR COMENZAR";
+const RECORDATORIO_TITLE = "🔔 TIENES UN RECORDATORIO NUEVO";
 const SIREN_LOW_FREQ = 420;
 const SIREN_HIGH_FREQ = 1250;
 const SIREN_SWEEP_DURATION = 0.28;
@@ -36,10 +38,16 @@ function getMinutesUntil(item) {
   return Math.round((start - Date.now()) / 60000);
 }
 
+// A pesar del nombre (histórico, por las alarmas de reunión), este
+// componente también dispara la misma ventana de alerta a pantalla completa
+// para los recordatorios del Tablero Gerencial de Proyectos — la campanita
+// del Topbar (NotificationBell.jsx) los muestra pasivamente, esto además los
+// empuja activamente igual que a una reunión, solo que con menor prioridad.
 export default function MeetingAttendanceAlarm({ currentUser }) {
   const personaId = currentUser?.persona_id;
   const [pendingAttendance, setPendingAttendance] = useState([]);
   const [pendingPreMeeting, setPendingPreMeeting] = useState([]);
+  const [pendingRecordatorios, setPendingRecordatorios] = useState([]);
   const [confirming, setConfirming] = useState(false);
   const snoozedUntilRef = useRef({});
   const originalTitleRef = useRef(typeof document !== "undefined" ? document.title : "");
@@ -99,10 +107,37 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
     };
   }, [personaId]);
 
+  useEffect(() => {
+    if (!personaId) {
+      setPendingRecordatorios([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function poll() {
+      const result = await getPendingRecordatorios(personaId);
+      if (cancelled) return;
+      const now = Date.now();
+      const visible = (result || []).filter((item) => (snoozedUntilRef.current[`recordatorio-${item.id}`] || 0) <= now);
+      setPendingRecordatorios(visible);
+    }
+
+    poll();
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [personaId]);
+
   const activePreMeeting = pendingPreMeeting[0] || null;
   const activeAttendance = pendingAttendance[0] || null;
-  const activeType = activePreMeeting ? "pre-meeting" : activeAttendance ? "attendance" : null;
-  const active = activePreMeeting || activeAttendance;
+  const activeRecordatorio = pendingRecordatorios[0] || null;
+  // Las reuniones son urgentes por tiempo — un recordatorio de proyecto solo
+  // se muestra cuando no hay ninguna alerta de reunión activa en ese momento.
+  const activeType = activePreMeeting ? "pre-meeting" : activeAttendance ? "attendance" : activeRecordatorio ? "recordatorio" : null;
+  const active = activePreMeeting || activeAttendance || activeRecordatorio;
   const notifyKey = active ? `${activeType}-${active.id}` : null;
 
   useEffect(() => {
@@ -110,7 +145,7 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
       if (typeof document !== "undefined") document.title = originalTitleRef.current;
       return undefined;
     }
-    const alarmTitle = activeType === "pre-meeting" ? PRE_MEETING_TITLE : ATTENDANCE_TITLE;
+    const alarmTitle = activeType === "pre-meeting" ? PRE_MEETING_TITLE : activeType === "recordatorio" ? RECORDATORIO_TITLE : ATTENDANCE_TITLE;
     let showAlarmTitle = false;
     const interval = setInterval(() => {
       document.title = showAlarmTitle ? originalTitleRef.current : alarmTitle;
@@ -126,10 +161,13 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
     if (!active || !notifyKey || notifiedRef.current.has(notifyKey)) return;
     notifiedRef.current.add(notifyKey);
     if (typeof Notification === "undefined") return;
-    const title = activeType === "pre-meeting" ? "Tu reunión está por comenzar" : "Confirma tu asistencia a una reunión";
+    const title = activeType === "pre-meeting" ? "Tu reunión está por comenzar" : activeType === "recordatorio" ? "Tienes un recordatorio nuevo" : "Confirma tu asistencia a una reunión";
+    const body = activeType === "recordatorio"
+      ? `${active.proyecto?.nombre || "Proyecto"} · ${active.mensaje || ""}`
+      : `${active.nombre || active.titulo || "Reunión"} · ${formatMeetingWhen(active)}`;
     if (Notification.permission === "granted") {
       new Notification(title, {
-        body: `${active.nombre || active.titulo || "Reunión"} · ${formatMeetingWhen(active)}`,
+        body,
         icon: "/favicon.svg",
       });
     } else if (Notification.permission !== "denied") {
@@ -182,11 +220,15 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
     setConfirming(true);
     const result = activeType === "pre-meeting"
       ? await confirmPreMeetingReminder(active.id)
-      : await confirmMeetingAttendance(active.id);
+      : activeType === "recordatorio"
+        ? await markRecordatorioVisto(active.id)
+        : await confirmMeetingAttendance(active.id);
     setConfirming(false);
     if (result?.ok) {
       if (activeType === "pre-meeting") {
         setPendingPreMeeting((current) => current.filter((item) => item.id !== active.id));
+      } else if (activeType === "recordatorio") {
+        setPendingRecordatorios((current) => current.filter((item) => item.id !== active.id));
       } else {
         setPendingAttendance((current) => current.filter((item) => item.id !== active.id));
       }
@@ -194,27 +236,41 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
   }
 
   function handleSnooze() {
-    snoozedUntilRef.current[`${activeType === "pre-meeting" ? "pre" : "attendance"}-${active.id}`] = Date.now() + SNOOZE_MS;
+    const prefix = activeType === "pre-meeting" ? "pre" : activeType === "recordatorio" ? "recordatorio" : "attendance";
+    snoozedUntilRef.current[`${prefix}-${active.id}`] = Date.now() + SNOOZE_MS;
     if (activeType === "pre-meeting") {
       setPendingPreMeeting((current) => current.filter((item) => item.id !== active.id));
+    } else if (activeType === "recordatorio") {
+      setPendingRecordatorios((current) => current.filter((item) => item.id !== active.id));
     } else {
       setPendingAttendance((current) => current.filter((item) => item.id !== active.id));
     }
   }
 
   const isPreMeeting = activeType === "pre-meeting";
+  const isRecordatorio = activeType === "recordatorio";
 
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-red-950/80 p-4">
       <div className="w-full max-w-sm animate-pulse rounded-2xl border-4 border-red-500 bg-white p-5 shadow-2xl">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">{isPreMeeting ? "⏰" : "⚠️"}</span>
+          <span className="text-2xl">{isPreMeeting ? "⏰" : isRecordatorio ? "🔔" : "⚠️"}</span>
           <p className="text-sm font-black uppercase tracking-widest text-red-600">
-            {isPreMeeting ? "Tu reunión está por comenzar" : "Confirma tu asistencia"}
+            {isPreMeeting ? "Tu reunión está por comenzar" : isRecordatorio ? "Recordatorio nuevo" : "Confirma tu asistencia"}
           </p>
         </div>
-        <p className="mt-3 text-base font-black text-slate-900">{active.nombre || active.titulo || "Reunión"}</p>
-        <p className="mt-1 text-[11px] font-bold text-slate-500">{formatMeetingWhen(active)} · {active.gestion || "Sin canal"}</p>
+        {isRecordatorio ? (
+          <>
+            <p className="mt-3 text-base font-black text-slate-900">{active.proyecto?.nombre || "Proyecto"}</p>
+            <p className="mt-1 text-[11px] font-bold text-slate-500">{active.mensaje}</p>
+            {active.created_by_nombre && <p className="mt-1 text-[11px] font-black text-red-600">De: {active.created_by_nombre}</p>}
+          </>
+        ) : (
+          <>
+            <p className="mt-3 text-base font-black text-slate-900">{active.nombre || active.titulo || "Reunión"}</p>
+            <p className="mt-1 text-[11px] font-bold text-slate-500">{formatMeetingWhen(active)} · {active.gestion || "Sin canal"}</p>
+          </>
+        )}
         {isPreMeeting && minutesUntil !== null && (
           <p className="mt-1 text-[11px] font-black text-red-600">
             {minutesUntil > 0 ? `Comienza en ${minutesUntil} min` : "Está comenzando ahora"}
@@ -227,7 +283,7 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
             onClick={handleConfirm}
             className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
           >
-            {confirming ? "Confirmando..." : isPreMeeting ? "✓ Entendido, ya voy" : "✓ Confirmar asistencia"}
+            {confirming ? "Confirmando..." : isPreMeeting ? "✓ Entendido, ya voy" : isRecordatorio ? "✓ Marcar como visto" : "✓ Confirmar asistencia"}
           </button>
           <button
             type="button"
