@@ -1,4 +1,5 @@
 import { useLocation } from "react-router-dom";
+import NotificationBell from "../components/NotificationBell";
 
 const pageTitles = {
   "/": "Inicio Ejecutivo",
@@ -36,6 +37,8 @@ export default function Topbar({
       </div>
 
       <div className="flex items-center gap-4">
+        <NotificationBell currentUser={currentUser} />
+
         <div className="text-right">
           <div className="text-xs text-slate-400">
             Usuario activo
