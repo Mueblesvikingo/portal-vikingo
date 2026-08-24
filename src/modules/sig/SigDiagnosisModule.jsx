@@ -1782,7 +1782,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                 <div><div className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Detalle del criterio</div><div className="mt-1 text-2xl font-black tracking-tight">{selectedCell.section.numeral}. {selectedCell.section.title}</div></div>
                 <button type="button" onClick={() => setSelectedCell(null)} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg font-black text-slate-200 transition hover:bg-white/15 hover:text-white">×</button>
               </div>
-              <div className="space-y-5 p-6">
+              <div className="max-h-[75vh] space-y-5 overflow-y-auto p-6">
                 <div className="grid grid-cols-[1fr_auto] gap-4 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm md:flex-row md:items-center md:justify-between">
                   <div>
                     <div className="text-sm font-black tracking-tight text-slate-900">{selectedCell.group.subtitle}</div>
