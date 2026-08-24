@@ -278,6 +278,15 @@ export function isStrategicTeamMember(user) {
   return roles.some((role) => STRATEGIC_TEAM_ROLES.includes(role));
 }
 
+// Usado solo para decidir a dónde aterriza cada quien al entrar al portal
+// (ver AppRouter): Centro de Decisiones es la vista de arranque exclusiva de
+// Director General, el resto del equipo estratégico entra por Balance de
+// Carga.
+export function isDirectorGeneral(user) {
+  const roles = getApplicableRoles(user);
+  return roles.includes("Director General");
+}
+
 // Edición del tablero Estratégico de Desempeño Organizacional: decisión
 // explícita del usuario de restringirla a estas dos personas puntuales
 // (Alejandro García Hernández y Cristian García Hernández), no a un rol —

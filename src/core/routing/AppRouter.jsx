@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import AppLayout from "../../layout/AppLayout";
-import { canViewModule } from "../../services/permissionsService";
+import { canViewModule, isDirectorGeneral } from "../../services/permissionsService";
 
 import ExecutiveHome from "../../modules/executive/ExecutiveHome";
 import PerformanceModule from "../../modules/performance/PerformanceModule";
@@ -23,6 +23,7 @@ export default function AppRouter({
   onLogout,
 }) {
   const restrictedStart = !canViewModule(currentUser, "home");
+  const directorStart = isDirectorGeneral(currentUser);
 
   return (
     <BrowserRouter>
@@ -36,12 +37,18 @@ export default function AppRouter({
             element={
               restrictedStart ? (
                 <Navigate to="/capacity" replace />
-              ) : (
+              ) : directorStart ? (
                 // Temporal: Inicio Ejecutivo se oculta mientras se pule —
                 // Centro de Decisiones es el primer módulo que debe ver
                 // Dirección. Revertir a <ExecutiveHome currentUser={currentUser} />
                 // cuando Inicio Ejecutivo esté listo.
                 <Navigate to="/decision-center" replace />
+              ) : (
+                // El resto del equipo estratégico (PM, Coordinador SIG,
+                // Analista de Procesos, etc.) arranca en Balance de Carga —
+                // Centro de Decisiones queda como vista de arranque exclusiva
+                // de Dirección.
+                <Navigate to="/workload-balance" replace />
               )
             }
           />
