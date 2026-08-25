@@ -60,6 +60,7 @@ let subnumeralDescriptions = {
   "8.5 Producción controlada": "Asegurar producción bajo control operativo.",
   "8.6 Liberación": "Controlar la liberación de productos y servicios.",
   "8.7 Control de las salidas no conformes": "Identificar y controlar salidas que no cumplen los requisitos.",
+  "8.8 Cliente interno": "Asegurar que cada proceso atiende bien a quien recibe su trabajo, no solo al cliente externo.",
   "9.1 Seguimiento y medición": "Medir desempeño y resultados del SIG.",
   "9.1.2 Satisfacción del cliente": "Evaluar percepción y satisfacción del cliente.",
   "9.2 Auditoría interna": "Verificar cumplimiento mediante auditorías.",
@@ -158,6 +159,7 @@ let sigSections = [
       { subtitle: "8.5 Producción controlada", rows: [[12, "Producción bajo condiciones controladas", "Fichas técnicas / instrucciones", "Planeación producción", 3], [13, "Seguimiento durante producción", "Registros de inspección", "Producción/Calidad", 3], [14, "Recursos y personal competente", "Infraestructura / competencias", "Planeación producción", 5]] },
       { subtitle: "8.6 Liberación", rows: [[15, "Productos verificados antes de liberarse", "Registros de inspección", "Calidad", 3], [16, "Liberación autorizada", "Autorización de liberación", "Calidad", 3]] },
       { subtitle: "8.7 Control de las salidas no conformes", rows: [[17, "Salidas no conformes controladas", "Registro de no conformidades", "Calidad", 3]] },
+      { subtitle: "8.8 Cliente interno", rows: [[18, "Se ha identificado quién recibe el resultado del proceso (cliente interno) y qué espera de él", "Caracterizaciones / Mapa de procesos (entradas-salidas)", "Todos", 0], [19, "Se da seguimiento a si el cliente interno recibe lo que necesita, a tiempo y con la calidad esperada", "Retroalimentación / quejas internas registradas", "Todos", 0]] },
     ],
   },
   {
