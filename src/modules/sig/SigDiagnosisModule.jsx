@@ -227,6 +227,7 @@ function statusBg(percent) {
 }
 
 function cellStyle(score) {
+  if (score === null || score === undefined) return "bg-slate-100 text-slate-400 ring-1 ring-slate-200";
   if (score >= 10) return "bg-emerald-100 text-emerald-700";
   if (score >= 5) return "bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200/60";
   if (score >= 3) return "bg-amber-100/80 text-amber-700 ring-1 ring-amber-200/70";
@@ -234,6 +235,7 @@ function cellStyle(score) {
 }
 
 function scoreMeaning(score) {
+  if (score === null || score === undefined) return "Sin evaluar";
   if (score >= 10) return "Estandarizado";
   if (score >= 5) return "Implementado";
   if (score >= 3) return "En desarrollo";
@@ -266,9 +268,14 @@ function stateKey(groupSubtitle, number, proceso) {
   return `${rowKey(groupSubtitle, number)}::${proceso}`;
 }
 
+// Devuelve null cuando el criterio nunca se ha evaluado para este proceso
+// (no existe fila en sig_diagnostico_estados) — antes caía en row[4], el
+// valor semilla del checklist, indistinguible en pantalla de una evaluación
+// real. null es la señal explícita de "sin evaluar" en todo el módulo.
 function getRowScore(statusOverrides, group, row, selectedProcess) {
   const proceso = resolveProceso(row[3], selectedProcess);
-  return statusOverrides[stateKey(group.subtitle, row[0], proceso)] ?? row[4];
+  const key = stateKey(group.subtitle, row[0], proceso);
+  return key in statusOverrides ? statusOverrides[key] : null;
 }
 
 function groupAverage(group) {
@@ -282,25 +289,33 @@ function groupAverage(group) {
 // sin filtrar, así que criterios de otros procesos (ej. Ventas, Compras)
 // diluían el % con su valor base fijo (row[4]) y el número se sentía
 // "pegado" sin importar qué proceso se seleccionara.
+// null = ningún criterio del grupo tiene evaluación real todavía (distinto
+// de 0%, que significaría "evaluado y en No implementado"). Los criterios
+// sin evaluar se excluyen del promedio, no cuentan como 0.
 function groupAverageWithOverrides(group, statusOverrides, selectedProcess = "Todos") {
   const rows = selectedProcess === "Todos" ? group.rows : group.rows.filter((row) => processApplies(row[3], selectedProcess));
-  if (!rows.length) return 0;
-  const total = rows.reduce((sum, row) => sum + getRowScore(statusOverrides, group, row, selectedProcess), 0);
-  return Math.round((total / (rows.length * 10)) * 100);
+  const scores = rows.map((row) => getRowScore(statusOverrides, group, row, selectedProcess)).filter((score) => score !== null);
+  if (!scores.length) return null;
+  const total = scores.reduce((sum, score) => sum + score, 0);
+  return Math.round((total / (scores.length * 10)) * 100);
 }
 
 function sectionAverageWithOverrides(section, statusOverrides, selectedProcess = "Todos") {
   const allRows = section.groups.flatMap((group) => group.rows.map((row) => ({ group, row })));
   const rows = selectedProcess === "Todos" ? allRows : allRows.filter((item) => processApplies(item.row[3], selectedProcess));
-  const total = rows.reduce((sum, item) => sum + getRowScore(statusOverrides, item.group, item.row, selectedProcess), 0);
-  return rows.length ? Math.round((total / (rows.length * 10)) * 100) : 0;
+  const scores = rows.map((item) => getRowScore(statusOverrides, item.group, item.row, selectedProcess)).filter((score) => score !== null);
+  if (!scores.length) return null;
+  const total = scores.reduce((sum, score) => sum + score, 0);
+  return Math.round((total / (scores.length * 10)) * 100);
 }
 
 // Promedio SIEMPRE en el contexto "Todos" — usado en la calificación global
 // fija (no se mueve con el filtro, a diferencia de la barra de progreso).
 function globalAverageWithOverrides(sections, statusOverrides) {
-  const total = sections.reduce((sum, section) => sum + sectionAverageWithOverrides(section, statusOverrides, "Todos"), 0);
-  return sections.length ? Math.round(total / sections.length) : 0;
+  const values = sections.map((section) => sectionAverageWithOverrides(section, statusOverrides, "Todos")).filter((value) => value !== null);
+  if (!values.length) return 0;
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return Math.round(total / values.length);
 }
 
 // Promedio de los criterios aplicables a un solo proceso, a través de los 7
@@ -311,21 +326,25 @@ function processAverageWithOverrides(sections, selectedProcess, statusOverrides)
   const rows = sections.flatMap((section) =>
     section.groups.flatMap((group) => group.rows.filter((row) => processApplies(row[3], selectedProcess)).map((row) => ({ group, row })))
   );
-  if (!rows.length) return 0;
-  const total = rows.reduce((sum, item) => sum + getRowScore(statusOverrides, item.group, item.row, selectedProcess), 0);
-  return Math.round((total / (rows.length * 10)) * 100);
+  const scores = rows.map((item) => getRowScore(statusOverrides, item.group, item.row, selectedProcess)).filter((score) => score !== null);
+  if (!scores.length) return 0;
+  const total = scores.reduce((sum, score) => sum + score, 0);
+  return Math.round((total / (scores.length * 10)) * 100);
 }
 
 function getSectionDelta(section, statusOverrides, selectedProcess = "Todos") {
   const current = sectionAverageWithOverrides(section, statusOverrides, selectedProcess);
+  if (current === null) return null;
   const original = section.percent;
   return current - original;
 }
 
 function getDynamicAction(section, selectedProcess, statusOverrides = {}) {
   const sectionRows = section.groups.flatMap((group) => group.rows.filter((row) => processApplies(row[3], selectedProcess)).map((row) => ({ group, row })));
-  const processAverage = sectionRows.length ? Math.round(sectionRows.reduce((sum, item) => sum + getRowScore(statusOverrides, item.group, item.row, selectedProcess), 0) / sectionRows.length) : 0;
-  const action = processAverage >= 8 ? "Hay que mantener" : processAverage >= 5 ? "Hay que monitorear" : processAverage >= 3 ? "Hay pendientes" : "Hay que empezar";
+  const scores = sectionRows.map((item) => getRowScore(statusOverrides, item.group, item.row, selectedProcess)).filter((score) => score !== null);
+  if (!scores.length) return { action: "Sin evaluar", processAverage: null };
+  const processAverage = Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
+  const action = processAverage >= 10 ? "Hay que mantener" : processAverage >= 5 ? "Hay que monitorear" : processAverage >= 3 ? "Hay pendientes" : "Hay que empezar";
   return { action, processAverage };
 }
 
@@ -350,15 +369,21 @@ function getProcessInsights(selectedProcess, statusOverrides = {}) {
   const directRows = applicableRows.filter((row) => row.process !== "Todos");
   const baseRows = directRows.length > 0 ? directRows : applicableRows;
 
-  const totalRows = baseRows.length;
-  const strongCount = baseRows.filter((row) => row.score >= 8).length;
-  const mediumCount = baseRows.filter((row) => row.score === 5).length;
-  const weakCount = baseRows.filter((row) => row.score <= 3).length;
-  const criticalCount = baseRows.filter((row) => row.score === 0).length;
+  // score === null significa "nunca evaluado" — se excluye de las 4
+  // categorías de madurez (fuerte/medio/débil/crítico) en vez de colar por
+  // null <= 3 (true en JS) hacia "débil", que lo haría ver peor de lo que
+  // realmente se sabe.
+  const evaluatedRows = baseRows.filter((row) => row.score !== null);
+  const notEvaluatedCount = baseRows.length - evaluatedRows.length;
+  const totalRows = evaluatedRows.length;
+  const strongCount = evaluatedRows.filter((row) => row.score >= 8).length;
+  const mediumCount = evaluatedRows.filter((row) => row.score === 5).length;
+  const weakCount = evaluatedRows.filter((row) => row.score <= 3).length;
+  const criticalCount = evaluatedRows.filter((row) => row.score === 0).length;
 
-  const weakAreas = [...new Set(baseRows.filter((row) => row.score <= 3).map((row) => row.subtitle.split(" ")[0]))].slice(0, 3);
-  const strongAreas = [...new Set(baseRows.filter((row) => row.score >= 8).map((row) => row.subtitle.split(" ")[0]))].slice(0, 3);
-  const monitorAreas = [...new Set(baseRows.filter((row) => row.score === 5).map((row) => row.subtitle.split(" ")[0]))].slice(0, 3);
+  const weakAreas = [...new Set(evaluatedRows.filter((row) => row.score <= 3).map((row) => row.subtitle.split(" ")[0]))].slice(0, 3);
+  const strongAreas = [...new Set(evaluatedRows.filter((row) => row.score >= 8).map((row) => row.subtitle.split(" ")[0]))].slice(0, 3);
+  const monitorAreas = [...new Set(evaluatedRows.filter((row) => row.score === 5).map((row) => row.subtitle.split(" ")[0]))].slice(0, 3);
 
   let strength = "El proceso aún no demuestra un nivel sólido de madurez operativa ni evidencia consistente del SIG.";
 
@@ -388,7 +413,7 @@ function getProcessInsights(selectedProcess, statusOverrides = {}) {
     recommendation = "Conservar controles actuales y mantener verificación continua de eficacia y trazabilidad documental.";
   }
 
-  return { strength, weakness, recommendation };
+  return { strength, weakness, recommendation, notEvaluatedCount };
 }
 
 // "Nombre de pila" contra el catálogo de personas (formato "APELLIDOS
@@ -1477,7 +1502,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
       prioridad: payload.prioridad,
       gestion: "SIG",
       titulo: payload.titulo,
-      descripcion: `${dynamic.action}. Avance actual del proceso en este numeral: ${dynamic.processAverage}0%.`,
+      descripcion: `${dynamic.action}. Avance actual del proceso en este numeral: ${dynamic.processAverage === null ? "sin evaluar" : `${dynamic.processAverage}0%`}.`,
       revisara: "", aprobara: "", seguimiento: "",
       carga_horas: payload.horas,
       fecha_limite: payload.fechaLimite,
@@ -1668,6 +1693,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
               <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 rounded bg-yellow-200" /> Implementado</span>
               <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 rounded bg-amber-300" /> En desarrollo</span>
               <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 rounded bg-rose-300" /> No implementado</span>
+              <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 rounded bg-slate-300" /> Sin evaluar</span>
             </div>
           </div>
 
@@ -1693,9 +1719,9 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                       <td className="px-2 py-1 align-middle font-black text-slate-500">{section.numeral}</td>
                       <td className="px-2 py-1 align-middle"><div className="cursor-help text-[11px] font-black leading-tight text-slate-900" title={section.summary}>{section.title}</div></td>
                       <td className="px-2 py-1 text-center align-middle">
-                        <div className={`flex items-center justify-center gap-1 text-sm font-black ${statusTextColor(sectionPercent)}`}>
-                          <span>{sectionPercent}%</span>
-                          {getSectionDelta(section, statusOverrides, selectedProcess) !== 0 && (
+                        <div className={`flex items-center justify-center gap-1 text-sm font-black ${sectionPercent === null ? "text-slate-400" : statusTextColor(sectionPercent)}`}>
+                          <span>{sectionPercent === null ? "Sin evaluar" : `${sectionPercent}%`}</span>
+                          {getSectionDelta(section, statusOverrides, selectedProcess) !== null && getSectionDelta(section, statusOverrides, selectedProcess) !== 0 && (
                             <span
                               className={`text-[9px] font-black tracking-tight opacity-70 ${
                                 getSectionDelta(section, statusOverrides, selectedProcess) > 0
@@ -1719,7 +1745,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                         return (
                           <td key={`${section.numeral}-${group.subtitle}`} className="px-1 py-1 text-center">
                             <div className="flex flex-col items-center gap-0.5">
-                              <button type="button" onClick={() => setSelectedCell({ section, group, avg, criticalRows, selectedProcess, filteredRows: filteredGroupRows })} className={`mx-auto flex h-8 w-full max-w-[92px] items-center justify-center rounded-xl text-xs font-black transition hover:scale-[1.03] ${cellStyle(avg / 10)} ${appliesToSelectedProcess ? "shadow-sm" : "opacity-25 grayscale"}`} title={cleanSubtitle(group.subtitle)}>
+                              <button type="button" onClick={() => setSelectedCell({ section, group, avg, criticalRows, selectedProcess, filteredRows: filteredGroupRows })} className={`mx-auto flex h-8 w-full max-w-[92px] items-center justify-center rounded-xl text-xs font-black transition hover:scale-[1.03] ${cellStyle(avg === null ? null : avg / 10)} ${appliesToSelectedProcess ? "shadow-sm" : "opacity-25 grayscale"}`} title={cleanSubtitle(group.subtitle)}>
                                 <span>{group.subtitle.split(" ")[0]}</span>
                               </button>
                               <span className="line-clamp-1 max-w-[96px] text-[7px] font-medium leading-tight text-slate-400">{cleanSubtitle(group.subtitle)}</span>
@@ -1773,6 +1799,15 @@ export default function DiagnosticoSIGModule({ currentUser }) {
               </div>
             );
           })()}
+          {(() => {
+            const { notEvaluatedCount } = getProcessInsights(selectedProcess, statusOverrides);
+            if (!notEvaluatedCount) return null;
+            return (
+              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-500">
+                {notEvaluatedCount} {notEvaluatedCount === 1 ? "criterio nunca se ha evaluado" : "criterios nunca se han evaluado"} para este proceso — no cuentan en el % de arriba, quedan pendientes de auditar.
+              </div>
+            );
+          })()}
         </section>
 
         {selectedCell ? (
@@ -1787,19 +1822,20 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                   <div>
                     <div className="text-sm font-black tracking-tight text-slate-900">{selectedCell.group.subtitle}</div>
                     <div className="mt-1 text-[11px] font-medium leading-relaxed text-slate-500">{subnumeralDescriptions[selectedCell.group.subtitle]}</div>
-                    <div className="mt-1 text-xs font-semibold leading-relaxed text-slate-500">Promedio del criterio: {groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess)}% • {selectedCell.group.rows.filter((row) => getRowScore(statusOverrides, selectedCell.group, row, selectedCell.selectedProcess) <= 3).length} puntos críticos</div>
+                    <div className="mt-1 text-xs font-semibold leading-relaxed text-slate-500">Promedio del criterio: {groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess) === null ? "Sin evaluar" : `${groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess)}%`} • {selectedCell.group.rows.filter((row) => { const s = getRowScore(statusOverrides, selectedCell.group, row, selectedCell.selectedProcess); return s !== null && s <= 3; }).length} puntos críticos</div>
                   </div>
-                  <span className={`rounded-2xl px-5 py-3 text-2xl font-black shadow-sm ${statusBg(groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess))}`}>{groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess)}%</span>
+                  <span className={`rounded-2xl px-5 py-3 text-2xl font-black shadow-sm ${statusBg(groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess) ?? 0)}`}>{groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess) === null ? "Sin evaluar" : `${groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess)}%`}</span>
                 </div>
                 <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50/80 text-slate-500 backdrop-blur-sm"><tr><th className="w-12 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wide">#</th><th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wide">Criterio</th><th className="w-[260px] px-4 py-3 text-left text-[11px] font-black uppercase tracking-wide">Proceso / responsable</th><th className="w-[180px] px-4 py-3 text-left text-[11px] font-black uppercase tracking-wide">Evidencia</th><th className="w-32 px-4 py-3 text-center font-black">Estado</th></tr></thead>
                     <tbody>
-                      {(selectedCell.filteredRows?.length ? selectedCell.filteredRows : selectedCell.group.rows).map(([number, requirement, evidence, responsible, score]) => {
+                      {(selectedCell.filteredRows?.length ? selectedCell.filteredRows : selectedCell.group.rows).map((row) => {
+                        const [number, requirement, evidence, responsible] = row;
                         const responsibleInfo = responsibleLabel(responsible);
                         const proceso = resolveProceso(responsible, selectedCell.selectedProcess);
                         const key = stateKey(selectedCell.group.subtitle, number, proceso);
-                        const currentScore = statusOverrides[key] ?? score;
+                        const currentScore = getRowScore(statusOverrides, selectedCell.group, row, selectedCell.selectedProcess);
                         return (
                           <tr key={key} className="border-t border-slate-100 transition hover:bg-slate-50/70">
                             <td className="px-4 py-3 font-black text-slate-500">{number}</td>
@@ -1813,7 +1849,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                             </td>
                             <td className="w-[180px] px-4 py-3"><div className="group relative max-w-[170px] rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-medium leading-relaxed text-slate-600 shadow-sm transition hover:border-slate-300"><textarea value={evidenceOverrides[key] ?? evidence} onChange={(event) => updateEvidence(selectedCell.section.numeral, selectedCell.group.subtitle, number, proceso, event.target.value)} onBlur={() => commitEvidence(selectedCell.section.numeral, selectedCell.group.subtitle, number, proceso)} rows={2} disabled={!canEdit} className={`w-full resize-none bg-transparent pr-5 text-[11px] font-medium leading-relaxed text-slate-600 outline-none ${canEdit ? "cursor-text" : "cursor-default"}`} /><span className={`absolute right-2 top-2 text-[9px] text-slate-400 transition ${canEdit ? "opacity-0 group-hover:opacity-100" : "opacity-0"}`}>✎</span></div></td>
                             <td className="px-4 py-3 text-center">
-                              <div className="group flex items-center justify-center gap-2"><span className={`inline-flex justify-center rounded-xl px-3 py-1.5 text-[11px] font-black shadow-sm transition-all ${cellStyle(currentScore)}`}>{currentScore} · {scoreMeaning(currentScore)}</span><select aria-label="Actualizar estatus" value={currentScore} onChange={(event) => updateStatus(selectedCell.section.numeral, selectedCell.group.subtitle, number, proceso, event.target.value)} disabled={!canEdit} className={`rounded-md border border-transparent bg-slate-100/70 px-1.5 py-[2px] text-[9px] font-bold text-slate-500 outline-none transition-all hover:bg-slate-200/70 hover:text-slate-700 focus:opacity-100 ${canEdit ? "opacity-0 group-hover:opacity-100" : "pointer-events-none opacity-0"}`}><option value={10}>10</option><option value={5}>5</option><option value={3}>3</option><option value={0}>0</option></select></div>
+                              <div className="group flex items-center justify-center gap-2"><span className={`inline-flex justify-center rounded-xl px-3 py-1.5 text-[11px] font-black shadow-sm transition-all ${cellStyle(currentScore)}`}>{currentScore === null ? scoreMeaning(currentScore) : `${currentScore} · ${scoreMeaning(currentScore)}`}</span><select aria-label="Actualizar estatus" value={currentScore ?? ""} onChange={(event) => updateStatus(selectedCell.section.numeral, selectedCell.group.subtitle, number, proceso, event.target.value)} disabled={!canEdit} className={`rounded-md border border-transparent bg-slate-100/70 px-1.5 py-[2px] text-[9px] font-bold text-slate-500 outline-none transition-all hover:bg-slate-200/70 hover:text-slate-700 focus:opacity-100 ${canEdit ? "opacity-0 group-hover:opacity-100" : "pointer-events-none opacity-0"}`}>{currentScore === null && <option value="" disabled>Sin evaluar</option>}<option value={10}>10</option><option value={5}>5</option><option value={3}>3</option><option value={0}>0</option></select></div>
                             </td>
                           </tr>
                         );
