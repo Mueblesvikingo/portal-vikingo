@@ -151,7 +151,7 @@ let sigSections = [
     percent: 36,
     summary: "Operación, producción y calidad",
     groups: [
-      { subtitle: "8.1 Control operacional", rows: [[1, "Procesos operativos planificados", "Plan de producción / programación", "Todos", 3], [2, "Controles operativos establecidos", "Procedimientos / instrucciones", "Todos", 3]] },
+      { subtitle: "8.1 Control operacional", rows: [[1, "Procesos operativos planificados", "Planes / programación", "Todos", 3], [2, "Controles operativos establecidos", "Procedimientos / instrucciones", "Todos", 3]] },
       { subtitle: "8.2 Cliente", rows: [[3, "Requisitos del cliente identificados", "Pedido / especificaciones", "Ventas", 5], [4, "Cambios de requisitos gestionados", "Modificación de pedido", "Ventas", 5], [5, "Comunicación con cliente mantenida", "Registros de comunicación", "Ventas", 5]] },
       { subtitle: "8.3 Diseño y desarrollo", rows: [[6, "Diseño planificado", "Plan de diseño / proyecto", "Desarrollo de productos", 5], [7, "Requisitos de diseño identificados", "Planos / fichas técnicas", "Desarrollo de productos", 5], [8, "Cambios de diseño controlados", "Registro de cambios de diseño", "Desarrollo de productos", 3]] },
       { subtitle: "8.4 Proveedores externos", rows: [[9, "Proveedores seleccionados con criterios", "Evaluación de proveedores", "Compras", 3], [10, "Desempeño de proveedores monitoreado", "Seguimiento de proveedores", "Compras", 3], [11, "Requisitos a proveedores comunicados", "Orden de compra / especificación", "Compras", 5]] },
