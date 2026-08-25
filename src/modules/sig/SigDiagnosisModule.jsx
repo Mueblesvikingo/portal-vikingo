@@ -50,20 +50,23 @@ let subnumeralDescriptions = {
   "6.3 Cambios": "Controlar cambios organizacionales y operativos.",
   "7.1 Recursos": "Asegurar recursos necesarios para operar.",
   "7.2 Competencias": "Desarrollar capacidades y habilidades requeridas.",
-  "7.3 Conciencia y comunicación": "Fortalecer comunicación y cultura SIG.",
+  "7.3 Toma de conciencia": "Fortalecer la cultura y el conocimiento del SIG en el personal.",
+  "7.4 Comunicación": "Definir qué, cuándo, a quién y cómo comunicar sobre el SIG.",
   "7.5 Información documentada": "Controlar documentos y registros del sistema.",
   "8.1 Control operacional": "Controlar actividades críticas de operación.",
   "8.2 Cliente": "Gestionar requisitos y comunicación con clientes.",
   "8.3 Diseño y desarrollo": "Controlar diseño y desarrollo de productos.",
   "8.4 Proveedores externos": "Gestionar proveedores y compras externas.",
   "8.5 Producción controlada": "Asegurar producción bajo control operativo.",
-  "8.6 Liberación y no conformes": "Controlar liberaciones y desviaciones.",
+  "8.6 Liberación": "Controlar la liberación de productos y servicios.",
+  "8.7 Control de las salidas no conformes": "Identificar y controlar salidas que no cumplen los requisitos.",
   "9.1 Seguimiento y medición": "Medir desempeño y resultados del SIG.",
   "9.1.2 Satisfacción del cliente": "Evaluar percepción y satisfacción del cliente.",
   "9.2 Auditoría interna": "Verificar cumplimiento mediante auditorías.",
   "9.3 Revisión por la dirección": "Evaluar desempeño estratégico del SIG.",
   "10.1 Mejora": "Promover mejora continua del sistema.",
   "10.2 Acción correctiva": "Corregir causas de incumplimientos.",
+  "10.3 Mejora continua": "Buscar mejorar continuamente la eficacia del SIG.",
 };
 
 let sigSections = [
@@ -135,9 +138,10 @@ let sigSections = [
     percent: 36,
     summary: "Recursos, capacitación y documentos",
     groups: [
-      { subtitle: "7.1 Recursos", rows: [[1, "La organización determina y proporciona recursos para el SIG", "SIG-F-02 Presupuesto estrategia", "Dirección", 10], [2, "La organización asegura la infraestructura necesaria", "Hojas de vida de activos", "Dirección", 3], [3, "Se define y proporciona el personal necesario para cada proceso", "Análisis de capacidad / Plan de cobertura", "Dirección", 3]] },
+      { subtitle: "7.1 Recursos", rows: [[1, "La organización determina y proporciona recursos para el SIG", "SIG-F-02 Presupuesto estrategia", "Dirección", 10], [2, "La organización asegura la infraestructura necesaria", "Hojas de vida de activos", "Dirección", 3], [3, "Se define y proporciona el personal necesario para cada proceso", "Análisis de capacidad / Plan de cobertura", "Dirección", 3], [13, "El conocimiento crítico del proceso está identificado y protegido ante la salida de personal clave", "Documentación de know-how / respaldo de conocimiento", "Todos", 0]] },
       { subtitle: "7.2 Competencias", rows: [[4, "Competencias por rol definidas", "GCO-M-01 Diccionario de competencias", "Todos", 5], [5, "Nivel requerido por proceso determinado", "Matriz de competencia por proceso", "Todos", 0], [6, "Brechas de competencia evaluadas", "Análisis de brechas", "Todos", 0]] },
-      { subtitle: "7.3 Conciencia y comunicación", rows: [[7, "Personal conoce políticas del SIG", "Entrevistas / checklist", "Dirección", 5], [8, "Canales de comunicación definidos", "SIG-MA-06 Comunicaciones", "Planeación Estratégica", 5], [9, "Desempeño del SIG comunicado", "Informes / tableros", "Planeación Estratégica", 3]] },
+      { subtitle: "7.3 Toma de conciencia", rows: [[7, "Personal conoce políticas del SIG", "Entrevistas / checklist", "Dirección", 5]] },
+      { subtitle: "7.4 Comunicación", rows: [[8, "Canales de comunicación definidos", "SIG-MA-06 Comunicaciones", "Planeación Estratégica", 5], [9, "Desempeño del SIG comunicado", "Informes / tableros", "Planeación Estratégica", 3]] },
       { subtitle: "7.5 Información documentada", rows: [[10, "Documentación del SIG controlada", "SIG-P-02 Control de información documentada", "Planeación Estratégica", 10], [11, "Lista maestra por proceso", "Lista maestra de documentos por proceso", "Todos", 3], [12, "Accesos y permisos controlados", "Administración de accesos", "Todos", 3]] },
     ],
   },
@@ -152,7 +156,8 @@ let sigSections = [
       { subtitle: "8.3 Diseño y desarrollo", rows: [[6, "Diseño planificado", "Plan de diseño / proyecto", "Desarrollo de productos", 5], [7, "Requisitos de diseño identificados", "Planos / fichas técnicas", "Desarrollo de productos", 5], [8, "Cambios de diseño controlados", "Registro de cambios de diseño", "Desarrollo de productos", 3]] },
       { subtitle: "8.4 Proveedores externos", rows: [[9, "Proveedores seleccionados con criterios", "Evaluación de proveedores", "Compras", 3], [10, "Desempeño de proveedores monitoreado", "Seguimiento de proveedores", "Compras", 3], [11, "Requisitos a proveedores comunicados", "Orden de compra / especificación", "Compras", 5]] },
       { subtitle: "8.5 Producción controlada", rows: [[12, "Producción bajo condiciones controladas", "Fichas técnicas / instrucciones", "Planeación producción", 3], [13, "Seguimiento durante producción", "Registros de inspección", "Producción/Calidad", 3], [14, "Recursos y personal competente", "Infraestructura / competencias", "Planeación producción", 5]] },
-      { subtitle: "8.6 Liberación y no conformes", rows: [[15, "Productos verificados antes de liberarse", "Registros de inspección", "Calidad", 3], [16, "Liberación autorizada", "Autorización de liberación", "Calidad", 3], [17, "Salidas no conformes controladas", "Registro de no conformidades", "Calidad", 3]] },
+      { subtitle: "8.6 Liberación", rows: [[15, "Productos verificados antes de liberarse", "Registros de inspección", "Calidad", 3], [16, "Liberación autorizada", "Autorización de liberación", "Calidad", 3]] },
+      { subtitle: "8.7 Control de las salidas no conformes", rows: [[17, "Salidas no conformes controladas", "Registro de no conformidades", "Calidad", 3]] },
     ],
   },
   {
@@ -161,7 +166,7 @@ let sigSections = [
     percent: 12,
     summary: "Medición, auditorías y seguimiento",
     groups: [
-      { subtitle: "9.1 Seguimiento y medición", rows: [[1, "Indicadores del SIG establecidos", "SIG-MA-07 Tablero de control", "Todos", 10], [2, "Datos de desempeño recopilados", "Tableros de control", "Todos", 0], [3, "Periodicidad de seguimiento definida", "Programa de revisión del SIG", "Todos", 0]] },
+      { subtitle: "9.1 Seguimiento y medición", rows: [[1, "Indicadores del SIG establecidos", "SIG-MA-07 Tablero de control", "Todos", 10], [2, "Datos de desempeño recopilados", "Tableros de control", "Todos", 0], [3, "Periodicidad de seguimiento definida", "Programa de revisión del SIG", "Todos", 0], [10, "Los datos recopilados se analizan y se usan para tomar decisiones, no solo se registran", "Análisis de indicadores / actas de revisión", "Todos", 0]] },
       { subtitle: "9.1.2 Satisfacción del cliente", rows: [[4, "Necesidades y expectativas del cliente monitoreadas", "Encuestas / reclamos", "Ventas", 3]] },
       { subtitle: "9.2 Auditoría interna", rows: [[5, "Programa de auditoría establecido", "Programas de auditoría", "Evaluación desempeño", 0], [6, "Criterios y alcance definidos", "Planes de auditoría", "Evaluación desempeño", 0], [7, "Informes de auditoría generados", "Informes de auditoría", "Evaluación desempeño", 0]] },
       { subtitle: "9.3 Revisión por la dirección", rows: [[8, "Revisión del SIG planificada", "Acta de revisión", "Dirección", 0], [9, "Decisiones y acciones generadas", "Informe de decisiones", "Dirección", 0]] },
@@ -173,8 +178,9 @@ let sigSections = [
     percent: 0,
     summary: "Corrección y mejora continua",
     groups: [
-      { subtitle: "10.1 Mejora", rows: [[1, "Oportunidades de mejora determinadas", "Planes de mejora documentados", "Todos", 0], [2, "Mejora continua promovida", "Iniciativas de mejora", "Todos", 0]] },
+      { subtitle: "10.1 Mejora", rows: [[1, "Oportunidades de mejora determinadas", "Planes de mejora documentados", "Todos", 0]] },
       { subtitle: "10.2 Acción correctiva", rows: [[3, "Acciones correctivas planteadas", "Plan de acciones", "Todos", 0], [4, "Acciones correctivas implementadas y evaluadas", "Plan de acciones", "Todos", 0], [5, "Causas de no conformidades analizadas", "Análisis de causas", "Todos", 0]] },
+      { subtitle: "10.3 Mejora continua", rows: [[2, "Mejora continua promovida", "Iniciativas de mejora", "Todos", 0]] },
     ],
   },
 ];
