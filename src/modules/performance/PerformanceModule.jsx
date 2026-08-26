@@ -149,12 +149,15 @@ export default function PerformanceModule({ currentUser }) {
   );
 
   // Los tácticos (cascadeados desde Despliegue Estratégico) los edita el
-  // equipo estratégico, sin importar de qué proceso sea el tablero. Los
-  // operativos (que cada líder captura para su propio proceso) solo los
-  // edita el líder de ESE proceso — dos permisos distintos dentro del mismo
-  // tablero, no uno solo para todo.
-  const canEditTactico = isStrategic;
-  const canEditOperativo = ownMacroprocesos.includes(scope);
+  // equipo estratégico O el líder del proceso dueño de ese tablero — antes
+  // solo el equipo estratégico podía, lo que dejaba a la mayoría de los
+  // líderes de proceso sin poder capturar resultado alguno en su propio
+  // tablero (casi ningún macroproceso tiene KPIs operativos activos como
+  // alternativa). Los operativos (que cada líder captura para su propio
+  // proceso) solo los edita el líder de ESE proceso, o el equipo
+  // estratégico como respaldo.
+  const canEditTactico = isStrategic || ownMacroprocesos.includes(scope);
+  const canEditOperativo = isStrategic || ownMacroprocesos.includes(scope);
   function canEditKpi(kpi) {
     if (isEstrategico) return canEditStrategicKpis(currentUser);
     return kpi.ambito === "tactico" ? canEditTactico : canEditOperativo;
