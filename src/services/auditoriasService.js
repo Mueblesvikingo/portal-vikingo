@@ -459,10 +459,18 @@ export async function getHallazgos(auditoriaId) {
 // también en sig_diagnostico_estados vía upsertEstado (mismo servicio que
 // usa la matriz de Diagnóstico HLS) — así el hallazgo de la auditoría pasa
 // a ser el dato real del diagnóstico, no una copia paralela.
-export async function upsertHallazgo(auditoriaId, criterio, { nivel, evidencia }, actor) {
+// `evidenciaSubcriterios`, si se manda, reemplaza por completo el objeto
+// guardado (la UI ya manda el objeto fusionado — un merge parcial aquí
+// duplicaría esa responsabilidad).
+export async function upsertHallazgo(auditoriaId, criterio, { nivel, evidencia, evidenciaSubcriterios }, actor) {
   try {
     const { personaId, nombre } = actorFields(actor);
     const { numeral, subtitulo, numero } = criterio;
+    const { data: existente } = await supabase
+      .from("sig_auditoria_hallazgos")
+      .select("evidencia_subcriterios")
+      .eq("auditoria_id", auditoriaId).eq("numeral", numeral).eq("subtitulo", subtitulo).eq("numero", numero)
+      .maybeSingle();
     const { data, error } = await supabase
       .from("sig_auditoria_hallazgos")
       .upsert(
@@ -473,6 +481,7 @@ export async function upsertHallazgo(auditoriaId, criterio, { nivel, evidencia }
           numero,
           nivel_confirmado: nivel ?? null,
           evidencia_observada: evidencia || null,
+          evidencia_subcriterios: evidenciaSubcriterios !== undefined ? evidenciaSubcriterios : (existente?.evidencia_subcriterios || {}),
           updated_at: new Date().toISOString(),
           updated_by_persona_id: personaId,
           updated_by_nombre: nombre,
@@ -602,17 +611,26 @@ function measureCriterioCard(doc, width, c) {
   const textoLines = doc.splitTextToSize(c.texto, innerWidth);
   doc.setFontSize(8.3);
   const evLines = doc.splitTextToSize(`Evidencia esperada: ${c.evidenciaEsperada || "—"}`, innerWidth);
+
   let obsLines = [];
-  if (c.evidenciaObservada) {
+  let subLines = [];
+  if (c.subcriterios) {
+    subLines = c.subcriterios.map((sc) => {
+      doc.setFontSize(9);
+      const resp = (c.evidenciaSubcriterios || {})[sc.letra] || "Sin registrar.";
+      return doc.splitTextToSize(`${sc.letra}) ${sc.titulo}: ${resp}`, innerWidth - 4);
+    });
+  } else if (c.evidenciaObservada) {
     doc.setFontSize(9);
     obsLines = doc.splitTextToSize(`Evidencia observada: ${c.evidenciaObservada}`, innerWidth);
   }
-  const height = pad * 2 + textoLines.length * 12.5 + evLines.length * 11 + 8 + 18 + (obsLines.length ? obsLines.length * 11 + 4 : 0);
-  return { pad, tagColW, textoLines, evLines, obsLines, height };
+  const subHeight = subLines.reduce((sum, lines) => sum + lines.length * 11 + 4, 0);
+  const height = pad * 2 + textoLines.length * 12.5 + evLines.length * 11 + 8 + 18 + subHeight + (obsLines.length ? obsLines.length * 11 + 4 : 0);
+  return { pad, tagColW, textoLines, evLines, obsLines, subLines, height };
 }
 
 function drawCriterioCard(doc, x, y, width, c, layout) {
-  const { pad, tagColW, textoLines, evLines, obsLines, height } = layout;
+  const { pad, tagColW, textoLines, evLines, obsLines, subLines, height } = layout;
   doc.setFillColor(...CARD_BG);
   doc.setDrawColor(...GRIS_LINEA);
   doc.setLineWidth(0.6);
@@ -647,7 +665,15 @@ function drawCriterioCard(doc, x, y, width, c, layout) {
   doc.text(label, textX + badgeW / 2, cursor, { align: "center" });
   cursor += 16;
 
-  if (obsLines.length) {
+  if (subLines.length) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...NEGRO);
+    subLines.forEach((lines) => {
+      doc.text(lines, textX, cursor);
+      cursor += lines.length * 11 + 4;
+    });
+  } else if (obsLines.length) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...NEGRO);
@@ -813,7 +839,41 @@ function buildFichaAuditoriaPdfDoc(auditoria, criterios) {
     const lines = doc.splitTextToSize(`Alcance: ${auditoria.alcance}`, contentWidth);
     lines.forEach((line) => { y = ensureSpace(y, 13); doc.text(line, marginX, y); y += 13; });
   }
-  y += 12;
+  y += 14;
+
+  // Resumen ejecutivo — pensado para que cualquiera de los 3 (auditado,
+  // auditor, Director) entienda el resultado sin leer el detalle: el
+  // resultado general primero, y una franja con el nivel de cada criterio.
+  y = ensureSpace(y, 46);
+  const declMap = { Cumple: LV_STYLES[5], "Cumple parcialmente": LV_STYLES[3], "No cumple": LV_STYLES[0] };
+  const declStyle = declMap[auditoria.declaracion_cumplimiento] || { fg: GRIS, bg: [240, 240, 242] };
+  const declLabel = auditoria.declaracion_cumplimiento ? auditoria.declaracion_cumplimiento.toUpperCase() : "RESULTADO PENDIENTE DE CIERRE";
+  doc.setFillColor(...declStyle.bg);
+  doc.roundedRect(marginX, y, contentWidth, 30, 8, 8, "F");
+  doc.setTextColor(...declStyle.fg);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.text(declLabel, marginX + 14, y + 20);
+  y += 30 + 12;
+
+  if ((criterios || []).length) {
+    y = ensureSpace(y, 30);
+    const gap = 8;
+    const cellW = (contentWidth - gap * (criterios.length - 1)) / criterios.length;
+    criterios.forEach((c, i) => {
+      const cx = marginX + i * (cellW + gap);
+      const st = c.nivelConfirmado == null ? { fg: GRIS, bg: [240, 240, 242] } : LV_STYLES[c.nivelConfirmado];
+      doc.setFillColor(...st.bg);
+      doc.roundedRect(cx, y, cellW, 28, 7, 7, "F");
+      doc.setTextColor(...st.fg);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.text(c.tag, cx + cellW / 2, y + 12, { align: "center" });
+      doc.setFontSize(9.5);
+      doc.text(c.nivelConfirmado == null ? "—" : String(c.nivelConfirmado), cx + cellW / 2, y + 23, { align: "center" });
+    });
+    y += 28 + 16;
+  }
 
   doc.setTextColor(...ROJO);
   doc.setFont("helvetica", "bold");

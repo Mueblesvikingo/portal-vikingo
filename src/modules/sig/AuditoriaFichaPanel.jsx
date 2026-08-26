@@ -5,6 +5,7 @@ import {
 } from "../../services/auditoriasService";
 import { isDirectorGeneral } from "../../services/permissionsService";
 import { sigSections, cellStyle, scoreMeaning, cleanSubtitle, resolveProceso, COORDINADOR_SIG_PERSONA_ID } from "./SigDiagnosisModule";
+import { getSubcriterios } from "./auditoriaSubcriterios";
 
 const DECLARACIONES = ["Cumple", "Cumple parcialmente", "No cumple"];
 const NIVELES = [0, 3, 5, 10];
@@ -49,6 +50,8 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
       proceso: resolveProceso(proceso, auditoria.macroproceso),
       nivelConfirmado: hallazgo?.nivel_confirmado ?? null,
       evidenciaObservada: hallazgo?.evidencia_observada || "",
+      subcriterios: getSubcriterios(c.subtitulo, c.numero),
+      evidenciaSubcriterios: hallazgo?.evidencia_subcriterios || {},
     };
   });
 
@@ -75,6 +78,22 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
       auditoria.id,
       { numeral: criterio.numeral, subtitulo: criterio.subtitulo, numero: criterio.numero, proceso: criterio.proceso },
       { nivel: criterio.nivelConfirmado, evidencia: value },
+      currentUser
+    );
+    if (!result.ok) { console.error(result.error); return; }
+    setHallazgos((current) => {
+      const otros = current.filter((h) => !(h.numeral === criterio.numeral && h.subtitulo === criterio.subtitulo && h.numero === criterio.numero));
+      return [...otros, result.data];
+    });
+  }
+
+  async function handleSubcriterioBlur(criterio, letra, value) {
+    if (value === (criterio.evidenciaSubcriterios[letra] || "")) return;
+    const evidenciaSubcriterios = { ...criterio.evidenciaSubcriterios, [letra]: value };
+    const result = await upsertHallazgo(
+      auditoria.id,
+      { numeral: criterio.numeral, subtitulo: criterio.subtitulo, numero: criterio.numero, proceso: criterio.proceso },
+      { nivel: criterio.nivelConfirmado, evidencia: criterio.evidenciaObservada, evidenciaSubcriterios },
       currentUser
     );
     if (!result.ok) { console.error(result.error); return; }
@@ -175,14 +194,35 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
                       ))}
                     </div>
                   </div>
-                  <textarea
-                    rows={2}
-                    defaultValue={c.evidenciaObservada}
-                    disabled={!canEdit}
-                    placeholder="Evidencia observada durante la auditoría..."
-                    onBlur={(e) => handleEvidenciaBlur(c, e.target.value)}
-                    className="mt-1.5 w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-600 outline-none disabled:bg-slate-50"
-                  />
+                  {c.subcriterios ? (
+                    <div className="mt-1.5 space-y-1.5">
+                      {c.subcriterios.map((sc) => (
+                        <div key={sc.letra} className="flex gap-2">
+                          <span className="mt-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-300 text-[9px] font-black text-white">{sc.letra}</span>
+                          <div className="flex-1">
+                            <div className="text-[10px] font-bold text-slate-600">{sc.titulo}</div>
+                            <textarea
+                              rows={1}
+                              defaultValue={c.evidenciaSubcriterios[sc.letra] || ""}
+                              disabled={!canEdit}
+                              placeholder={sc.pregunta}
+                              onBlur={(e) => handleSubcriterioBlur(c, sc.letra, e.target.value)}
+                              className="mt-0.5 w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-600 outline-none disabled:bg-slate-50"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <textarea
+                      rows={2}
+                      defaultValue={c.evidenciaObservada}
+                      disabled={!canEdit}
+                      placeholder="Evidencia observada durante la auditoría..."
+                      onBlur={(e) => handleEvidenciaBlur(c, e.target.value)}
+                      className="mt-1.5 w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-600 outline-none disabled:bg-slate-50"
+                    />
+                  )}
                 </div>
               );
             })}
