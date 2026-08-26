@@ -707,6 +707,19 @@ export async function deleteAssignment(id) {
     if (weeklyResult.error) return { ok: false, error: weeklyResult.error };
     if (monthlyResult.error) return { ok: false, error: monthlyResult.error };
 
+    // Desvincular antes de borrar: sig_auditorias, acciones y pmo_proyectos
+    // pueden apuntar a esta asignación (botón "Convertir en asignación" de
+    // cada uno) con una FK sin ON DELETE CASCADE — sin esto, Postgres
+    // rechaza el DELETE de abajo con una violación de llave foránea.
+    const [auditoriasResult, accionesResult, pmoResult] = await Promise.all([
+      supabase.from("sig_auditorias").update({ asignacion_id: null }).eq("asignacion_id", id),
+      supabase.from("acciones").update({ workload_asignacion_id: null }).eq("workload_asignacion_id", id),
+      supabase.from("pmo_proyectos").update({ asignacion_id: null }).eq("asignacion_id", id),
+    ]);
+    if (auditoriasResult.error) return { ok: false, error: auditoriasResult.error };
+    if (accionesResult.error) return { ok: false, error: accionesResult.error };
+    if (pmoResult.error) return { ok: false, error: pmoResult.error };
+
     const { error } = await supabase.from("workload_asignaciones").delete().eq("id", id);
     if (error) return { ok: false, error };
 
