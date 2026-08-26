@@ -13,7 +13,7 @@ import {
 import { canEvaluateCambio, canApproveCambio, canImplementCambio, isDirectorGeneral } from "../../services/permissionsService";
 import {
   getAuditorias, createAuditoria, updateAuditoria, deleteAuditoria, createAccionDesdeHallazgo,
-  getProgramaVigente, createPrograma, updatePrograma, aprobarPrograma, downloadProgramaPdf,
+  getProgramas, createPrograma, updatePrograma, aprobarPrograma, downloadProgramaPdf,
   firmarProgramaComoCoordinador,
 } from "../../services/auditoriasService";
 import { getAcciones } from "../../services/accionesService";
@@ -1057,12 +1057,17 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [auditoriaAccionDraft, setAuditoriaAccionDraft] = useState({ titulo: "", descripcion: "", responsablePersonaId: "", prioridad: "Alta" });
   const [auditoriaFichaAbiertaId, setAuditoriaFichaAbiertaId] = useState(null);
 
-  const [programa, setPrograma] = useState(null);
-  const [programaLoading, setProgramaLoading] = useState(false);
+  const [auditoriasSubTab, setAuditoriasSubTab] = useState("programas");
+  const [programas, setProgramas] = useState(null);
+  const [programasLoading, setProgramasLoading] = useState(false);
+  // number = fila existente abierta; "new" = formulario de alta; null = nada abierto.
+  const [programaExpandedId, setProgramaExpandedId] = useState(null);
   const [programaEditing, setProgramaEditing] = useState(false);
   const [programaMessage, setProgramaMessage] = useState("");
   const PROGRAMA_CAMPOS_VACIOS = { nombre: "Programa 1 de pre-auditorías SIG", objetivos: "", alcance: "", riesgosOportunidades: "", recursosRoles: "", criteriosGenerales: "", enfoqueMetodologico: "", documentosReferencia: "" };
   const [programaDraft, setProgramaDraft] = useState(PROGRAMA_CAMPOS_VACIOS);
+  const programaVigente = (programas || []).find((p) => p.estado === "Vigente") || null;
+  const programaAbierto = typeof programaExpandedId === "number" ? (programas || []).find((p) => p.id === programaExpandedId) || null : null;
 
   const canEdit = isStrategicTeamMember(currentUser);
   // Espejo de lo último realmente guardado en Supabase (no lo que se va
@@ -1205,11 +1210,11 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     setAccionesPorAuditoria(agrupadas);
   }
 
-  async function loadPrograma() {
-    setProgramaLoading(true);
-    const data = await getProgramaVigente();
-    setPrograma(data);
-    setProgramaLoading(false);
+  async function loadProgramas() {
+    setProgramasLoading(true);
+    const data = await getProgramas();
+    setProgramas(data);
+    setProgramasLoading(false);
   }
 
   useEffect(() => {
@@ -1217,34 +1222,38 @@ export default function DiagnosticoSIGModule({ currentUser }) {
       loadAuditorias();
       loadAuditoriaPersonaOptions();
       loadAuditoriaAcciones();
-      loadPrograma();
+      loadProgramas();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
-  function openProgramaEditor() {
+  // Sin `existing` abre el formulario de alta de un programa nuevo; con
+  // `existing` prellena el formulario para editar esa fila del histórico.
+  function openProgramaEditor(existing) {
     setProgramaDraft(
-      programa
+      existing
         ? {
-            nombre: programa.nombre || "",
-            objetivos: programa.objetivos || "",
-            alcance: programa.alcance || "",
-            riesgosOportunidades: programa.riesgos_oportunidades || "",
-            recursosRoles: programa.recursos_roles || "",
-            criteriosGenerales: programa.criterios_generales || "",
-            enfoqueMetodologico: programa.enfoque_metodologico || "",
-            documentosReferencia: programa.documentos_referencia || "",
+            nombre: existing.nombre || "",
+            objetivos: existing.objetivos || "",
+            alcance: existing.alcance || "",
+            riesgosOportunidades: existing.riesgos_oportunidades || "",
+            recursosRoles: existing.recursos_roles || "",
+            criteriosGenerales: existing.criterios_generales || "",
+            enfoqueMetodologico: existing.enfoque_metodologico || "",
+            documentosReferencia: existing.documentos_referencia || "",
           }
         : PROGRAMA_CAMPOS_VACIOS
     );
     setProgramaMessage("");
+    setProgramaExpandedId(existing ? existing.id : "new");
     setProgramaEditing(true);
   }
 
   async function handleGuardarPrograma() {
     if (!programaDraft.nombre.trim()) { setProgramaMessage("El programa necesita un nombre."); return; }
-    const result = programa
-      ? await updatePrograma(programa.id, {
+    const editingId = typeof programaExpandedId === "number" ? programaExpandedId : null;
+    const result = editingId
+      ? await updatePrograma(editingId, {
           nombre: programaDraft.nombre,
           objetivos: programaDraft.objetivos || null,
           alcance: programaDraft.alcance || null,
@@ -1256,26 +1265,164 @@ export default function DiagnosticoSIGModule({ currentUser }) {
         }, currentUser)
       : await createPrograma(programaDraft, currentUser);
     if (!result.ok) { console.error(result.error); setProgramaMessage("No fue posible guardar el programa."); return; }
-    setPrograma(result.data);
+    setProgramas((current) => {
+      const list = current || [];
+      return editingId ? list.map((p) => (p.id === result.data.id ? result.data : p)) : [result.data, ...list];
+    });
+    setProgramaExpandedId(result.data.id);
     setProgramaEditing(false);
   }
 
-  async function handleAprobarPrograma() {
-    if (!programa) return;
-    const result = await aprobarPrograma(programa.id, currentUser);
+  async function handleAprobarPrograma(id) {
+    const result = await aprobarPrograma(id, currentUser);
     if (!result.ok) { console.error(result.error); setProgramaMessage("No fue posible registrar el visto bueno."); return; }
-    setPrograma(result.data);
+    setProgramas((current) => (current || []).map((p) => (p.id === id ? result.data : p)));
   }
 
-  async function handleFirmarProgramaCoordinador() {
-    if (!programa) return;
-    const result = await firmarProgramaComoCoordinador(programa.id, currentUser);
+  async function handleFirmarProgramaCoordinador(id) {
+    const result = await firmarProgramaComoCoordinador(id, currentUser);
     if (!result.ok) { console.error(result.error); setProgramaMessage(typeof result.error === "string" ? result.error : "No fue posible registrar la firma."); return; }
-    setPrograma(result.data);
+    setProgramas((current) => (current || []).map((p) => (p.id === id ? result.data : p)));
   }
 
-  function handleDescargarProgramaPdf() {
-    if (programa) downloadProgramaPdf(programa);
+  function handleDescargarProgramaPdf(p) {
+    if (p) downloadProgramaPdf(p);
+  }
+
+  // Formulario de alta/edición — mismo JSX para "+ Nuevo programa" (crea)
+  // y "Editar" sobre una fila existente (actualiza); el destino real lo
+  // decide handleGuardarPrograma() a partir de programaExpandedId.
+  function renderProgramaEditForm() {
+    return (
+      <div className="space-y-2">
+        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Nombre del programa
+          <input type="text" value={programaDraft.nombre} onChange={(e) => setProgramaDraft((d) => ({ ...d, nombre: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <div className="grid gap-2 md:grid-cols-2">
+          {[
+            ["objetivos", "Objetivos del programa"],
+            ["alcance", "Alcance del programa"],
+            ["riesgosOportunidades", "Riesgos y oportunidades"],
+            ["recursosRoles", "Recursos y roles"],
+            ["criteriosGenerales", "Criterios generales"],
+            ["enfoqueMetodologico", "Enfoque metodológico"],
+            ["documentosReferencia", "Documentos de referencia"],
+          ].map(([field, label]) => (
+            <label key={field} className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              {label}
+              <textarea rows={3} value={programaDraft[field]} onChange={(e) => setProgramaDraft((d) => ({ ...d, [field]: e.target.value }))} className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium normal-case tracking-normal text-slate-700 outline-none" />
+            </label>
+          ))}
+        </div>
+        {programaMessage && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{programaMessage}</div>}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={handleGuardarPrograma} className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white">Guardar programa</button>
+          <button type="button" onClick={() => { setProgramaEditing(false); if (programaExpandedId === "new") setProgramaExpandedId(null); }} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button>
+        </div>
+      </div>
+    );
+  }
+
+  // Vista de solo lectura de un programa — tarjetas de color por campo,
+  // escala 0/3/5/10 y las dos firmas (Coordinador SIG / Director General).
+  function renderProgramaReadView(p) {
+    return (
+      <div className="space-y-2 pt-2">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Detalle del programa</div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {canEdit && <button type="button" onClick={() => openProgramaEditor(p)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-slate-300">Editar</button>}
+            <button type="button" onClick={() => handleDescargarProgramaPdf(p)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-slate-300">↓ PDF</button>
+          </div>
+        </div>
+        <div className="grid gap-2.5 text-[11px] font-medium text-slate-600 md:grid-cols-2">
+          {[
+            ["Objetivos", p.objetivos, "🎯", "border-sky-100 bg-sky-50/70 text-sky-700"],
+            ["Alcance", p.alcance, "🗺️", "border-indigo-100 bg-indigo-50/70 text-indigo-700"],
+            ["Riesgos y oportunidades", p.riesgos_oportunidades, "⚠️", "border-amber-100 bg-amber-50/70 text-amber-700"],
+            ["Recursos y roles", p.recursos_roles, "👥", "border-violet-100 bg-violet-50/70 text-violet-700"],
+            ["Criterios generales", p.criterios_generales, "📐", "border-emerald-100 bg-emerald-50/70 text-emerald-700"],
+            ["Enfoque metodológico", p.enfoque_metodologico, "🧭", "border-teal-100 bg-teal-50/70 text-teal-700"],
+            ["Documentos de referencia", p.documentos_referencia, "📎", "border-fuchsia-100 bg-fuchsia-50/70 text-fuchsia-700"],
+          ].filter(([, v]) => v).map(([label, v, icon, tint]) => {
+            const bullets = v.includes("\n") ? v.split("\n").filter(Boolean) : null;
+            return (
+              <div key={label} className={`rounded-2xl border p-3 shadow-sm ${tint}`}>
+                <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
+                  <span className="text-[13px] leading-none">{icon}</span>
+                  {label}
+                </div>
+                {bullets ? (
+                  <ul className="mt-1.5 space-y-1 text-slate-700">
+                    {bullets.map((line, i) => (
+                      <li key={i} className="flex gap-1.5">
+                        <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-current opacity-60" />
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="mt-1 text-slate-700">{v}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div>
+          <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Escala de calificación</div>
+          <div className="mt-1 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            {[0, 3, 5, 10].map((n) => (
+              <div key={n} className={`rounded-xl px-2.5 py-2 text-center shadow-sm ${cellStyle(n)}`}>
+                <div className="text-base font-black leading-none">{n}</div>
+                <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wide">{scoreMeaning(n)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Firmas</div>
+          <div className="mt-1 grid gap-2 sm:grid-cols-2">
+            {[
+              {
+                rol: "Coordinador SIG",
+                nombre: p.firmado_coordinador_nombre,
+                fecha: p.firmado_coordinador_at,
+                puedeFirmar: Number(currentUser?.persona_id) === COORDINADOR_SIG_PERSONA_ID,
+                onFirmar: () => handleFirmarProgramaCoordinador(p.id),
+              },
+              {
+                rol: "Director General",
+                nombre: p.aprobado_por_nombre,
+                fecha: p.aprobado_at,
+                puedeFirmar: isDirectorGeneral(currentUser),
+                onFirmar: () => handleAprobarPrograma(p.id),
+              },
+            ].map((f) => (
+              <div key={f.rol} className={`rounded-2xl border p-3 ${f.nombre ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-slate-50/60"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{f.rol}</div>
+                  {f.nombre ? (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-black text-emerald-700">✓ Firmado</span>
+                  ) : (
+                    <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[9px] font-black text-amber-700">Pendiente</span>
+                  )}
+                </div>
+                {f.nombre ? (
+                  <div className="mt-1 text-[11px] font-bold text-slate-700">
+                    {f.nombre} <span className="font-medium text-slate-400">· {new Date(f.fecha).toLocaleDateString("es-MX")}</span>
+                  </div>
+                ) : f.puedeFirmar ? (
+                  <button type="button" onClick={f.onFirmar} className="mt-1.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Firmar</button>
+                ) : (
+                  <div className="mt-1 text-[11px] font-medium text-slate-400">Sin firmar</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   function updateAuditoriaLocal(id, patch) {
@@ -1285,7 +1432,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   async function handleCreateAuditoria() {
     if (!auditoriaNewDraft.macroproceso) { setAuditoriasMessage("Selecciona el macroproceso a auditar."); return; }
     setAuditoriasMessage("");
-    const result = await createAuditoria({ ...auditoriaNewDraft, programaId: programa?.id || null }, currentUser);
+    const result = await createAuditoria({ ...auditoriaNewDraft, programaId: programaVigente?.id || null }, currentUser);
     if (!result.ok) { console.error(result.error); setAuditoriasMessage("No fue posible programar la auditoría."); return; }
     // Se recarga la lista completa (en vez de insertar result.data localmente)
     // porque el equipo auditor recién guardado necesita el join con personas
@@ -1734,8 +1881,11 @@ export default function DiagnosticoSIGModule({ currentUser }) {
               <button type="button" onClick={() => setCambioCreating((current) => !current)} className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 px-3 py-1.5 text-[10px] font-black text-sky-700 transition hover:border-sky-400 hover:bg-sky-100">+ Nueva solicitud</button>
             </div>
           )}
-          {view === "auditorias" && canEdit && (
+          {view === "auditorias" && canEdit && auditoriasSubTab === "planes" && (
             <button type="button" onClick={() => setAuditoriaCreating((current) => !current)} className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 px-3 py-1.5 text-[10px] font-black text-sky-700 transition hover:border-sky-400 hover:bg-sky-100">+ Nueva auditoría</button>
+          )}
+          {view === "auditorias" && canEdit && auditoriasSubTab === "programas" && (
+            <button type="button" onClick={() => openProgramaEditor()} className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 px-3 py-1.5 text-[10px] font-black text-sky-700 transition hover:border-sky-400 hover:bg-sky-100">+ Nuevo programa</button>
           )}
         </section>
 
@@ -2164,150 +2314,81 @@ export default function DiagnosticoSIGModule({ currentUser }) {
               Programa, plan y ficha de cada auditoría se capturan y editan aquí (ISO 19011); la evidencia primaria del auditado sigue viviendo en su estructura de SharePoint. Cada PDF descargado se archiva ahí como respaldo.
             </p>
 
-            {!programaLoading && (
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                {programaEditing ? (
-                  <div className="space-y-2">
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Nombre del programa
-                      <input type="text" value={programaDraft.nombre} onChange={(e) => setProgramaDraft((d) => ({ ...d, nombre: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
-                    </label>
-                    <div className="grid gap-2 md:grid-cols-2">
-                      {[
-                        ["objetivos", "Objetivos del programa"],
-                        ["alcance", "Alcance del programa"],
-                        ["riesgosOportunidades", "Riesgos y oportunidades"],
-                        ["recursosRoles", "Recursos y roles"],
-                        ["criteriosGenerales", "Criterios generales"],
-                        ["enfoqueMetodologico", "Enfoque metodológico"],
-                        ["documentosReferencia", "Documentos de referencia"],
-                      ].map(([field, label]) => (
-                        <label key={field} className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          {label}
-                          <textarea rows={3} value={programaDraft[field]} onChange={(e) => setProgramaDraft((d) => ({ ...d, [field]: e.target.value }))} className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium normal-case tracking-normal text-slate-700 outline-none" />
-                        </label>
-                      ))}
-                    </div>
-                    {programaMessage && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{programaMessage}</div>}
-                    <div className="flex justify-end gap-2 pt-1">
-                      <button type="button" onClick={handleGuardarPrograma} className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white">Guardar programa</button>
-                      <button type="button" onClick={() => setProgramaEditing(false)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button>
-                    </div>
-                  </div>
-                ) : !programa ? (
-                  canEdit && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-400">Aún no existe un programa de auditoría vigente.</span>
-                      <button type="button" onClick={openProgramaEditor} className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 px-3 py-1.5 text-[10px] font-black text-sky-700">+ Crear programa</button>
-                    </div>
+            <div className="flex w-fit items-center gap-1 rounded-lg bg-slate-100 p-0.5 text-[10px] font-black uppercase tracking-wide">
+              <button type="button" onClick={() => setAuditoriasSubTab("programas")} className={`rounded-md px-3 py-1.5 transition ${auditoriasSubTab === "programas" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Programas</button>
+              <button type="button" onClick={() => setAuditoriasSubTab("planes")} className={`rounded-md px-3 py-1.5 transition ${auditoriasSubTab === "planes" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Planes</button>
+            </div>
+
+            {auditoriasSubTab === "programas" && (
+              <div className="space-y-3">
+                {programaExpandedId === "new" && programaEditing && (
+                  <div className="rounded-2xl border border-sky-100 bg-sky-50/40 p-4">{renderProgramaEditForm()}</div>
+                )}
+
+                {programasLoading ? (
+                  <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-400 shadow-sm">Cargando programas…</div>
+                ) : (programas || []).length === 0 ? (
+                  programaExpandedId !== "new" && (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-300 shadow-sm">Aún no existe ningún programa de auditoría.</div>
                   )
                 ) : (
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Programa vigente</div>
-                        <div className="text-sm font-black text-slate-800">{programa.nombre}</div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {programa.firmado_coordinador_nombre && programa.aprobado_por_nombre ? (
-                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">✓ Firmado por ambos</span>
-                        ) : (
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700">Firmas pendientes</span>
-                        )}
-                        {canEdit && <button type="button" onClick={openProgramaEditor} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-slate-300">Editar</button>}
-                        <button type="button" onClick={handleDescargarProgramaPdf} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-slate-300">↓ PDF</button>
-                      </div>
-                    </div>
-                    <div className="grid gap-2.5 text-[11px] font-medium text-slate-600 md:grid-cols-2">
-                      {[
-                        ["Objetivos", programa.objetivos, "🎯", "border-sky-100 bg-sky-50/70 text-sky-700"],
-                        ["Alcance", programa.alcance, "🗺️", "border-indigo-100 bg-indigo-50/70 text-indigo-700"],
-                        ["Riesgos y oportunidades", programa.riesgos_oportunidades, "⚠️", "border-amber-100 bg-amber-50/70 text-amber-700"],
-                        ["Recursos y roles", programa.recursos_roles, "👥", "border-violet-100 bg-violet-50/70 text-violet-700"],
-                        ["Criterios generales", programa.criterios_generales, "📐", "border-emerald-100 bg-emerald-50/70 text-emerald-700"],
-                        ["Enfoque metodológico", programa.enfoque_metodologico, "🧭", "border-teal-100 bg-teal-50/70 text-teal-700"],
-                        ["Documentos de referencia", programa.documentos_referencia, "📎", "border-fuchsia-100 bg-fuchsia-50/70 text-fuchsia-700"],
-                      ].filter(([, v]) => v).map(([label, v, icon, tint]) => {
-                        const bullets = v.includes("\n") ? v.split("\n").filter(Boolean) : null;
-                        return (
-                          <div key={label} className={`rounded-2xl border p-3 shadow-sm ${tint}`}>
-                            <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
-                              <span className="text-[13px] leading-none">{icon}</span>
-                              {label}
-                            </div>
-                            {bullets ? (
-                              <ul className="mt-1.5 space-y-1 text-slate-700">
-                                {bullets.map((line, i) => (
-                                  <li key={i} className="flex gap-1.5">
-                                    <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-current opacity-60" />
-                                    <span>{line}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <div className="mt-1 text-slate-700">{v}</div>
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <table className="min-w-full text-left text-[11px]">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                          <th className="px-3 py-2">Programa</th>
+                          <th className="px-3 py-2">Estado</th>
+                          <th className="px-3 py-2">Coordinador SIG</th>
+                          <th className="px-3 py-2">Director General</th>
+                          <th className="px-3 py-2">Creado</th>
+                          <th className="px-3 py-2 text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {programas.map((p) => (
+                          <React.Fragment key={p.id}>
+                            <tr className="border-b border-slate-50">
+                              <td className="px-3 py-2.5 font-bold text-slate-700">{p.nombre}</td>
+                              <td className="px-3 py-2.5">
+                                <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${p.estado === "Vigente" ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}>{p.estado}</span>
+                              </td>
+                              <td className="px-3 py-2.5">
+                                {p.firmado_coordinador_nombre ? <span className="font-bold text-emerald-600">✓ Firmado</span> : <span className="text-slate-400">Pendiente</span>}
+                              </td>
+                              <td className="px-3 py-2.5">
+                                {p.aprobado_por_nombre ? <span className="font-bold text-emerald-600">✓ Firmado</span> : <span className="text-slate-400">Pendiente</span>}
+                              </td>
+                              <td className="px-3 py-2.5 font-semibold text-slate-500">{new Date(p.created_at).toLocaleDateString("es-MX")}</td>
+                              <td className="px-3 py-2.5">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setProgramaEditing(false); setProgramaExpandedId((current) => (current === p.id ? null : p.id)); }}
+                                    className={`rounded-lg border px-2.5 py-1 text-[10px] font-black transition ${programaExpandedId === p.id ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}
+                                  >
+                                    {programaExpandedId === p.id ? "Ocultar" : "Ver detalle"}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {programaExpandedId === p.id && (
+                              <tr>
+                                <td colSpan={6} className="bg-slate-50/60 px-3 pb-3">
+                                  {programaEditing ? renderProgramaEditForm() : renderProgramaReadView(p)}
+                                </td>
+                              </tr>
                             )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div>
-                      <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Escala de calificación</div>
-                      <div className="mt-1 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                        {[0, 3, 5, 10].map((n) => (
-                          <div key={n} className={`rounded-xl px-2.5 py-2 text-center shadow-sm ${cellStyle(n)}`}>
-                            <div className="text-base font-black leading-none">{n}</div>
-                            <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wide">{scoreMeaning(n)}</div>
-                          </div>
+                          </React.Fragment>
                         ))}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Firmas</div>
-                      <div className="mt-1 grid gap-2 sm:grid-cols-2">
-                        {[
-                          {
-                            rol: "Coordinador SIG",
-                            nombre: programa.firmado_coordinador_nombre,
-                            fecha: programa.firmado_coordinador_at,
-                            puedeFirmar: Number(currentUser?.persona_id) === COORDINADOR_SIG_PERSONA_ID,
-                            onFirmar: handleFirmarProgramaCoordinador,
-                          },
-                          {
-                            rol: "Director General",
-                            nombre: programa.aprobado_por_nombre,
-                            fecha: programa.aprobado_at,
-                            puedeFirmar: isDirectorGeneral(currentUser),
-                            onFirmar: handleAprobarPrograma,
-                          },
-                        ].map((f) => (
-                          <div key={f.rol} className={`rounded-2xl border p-3 ${f.nombre ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-slate-50/60"}`}>
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{f.rol}</div>
-                              {f.nombre ? (
-                                <span className="rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-black text-emerald-700">✓ Firmado</span>
-                              ) : (
-                                <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[9px] font-black text-amber-700">Pendiente</span>
-                              )}
-                            </div>
-                            {f.nombre ? (
-                              <div className="mt-1 text-[11px] font-bold text-slate-700">
-                                {f.nombre} <span className="font-medium text-slate-400">· {new Date(f.fecha).toLocaleDateString("es-MX")}</span>
-                              </div>
-                            ) : f.puedeFirmar ? (
-                              <button type="button" onClick={f.onFirmar} className="mt-1.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Firmar</button>
-                            ) : (
-                              <div className="mt-1 text-[11px] font-medium text-slate-400">Sin firmar</div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
             )}
 
+            {auditoriasSubTab === "planes" && (
+              <>
             {auditoriasMessage && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{auditoriasMessage}</div>}
 
             {auditoriaCreating && (
@@ -2554,6 +2635,8 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                   </tbody>
                 </table>
               </div>
+            )}
+              </>
             )}
           </section>
         )}
