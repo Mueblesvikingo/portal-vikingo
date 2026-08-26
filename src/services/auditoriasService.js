@@ -380,6 +380,162 @@ export async function upsertHallazgo(auditoriaId, criterio, { nivel, evidencia }
   }
 }
 
+// ---- Estilos visuales compartidos por los PDF de auditoría ----
+// Mismos 4 colores (y sus tintes de fondo) que ya usa la rúbrica 0/3/5/10
+// en el artefacto HTML aprobado por el usuario — se reutilizan aquí para
+// que el PDF se vea consistente con lo que ya vio y aceptó.
+const LV_STYLES = {
+  0: { fg: [166, 54, 45], bg: [251, 234, 232], label: "No implementado" },
+  3: { fg: [165, 113, 31], bg: [251, 241, 222], label: "En desarrollo" },
+  5: { fg: [33, 113, 79], bg: [230, 243, 236], label: "Implementado" },
+  10: { fg: [30, 39, 97], bg: [231, 233, 246], label: "Estandarizado" },
+};
+const CARD_BG = [248, 248, 250];
+
+// Mide y dibuja un campo como tarjeta: cuadro rojo pequeño + título, y el
+// cuerpo como párrafo o —si el texto trae saltos de línea— como lista con
+// viñetas (una viñeta por línea del texto guardado). El alto de la tarjeta
+// se calcula antes de dibujar para poder pintar el fondo de una sola vez.
+function measureFieldCard(doc, width, texto) {
+  const cardPad = 12;
+  const bulletIndent = 13;
+  const lineH = 13;
+  const raw = texto && texto.trim() ? texto : "Sin definir.";
+  const isBulleted = raw.includes("\n");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  const items = isBulleted
+    ? raw.split("\n").filter(Boolean).map((p) => doc.splitTextToSize(p, width - cardPad * 2 - bulletIndent))
+    : [doc.splitTextToSize(raw, width - cardPad * 2)];
+  const totalLines = items.reduce((sum, lines) => sum + lines.length, 0);
+  const itemGap = isBulleted ? (items.length - 1) * 5 : 0;
+  const titleBlock = 20;
+  const height = cardPad * 2 + titleBlock + totalLines * lineH + itemGap;
+  return { cardPad, bulletIndent, lineH, isBulleted, items, height };
+}
+
+function drawFieldCard(doc, x, y, width, titulo, layout) {
+  const { cardPad, bulletIndent, lineH, isBulleted, items, height } = layout;
+  doc.setFillColor(...CARD_BG);
+  doc.setDrawColor(...GRIS_LINEA);
+  doc.setLineWidth(0.6);
+  doc.roundedRect(x, y, width, height, 6, 6, "FD");
+
+  doc.setFillColor(...ROJO);
+  doc.roundedRect(x + cardPad, y + cardPad + 1, 6, 6, 1.5, 1.5, "F");
+  doc.setTextColor(...ROJO);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  doc.text(titulo, x + cardPad + 12, y + cardPad + 7);
+
+  let cursor = y + cardPad + 20;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...NEGRO);
+  items.forEach((lines) => {
+    if (isBulleted) {
+      doc.setFillColor(...GRIS);
+      doc.circle(x + cardPad + 3, cursor - 3, 1.6, "F");
+      doc.text(lines, x + cardPad + bulletIndent, cursor);
+    } else {
+      doc.text(lines, x + cardPad, cursor);
+    }
+    cursor += lines.length * lineH + (isBulleted ? 5 : 0);
+  });
+
+  return y + height;
+}
+
+// Franja de 4 celdas con la escala 0/3/5/10 — misma info que ya vive en
+// scoreMeaning()/cellStyle() de SigDiagnosisModule.jsx, dibujada aquí de
+// forma fija (no depende de texto capturado) para que siempre se vea igual.
+function drawEscalaCalificacion(doc, x, y, width) {
+  const gap = 8;
+  const cellW = (width - gap * 3) / 4;
+  const cellH = 40;
+  [0, 3, 5, 10].forEach((nivel, i) => {
+    const style = LV_STYLES[nivel];
+    const cellX = x + i * (cellW + gap);
+    doc.setFillColor(...style.bg);
+    doc.roundedRect(cellX, y, cellW, cellH, 5, 5, "F");
+    doc.setTextColor(...style.fg);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(String(nivel), cellX + 8, y + 17);
+    doc.setFontSize(7.8);
+    doc.text(style.label, cellX + 8, y + 30, { maxWidth: cellW - 14 });
+  });
+  return y + cellH;
+}
+
+// Tarjeta de un criterio en la Ficha de auditoría: etiqueta + texto del
+// criterio, evidencia esperada, una píldora de color con el nivel
+// confirmado (mismos colores que LV_STYLES) y, si existe, la evidencia
+// observada durante la sesión.
+function measureCriterioCard(doc, width, c) {
+  const pad = 12;
+  const tagColW = 58;
+  const innerWidth = width - pad * 2 - tagColW;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  const textoLines = doc.splitTextToSize(c.texto, innerWidth);
+  doc.setFontSize(8.3);
+  const evLines = doc.splitTextToSize(`Evidencia esperada: ${c.evidenciaEsperada || "—"}`, innerWidth);
+  let obsLines = [];
+  if (c.evidenciaObservada) {
+    doc.setFontSize(9);
+    obsLines = doc.splitTextToSize(`Evidencia observada: ${c.evidenciaObservada}`, innerWidth);
+  }
+  const height = pad * 2 + textoLines.length * 12.5 + evLines.length * 11 + 8 + 18 + (obsLines.length ? obsLines.length * 11 + 4 : 0);
+  return { pad, tagColW, textoLines, evLines, obsLines, height };
+}
+
+function drawCriterioCard(doc, x, y, width, c, layout) {
+  const { pad, tagColW, textoLines, evLines, obsLines, height } = layout;
+  doc.setFillColor(...CARD_BG);
+  doc.setDrawColor(...GRIS_LINEA);
+  doc.setLineWidth(0.6);
+  doc.roundedRect(x, y, width, height, 6, 6, "FD");
+
+  doc.setTextColor(...ROJO);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.text(c.tag, x + pad, y + pad + 8);
+
+  const textX = x + pad + tagColW;
+  doc.setTextColor(...NEGRO);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  doc.text(textoLines, textX, y + pad + 8);
+  let cursor = y + pad + 8 + textoLines.length * 12.5 + 3;
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(8.3);
+  doc.setTextColor(...GRIS);
+  doc.text(evLines, textX, cursor);
+  cursor += evLines.length * 11 + 8;
+
+  const style = c.nivelConfirmado == null ? { fg: GRIS, bg: [240, 240, 242] } : LV_STYLES[c.nivelConfirmado];
+  const label = c.nivelConfirmado == null ? "SIN CAPTURAR" : `${c.nivelConfirmado} · ${LV_STYLES[c.nivelConfirmado].label.toUpperCase()}`;
+  const badgeW = 104;
+  doc.setFillColor(...style.bg);
+  doc.roundedRect(textX, cursor - 10, badgeW, 15, 7.5, 7.5, "F");
+  doc.setTextColor(...style.fg);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.8);
+  doc.text(label, textX + badgeW / 2, cursor, { align: "center" });
+  cursor += 16;
+
+  if (obsLines.length) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...NEGRO);
+    doc.text(obsLines, textX, cursor);
+  }
+
+  return y + height;
+}
+
 // ---- PDF: Programa de auditoría (SIG-F-03) ----
 
 function buildProgramaPdfDoc(programa) {
@@ -390,16 +546,17 @@ function buildProgramaPdfDoc(programa) {
   const contentWidth = pageWidth - marginX * 2;
   const bottomLimit = pageHeight - 50;
   const paginaSpots = [];
+  const headerOpts = { titulo: "PROGRAMA DE AUDITORÍA SIG", aplicacion: "Diagnóstico SIG", codigo: "SIG-F-03" };
 
   function ensureSpace(y, needed) {
     if (y + needed > bottomLimit) {
       doc.addPage();
-      return drawDocumentHeader(doc, { titulo: "PROGRAMA DE AUDITORÍA SIG", aplicacion: "Diagnóstico SIG", codigo: "SIG-F-03" }, paginaSpots) + 24;
+      return drawDocumentHeader(doc, headerOpts, paginaSpots) + 24;
     }
     return y;
   }
 
-  let y = drawDocumentHeader(doc, { titulo: "PROGRAMA DE AUDITORÍA SIG", aplicacion: "Diagnóstico SIG", codigo: "SIG-F-03" }, paginaSpots) + 24;
+  let y = drawDocumentHeader(doc, headerOpts, paginaSpots) + 24;
 
   doc.setFillColor(...ROJO);
   doc.rect(marginX, y, contentWidth, 34, "F");
@@ -407,7 +564,7 @@ function buildProgramaPdfDoc(programa) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.text(programa.nombre || "Programa de auditoría", marginX + 14, y + 22, { maxWidth: contentWidth - 28 });
-  y += 34 + 20;
+  y += 34 + 16;
 
   const secciones = [
     ["Objetivos del programa (ISO 19011 §5)", programa.objetivos],
@@ -420,22 +577,17 @@ function buildProgramaPdfDoc(programa) {
   ];
 
   secciones.forEach(([titulo, texto]) => {
-    y = ensureSpace(y, 40);
-    doc.setTextColor(...ROJO);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text(titulo, marginX, y);
-    y += 15;
-    doc.setTextColor(...NEGRO);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    const lines = doc.splitTextToSize(texto || "Sin definir.", contentWidth);
-    lines.forEach((line) => {
-      y = ensureSpace(y, 14);
-      doc.text(line, marginX, y);
-      y += 14;
-    });
-    y += 10;
+    const layout = measureFieldCard(doc, contentWidth, texto);
+    y = ensureSpace(y, layout.height);
+    y = drawFieldCard(doc, marginX, y, contentWidth, titulo, layout) + 12;
+    if (titulo.startsWith("Criterios generales")) {
+      y = ensureSpace(y, 52);
+      doc.setTextColor(...GRIS);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text("ESCALA DE CALIFICACIÓN", marginX, y);
+      y = drawEscalaCalificacion(doc, marginX, y + 6, contentWidth) + 16;
+    }
   });
 
   y = ensureSpace(y, 90);
@@ -443,15 +595,25 @@ function buildProgramaPdfDoc(programa) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.text("Visto bueno", marginX, y);
-  y += 24;
+  y += 10;
+
+  const aprobado = Boolean(programa.aprobado_por_nombre);
+  const badgeStyle = aprobado ? { fg: [33, 113, 79], bg: [230, 243, 236], label: "APROBADO" } : { fg: [165, 113, 31], bg: [251, 241, 222], label: "PENDIENTE" };
+  doc.setFillColor(...badgeStyle.bg);
+  doc.roundedRect(marginX, y, 74, 18, 9, 9, "F");
+  doc.setTextColor(...badgeStyle.fg);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.text(badgeStyle.label, marginX + 37, y + 12, { align: "center" });
+  y += 32;
+
   doc.setDrawColor(...GRIS_LINEA);
   doc.setLineWidth(0.5);
   doc.line(marginX, y, marginX + 260, y);
   y += 14;
-  doc.setTextColor(...NEGRO);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  if (programa.aprobado_por_nombre) {
+  if (aprobado) {
     doc.setTextColor(...ROJO);
     doc.text(`Aprobado por ${programa.aprobado_por_nombre} · ${new Date(programa.aprobado_at).toLocaleDateString("es-MX")}`, marginX, y);
   } else {
@@ -522,38 +684,14 @@ function buildFichaAuditoriaPdfDoc(auditoria, criterios) {
   doc.setFontSize(11);
   y = ensureSpace(y, 20);
   doc.text("Criterios y hallazgos (ISO 19011 §6.5 f-g)", marginX, y);
-  y += 18;
+  y += 16;
 
   (criterios || []).forEach((c) => {
-    y = ensureSpace(y, 60);
-    doc.setTextColor(...ROJO);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(c.tag, marginX, y);
-    doc.setTextColor(...NEGRO);
-    doc.setFont("helvetica", "normal");
-    const textoLines = doc.splitTextToSize(c.texto, contentWidth - 70);
-    doc.text(textoLines, marginX + 60, y);
-    y += textoLines.length * 13;
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...GRIS);
-    doc.text(`Evidencia esperada: ${c.evidenciaEsperada || "—"}`, marginX + 60, y);
-    y += 13;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
-    doc.setTextColor(c.nivelConfirmado === null || c.nivelConfirmado === undefined ? GRIS[0] : ROJO[0], c.nivelConfirmado == null ? GRIS[1] : ROJO[1], c.nivelConfirmado == null ? GRIS[2] : ROJO[2]);
-    doc.text(`Nivel confirmado: ${c.nivelConfirmado ?? "Sin capturar"}`, marginX + 60, y);
-    y += 13;
-    if (c.evidenciaObservada) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(...NEGRO);
-      const evLines = doc.splitTextToSize(`Evidencia observada: ${c.evidenciaObservada}`, contentWidth - 70);
-      evLines.forEach((line) => { y = ensureSpace(y, 12); doc.text(line, marginX + 60, y); y += 12; });
-    }
-    y += 12;
+    const layout = measureCriterioCard(doc, contentWidth, c);
+    y = ensureSpace(y, layout.height);
+    y = drawCriterioCard(doc, marginX, y, contentWidth, c, layout) + 10;
   });
+  y += 6;
 
   const cierre = [
     ["Conclusiones de la auditoría (h)", auditoria.conclusiones],
@@ -562,18 +700,9 @@ function buildFichaAuditoriaPdfDoc(auditoria, criterios) {
     ["Plan de seguimiento (k)", auditoria.plan_seguimiento],
   ];
   cierre.forEach(([titulo, texto]) => {
-    y = ensureSpace(y, 36);
-    doc.setTextColor(...ROJO);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.5);
-    doc.text(titulo, marginX, y);
-    y += 14;
-    doc.setTextColor(...NEGRO);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
-    const lines = doc.splitTextToSize(texto || "Sin registrar.", contentWidth);
-    lines.forEach((line) => { y = ensureSpace(y, 13); doc.text(line, marginX, y); y += 13; });
-    y += 8;
+    const layout = measureFieldCard(doc, contentWidth, texto);
+    y = ensureSpace(y, layout.height);
+    y = drawFieldCard(doc, marginX, y, contentWidth, titulo, layout) + 10;
   });
 
   y = ensureSpace(y, 70);
