@@ -222,7 +222,7 @@ export async function getProgramaVigente() {
   try {
     const { data, error } = await supabase
       .from("sig_programas_auditoria")
-      .select("*, aprobado_por:personas(id,nombre)")
+      .select("*, aprobado_por:personas!sig_programas_auditoria_aprobado_por_persona_id_fkey(id,nombre)")
       .eq("estado", "Vigente")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -242,7 +242,7 @@ export async function getProgramas() {
   try {
     const { data, error } = await supabase
       .from("sig_programas_auditoria")
-      .select("*, aprobado_por:personas(id,nombre)")
+      .select("*, aprobado_por:personas!sig_programas_auditoria_aprobado_por_persona_id_fkey(id,nombre)")
       .order("created_at", { ascending: false });
     if (error) {
       console.error("Error al cargar los programas de auditoría:", error);
@@ -272,7 +272,7 @@ export async function createPrograma(payload, actor) {
         created_by_persona_id: personaId,
         created_by_nombre: nombre,
       })
-      .select("*, aprobado_por:personas(id,nombre)")
+      .select("*, aprobado_por:personas!sig_programas_auditoria_aprobado_por_persona_id_fkey(id,nombre)")
       .single();
     if (error) return { ok: false, error, data: null };
     return { ok: true, error: null, data };
@@ -300,7 +300,7 @@ export async function updatePrograma(id, changes, actor) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
-      .select("*, aprobado_por:personas(id,nombre)")
+      .select("*, aprobado_por:personas!sig_programas_auditoria_aprobado_por_persona_id_fkey(id,nombre)")
       .single();
     if (error) return { ok: false, error, data: null };
     return { ok: true, error: null, data };
@@ -317,7 +317,7 @@ export async function aprobarPrograma(id, actor) {
       .from("sig_programas_auditoria")
       .update({ aprobado_por_persona_id: personaId, aprobado_por_nombre: nombre, aprobado_at: new Date().toISOString() })
       .eq("id", id)
-      .select("*, aprobado_por:personas(id,nombre)")
+      .select("*, aprobado_por:personas!sig_programas_auditoria_aprobado_por_persona_id_fkey(id,nombre)")
       .single();
     if (error) return { ok: false, error, data: null };
     return { ok: true, error: null, data };
@@ -341,7 +341,7 @@ export async function firmarProgramaComoCoordinador(id, actor) {
       .from("sig_programas_auditoria")
       .update({ firmado_coordinador_persona_id: personaId, firmado_coordinador_nombre: nombre, firmado_coordinador_at: new Date().toISOString() })
       .eq("id", id)
-      .select("*, aprobado_por:personas(id,nombre)")
+      .select("*, aprobado_por:personas!sig_programas_auditoria_aprobado_por_persona_id_fkey(id,nombre)")
       .single();
     if (error) return { ok: false, error, data: null };
     return { ok: true, error: null, data };
