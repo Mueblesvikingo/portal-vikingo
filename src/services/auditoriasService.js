@@ -22,7 +22,7 @@ function drawDocumentHeader(doc, { titulo, aplicacion, codigo }, paginaSpots) {
   const marginX = 40;
   const contentWidth = pageWidth - marginX * 2;
   const top = 30;
-  const headerHeight = 80;
+  const headerHeight = 60;
   const logoColWidth = 105;
   const metaColWidth = 150;
   const metaX = pageWidth - marginX - metaColWidth;
@@ -35,20 +35,20 @@ function drawDocumentHeader(doc, { titulo, aplicacion, codigo }, paginaSpots) {
   doc.line(marginX + logoColWidth, top, marginX + logoColWidth, top + headerHeight);
   doc.line(metaX, top, metaX, top + headerHeight);
 
-  const logoW = 82;
+  const logoW = 68;
   const logoH = logoW / LOGO_RATIO;
   doc.addImage(`data:image/png;base64,${VIKINGO_LOGO_PNG_BASE64}`, "PNG", marginX + (logoColWidth - logoW) / 2, top + (headerHeight - logoH) / 2, logoW, logoH);
 
   doc.setTextColor(...NEGRO);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.text(titulo, middleX, top + 30, { maxWidth: middleWidth });
+  doc.setFontSize(12);
+  doc.text(titulo, middleX, top + 21, { maxWidth: middleWidth });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setTextColor(...ROJO);
-  doc.text("Sistema Integrado de Gestión", middleX, top + 46, { maxWidth: middleWidth });
+  doc.text("Sistema Integrado de Gestión", middleX, top + 34, { maxWidth: middleWidth });
   doc.setTextColor(...GRIS);
-  doc.text(`Aplicación: ${aplicacion}`, middleX, top + 60, { maxWidth: middleWidth });
+  doc.text(`Aplicación: ${aplicacion}`, middleX, top + 46, { maxWidth: middleWidth });
 
   const metaRows = [["Código:", codigo], ["Estado:", "Vigente"], ["Edición:", DOC_EDICION], ["Fecha:", DOC_FECHA_EDICION], ["Página:", "__PAGINA__"]];
   const rowH = headerHeight / metaRows.length;
