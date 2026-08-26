@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { updateAuditoria, getHallazgos, upsertHallazgo, downloadFichaAuditoriaPdf } from "../../services/auditoriasService";
-import { sigSections, cellStyle, scoreMeaning, cleanSubtitle, resolveProceso } from "./SigDiagnosisModule";
+import {
+  updateAuditoria, getHallazgos, upsertHallazgo, downloadFichaAuditoriaPdf, FICHA_FIRMAS_CLEAR,
+  firmarFichaComoCoordinador, firmarFichaComoDirector, firmarFichaComoAuditado,
+} from "../../services/auditoriasService";
+import { isDirectorGeneral } from "../../services/permissionsService";
+import { sigSections, cellStyle, scoreMeaning, cleanSubtitle, resolveProceso, COORDINADOR_SIG_PERSONA_ID } from "./SigDiagnosisModule";
 
 const DECLARACIONES = ["Cumple", "Cumple parcialmente", "No cumple"];
 const NIVELES = [0, 3, 5, 10];
@@ -82,17 +86,23 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
 
   async function handleCierreBlur(field, value) {
     if (value === (auditoria[field] || "")) return;
-    const result = await updateAuditoria(auditoria.id, { [field]: value || null });
+    const result = await updateAuditoria(auditoria.id, { [field]: value || null, ...FICHA_FIRMAS_CLEAR });
     if (!result.ok) { console.error(result.error); return; }
     onUpdated(result.data);
   }
 
   function handlePlanFieldBlur(field, value) {
     if (value === (auditoria[field] || "")) return;
-    updateAuditoria(auditoria.id, { [field]: value || null }).then((result) => {
+    updateAuditoria(auditoria.id, { [field]: value || null, ...FICHA_FIRMAS_CLEAR }).then((result) => {
       if (!result.ok) { console.error(result.error); return; }
       onUpdated(result.data);
     });
+  }
+
+  async function handleFirmar(firmarFn) {
+    const result = await firmarFn(auditoria.id, currentUser);
+    if (!result.ok) { console.error(result.error); alert(typeof result.error === "string" ? result.error : "No fue posible registrar la firma."); return; }
+    onUpdated(result.data);
   }
 
   return (
@@ -204,6 +214,55 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
           Fecha sugerida de seguimiento
           <input type="date" defaultValue={cierre.fecha_seguimiento_sugerida} disabled={!canEdit} onChange={(e) => { setCierre((c) => ({ ...c, fecha_seguimiento_sugerida: e.target.value })); handleCierreBlur("fecha_seguimiento_sugerida", e.target.value); }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:bg-slate-50" />
         </label>
+      </div>
+
+      <div>
+        <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Firmas</div>
+        <div className="mt-1 grid gap-2 sm:grid-cols-3">
+          {[
+            {
+              rol: "Coordinador SIG",
+              nombre: auditoria.firmado_coordinador_nombre,
+              fecha: auditoria.firmado_coordinador_at,
+              puedeFirmar: Number(currentUser?.persona_id) === COORDINADOR_SIG_PERSONA_ID,
+              onFirmar: () => handleFirmar(firmarFichaComoCoordinador),
+            },
+            {
+              rol: "Director General",
+              nombre: auditoria.firmado_director_nombre,
+              fecha: auditoria.firmado_director_at,
+              puedeFirmar: isDirectorGeneral(currentUser),
+              onFirmar: () => handleFirmar(firmarFichaComoDirector),
+            },
+            {
+              rol: "Auditado",
+              nombre: auditoria.firmado_auditado_nombre,
+              fecha: auditoria.firmado_auditado_at,
+              puedeFirmar: Boolean(auditoria.auditado_persona_id) && Number(currentUser?.persona_id) === Number(auditoria.auditado_persona_id),
+              onFirmar: () => handleFirmar(firmarFichaComoAuditado),
+            },
+          ].map((f) => (
+            <div key={f.rol} className={`rounded-2xl border p-3 ${f.nombre ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-slate-50/60"}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{f.rol}</div>
+                {f.nombre ? (
+                  <span className="rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-black text-emerald-700">✓ Firmado</span>
+                ) : (
+                  <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[9px] font-black text-amber-700">Pendiente</span>
+                )}
+              </div>
+              {f.nombre ? (
+                <div className="mt-1 text-[11px] font-bold text-slate-700">
+                  {f.nombre} <span className="font-medium text-slate-400">· {new Date(f.fecha).toLocaleDateString("es-MX")}</span>
+                </div>
+              ) : f.puedeFirmar ? (
+                <button type="button" onClick={f.onFirmar} className="mt-1.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Firmar</button>
+              ) : (
+                <div className="mt-1 text-[11px] font-medium text-slate-400">Sin firmar</div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

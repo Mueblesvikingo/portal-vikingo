@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 import { createAccion } from "./accionesService";
 import { upsertEstado } from "./sigService";
 import { VIKINGO_LOGO_PNG_BASE64 } from "../assets/vikingoLogoBase64";
+import { isDirectorGeneral } from "./permissionsService";
 
 // Mismo encabezado de documento controlado del SIG que minutasService.js
 // (Código/Edición/Fecha/Aplicación + logo Vikingo) — códigos siguientes en
@@ -106,7 +107,7 @@ function actorFields(actor) {
 export async function getAuditorias() {
   try {
     const [{ data: auditorias, error: aErr }, { data: equipo, error: eErr }] = await Promise.all([
-      supabase.from("sig_auditorias").select("*, auditor_lider:personas!sig_auditorias_auditor_persona_id_fkey(id,nombre), auditado:personas!sig_auditorias_auditado_persona_id_fkey(id,nombre)").order("fecha_programada", { ascending: true }),
+      supabase.from("sig_auditorias").select("*, auditor_lider:personas!sig_auditorias_auditor_persona_id_fkey(id,nombre), auditado:personas!sig_auditorias_auditado_persona_id_fkey(id,nombre), programa:sig_programas_auditoria(id,nombre)").order("fecha_programada", { ascending: true }),
       supabase.from("sig_auditoria_equipo").select("*, persona:personas(id,nombre)").order("orden"),
     ]);
     if (aErr || eErr) {
@@ -351,6 +352,89 @@ export async function firmarProgramaComoCoordinador(id, actor) {
   }
 }
 
+// Editar cualquier contenido de la Ficha (plan, hallazgos, cierre) invalida
+// las 3 firmas ya capturadas — mismo criterio que Programa: un cambio de
+// contenido exige volver a firmar. Se exporta para que la UI lo incluya en
+// sus propios `changes` al llamar updateAuditoria() sobre campos de plan/
+// cierre; upsertHallazgo() lo aplica directo por tocar otra tabla.
+export const FICHA_FIRMAS_CLEAR = {
+  firmado_coordinador_persona_id: null, firmado_coordinador_nombre: null, firmado_coordinador_at: null,
+  firmado_director_persona_id: null, firmado_director_nombre: null, firmado_director_at: null,
+  firmado_auditado_persona_id: null, firmado_auditado_nombre: null, firmado_auditado_at: null,
+};
+
+// "Firma automática al reconocer el usuario" — mismo patrón que
+// firmarMinuta()/firmarProgramaComoCoordinador(): no se teclea nombre, se
+// toma directo de currentUser, y solo firma quien de verdad corresponde.
+export async function firmarFichaComoCoordinador(auditoriaId, actor) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    if (personaId !== COORDINADOR_SIG_PERSONA_ID) {
+      return { ok: false, error: "Solo el Coordinador SIG puede firmar aquí.", data: null };
+    }
+    const { data, error } = await supabase
+      .from("sig_auditorias")
+      .update({ firmado_coordinador_persona_id: personaId, firmado_coordinador_nombre: nombre, firmado_coordinador_at: new Date().toISOString() })
+      .eq("id", auditoriaId)
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al firmar la ficha como Coordinador SIG:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function firmarFichaComoDirector(auditoriaId, actor) {
+  try {
+    if (!isDirectorGeneral(actor)) {
+      return { ok: false, error: "Solo el Director General puede firmar aquí.", data: null };
+    }
+    const { personaId, nombre } = actorFields(actor);
+    const { data, error } = await supabase
+      .from("sig_auditorias")
+      .update({ firmado_director_persona_id: personaId, firmado_director_nombre: nombre, firmado_director_at: new Date().toISOString() })
+      .eq("id", auditoriaId)
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al firmar la ficha como Director General:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+// El auditado varía por sesión (no hay un id fijo como Coordinador/
+// Director), así que se verifica contra el auditado_persona_id guardado
+// en esta auditoría específica.
+export async function firmarFichaComoAuditado(auditoriaId, actor) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    const { data: auditoria, error: findErr } = await supabase
+      .from("sig_auditorias")
+      .select("auditado_persona_id")
+      .eq("id", auditoriaId)
+      .maybeSingle();
+    if (findErr) return { ok: false, error: findErr, data: null };
+    if (!auditoria || Number(auditoria.auditado_persona_id) !== personaId) {
+      return { ok: false, error: "Solo el auditado de esta sesión puede firmar aquí.", data: null };
+    }
+    const { data, error } = await supabase
+      .from("sig_auditorias")
+      .update({ firmado_auditado_persona_id: personaId, firmado_auditado_nombre: nombre, firmado_auditado_at: new Date().toISOString() })
+      .eq("id", auditoriaId)
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al firmar la ficha como auditado:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
 // ---- Hallazgos de auditoría (ISO 19011 §6.5 g) — uno por criterio evaluado ----
 
 export async function getHallazgos(auditoriaId) {
@@ -406,6 +490,9 @@ export async function upsertHallazgo(auditoriaId, criterio, { nivel, evidencia }
       );
       if (!estadoResult.ok) console.error("Hallazgo guardado, pero no se pudo actualizar Diagnóstico SIG:", estadoResult.error);
     }
+
+    const { error: clearErr } = await supabase.from("sig_auditorias").update(FICHA_FIRMAS_CLEAR).eq("id", auditoriaId);
+    if (clearErr) console.error("Hallazgo guardado, pero no se pudieron limpiar las firmas de la ficha:", clearErr);
 
     return { ok: true, error: null, data };
   } catch (err) {
@@ -754,18 +841,18 @@ function buildFichaAuditoriaPdfDoc(auditoria, criterios) {
     y = drawFieldCard(doc, marginX, y, contentWidth, titulo, layout) + 10;
   });
 
-  y = ensureSpace(y, 70);
-  y += 10;
-  [["Auditor líder — firma y fecha"], ["Auditado — firma y fecha"]].forEach(([label], i) => {
-    const lineY = y + i * 34;
-    doc.setDrawColor(...GRIS_LINEA);
-    doc.setLineWidth(0.5);
-    doc.line(marginX, lineY, marginX + 260, lineY);
-    doc.setTextColor(...GRIS);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.text(label, marginX, lineY + 12);
-  });
+  y = ensureSpace(y, 110);
+  doc.setTextColor(...ROJO);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("Firmas", marginX, y);
+  y += 14;
+
+  const firmaGap = 16;
+  const firmaColW = (contentWidth - firmaGap * 2) / 3;
+  drawFirmaBlock(doc, marginX, y, firmaColW, "Coordinador SIG", auditoria.firmado_coordinador_nombre, auditoria.firmado_coordinador_at);
+  drawFirmaBlock(doc, marginX + firmaColW + firmaGap, y, firmaColW, "Director General", auditoria.firmado_director_nombre, auditoria.firmado_director_at);
+  drawFirmaBlock(doc, marginX + (firmaColW + firmaGap) * 2, y, firmaColW, "Auditado", auditoria.firmado_auditado_nombre, auditoria.firmado_auditado_at);
 
   finishPagination(doc, paginaSpots);
   return doc;

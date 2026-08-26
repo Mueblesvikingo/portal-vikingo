@@ -31,7 +31,7 @@ const AUDITORIA_ESTADO_BADGE = {
 const AUDITORIA_EQUIPO_PERSONA_IDS = [14, 12, 1];
 // El auditor líder puede ser cualquiera del equipo anterior, más Cristian
 // (Coordinador SIG) — también por pedido explícito.
-const COORDINADOR_SIG_PERSONA_ID = 15;
+export const COORDINADOR_SIG_PERSONA_ID = 15;
 const AUDITORIA_LIDER_PERSONA_IDS = [...AUDITORIA_EQUIPO_PERSONA_IDS, COORDINADOR_SIG_PERSONA_ID];
 
 // Nombre/macroproceso del KPI en Desempeño Organizacional que refleja el
@@ -1070,6 +1070,10 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const programaAbierto = typeof programaExpandedId === "number" ? (programas || []).find((p) => p.id === programaExpandedId) || null : null;
 
   const canEdit = isStrategicTeamMember(currentUser);
+  // La tabla de Planes (auditorías) y su ficha solo las edita el
+  // Coordinador SIG — pedido explícito, más restrictivo que canEdit (que
+  // cubre a todo el equipo estratégico).
+  const canEditPlanes = Number(currentUser?.persona_id) === COORDINADOR_SIG_PERSONA_ID;
   // Espejo de lo último realmente guardado en Supabase (no lo que se va
   // tecleando) — así commitEvidence puede saber qué cambió de verdad al
   // hacer blur, sin depender del estado de UI que ya se actualizó en vivo.
@@ -1881,7 +1885,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
               <button type="button" onClick={() => setCambioCreating((current) => !current)} className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 px-3 py-1.5 text-[10px] font-black text-sky-700 transition hover:border-sky-400 hover:bg-sky-100">+ Nueva solicitud</button>
             </div>
           )}
-          {view === "auditorias" && canEdit && auditoriasSubTab === "planes" && (
+          {view === "auditorias" && canEditPlanes && auditoriasSubTab === "planes" && (
             <button type="button" onClick={() => setAuditoriaCreating((current) => !current)} className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 px-3 py-1.5 text-[10px] font-black text-sky-700 transition hover:border-sky-400 hover:bg-sky-100">+ Nueva auditoría</button>
           )}
           {view === "auditorias" && canEdit && auditoriasSubTab === "programas" && (
@@ -2492,30 +2496,42 @@ export default function DiagnosticoSIGModule({ currentUser }) {
               <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <table className="min-w-full text-left text-[11px]">
                   <thead>
-                    <tr className="border-b border-slate-100 text-[9px] font-black uppercase tracking-widest text-slate-400">
-                      <th className="px-3 py-2">Macroproceso</th>
-                      <th className="px-3 py-2">Fecha</th>
-                      <th className="px-3 py-2">Estado</th>
-                      <th className="px-3 py-2">Auditor líder</th>
-                      <th className="px-3 py-2">Equipo</th>
-                      <th className="px-3 py-2">Hallazgos</th>
-                      <th className="px-3 py-2">Reporte</th>
-                      <th className="px-3 py-2">Acciones generadas</th>
-                      {canEdit && <th className="px-3 py-2 text-right">Acciones</th>}
+                    <tr className="border-b border-slate-100 bg-slate-50/60 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                      <th className="px-3 py-2">🗂 Programa</th>
+                      <th className="px-3 py-2">🏭 Macroproceso</th>
+                      <th className="px-3 py-2">📅 Fecha</th>
+                      <th className="px-3 py-2">🚦 Estado</th>
+                      <th className="px-3 py-2">🧑‍💼 Auditor líder</th>
+                      <th className="px-3 py-2">👥 Equipo</th>
+                      <th className="px-3 py-2">✍️ Firmas</th>
+                      <th className="px-3 py-2">🔍 Hallazgos</th>
+                      <th className="px-3 py-2">📎 Reporte</th>
+                      <th className="px-3 py-2">✅ Acciones generadas</th>
+                      <th className="px-3 py-2 text-right">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(auditorias || []).map((auditoria) => (
+                    {(auditorias || []).map((auditoria) => {
+                      const puedeVerFicha = canEdit || Number(currentUser?.persona_id) === Number(auditoria.auditado_persona_id);
+                      const firmasCount = [auditoria.firmado_coordinador_nombre, auditoria.firmado_director_nombre, auditoria.firmado_auditado_nombre].filter(Boolean).length;
+                      return (
                       <React.Fragment key={auditoria.id}>
-                        <tr className="border-b border-slate-50">
+                        <tr className="border-b border-slate-50 hover:bg-slate-50/40">
+                          <td className="px-3 py-2.5">
+                            {auditoria.programa?.nombre ? (
+                              <span className="inline-block rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-black text-sky-700">{auditoria.programa.nombre}</span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
                           <td className="px-3 py-2.5 font-bold text-slate-700">{auditoria.macroproceso}</td>
                           <td className="px-3 py-2.5 font-semibold text-slate-500">{auditoria.fecha_programada || "Sin fecha"}</td>
                           <td className="px-3 py-2.5">
                             <button
                               type="button"
-                              disabled={!canEdit}
+                              disabled={!canEditPlanes}
                               onClick={() => handleCycleAuditoriaEstado(auditoria)}
-                              title={canEdit ? "Clic para avanzar el estado" : ""}
+                              title={canEditPlanes ? "Clic para avanzar el estado" : ""}
                               className={`rounded-full border px-2.5 py-1 text-[10px] font-black disabled:cursor-default ${AUDITORIA_ESTADO_BADGE[auditoria.estado] || ""}`}
                             >
                               {auditoria.estado}
@@ -2526,10 +2542,13 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                             {auditoria.equipo?.length ? auditoria.equipo.map((e) => e.persona?.nombre).filter(Boolean).join(", ") : <span className="text-slate-300">—</span>}
                           </td>
                           <td className="px-3 py-2.5">
+                            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${firmasCount === 3 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{firmasCount}/3</span>
+                          </td>
+                          <td className="px-3 py-2.5">
                             <input
                               type="number"
                               min="0"
-                              disabled={!canEdit}
+                              disabled={!canEditPlanes}
                               value={auditoria.hallazgos ?? 0}
                               onChange={(e) => handleSaveAuditoriaField(auditoria, "hallazgos", Number(e.target.value) || 0)}
                               className="h-8 w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none disabled:bg-white"
@@ -2547,15 +2566,15 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                               {(accionesPorAuditoria[auditoria.id] || []).map((accion) => (
                                 <span key={accion.id} className="font-bold text-emerald-600">{accion.codigo}</span>
                               ))}
-                              {canEdit && (
+                              {canEditPlanes && (
                                 <button type="button" onClick={() => openAuditoriaAccionForm(auditoria)} className="text-left font-black text-slate-400 hover:text-sky-600">▸ Nueva acción</button>
                               )}
-                              {!canEdit && !(accionesPorAuditoria[auditoria.id] || []).length && <span className="text-slate-300">—</span>}
+                              {!canEditPlanes && !(accionesPorAuditoria[auditoria.id] || []).length && <span className="text-slate-300">—</span>}
                             </div>
                           </td>
-                          {canEdit && (
-                            <td className="px-3 py-2.5">
-                              <div className="flex items-center justify-end gap-2">
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center justify-end gap-2">
+                              {puedeVerFicha && (
                                 <button
                                   type="button"
                                   onClick={() => setAuditoriaFichaAbiertaId((current) => (current === auditoria.id ? null : auditoria.id))}
@@ -2563,22 +2582,26 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                                 >
                                   Ver ficha
                                 </button>
-                                <AuditoriaAsignacionButton
-                                  active={Boolean(auditoria.asignacion_id)}
-                                  onClick={() => setAuditoriaAsignandoId((current) => (current === auditoria.id ? null : auditoria.id))}
-                                />
-                                <button type="button" onClick={() => handleDeleteAuditoria(auditoria.id)} title="Eliminar" className="text-sm font-black leading-none text-slate-300 transition hover:text-red-600">×</button>
-                              </div>
-                            </td>
-                          )}
+                              )}
+                              {canEditPlanes && (
+                                <>
+                                  <AuditoriaAsignacionButton
+                                    active={Boolean(auditoria.asignacion_id)}
+                                    onClick={() => setAuditoriaAsignandoId((current) => (current === auditoria.id ? null : auditoria.id))}
+                                  />
+                                  <button type="button" onClick={() => handleDeleteAuditoria(auditoria.id)} title="Eliminar" className="text-sm font-black leading-none text-slate-300 transition hover:text-red-600">×</button>
+                                </>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                         {auditoriaFichaAbiertaId === auditoria.id && (
                           <tr>
-                            <td colSpan={9} className="bg-slate-50/60 px-3 pb-3">
+                            <td colSpan={11} className="bg-slate-50/60 px-3 pb-3">
                               <AuditoriaFichaPanel
                                 auditoria={auditoria}
                                 currentUser={currentUser}
-                                canEdit={canEdit}
+                                canEdit={canEditPlanes}
                                 onUpdated={handleAuditoriaFichaUpdated}
                               />
                             </td>
@@ -2586,7 +2609,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                         )}
                         {auditoriaAsignandoId === auditoria.id && (
                           <tr>
-                            <td colSpan={9} className="px-3 pb-3">
+                            <td colSpan={11} className="px-3 pb-3">
                               <AuditoriaAsignacionForm
                                 personasCatalogo={auditoriaPersonaOptions}
                                 onConfirm={(payload) => handleConvertAuditoriaToAssignment(auditoria, payload)}
@@ -2597,7 +2620,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                         )}
                         {auditoriaAccionFormId === auditoria.id && (
                           <tr>
-                            <td colSpan={9} className="px-3 pb-3">
+                            <td colSpan={11} className="px-3 pb-3">
                               <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-3">
                                 <div className="grid gap-2 md:grid-cols-2">
                                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-2">
@@ -2631,7 +2654,8 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                           </tr>
                         )}
                       </React.Fragment>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
