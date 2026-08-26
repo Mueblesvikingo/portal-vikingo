@@ -2212,21 +2212,49 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                         <button type="button" onClick={handleDescargarProgramaPdf} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-slate-300">↓ PDF</button>
                       </div>
                     </div>
-                    <div className="grid gap-2 text-[11px] font-medium text-slate-600 md:grid-cols-2">
+                    <div className="grid gap-2.5 text-[11px] font-medium text-slate-600 md:grid-cols-2">
                       {[
-                        ["Objetivos", programa.objetivos],
-                        ["Alcance", programa.alcance],
-                        ["Riesgos y oportunidades", programa.riesgos_oportunidades],
-                        ["Recursos y roles", programa.recursos_roles],
-                        ["Criterios generales", programa.criterios_generales],
-                        ["Enfoque metodológico", programa.enfoque_metodologico],
-                        ["Documentos de referencia", programa.documentos_referencia],
-                      ].filter(([, v]) => v).map(([label, v]) => (
-                        <div key={label} className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
-                          <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</div>
-                          <div className="mt-0.5 whitespace-pre-wrap">{v}</div>
-                        </div>
-                      ))}
+                        ["Objetivos", programa.objetivos, "🎯", "border-sky-100 bg-sky-50/70 text-sky-700"],
+                        ["Alcance", programa.alcance, "🗺️", "border-indigo-100 bg-indigo-50/70 text-indigo-700"],
+                        ["Riesgos y oportunidades", programa.riesgos_oportunidades, "⚠️", "border-amber-100 bg-amber-50/70 text-amber-700"],
+                        ["Recursos y roles", programa.recursos_roles, "👥", "border-violet-100 bg-violet-50/70 text-violet-700"],
+                        ["Criterios generales", programa.criterios_generales, "📐", "border-emerald-100 bg-emerald-50/70 text-emerald-700"],
+                        ["Enfoque metodológico", programa.enfoque_metodologico, "🧭", "border-teal-100 bg-teal-50/70 text-teal-700"],
+                        ["Documentos de referencia", programa.documentos_referencia, "📎", "border-fuchsia-100 bg-fuchsia-50/70 text-fuchsia-700"],
+                      ].filter(([, v]) => v).map(([label, v, icon, tint]) => {
+                        const bullets = v.includes("\n") ? v.split("\n").filter(Boolean) : null;
+                        return (
+                          <div key={label} className={`rounded-2xl border p-3 shadow-sm ${tint}`}>
+                            <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest">
+                              <span className="text-[13px] leading-none">{icon}</span>
+                              {label}
+                            </div>
+                            {bullets ? (
+                              <ul className="mt-1.5 space-y-1 text-slate-700">
+                                {bullets.map((line, i) => (
+                                  <li key={i} className="flex gap-1.5">
+                                    <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-current opacity-60" />
+                                    <span>{line}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div className="mt-1 text-slate-700">{v}</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Escala de calificación</div>
+                      <div className="mt-1 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                        {[0, 3, 5, 10].map((n) => (
+                          <div key={n} className={`rounded-xl px-2.5 py-2 text-center shadow-sm ${cellStyle(n)}`}>
+                            <div className="text-base font-black leading-none">{n}</div>
+                            <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wide">{scoreMeaning(n)}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
