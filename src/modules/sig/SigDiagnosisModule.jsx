@@ -10,11 +10,13 @@ import {
   getCambios, createCambio, updateCambio, sendToDecisionCenter,
   createAccionCorrectivaPorCambio, getHistorial as getCambiosHistorial,
 } from "../../services/cambiosService";
-import { canEvaluateCambio, canApproveCambio, canImplementCambio } from "../../services/permissionsService";
+import { canEvaluateCambio, canApproveCambio, canImplementCambio, isDirectorGeneral } from "../../services/permissionsService";
 import {
   getAuditorias, createAuditoria, updateAuditoria, deleteAuditoria, createAccionDesdeHallazgo,
+  getProgramaVigente, createPrograma, updatePrograma, aprobarPrograma, downloadProgramaPdf,
 } from "../../services/auditoriasService";
 import { getAcciones } from "../../services/accionesService";
+import AuditoriaFichaPanel from "./AuditoriaFichaPanel";
 
 const ESTADOS_AUDITORIA = ["Programada", "En curso", "Cerrada"];
 const AUDITORIA_ESTADO_BADGE = {
@@ -70,7 +72,7 @@ let subnumeralDescriptions = {
   "10.3 Mejora continua": "Buscar mejorar continuamente la eficacia del SIG.",
 };
 
-let sigSections = [
+export let sigSections = [
   {
     numeral: "4",
     title: "Contexto de la organización",
@@ -211,7 +213,7 @@ function processApplies(rowProcess, selectedProcess) {
   return (processAliases[selectedProcess] || [selectedProcess, "Todos"]).includes(rowProcess);
 }
 
-function cleanSubtitle(subtitle) {
+export function cleanSubtitle(subtitle) {
   return subtitle.replace(/^\d+(\.\d+)*\s*/, "");
 }
 
@@ -234,7 +236,7 @@ function statusBg(percent) {
   return "bg-slate-100 border-slate-200 text-slate-500";
 }
 
-function cellStyle(score) {
+export function cellStyle(score) {
   if (score === null || score === undefined) return "bg-slate-100 text-slate-400 ring-1 ring-slate-200";
   if (score >= 10) return "bg-emerald-100 text-emerald-700";
   if (score >= 5) return "bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200/60";
@@ -242,7 +244,7 @@ function cellStyle(score) {
   return "bg-rose-100 text-rose-700 ring-1 ring-rose-200/70";
 }
 
-function scoreMeaning(score) {
+export function scoreMeaning(score) {
   if (score === null || score === undefined) return "Sin evaluar";
   if (score >= 10) return "Estandarizado";
   if (score >= 5) return "Implementado";
@@ -267,7 +269,7 @@ function rowKey(groupSubtitle, number) {
 // proceso, se usa ese proceso (no hay ambigüedad); si es transversal Y se
 // está viendo "Todos", se usa un cajón general propio ("Todos"), separado
 // de cualquier proceso puntual.
-function resolveProceso(rowResponsible, selectedProcess) {
+export function resolveProceso(rowResponsible, selectedProcess) {
   if (selectedProcess !== "Todos") return selectedProcess;
   return rowResponsible;
 }
@@ -1045,12 +1047,20 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [auditoriasLoading, setAuditoriasLoading] = useState(false);
   const [auditoriasMessage, setAuditoriasMessage] = useState("");
   const [auditoriaCreating, setAuditoriaCreating] = useState(false);
-  const [auditoriaNewDraft, setAuditoriaNewDraft] = useState({ macroproceso: "", fechaProgramada: "", auditorLiderPersonaId: "", equipoPersonaIds: [], reporteUrl: "", notas: "" });
+  const [auditoriaNewDraft, setAuditoriaNewDraft] = useState({ macroproceso: "", fechaProgramada: "", auditorLiderPersonaId: "", equipoPersonaIds: [], reporteUrl: "", notas: "", auditadoPersonaId: "", alcance: "", modalidadLugar: "", criterios: [] });
   const [auditoriaAsignandoId, setAuditoriaAsignandoId] = useState(null);
   const [auditoriaPersonaOptions, setAuditoriaPersonaOptions] = useState([]);
   const [accionesPorAuditoria, setAccionesPorAuditoria] = useState({});
   const [auditoriaAccionFormId, setAuditoriaAccionFormId] = useState(null);
   const [auditoriaAccionDraft, setAuditoriaAccionDraft] = useState({ titulo: "", descripcion: "", responsablePersonaId: "", prioridad: "Alta" });
+  const [auditoriaFichaAbiertaId, setAuditoriaFichaAbiertaId] = useState(null);
+
+  const [programa, setPrograma] = useState(null);
+  const [programaLoading, setProgramaLoading] = useState(false);
+  const [programaEditing, setProgramaEditing] = useState(false);
+  const [programaMessage, setProgramaMessage] = useState("");
+  const PROGRAMA_CAMPOS_VACIOS = { nombre: "Programa 1 de pre-auditorías SIG", objetivos: "", alcance: "", riesgosOportunidades: "", recursosRoles: "", criteriosGenerales: "", enfoqueMetodologico: "", documentosReferencia: "" };
+  const [programaDraft, setProgramaDraft] = useState(PROGRAMA_CAMPOS_VACIOS);
 
   const canEdit = isStrategicTeamMember(currentUser);
   // Espejo de lo último realmente guardado en Supabase (no lo que se va
@@ -1193,14 +1203,71 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     setAccionesPorAuditoria(agrupadas);
   }
 
+  async function loadPrograma() {
+    setProgramaLoading(true);
+    const data = await getProgramaVigente();
+    setPrograma(data);
+    setProgramaLoading(false);
+  }
+
   useEffect(() => {
     if (view === "auditorias" && auditorias === null) {
       loadAuditorias();
       loadAuditoriaPersonaOptions();
       loadAuditoriaAcciones();
+      loadPrograma();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
+
+  function openProgramaEditor() {
+    setProgramaDraft(
+      programa
+        ? {
+            nombre: programa.nombre || "",
+            objetivos: programa.objetivos || "",
+            alcance: programa.alcance || "",
+            riesgosOportunidades: programa.riesgos_oportunidades || "",
+            recursosRoles: programa.recursos_roles || "",
+            criteriosGenerales: programa.criterios_generales || "",
+            enfoqueMetodologico: programa.enfoque_metodologico || "",
+            documentosReferencia: programa.documentos_referencia || "",
+          }
+        : PROGRAMA_CAMPOS_VACIOS
+    );
+    setProgramaMessage("");
+    setProgramaEditing(true);
+  }
+
+  async function handleGuardarPrograma() {
+    if (!programaDraft.nombre.trim()) { setProgramaMessage("El programa necesita un nombre."); return; }
+    const result = programa
+      ? await updatePrograma(programa.id, {
+          nombre: programaDraft.nombre,
+          objetivos: programaDraft.objetivos || null,
+          alcance: programaDraft.alcance || null,
+          riesgos_oportunidades: programaDraft.riesgosOportunidades || null,
+          recursos_roles: programaDraft.recursosRoles || null,
+          criterios_generales: programaDraft.criteriosGenerales || null,
+          enfoque_metodologico: programaDraft.enfoqueMetodologico || null,
+          documentos_referencia: programaDraft.documentosReferencia || null,
+        }, currentUser)
+      : await createPrograma(programaDraft, currentUser);
+    if (!result.ok) { console.error(result.error); setProgramaMessage("No fue posible guardar el programa."); return; }
+    setPrograma(result.data);
+    setProgramaEditing(false);
+  }
+
+  async function handleAprobarPrograma() {
+    if (!programa) return;
+    const result = await aprobarPrograma(programa.id, currentUser);
+    if (!result.ok) { console.error(result.error); setProgramaMessage("No fue posible registrar el visto bueno."); return; }
+    setPrograma(result.data);
+  }
+
+  function handleDescargarProgramaPdf() {
+    if (programa) downloadProgramaPdf(programa);
+  }
 
   function updateAuditoriaLocal(id, patch) {
     setAuditorias((current) => (current || []).map((a) => (a.id === id ? { ...a, ...patch } : a)));
@@ -1209,14 +1276,30 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   async function handleCreateAuditoria() {
     if (!auditoriaNewDraft.macroproceso) { setAuditoriasMessage("Selecciona el macroproceso a auditar."); return; }
     setAuditoriasMessage("");
-    const result = await createAuditoria(auditoriaNewDraft, currentUser);
+    const result = await createAuditoria({ ...auditoriaNewDraft, programaId: programa?.id || null }, currentUser);
     if (!result.ok) { console.error(result.error); setAuditoriasMessage("No fue posible programar la auditoría."); return; }
     // Se recarga la lista completa (en vez de insertar result.data localmente)
     // porque el equipo auditor recién guardado necesita el join con personas
     // que solo trae getAuditorias().
     await loadAuditorias();
-    setAuditoriaNewDraft({ macroproceso: "", fechaProgramada: "", auditorLiderPersonaId: "", equipoPersonaIds: [], reporteUrl: "", notas: "" });
+    setAuditoriaNewDraft({ macroproceso: "", fechaProgramada: "", auditorLiderPersonaId: "", equipoPersonaIds: [], reporteUrl: "", notas: "", auditadoPersonaId: "", alcance: "", modalidadLugar: "", criterios: [] });
     setAuditoriaCreating(false);
+  }
+
+  function toggleAuditoriaCriterio(numeral, subtitulo, numero) {
+    setAuditoriaNewDraft((d) => {
+      const existe = d.criterios.some((c) => c.numeral === numeral && c.subtitulo === subtitulo && c.numero === numero);
+      return {
+        ...d,
+        criterios: existe
+          ? d.criterios.filter((c) => !(c.numeral === numeral && c.subtitulo === subtitulo && c.numero === numero))
+          : [...d.criterios, { numeral, subtitulo, numero }],
+      };
+    });
+  }
+
+  function handleAuditoriaFichaUpdated(updated) {
+    updateAuditoriaLocal(updated.id, updated);
   }
 
   async function handleCycleAuditoriaEstado(auditoria) {
@@ -2069,8 +2152,86 @@ export default function DiagnosticoSIGModule({ currentUser }) {
         {view === "auditorias" && (
           <section className="space-y-3">
             <p className="text-[10px] font-bold text-slate-400">
-              El detalle de cada auditoría (checklist, evidencia, hallazgos redactados) vive en SharePoint — aquí solo se rastrea cuándo toca auditar qué, quién audita, y hacia dónde va cada hallazgo.
+              Programa, plan y ficha de cada auditoría se capturan y editan aquí (ISO 19011); la evidencia primaria del auditado sigue viviendo en su estructura de SharePoint. Cada PDF descargado se archiva ahí como respaldo.
             </p>
+
+            {!programaLoading && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                {programaEditing ? (
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Nombre del programa
+                      <input type="text" value={programaDraft.nombre} onChange={(e) => setProgramaDraft((d) => ({ ...d, nombre: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+                    </label>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {[
+                        ["objetivos", "Objetivos del programa"],
+                        ["alcance", "Alcance del programa"],
+                        ["riesgosOportunidades", "Riesgos y oportunidades"],
+                        ["recursosRoles", "Recursos y roles"],
+                        ["criteriosGenerales", "Criterios generales"],
+                        ["enfoqueMetodologico", "Enfoque metodológico"],
+                        ["documentosReferencia", "Documentos de referencia"],
+                      ].map(([field, label]) => (
+                        <label key={field} className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          {label}
+                          <textarea rows={3} value={programaDraft[field]} onChange={(e) => setProgramaDraft((d) => ({ ...d, [field]: e.target.value }))} className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium normal-case tracking-normal text-slate-700 outline-none" />
+                        </label>
+                      ))}
+                    </div>
+                    {programaMessage && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{programaMessage}</div>}
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button type="button" onClick={handleGuardarPrograma} className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white">Guardar programa</button>
+                      <button type="button" onClick={() => setProgramaEditing(false)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button>
+                    </div>
+                  </div>
+                ) : !programa ? (
+                  canEdit && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-400">Aún no existe un programa de auditoría vigente.</span>
+                      <button type="button" onClick={openProgramaEditor} className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 px-3 py-1.5 text-[10px] font-black text-sky-700">+ Crear programa</button>
+                    </div>
+                  )
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Programa vigente</div>
+                        <div className="text-sm font-black text-slate-800">{programa.nombre}</div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {programa.aprobado_por_nombre ? (
+                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">✓ Aprobado por {programa.aprobado_por_nombre}</span>
+                        ) : (
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700">Pendiente de visto bueno</span>
+                        )}
+                        {canEdit && <button type="button" onClick={openProgramaEditor} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-slate-300">Editar</button>}
+                        {!programa.aprobado_por_nombre && isDirectorGeneral(currentUser) && (
+                          <button type="button" onClick={handleAprobarPrograma} className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Dar visto bueno</button>
+                        )}
+                        <button type="button" onClick={handleDescargarProgramaPdf} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-slate-300">↓ PDF</button>
+                      </div>
+                    </div>
+                    <div className="grid gap-2 text-[11px] font-medium text-slate-600 md:grid-cols-2">
+                      {[
+                        ["Objetivos", programa.objetivos],
+                        ["Alcance", programa.alcance],
+                        ["Riesgos y oportunidades", programa.riesgos_oportunidades],
+                        ["Recursos y roles", programa.recursos_roles],
+                        ["Criterios generales", programa.criterios_generales],
+                        ["Enfoque metodológico", programa.enfoque_metodologico],
+                        ["Documentos de referencia", programa.documentos_referencia],
+                      ].filter(([, v]) => v).map(([label, v]) => (
+                        <div key={label} className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
+                          <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</div>
+                          <div className="mt-0.5 whitespace-pre-wrap">{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {auditoriasMessage && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{auditoriasMessage}</div>}
 
@@ -2108,6 +2269,21 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                     />
                   </label>
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Auditado
+                    <select value={auditoriaNewDraft.auditadoPersonaId} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, auditadoPersonaId: e.target.value }))} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                      <option value="">Sin asignar</option>
+                      {auditoriaPersonaOptions.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Modalidad y lugar
+                    <input type="text" value={auditoriaNewDraft.modalidadLugar} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, modalidadLugar: e.target.value }))} placeholder="Presencial · Oficina RH" className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-2">
+                    Alcance
+                    <textarea rows={2} value={auditoriaNewDraft.alcance} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, alcance: e.target.value }))} className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium normal-case tracking-normal text-slate-700 outline-none" />
+                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Reporte (link a SharePoint)
                     <input type="text" value={auditoriaNewDraft.reporteUrl} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, reporteUrl: e.target.value }))} placeholder="https://..." className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
                   </label>
@@ -2116,6 +2292,35 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                     <textarea rows={2} value={auditoriaNewDraft.notas} onChange={(e) => setAuditoriaNewDraft((d) => ({ ...d, notas: e.target.value }))} className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium normal-case tracking-normal text-slate-700 outline-none" />
                   </label>
                 </div>
+
+                <div className="mt-2">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Criterios de auditoría ({auditoriaNewDraft.criterios.length} seleccionados)</div>
+                  <div className="mt-1 max-h-64 space-y-1.5 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2">
+                    {sigSections.map((section) => (
+                      <details key={section.numeral} className="rounded-lg border border-slate-100 bg-slate-50/60 px-2 py-1.5">
+                        <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wide text-slate-500">{section.numeral}. {section.title}</summary>
+                        <div className="mt-1.5 space-y-2 pl-2">
+                          {section.groups.map((group) => (
+                            <div key={group.subtitle}>
+                              <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{cleanSubtitle(group.subtitle)}</div>
+                              {group.rows.map((row) => {
+                                const [numero, texto] = row;
+                                const checked = auditoriaNewDraft.criterios.some((c) => c.numeral === section.numeral && c.subtitulo === group.subtitle && c.numero === numero);
+                                return (
+                                  <label key={numero} className="mt-0.5 flex items-start gap-1.5 text-[11px] font-medium text-slate-600">
+                                    <input type="checkbox" checked={checked} onChange={() => toggleAuditoriaCriterio(section.numeral, group.subtitle, numero)} className="mt-0.5" />
+                                    <span>{numero} · {texto}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="mt-2 flex justify-end gap-2">
                   <button type="button" onClick={handleCreateAuditoria} className="rounded-lg bg-[#111827] px-3 py-1.5 text-[10px] font-black text-white">Programar auditoría</button>
                   <button type="button" onClick={() => setAuditoriaCreating(false)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button>
@@ -2195,6 +2400,13 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                           {canEdit && (
                             <td className="px-3 py-2.5">
                               <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setAuditoriaFichaAbiertaId((current) => (current === auditoria.id ? null : auditoria.id))}
+                                  className={`rounded-lg border px-2.5 py-1 text-[10px] font-black transition ${auditoriaFichaAbiertaId === auditoria.id ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}
+                                >
+                                  Ver ficha
+                                </button>
                                 <AuditoriaAsignacionButton
                                   active={Boolean(auditoria.asignacion_id)}
                                   onClick={() => setAuditoriaAsignandoId((current) => (current === auditoria.id ? null : auditoria.id))}
@@ -2204,6 +2416,18 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                             </td>
                           )}
                         </tr>
+                        {auditoriaFichaAbiertaId === auditoria.id && (
+                          <tr>
+                            <td colSpan={9} className="bg-slate-50/60 px-3 pb-3">
+                              <AuditoriaFichaPanel
+                                auditoria={auditoria}
+                                currentUser={currentUser}
+                                canEdit={canEdit}
+                                onUpdated={handleAuditoriaFichaUpdated}
+                              />
+                            </td>
+                          </tr>
+                        )}
                         {auditoriaAsignandoId === auditoria.id && (
                           <tr>
                             <td colSpan={9} className="px-3 pb-3">
