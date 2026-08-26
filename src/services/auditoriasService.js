@@ -282,13 +282,23 @@ export async function createPrograma(payload, actor) {
   }
 }
 
-// Editar un programa ya aprobado limpia el VOBO — un cambio de contenido
-// exige volver a aprobarlo, no se queda "aprobado" sobre texto distinto.
+// Mismo criterio que ya usa AUDITORIA_LIDER_PERSONA_IDS en
+// SigDiagnosisModule.jsx: Cristian (id 15) es el Coordinador SIG.
+const COORDINADOR_SIG_PERSONA_ID = 15;
+
+// Editar un programa ya firmado/aprobado limpia ambas firmas — un cambio
+// de contenido exige volver a firmar, no se queda "firmado" sobre texto
+// distinto.
 export async function updatePrograma(id, changes, actor) {
   try {
     const { data, error } = await supabase
       .from("sig_programas_auditoria")
-      .update({ ...changes, aprobado_por_persona_id: null, aprobado_por_nombre: null, aprobado_at: null, updated_at: new Date().toISOString() })
+      .update({
+        ...changes,
+        aprobado_por_persona_id: null, aprobado_por_nombre: null, aprobado_at: null,
+        firmado_coordinador_persona_id: null, firmado_coordinador_nombre: null, firmado_coordinador_at: null,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", id)
       .select("*, aprobado_por:personas(id,nombre)")
       .single();
@@ -313,6 +323,30 @@ export async function aprobarPrograma(id, actor) {
     return { ok: true, error: null, data };
   } catch (err) {
     console.error("Error inesperado al aprobar el programa de auditoría:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+// "Firma automática al reconocer el usuario" — mismo patrón que
+// firmarMinuta() en minutasService.js: no se teclea nombre, se toma
+// directo de currentUser, y solo puede firmar quien de verdad es el
+// Coordinador SIG (no cualquier miembro del equipo estratégico).
+export async function firmarProgramaComoCoordinador(id, actor) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    if (personaId !== COORDINADOR_SIG_PERSONA_ID) {
+      return { ok: false, error: "Solo el Coordinador SIG puede firmar aquí.", data: null };
+    }
+    const { data, error } = await supabase
+      .from("sig_programas_auditoria")
+      .update({ firmado_coordinador_persona_id: personaId, firmado_coordinador_nombre: nombre, firmado_coordinador_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("*, aprobado_por:personas(id,nombre)")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al firmar el programa como Coordinador SIG:", err);
     return { ok: false, error: err, data: null };
   }
 }
@@ -590,39 +624,54 @@ function buildProgramaPdfDoc(programa) {
     }
   });
 
-  y = ensureSpace(y, 90);
+  y = ensureSpace(y, 100);
   doc.setTextColor(...ROJO);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text("Visto bueno", marginX, y);
-  y += 10;
-
-  const aprobado = Boolean(programa.aprobado_por_nombre);
-  const badgeStyle = aprobado ? { fg: [33, 113, 79], bg: [230, 243, 236], label: "APROBADO" } : { fg: [165, 113, 31], bg: [251, 241, 222], label: "PENDIENTE" };
-  doc.setFillColor(...badgeStyle.bg);
-  doc.roundedRect(marginX, y, 74, 18, 9, 9, "F");
-  doc.setTextColor(...badgeStyle.fg);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text(badgeStyle.label, marginX + 37, y + 12, { align: "center" });
-  y += 32;
-
-  doc.setDrawColor(...GRIS_LINEA);
-  doc.setLineWidth(0.5);
-  doc.line(marginX, y, marginX + 260, y);
+  doc.text("Firmas", marginX, y);
   y += 14;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  if (aprobado) {
-    doc.setTextColor(...ROJO);
-    doc.text(`Aprobado por ${programa.aprobado_por_nombre} · ${new Date(programa.aprobado_at).toLocaleDateString("es-MX")}`, marginX, y);
-  } else {
-    doc.setTextColor(...GRIS);
-    doc.text("Director General — nombre, firma y fecha", marginX, y);
-  }
+
+  const colW = (contentWidth - 20) / 2;
+  drawFirmaBlock(doc, marginX, y, colW, "Coordinador SIG", programa.firmado_coordinador_nombre, programa.firmado_coordinador_at);
+  drawFirmaBlock(doc, marginX + colW + 20, y, colW, "Director General", programa.aprobado_por_nombre, programa.aprobado_at);
+  y += 92;
 
   finishPagination(doc, paginaSpots);
   return doc;
+}
+
+function drawFirmaBlock(doc, x, y, width, rol, nombre, fecha) {
+  const firmado = Boolean(nombre);
+  const badgeStyle = firmado ? { fg: [33, 113, 79], bg: [230, 243, 236], label: "FIRMADO" } : { fg: [165, 113, 31], bg: [251, 241, 222], label: "PENDIENTE" };
+  doc.setFillColor(...badgeStyle.bg);
+  doc.roundedRect(x, y, 66, 16, 8, 8, "F");
+  doc.setTextColor(...badgeStyle.fg);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.text(badgeStyle.label, x + 33, y + 11, { align: "center" });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...GRIS);
+  doc.text(rol.toUpperCase(), x, y + 30);
+
+  if (firmado) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(...ROJO);
+    doc.text(nombre, x, y + 44, { maxWidth: width });
+    doc.setFontSize(8);
+    doc.setTextColor(...GRIS);
+    doc.text(new Date(fecha).toLocaleDateString("es-MX"), x, y + 57);
+  } else {
+    doc.setDrawColor(...GRIS_LINEA);
+    doc.setLineWidth(0.5);
+    doc.line(x, y + 50, x + width, y + 50);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...GRIS);
+    doc.text("Nombre, firma y fecha", x, y + 62);
+  }
 }
 
 export function downloadProgramaPdf(programa) {

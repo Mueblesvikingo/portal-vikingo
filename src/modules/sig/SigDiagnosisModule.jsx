@@ -14,6 +14,7 @@ import { canEvaluateCambio, canApproveCambio, canImplementCambio, isDirectorGene
 import {
   getAuditorias, createAuditoria, updateAuditoria, deleteAuditoria, createAccionDesdeHallazgo,
   getProgramaVigente, createPrograma, updatePrograma, aprobarPrograma, downloadProgramaPdf,
+  firmarProgramaComoCoordinador,
 } from "../../services/auditoriasService";
 import { getAcciones } from "../../services/accionesService";
 import AuditoriaFichaPanel from "./AuditoriaFichaPanel";
@@ -30,7 +31,8 @@ const AUDITORIA_ESTADO_BADGE = {
 const AUDITORIA_EQUIPO_PERSONA_IDS = [14, 12, 1];
 // El auditor líder puede ser cualquiera del equipo anterior, más Cristian
 // (Coordinador SIG) — también por pedido explícito.
-const AUDITORIA_LIDER_PERSONA_IDS = [...AUDITORIA_EQUIPO_PERSONA_IDS, 15];
+const COORDINADOR_SIG_PERSONA_ID = 15;
+const AUDITORIA_LIDER_PERSONA_IDS = [...AUDITORIA_EQUIPO_PERSONA_IDS, COORDINADOR_SIG_PERSONA_ID];
 
 // Nombre/macroproceso del KPI en Desempeño Organizacional que refleja el
 // avance global del SIG — ya existía, no se crea uno nuevo. Se busca por
@@ -1265,6 +1267,13 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     setPrograma(result.data);
   }
 
+  async function handleFirmarProgramaCoordinador() {
+    if (!programa) return;
+    const result = await firmarProgramaComoCoordinador(programa.id, currentUser);
+    if (!result.ok) { console.error(result.error); setProgramaMessage(typeof result.error === "string" ? result.error : "No fue posible registrar la firma."); return; }
+    setPrograma(result.data);
+  }
+
   function handleDescargarProgramaPdf() {
     if (programa) downloadProgramaPdf(programa);
   }
@@ -2200,15 +2209,12 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                         <div className="text-sm font-black text-slate-800">{programa.nombre}</div>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {programa.aprobado_por_nombre ? (
-                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">✓ Aprobado por {programa.aprobado_por_nombre}</span>
+                        {programa.firmado_coordinador_nombre && programa.aprobado_por_nombre ? (
+                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">✓ Firmado por ambos</span>
                         ) : (
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700">Pendiente de visto bueno</span>
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700">Firmas pendientes</span>
                         )}
                         {canEdit && <button type="button" onClick={openProgramaEditor} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-slate-300">Editar</button>}
-                        {!programa.aprobado_por_nombre && isDirectorGeneral(currentUser) && (
-                          <button type="button" onClick={handleAprobarPrograma} className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Dar visto bueno</button>
-                        )}
                         <button type="button" onClick={handleDescargarProgramaPdf} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-slate-300">↓ PDF</button>
                       </div>
                     </div>
@@ -2252,6 +2258,47 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                           <div key={n} className={`rounded-xl px-2.5 py-2 text-center shadow-sm ${cellStyle(n)}`}>
                             <div className="text-base font-black leading-none">{n}</div>
                             <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wide">{scoreMeaning(n)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Firmas</div>
+                      <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                        {[
+                          {
+                            rol: "Coordinador SIG",
+                            nombre: programa.firmado_coordinador_nombre,
+                            fecha: programa.firmado_coordinador_at,
+                            puedeFirmar: Number(currentUser?.persona_id) === COORDINADOR_SIG_PERSONA_ID,
+                            onFirmar: handleFirmarProgramaCoordinador,
+                          },
+                          {
+                            rol: "Director General",
+                            nombre: programa.aprobado_por_nombre,
+                            fecha: programa.aprobado_at,
+                            puedeFirmar: isDirectorGeneral(currentUser),
+                            onFirmar: handleAprobarPrograma,
+                          },
+                        ].map((f) => (
+                          <div key={f.rol} className={`rounded-2xl border p-3 ${f.nombre ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-slate-50/60"}`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{f.rol}</div>
+                              {f.nombre ? (
+                                <span className="rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-black text-emerald-700">✓ Firmado</span>
+                              ) : (
+                                <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[9px] font-black text-amber-700">Pendiente</span>
+                              )}
+                            </div>
+                            {f.nombre ? (
+                              <div className="mt-1 text-[11px] font-bold text-slate-700">
+                                {f.nombre} <span className="font-medium text-slate-400">· {new Date(f.fecha).toLocaleDateString("es-MX")}</span>
+                              </div>
+                            ) : f.puedeFirmar ? (
+                              <button type="button" onClick={f.onFirmar} className="mt-1.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Firmar</button>
+                            ) : (
+                              <div className="mt-1 text-[11px] font-medium text-slate-400">Sin firmar</div>
+                            )}
                           </div>
                         ))}
                       </div>
