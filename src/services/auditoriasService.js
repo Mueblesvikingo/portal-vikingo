@@ -773,7 +773,7 @@ function buildProgramaPdfDoc(programa) {
   return doc;
 }
 
-function drawFirmaBlock(doc, x, y, width, rol, nombre, fecha) {
+function drawFirmaBlock(doc, x, y, width, rol, nombre, fecha, esperado) {
   const firmado = Boolean(nombre);
   const badgeStyle = firmado ? { fg: [33, 113, 79], bg: [230, 243, 236], label: "FIRMADO" } : { fg: [165, 113, 31], bg: [251, 241, 222], label: "PENDIENTE" };
   doc.setFillColor(...badgeStyle.bg);
@@ -797,13 +797,19 @@ function drawFirmaBlock(doc, x, y, width, rol, nombre, fecha) {
     doc.setTextColor(...GRIS);
     doc.text(new Date(fecha).toLocaleDateString("es-MX"), x, y + 57);
   } else {
+    if (esperado) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...NEGRO);
+      doc.text(esperado, x, y + 42, { maxWidth: width });
+    }
     doc.setDrawColor(...GRIS_LINEA);
     doc.setLineWidth(0.5);
     doc.line(x, y + 50, x + width, y + 50);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...GRIS);
-    doc.text("Nombre, firma y fecha", x, y + 62);
+    doc.text("Firma y fecha", x, y + 62);
   }
 }
 
@@ -932,7 +938,7 @@ function buildFichaAuditoriaPdfDoc(auditoria, criterios) {
   const firmaColW = (contentWidth - firmaGap * 2) / 3;
   drawFirmaBlock(doc, marginX, y, firmaColW, "Coordinador SIG", auditoria.firmado_coordinador_nombre, auditoria.firmado_coordinador_at);
   drawFirmaBlock(doc, marginX + firmaColW + firmaGap, y, firmaColW, "Director General", auditoria.firmado_director_nombre, auditoria.firmado_director_at);
-  drawFirmaBlock(doc, marginX + (firmaColW + firmaGap) * 2, y, firmaColW, "Auditado", auditoria.firmado_auditado_nombre, auditoria.firmado_auditado_at);
+  drawFirmaBlock(doc, marginX + (firmaColW + firmaGap) * 2, y, firmaColW, "Auditado", auditoria.firmado_auditado_nombre, auditoria.firmado_auditado_at, auditoria.auditado?.nombre);
 
   finishPagination(doc, paginaSpots);
   return doc;

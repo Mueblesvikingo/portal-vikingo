@@ -276,6 +276,7 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
             },
             {
               rol: "Auditado",
+              esperado: auditoria.auditado?.nombre || null,
               nombre: auditoria.firmado_auditado_nombre,
               fecha: auditoria.firmado_auditado_at,
               puedeFirmar: Boolean(auditoria.auditado_persona_id) && Number(currentUser?.persona_id) === Number(auditoria.auditado_persona_id),
@@ -295,10 +296,15 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
                 <div className="mt-1 text-[11px] font-bold text-slate-700">
                   {f.nombre} <span className="font-medium text-slate-400">· {new Date(f.fecha).toLocaleDateString("es-MX")}</span>
                 </div>
-              ) : f.puedeFirmar ? (
-                <button type="button" onClick={f.onFirmar} className="mt-1.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Firmar</button>
               ) : (
-                <div className="mt-1 text-[11px] font-medium text-slate-400">Sin firmar</div>
+                <>
+                  {f.esperado && <div className="mt-1 text-[11px] font-bold text-slate-600">{f.esperado}</div>}
+                  {f.puedeFirmar ? (
+                    <button type="button" onClick={f.onFirmar} className="mt-1.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Firmar</button>
+                  ) : (
+                    <div className={`${f.esperado ? "mt-0.5" : "mt-1"} text-[11px] font-medium text-slate-400`}>Sin firmar</div>
+                  )}
+                </>
               )}
             </div>
           ))}
