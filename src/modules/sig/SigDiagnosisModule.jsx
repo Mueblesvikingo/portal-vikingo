@@ -14,7 +14,7 @@ import { canEvaluateCambio, canApproveCambio, canImplementCambio, isDirectorGene
 import {
   getAuditorias, createAuditoria, updateAuditoria, deleteAuditoria, createAccionDesdeHallazgo,
   getProgramas, createPrograma, updatePrograma, aprobarPrograma, downloadProgramaPdf,
-  firmarProgramaComoCoordinador,
+  firmarProgramaComoCoordinador, esAuditadoDeAlguna,
 } from "../../services/auditoriasService";
 import { getAcciones } from "../../services/accionesService";
 import AuditoriaFichaPanel from "./AuditoriaFichaPanel";
@@ -1057,7 +1057,10 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [auditoriaAccionDraft, setAuditoriaAccionDraft] = useState({ titulo: "", descripcion: "", responsablePersonaId: "", prioridad: "Alta" });
   const [auditoriaFichaAbiertaId, setAuditoriaFichaAbiertaId] = useState(null);
 
-  const [auditoriasSubTab, setAuditoriasSubTab] = useState("programas");
+  // Quien no es equipo estratégico nunca ve la sub-pestaña "Programas"
+  // (se oculta más abajo), así que arranca directo en "Planes" — si no,
+  // vería un tab en blanco por defecto.
+  const [auditoriasSubTab, setAuditoriasSubTab] = useState(() => (isStrategicTeamMember(currentUser) ? "programas" : "planes"));
   const [programas, setProgramas] = useState(null);
   const [programasLoading, setProgramasLoading] = useState(false);
   // number = fila existente abierta; "new" = formulario de alta; null = nada abierto.
@@ -1074,6 +1077,12 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   // Coordinador SIG — pedido explícito, más restrictivo que canEdit (que
   // cubre a todo el equipo estratégico).
   const canEditPlanes = Number(currentUser?.persona_id) === COORDINADOR_SIG_PERSONA_ID;
+  // Programas y Planes de auditoría están ocultos para el resto de la
+  // empresa por defecto — solo equipo estratégico, más la excepción
+  // puntual de quien sea auditado de alguna sesión (necesita ver y firmar
+  // su propia ficha, no el resto del histórico).
+  const [esAuditado, setEsAuditado] = useState(false);
+  const puedeVerAuditorias = canEdit || esAuditado;
   // Espejo de lo último realmente guardado en Supabase (no lo que se va
   // tecleando) — así commitEvidence puede saber qué cambió de verdad al
   // hacer blur, sin depender del estado de UI que ya se actualizó en vivo.
@@ -1129,6 +1138,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     loadEstados();
     loadPeople();
     loadSigKpiId();
+    if (currentUser?.persona_id) esAuditadoDeAlguna(currentUser.persona_id).then(setEsAuditado);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1874,7 +1884,9 @@ export default function DiagnosticoSIGModule({ currentUser }) {
             <button type="button" onClick={() => setView("diagnostico")} className={`rounded-md px-3 py-1.5 transition ${view === "diagnostico" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Diagnóstico HLS</button>
             <button type="button" onClick={() => setView("plan")} className={`rounded-md px-3 py-1.5 transition ${view === "plan" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Plan de implementación</button>
             <button type="button" onClick={() => setView("cambios")} className={`rounded-md px-3 py-1.5 transition ${view === "cambios" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Control de cambios</button>
-            <button type="button" onClick={() => setView("auditorias")} className={`rounded-md px-3 py-1.5 transition ${view === "auditorias" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Programa de auditorías</button>
+            {puedeVerAuditorias && (
+              <button type="button" onClick={() => setView("auditorias")} className={`rounded-md px-3 py-1.5 transition ${view === "auditorias" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Programa de auditorías</button>
+            )}
           </div>
           {view === "plan" && (
             <button type="button" onClick={openPlanHistorial} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 transition hover:border-slate-300 hover:text-slate-700">⏱ Historial del plan</button>
@@ -2312,18 +2324,22 @@ export default function DiagnosticoSIGModule({ currentUser }) {
           </section>
         )}
 
-        {view === "auditorias" && (
+        {view === "auditorias" && puedeVerAuditorias && (
           <section className="space-y-3">
             <p className="text-[10px] font-bold text-slate-400">
-              Programa, plan y ficha de cada auditoría se capturan y editan aquí (ISO 19011); la evidencia primaria del auditado sigue viviendo en su estructura de SharePoint. Cada PDF descargado se archiva ahí como respaldo.
+              {canEdit
+                ? "Programa, plan y ficha de cada auditoría se capturan y editan aquí (ISO 19011); la evidencia primaria del auditado sigue viviendo en su estructura de SharePoint. Cada PDF descargado se archiva ahí como respaldo."
+                : "Aquí solo ves la ficha de la(s) auditoría(s) donde tú eres el auditado — puedes revisarla y firmarla."}
             </p>
 
-            <div className="flex w-fit items-center gap-1 rounded-lg bg-slate-100 p-0.5 text-[10px] font-black uppercase tracking-wide">
-              <button type="button" onClick={() => setAuditoriasSubTab("programas")} className={`rounded-md px-3 py-1.5 transition ${auditoriasSubTab === "programas" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Programas</button>
-              <button type="button" onClick={() => setAuditoriasSubTab("planes")} className={`rounded-md px-3 py-1.5 transition ${auditoriasSubTab === "planes" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Planes</button>
-            </div>
+            {canEdit && (
+              <div className="flex w-fit items-center gap-1 rounded-lg bg-slate-100 p-0.5 text-[10px] font-black uppercase tracking-wide">
+                <button type="button" onClick={() => setAuditoriasSubTab("programas")} className={`rounded-md px-3 py-1.5 transition ${auditoriasSubTab === "programas" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Programas</button>
+                <button type="button" onClick={() => setAuditoriasSubTab("planes")} className={`rounded-md px-3 py-1.5 transition ${auditoriasSubTab === "planes" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Planes</button>
+              </div>
+            )}
 
-            {auditoriasSubTab === "programas" && (
+            {canEdit && auditoriasSubTab === "programas" && (
               <div className="space-y-3">
                 {programaExpandedId === "new" && programaEditing && (
                   <div className="rounded-2xl border border-sky-100 bg-sky-50/40 p-4">{renderProgramaEditForm()}</div>
@@ -2488,10 +2504,14 @@ export default function DiagnosticoSIGModule({ currentUser }) {
               </div>
             )}
 
-            {auditoriasLoading ? (
+            {(() => {
+              const auditoriasVisibles = canEdit
+                ? (auditorias || [])
+                : (auditorias || []).filter((a) => Number(a.auditado_persona_id) === Number(currentUser?.persona_id));
+              return auditoriasLoading ? (
               <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-400 shadow-sm">Cargando programa de auditorías…</div>
-            ) : (auditorias || []).length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-300 shadow-sm">Aún no hay auditorías programadas.</div>
+            ) : auditoriasVisibles.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-300 shadow-sm">{canEdit ? "Aún no hay auditorías programadas." : "Aún no hay una ficha de auditoría asignada a ti."}</div>
             ) : (
               <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <table className="min-w-full text-left text-[11px]">
@@ -2511,7 +2531,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {(auditorias || []).map((auditoria) => {
+                    {auditoriasVisibles.map((auditoria) => {
                       const puedeVerFicha = canEdit || Number(currentUser?.persona_id) === Number(auditoria.auditado_persona_id);
                       const firmasCount = [auditoria.firmado_coordinador_nombre, auditoria.firmado_director_nombre, auditoria.firmado_auditado_nombre].filter(Boolean).length;
                       return (
@@ -2659,7 +2679,8 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                   </tbody>
                 </table>
               </div>
-            )}
+            );
+            })()}
               </>
             )}
           </section>

@@ -103,6 +103,26 @@ function actorFields(actor) {
 // El resto del Plan (§6.3: auditado, alcance, modalidad, criterios) y del
 // Informe (§6.5: hallazgos, conclusiones, declaración, seguimiento) también
 // se captura en el portal — ver sig_auditoria_hallazgos y los campos abajo.
+// Check liviano usado por SigDiagnosisModule.jsx para decidir si mostrar la
+// pestaña "Programa de auditorías" a alguien que no es equipo estratégico:
+// visibilidad restringida por defecto, salvo que la persona sea auditada de
+// al menos una sesión (necesita ver y firmar su propia ficha).
+export async function esAuditadoDeAlguna(personaId) {
+  if (!personaId) return false;
+  try {
+    const { data, error } = await supabase
+      .from("sig_auditorias")
+      .select("id")
+      .eq("auditado_persona_id", personaId)
+      .limit(1);
+    if (error) { console.error("Error al verificar si la persona es auditada:", error); return false; }
+    return Boolean(data?.length);
+  } catch (err) {
+    console.error("Error inesperado al verificar si la persona es auditada:", err);
+    return false;
+  }
+}
+
 // La evidencia primaria del auditado sigue viviendo en su SharePoint.
 export async function getAuditorias() {
   try {
