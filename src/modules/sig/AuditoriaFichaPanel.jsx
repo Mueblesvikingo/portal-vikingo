@@ -256,10 +256,6 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
           Plan de seguimiento (k)
           <textarea rows={2} defaultValue={cierre.plan_seguimiento} disabled={!canEdit} onBlur={(e) => { setCierre((c) => ({ ...c, plan_seguimiento: e.target.value })); handleCierreBlur("plan_seguimiento", e.target.value); }} className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium normal-case tracking-normal text-slate-700 outline-none disabled:bg-slate-50" />
         </label>
-        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-          Fecha sugerida de seguimiento
-          <input type="date" defaultValue={cierre.fecha_seguimiento_sugerida} disabled={!canEdit} onChange={(e) => { setCierre((c) => ({ ...c, fecha_seguimiento_sugerida: e.target.value })); handleCierreBlur("fecha_seguimiento_sugerida", e.target.value); }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:bg-slate-50" />
-        </label>
       </div>
 
       <div>
