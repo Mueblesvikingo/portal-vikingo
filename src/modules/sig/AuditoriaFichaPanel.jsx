@@ -160,6 +160,12 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
             className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium normal-case tracking-normal text-slate-700 outline-none disabled:bg-slate-50"
           />
         </label>
+        <div className="md:col-span-3 flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-slate-500">
+          <span className="font-black uppercase tracking-widest text-slate-400">Ponderación:</span>
+          {NIVELES.map((n) => (
+            <span key={n} className={`rounded-full px-2 py-0.5 ${cellStyle(n)}`}>{n} {scoreMeaning(n)}</span>
+          ))}
+        </div>
       </div>
 
       <div>
