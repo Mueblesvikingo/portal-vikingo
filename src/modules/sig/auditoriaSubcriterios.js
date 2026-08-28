@@ -18,13 +18,11 @@ const SUBCRITERIOS = {
     { letra: "a", titulo: "Existencia de la matriz", pregunta: "¿Tienes una matriz de cumplimiento para tu proceso?" },
     { letra: "b", titulo: "Contenido", pregunta: "¿Qué estás midiendo ahí — qué contiene?" },
     { letra: "c", titulo: "Actualización reciente", pregunta: "¿Cuándo fue la última vez que la actualizaste, y qué cambiaste?" },
-    { letra: "d", titulo: "Si no existe", pregunta: "¿Sabes qué es una matriz de cumplimiento? ¿Hay algo parecido aunque no se llame así?" },
   ],
   "5.3 Roles y responsabilidades|10": [
     { letra: "a", titulo: "Rol propio", pregunta: "¿Cuál es tu rol dentro de este proceso?" },
     { letra: "b", titulo: "Objetivo del rol", pregunta: "¿Cuál es el objetivo de ese rol dentro del proceso?" },
     { letra: "c", titulo: "Conexión con el proceso", pregunta: "¿Cómo se conecta tu rol con el objetivo general del proceso?" },
-    { letra: "d", titulo: "Rol específico", pregunta: "Si tienes más de un rol dentro del proceso, ¿cuál es el objetivo de cada uno por separado?" },
   ],
   "5.3 Roles y responsabilidades|11": [
     { letra: "a", titulo: "Quién aprueba", pregunta: "¿Quién autoriza o aprueba cada paso clave de tu proceso?" },
