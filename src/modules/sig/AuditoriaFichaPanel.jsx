@@ -127,7 +127,7 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
   return (
     <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm font-black text-slate-800">Ficha de auditoría — {auditoria.macroproceso}</div>
+        <div className="text-sm font-black text-slate-800">Plan de auditoría — {auditoria.macroproceso}</div>
         <button type="button" onClick={() => downloadFichaAuditoriaPdf(auditoria, criterios)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-slate-300">↓ PDF</button>
       </div>
 

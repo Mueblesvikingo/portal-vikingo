@@ -8,15 +8,21 @@ import { isDirectorGeneral } from "./permissionsService";
 // Mismo encabezado de documento controlado del SIG que minutasService.js
 // (Código/Edición/Fecha/Aplicación + logo Vikingo) — códigos siguientes en
 // la numeración SIG-F ya usada (SIG-F-01 Presupuesto Estrategia, SIG-F-02
-// Minutas): SIG-F-03 para el Programa de auditoría, SIG-F-04 para la Ficha
-// de auditoría (Plan + Informe, un solo PDF por sesión).
+// Minutas): SIG-F-03 para el Programa de auditoría, SIG-F-04 para el
+// Informe de auditoría (llamado "Plan" en el portal mientras se captura;
+// Plan + Informe, un solo PDF por sesión).
 const NEGRO = [23, 23, 23];
 const ROJO = [124, 20, 22];
 const GRIS = [120, 120, 120];
 const GRIS_LINEA = [205, 205, 205];
 const DOC_EDICION = "01";
-const DOC_FECHA_EDICION = "19/08/2026";
 const LOGO_RATIO = 432 / 122;
+// Antes era una fecha fija ("edición del formato") que no reflejaba nada
+// real y se veía como un bug — ahora es la fecha real en que se genera
+// cada PDF, calculada en el momento de dibujar el encabezado.
+function getDocFechaGeneracion() {
+  return new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
 
 function drawDocumentHeader(doc, { titulo, aplicacion, codigo }, paginaSpots) {
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -51,7 +57,7 @@ function drawDocumentHeader(doc, { titulo, aplicacion, codigo }, paginaSpots) {
   doc.setTextColor(...GRIS);
   doc.text(`Aplicación: ${aplicacion}`, middleX, top + 46, { maxWidth: middleWidth });
 
-  const metaRows = [["Código:", codigo], ["Estado:", "Vigente"], ["Edición:", DOC_EDICION], ["Fecha:", DOC_FECHA_EDICION], ["Página:", "__PAGINA__"]];
+  const metaRows = [["Código:", codigo], ["Estado:", "Vigente"], ["Edición:", DOC_EDICION], ["Fecha:", getDocFechaGeneracion()], ["Página:", "__PAGINA__"]];
   const rowH = headerHeight / metaRows.length;
   metaRows.forEach((row, i) => {
     const rowY = top + i * rowH;
@@ -831,7 +837,7 @@ function buildFichaAuditoriaPdfDoc(auditoria, criterios) {
   const contentWidth = pageWidth - marginX * 2;
   const bottomLimit = pageHeight - 50;
   const paginaSpots = [];
-  const headerOpts = { titulo: "FICHA DE AUDITORÍA SIG", aplicacion: "Diagnóstico SIG", codigo: "SIG-F-04" };
+  const headerOpts = { titulo: "INFORME DE AUDITORÍA SIG", aplicacion: "Diagnóstico SIG", codigo: "SIG-F-04" };
 
   function ensureSpace(y, needed) {
     if (y + needed > bottomLimit) {
@@ -947,5 +953,5 @@ function buildFichaAuditoriaPdfDoc(auditoria, criterios) {
 export function downloadFichaAuditoriaPdf(auditoria, criterios) {
   const doc = buildFichaAuditoriaPdfDoc(auditoria, criterios);
   const safeTitle = (auditoria.macroproceso || "auditoria").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
-  doc.save(`ficha-auditoria-${safeTitle}-${auditoria.fecha_programada || "sin-fecha"}.pdf`);
+  doc.save(`informe-auditoria-${safeTitle}-${auditoria.fecha_programada || "sin-fecha"}.pdf`);
 }

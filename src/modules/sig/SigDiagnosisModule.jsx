@@ -2328,8 +2328,8 @@ export default function DiagnosticoSIGModule({ currentUser }) {
           <section className="space-y-3">
             <p className="text-[10px] font-bold text-slate-400">
               {canEdit
-                ? "Programa, plan y ficha de cada auditoría se capturan y editan aquí (ISO 19011); la evidencia primaria del auditado sigue viviendo en su estructura de SharePoint. Cada PDF descargado se archiva ahí como respaldo."
-                : "Aquí solo ves la ficha de la(s) auditoría(s) donde tú eres el auditado — puedes revisarla y firmarla."}
+                ? "Programa y plan de cada auditoría se capturan y editan aquí (ISO 19011); la evidencia primaria del auditado sigue viviendo en su estructura de SharePoint. El informe en PDF descargado se archiva ahí como respaldo."
+                : "Aquí solo ves el plan de la(s) auditoría(s) donde tú eres el auditado — puedes revisarlo y firmarlo."}
             </p>
 
             {canEdit && (
@@ -2511,7 +2511,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
               return auditoriasLoading ? (
               <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-400 shadow-sm">Cargando programa de auditorías…</div>
             ) : auditoriasVisibles.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-300 shadow-sm">{canEdit ? "Aún no hay auditorías programadas." : "Aún no hay una ficha de auditoría asignada a ti."}</div>
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-300 shadow-sm">{canEdit ? "Aún no hay auditorías programadas." : "Aún no hay un plan de auditoría asignado a ti."}</div>
             ) : (
               <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <table className="min-w-full text-left text-[11px]">
@@ -2600,7 +2600,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                                   onClick={() => setAuditoriaFichaAbiertaId((current) => (current === auditoria.id ? null : auditoria.id))}
                                   className={`rounded-lg border px-2.5 py-1 text-[10px] font-black transition ${auditoriaFichaAbiertaId === auditoria.id ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}
                                 >
-                                  Ver ficha
+                                  Ver plan
                                 </button>
                               )}
                               {canEditPlanes && (
