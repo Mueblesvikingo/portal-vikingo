@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../services/supabase";
 import { isStrategicTeamMember } from "../../services/permissionsService";
 import { createWorkloadAssignment } from "../../services/workloadService";
@@ -14,7 +15,7 @@ import { canEvaluateCambio, canApproveCambio, canImplementCambio, isDirectorGene
 import {
   getAuditorias, createAuditoria, updateAuditoria, deleteAuditoria, createAccionDesdeHallazgo,
   getProgramas, createPrograma, updatePrograma, aprobarPrograma, downloadProgramaPdf,
-  firmarProgramaComoCoordinador, esAuditadoDeAlguna,
+  firmarProgramaComoCoordinador, esAuditadoDeAlguna, enviarFichaParaFirma,
 } from "../../services/auditoriasService";
 import { getAcciones } from "../../services/accionesService";
 import AuditoriaFichaPanel from "./AuditoriaFichaPanel";
@@ -949,6 +950,33 @@ function AuditoriaAsignacionButton({ onClick, active }) {
   );
 }
 
+// Dispara la notificación + alerta a pantalla completa del auditado
+// (MeetingAttendanceAlarm.jsx sondea getPendingFichasParaFirmar). Clic de
+// nuevo mientras está en amarillo = reenviar (útil si el auditado la cerró
+// o pospuso sin firmar).
+function AuditoriaEnviarFirmaButton({ auditoria, onClick, sending }) {
+  if (!auditoria.auditado_persona_id) return null;
+  const firmado = Boolean(auditoria.firmado_auditado_nombre);
+  const enviado = Boolean(auditoria.enviado_auditado_at) && !firmado;
+  const nombreAuditado = auditoria.auditado?.nombre || "el auditado";
+  const title = firmado
+    ? `${nombreAuditado} ya firmó — clic para reenviar y pedir nueva firma`
+    : enviado
+      ? `Enviado a ${nombreAuditado} — pendiente de firma. Clic para reenviar.`
+      : `Enviar a ${nombreAuditado} para firmar`;
+  return (
+    <button
+      type="button"
+      disabled={sending}
+      onClick={onClick}
+      title={title}
+      className={`text-sm font-black leading-none transition disabled:opacity-40 ${firmado ? "text-emerald-600 hover:text-emerald-700" : enviado ? "text-amber-600 hover:text-amber-700" : "text-slate-300 hover:text-sky-600"}`}
+    >
+      {firmado ? "✓✉" : "✉"}
+    </button>
+  );
+}
+
 // Mismo formulario compacto (persona/horas/fecha límite/prioridad) ya usado
 // en Acuerdos S&OP y Seguimiento Estratégico para convertir un renglón en
 // una asignación real, adaptado a una fila de auditoría.
@@ -1056,6 +1084,22 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [auditoriaAccionFormId, setAuditoriaAccionFormId] = useState(null);
   const [auditoriaAccionDraft, setAuditoriaAccionDraft] = useState({ titulo: "", descripcion: "", responsablePersonaId: "", prioridad: "Alta" });
   const [auditoriaFichaAbiertaId, setAuditoriaFichaAbiertaId] = useState(null);
+  const [enviandoFirmaId, setEnviandoFirmaId] = useState(null);
+
+  // Deep-link desde la alerta de "informe pendiente de firmar"
+  // (MeetingAttendanceAlarm.jsx → navigate("/sig", { state: { openAuditoriaId } })):
+  // al llegar con ese estado, cae directo en Planes con esa ficha ya desplegada.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const openId = location.state?.openAuditoriaId;
+    if (!openId) return;
+    setView("auditorias");
+    setAuditoriasSubTab("planes");
+    setAuditoriaFichaAbiertaId(openId);
+    navigate(location.pathname, { replace: true, state: {} });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   // Quien no es equipo estratégico nunca ve la sub-pestaña "Programas"
   // (se oculta más abajo), así que arranca directo en "Planes" — si no,
@@ -1470,6 +1514,15 @@ export default function DiagnosticoSIGModule({ currentUser }) {
 
   function handleAuditoriaFichaUpdated(updated) {
     updateAuditoriaLocal(updated.id, updated);
+  }
+
+  async function handleEnviarFirma(auditoria) {
+    if (!auditoria.auditado_persona_id || enviandoFirmaId) return;
+    setEnviandoFirmaId(auditoria.id);
+    const result = await enviarFichaParaFirma(auditoria.id, currentUser);
+    setEnviandoFirmaId(null);
+    if (!result.ok) { console.error(result.error); alert("No fue posible enviar el aviso de firma."); return; }
+    updateAuditoriaLocal(auditoria.id, result.data);
   }
 
   async function handleCycleAuditoriaEstado(auditoria) {
@@ -2605,6 +2658,11 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                               )}
                               {canEditPlanes && (
                                 <>
+                                  <AuditoriaEnviarFirmaButton
+                                    auditoria={auditoria}
+                                    sending={enviandoFirmaId === auditoria.id}
+                                    onClick={() => handleEnviarFirma(auditoria)}
+                                  />
                                   <AuditoriaAsignacionButton
                                     active={Boolean(auditoria.asignacion_id)}
                                     onClick={() => setAuditoriaAsignandoId((current) => (current === auditoria.id ? null : auditoria.id))}

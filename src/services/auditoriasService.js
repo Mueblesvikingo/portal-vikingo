@@ -461,6 +461,56 @@ export async function firmarFichaComoAuditado(auditoriaId, actor) {
   }
 }
 
+// Marca esta ficha como enviada al auditado (botón por fila en Planes).
+// Reenviar (clic de nuevo) simplemente actualiza el timestamp — eso re-abre
+// la alerta a pantalla completa del auditado aunque ya la hubiera cerrado o
+// pospuesto. No se toca la firma existente: si el auditado ya había firmado
+// y el contenido no cambió desde entonces, firmado_auditado_nombre sigue ahí
+// y getPendingFichasParaFirmar ya no la considera pendiente.
+export async function enviarFichaParaFirma(auditoriaId, actor) {
+  try {
+    const { nombre } = actorFields(actor);
+    const { data, error } = await supabase
+      .from("sig_auditorias")
+      .update({ enviado_auditado_at: new Date().toISOString(), enviado_auditado_por_nombre: nombre })
+      .eq("id", auditoriaId)
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al enviar la ficha a firmar:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+// Fichas que ya se enviaron a firmar y siguen sin la firma del auditado —
+// esto es lo que MeetingAttendanceAlarm.jsx sondea para disparar la alerta
+// a pantalla completa (sin sonido) de ese auditado específico. Si el
+// contenido de la ficha se edita después de firmada, FICHA_FIRMAS_CLEAR
+// borra firmado_auditado_nombre pero no enviado_auditado_at — por lo que
+// vuelve a aparecer aquí automáticamente, sin necesidad de reenviarla.
+export async function getPendingFichasParaFirmar(personaId) {
+  if (!personaId) return [];
+  try {
+    const { data, error } = await supabase
+      .from("sig_auditorias")
+      .select("id, macroproceso, enviado_auditado_at, enviado_auditado_por_nombre, auditado_persona_id, firmado_auditado_nombre")
+      .eq("auditado_persona_id", personaId)
+      .not("enviado_auditado_at", "is", null)
+      .is("firmado_auditado_nombre", null)
+      .order("enviado_auditado_at", { ascending: false });
+    if (error) {
+      console.error("Error al cargar fichas pendientes de firma:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar fichas pendientes de firma:", err);
+    return [];
+  }
+}
+
 // ---- Hallazgos de auditoría (ISO 19011 §6.5 g) — uno por criterio evaluado ----
 
 export async function getHallazgos(auditoriaId) {

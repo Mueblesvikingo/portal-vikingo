@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   confirmMeetingAttendance,
   confirmPreMeetingReminder,
@@ -6,14 +7,17 @@ import {
   getPendingPreMeetingReminders,
 } from "../services/workloadService";
 import { getPendingRecordatorios, markRecordatorioVisto } from "../services/pmoService";
+import { getPendingFichasParaFirmar } from "../services/auditoriasService";
 
 const POLL_INTERVAL_MS = 25000;
 const SNOOZE_MS = 90000;
+const FIRMA_VIEW_SNOOZE_MS = 15 * 60 * 1000;
 const BEEP_INTERVAL_MS = 2400;
 const PRE_MEETING_WINDOW_MS = 45 * 60 * 1000;
 const ATTENDANCE_TITLE = "⚠️ CONFIRMA TU ASISTENCIA";
 const PRE_MEETING_TITLE = "⏰ TU REUNIÓN ESTÁ POR COMENZAR";
 const RECORDATORIO_TITLE = "🔔 TIENES UN RECORDATORIO NUEVO";
+const FIRMA_TITLE = "✍️ TIENES UN INFORME PENDIENTE DE FIRMAR";
 const SIREN_LOW_FREQ = 420;
 const SIREN_HIGH_FREQ = 1250;
 const SIREN_SWEEP_DURATION = 0.28;
@@ -45,9 +49,11 @@ function getMinutesUntil(item) {
 // empuja activamente igual que a una reunión, solo que con menor prioridad.
 export default function MeetingAttendanceAlarm({ currentUser }) {
   const personaId = currentUser?.persona_id;
+  const navigate = useNavigate();
   const [pendingAttendance, setPendingAttendance] = useState([]);
   const [pendingPreMeeting, setPendingPreMeeting] = useState([]);
   const [pendingRecordatorios, setPendingRecordatorios] = useState([]);
+  const [pendingFirmas, setPendingFirmas] = useState([]);
   const [confirming, setConfirming] = useState(false);
   const snoozedUntilRef = useRef({});
   const originalTitleRef = useRef(typeof document !== "undefined" ? document.title : "");
@@ -131,21 +137,50 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
     };
   }, [personaId]);
 
+  useEffect(() => {
+    if (!personaId) {
+      setPendingFirmas([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function poll() {
+      const result = await getPendingFichasParaFirmar(personaId);
+      if (cancelled) return;
+      const now = Date.now();
+      const visible = (result || []).filter((item) => (snoozedUntilRef.current[`firma-${item.id}`] || 0) <= now);
+      setPendingFirmas(visible);
+    }
+
+    poll();
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [personaId]);
+
   const activePreMeeting = pendingPreMeeting[0] || null;
   const activeAttendance = pendingAttendance[0] || null;
+  const activeFirma = pendingFirmas[0] || null;
   const activeRecordatorio = pendingRecordatorios[0] || null;
-  // Las reuniones son urgentes por tiempo — un recordatorio de proyecto solo
-  // se muestra cuando no hay ninguna alerta de reunión activa en ese momento.
-  const activeType = activePreMeeting ? "pre-meeting" : activeAttendance ? "attendance" : activeRecordatorio ? "recordatorio" : null;
-  const active = activePreMeeting || activeAttendance || activeRecordatorio;
-  const notifyKey = active ? `${activeType}-${active.id}` : null;
+  // Las reuniones son urgentes por tiempo — van primero. Una ficha pendiente
+  // de firma es una solicitud explícita (alguien la envió a propósito), así
+  // que pasa antes que los recordatorios pasivos del tablero PMO.
+  const activeType = activePreMeeting ? "pre-meeting" : activeAttendance ? "attendance" : activeFirma ? "firma" : activeRecordatorio ? "recordatorio" : null;
+  const active = activePreMeeting || activeAttendance || activeFirma || activeRecordatorio;
+  // Para "firma" el timestamp de reenvío entra a la clave — así un reenvío
+  // (mismo id, enviado_auditado_at nuevo) SÍ vuelve a notificar/emerger,
+  // aunque el auditado ya hubiera cerrado o pospuesto el aviso anterior.
+  const notifyKey = active ? (activeType === "firma" ? `firma-${active.id}-${active.enviado_auditado_at}` : `${activeType}-${active.id}`) : null;
 
   useEffect(() => {
     if (!active) {
       if (typeof document !== "undefined") document.title = originalTitleRef.current;
       return undefined;
     }
-    const alarmTitle = activeType === "pre-meeting" ? PRE_MEETING_TITLE : activeType === "recordatorio" ? RECORDATORIO_TITLE : ATTENDANCE_TITLE;
+    const alarmTitle = activeType === "pre-meeting" ? PRE_MEETING_TITLE : activeType === "firma" ? FIRMA_TITLE : activeType === "recordatorio" ? RECORDATORIO_TITLE : ATTENDANCE_TITLE;
     let showAlarmTitle = false;
     const interval = setInterval(() => {
       document.title = showAlarmTitle ? originalTitleRef.current : alarmTitle;
@@ -161,10 +196,12 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
     if (!active || !notifyKey || notifiedRef.current.has(notifyKey)) return;
     notifiedRef.current.add(notifyKey);
     if (typeof Notification === "undefined") return;
-    const title = activeType === "pre-meeting" ? "Tu reunión está por comenzar" : activeType === "recordatorio" ? "Tienes un recordatorio nuevo" : "Confirma tu asistencia a una reunión";
+    const title = activeType === "pre-meeting" ? "Tu reunión está por comenzar" : activeType === "firma" ? "Tienes un informe pendiente de firmar" : activeType === "recordatorio" ? "Tienes un recordatorio nuevo" : "Confirma tu asistencia a una reunión";
     const body = activeType === "recordatorio"
       ? `${active.proyecto?.nombre || "Proyecto"} · ${active.mensaje || ""}`
-      : `${active.nombre || active.titulo || "Reunión"} · ${formatMeetingWhen(active)}`;
+      : activeType === "firma"
+        ? `${active.macroproceso || "Auditoría"} · enviado por ${active.enviado_auditado_por_nombre || "Equipo SIG"}`
+        : `${active.nombre || active.titulo || "Reunión"} · ${formatMeetingWhen(active)}`;
     if (Notification.permission === "granted") {
       new Notification(title, {
         body,
@@ -176,7 +213,9 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
   }, [notifyKey, activeType]);
 
   useEffect(() => {
-    if (!active) return undefined;
+    // El aviso de firma es deliberadamente silencioso (a diferencia de
+    // reuniones/recordatorios) — solo la pantalla emergente, sin sirena.
+    if (!active || activeType === "firma") return undefined;
     function carAlarmSiren() {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -236,30 +275,48 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
   }
 
   function handleSnooze() {
-    const prefix = activeType === "pre-meeting" ? "pre" : activeType === "recordatorio" ? "recordatorio" : "attendance";
+    const prefix = activeType === "pre-meeting" ? "pre" : activeType === "recordatorio" ? "recordatorio" : activeType === "firma" ? "firma" : "attendance";
     snoozedUntilRef.current[`${prefix}-${active.id}`] = Date.now() + SNOOZE_MS;
     if (activeType === "pre-meeting") {
       setPendingPreMeeting((current) => current.filter((item) => item.id !== active.id));
     } else if (activeType === "recordatorio") {
       setPendingRecordatorios((current) => current.filter((item) => item.id !== active.id));
+    } else if (activeType === "firma") {
+      setPendingFirmas((current) => current.filter((item) => item.id !== active.id));
     } else {
       setPendingAttendance((current) => current.filter((item) => item.id !== active.id));
     }
   }
 
+  // El auditado no "confirma" nada aquí — la firma real se hace dentro del
+  // plan. Este botón solo lo lleva ahí y pospone la alerta lo suficiente
+  // para que le dé tiempo de revisar y firmar sin que la pantalla vuelva a
+  // interrumpirlo a los 25s.
+  function handleVerInforme() {
+    snoozedUntilRef.current[`firma-${active.id}`] = Date.now() + FIRMA_VIEW_SNOOZE_MS;
+    setPendingFirmas((current) => current.filter((item) => item.id !== active.id));
+    navigate("/sig", { state: { openAuditoriaId: active.id } });
+  }
+
   const isPreMeeting = activeType === "pre-meeting";
   const isRecordatorio = activeType === "recordatorio";
+  const isFirma = activeType === "firma";
 
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-red-950/80 p-4">
       <div className="w-full max-w-sm animate-pulse rounded-2xl border-4 border-red-500 bg-white p-5 shadow-2xl">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">{isPreMeeting ? "⏰" : isRecordatorio ? "🔔" : "⚠️"}</span>
+          <span className="text-2xl">{isPreMeeting ? "⏰" : isFirma ? "✍️" : isRecordatorio ? "🔔" : "⚠️"}</span>
           <p className="text-sm font-black uppercase tracking-widest text-red-600">
-            {isPreMeeting ? "Tu reunión está por comenzar" : isRecordatorio ? "Recordatorio nuevo" : "Confirma tu asistencia"}
+            {isPreMeeting ? "Tu reunión está por comenzar" : isFirma ? "Informe pendiente de firmar" : isRecordatorio ? "Recordatorio nuevo" : "Confirma tu asistencia"}
           </p>
         </div>
-        {isRecordatorio ? (
+        {isFirma ? (
+          <>
+            <p className="mt-3 text-base font-black text-slate-900">{active.macroproceso || "Auditoría"}</p>
+            <p className="mt-1 text-[11px] font-bold text-slate-500">Enviado por {active.enviado_auditado_por_nombre || "Equipo SIG"}</p>
+          </>
+        ) : isRecordatorio ? (
           <>
             <p className="mt-3 text-base font-black text-slate-900">{active.proyecto?.nombre || "Proyecto"}</p>
             <p className="mt-1 text-[11px] font-bold text-slate-500">{active.mensaje}</p>
@@ -280,10 +337,10 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
           <button
             type="button"
             disabled={confirming}
-            onClick={handleConfirm}
-            className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
+            onClick={isFirma ? handleVerInforme : handleConfirm}
+            className={`rounded-xl px-4 py-2.5 text-sm font-black text-white shadow-sm transition disabled:cursor-not-allowed ${isFirma ? "bg-sky-600 hover:bg-sky-700 disabled:bg-sky-300" : "bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300"}`}
           >
-            {confirming ? "Confirmando..." : isPreMeeting ? "✓ Entendido, ya voy" : isRecordatorio ? "✓ Marcar como visto" : "✓ Confirmar asistencia"}
+            {confirming ? "Confirmando..." : isFirma ? "→ Ver mi informe" : isPreMeeting ? "✓ Entendido, ya voy" : isRecordatorio ? "✓ Marcar como visto" : "✓ Confirmar asistencia"}
           </button>
           <button
             type="button"
