@@ -447,9 +447,12 @@ export async function firmarFichaComoAuditado(auditoriaId, actor) {
     if (!auditoria || Number(auditoria.auditado_persona_id) !== personaId) {
       return { ok: false, error: "Solo el auditado de esta sesión puede firmar aquí.", data: null };
     }
+    // firma_aviso_visto se reinicia en false para que esta firma en
+    // particular sea la que dispare el aviso a quien la envió, incluso si
+    // una firma anterior de la misma ficha ya se había marcado como vista.
     const { data, error } = await supabase
       .from("sig_auditorias")
-      .update({ firmado_auditado_persona_id: personaId, firmado_auditado_nombre: nombre, firmado_auditado_at: new Date().toISOString() })
+      .update({ firmado_auditado_persona_id: personaId, firmado_auditado_nombre: nombre, firmado_auditado_at: new Date().toISOString(), firma_aviso_visto: false })
       .eq("id", auditoriaId)
       .select("*")
       .single();
@@ -466,13 +469,15 @@ export async function firmarFichaComoAuditado(auditoriaId, actor) {
 // la alerta a pantalla completa del auditado aunque ya la hubiera cerrado o
 // pospuesto. No se toca la firma existente: si el auditado ya había firmado
 // y el contenido no cambió desde entonces, firmado_auditado_nombre sigue ahí
-// y getPendingFichasParaFirmar ya no la considera pendiente.
+// y getPendingFichasParaFirmar ya no la considera pendiente. Se guarda
+// también quién la envió (enviado_auditado_por_persona_id) — es a esa
+// persona a quien se le avisa cuando el auditado finalmente firme.
 export async function enviarFichaParaFirma(auditoriaId, actor) {
   try {
-    const { nombre } = actorFields(actor);
+    const { personaId, nombre } = actorFields(actor);
     const { data, error } = await supabase
       .from("sig_auditorias")
-      .update({ enviado_auditado_at: new Date().toISOString(), enviado_auditado_por_nombre: nombre })
+      .update({ enviado_auditado_at: new Date().toISOString(), enviado_auditado_por_nombre: nombre, enviado_auditado_por_persona_id: personaId, firma_aviso_visto: false })
       .eq("id", auditoriaId)
       .select("*")
       .single();
@@ -481,6 +486,42 @@ export async function enviarFichaParaFirma(auditoriaId, actor) {
   } catch (err) {
     console.error("Error inesperado al enviar la ficha a firmar:", err);
     return { ok: false, error: err, data: null };
+  }
+}
+
+// Fichas ya firmadas por el auditado cuyo envío (enviado_auditado_por_persona_id)
+// fue esta persona, y que todavía no se le avisó — esto alimenta la
+// campanita de notificaciones (NotificationBell.jsx) del lado de quien la
+// mandó a firmar.
+export async function getFichasFirmadasPendientesAviso(personaId) {
+  if (!personaId) return [];
+  try {
+    const { data, error } = await supabase
+      .from("sig_auditorias")
+      .select("id, macroproceso, firmado_auditado_at, firmado_auditado_nombre")
+      .eq("enviado_auditado_por_persona_id", personaId)
+      .not("firmado_auditado_at", "is", null)
+      .eq("firma_aviso_visto", false)
+      .order("firmado_auditado_at", { ascending: false });
+    if (error) {
+      console.error("Error al cargar avisos de firma pendientes:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar avisos de firma pendientes:", err);
+    return [];
+  }
+}
+
+export async function marcarFirmaAvisoVisto(auditoriaId) {
+  try {
+    const { error } = await supabase.from("sig_auditorias").update({ firma_aviso_visto: true }).eq("id", auditoriaId);
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    console.error("Error inesperado al marcar visto el aviso de firma:", err);
+    return { ok: false, error: err };
   }
 }
 
