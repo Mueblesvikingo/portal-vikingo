@@ -9,6 +9,12 @@ import { getSubcriterios } from "./auditoriaSubcriterios";
 
 const DECLARACIONES = ["Cumple", "Cumple parcialmente", "No cumple"];
 const NIVELES = [0, 3, 5, 10];
+const NIVEL_DESCRIPCION = {
+  0: "sin evidencia",
+  3: "evidencia parcial o inconsistente",
+  5: "se aplica de forma consistente",
+  10: "documentado, medido y con mejora continua",
+};
 
 function findCriterioTexto(numeral, subtitulo, numero) {
   const section = sigSections.find((s) => s.numeral === numeral);
@@ -163,7 +169,9 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
         <div className="md:col-span-3 flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-slate-500">
           <span className="font-black uppercase tracking-widest text-slate-400">Ponderación:</span>
           {NIVELES.map((n) => (
-            <span key={n} className={`rounded-full px-2 py-0.5 ${cellStyle(n)}`}>{n} {scoreMeaning(n)}</span>
+            <span key={n} className={`rounded-full px-2 py-0.5 ${cellStyle(n)}`}>
+              {n} {scoreMeaning(n)} <span className="font-medium normal-case opacity-70">— {NIVEL_DESCRIPCION[n]}</span>
+            </span>
           ))}
         </div>
       </div>
