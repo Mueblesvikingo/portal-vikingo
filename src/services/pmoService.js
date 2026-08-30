@@ -1,5 +1,11 @@
 import { supabase } from "./supabase";
 
+// La PM (Jacqueline Serrano) es una sola persona, no un rol compartido por
+// varias — igual patrón que COORDINADOR_SIG_PERSONA_ID en auditoriasService.js.
+// Se usa para avisarle cuando una acción de mejora se convierte en proyecto
+// o asignación, ya que es ella quien le da seguimiento desde aquí.
+export const PM_PERSONA_ID = 12;
+
 function actorFields(actor) {
   return {
     personaId: actor?.persona_id != null ? Number(actor.persona_id) : null,

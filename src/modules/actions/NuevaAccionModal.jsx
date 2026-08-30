@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { TIPOS_ACCION, NIVELES_ACCION, PRIORIDADES_ACCION } from "./actionsHelpers";
+import { TIPOS_ACCION, NIVELES_ACCION } from "./actionsHelpers";
 
 const initialDraft = {
   tipo: TIPOS_ACCION[0],
@@ -7,12 +7,14 @@ const initialDraft = {
   titulo: "",
   descripcion: "",
   procesoId: "",
-  responsablePersonaId: "",
   objetivoId: "",
-  prioridad: "Media",
-  fechaCompromiso: "",
 };
 
+// Esta captura inicial es deliberadamente ligera: solo registra el
+// problema/situación detectada. Responsable, prioridad y fecha compromiso
+// se definen después, en la pestaña "Plan de acción" del detalle — una vez
+// que ya se sabe (por el análisis de causa) qué acción concreta se necesita
+// y quién la puede ejecutar, en vez de comprometerlos de entrada.
 export default function NuevaAccionModal({ procesos, personas, objetivos, onSave, onClose }) {
   const [draft, setDraft] = useState(initialDraft);
   const [error, setError] = useState("");
@@ -23,7 +25,7 @@ export default function NuevaAccionModal({ procesos, personas, objetivos, onSave
 
   function handleSave() {
     if (!draft.titulo.trim()) {
-      setError("Captura un título para la acción.");
+      setError("Captura el problema o situación detectada.");
       return;
     }
     onSave({
@@ -32,10 +34,10 @@ export default function NuevaAccionModal({ procesos, personas, objetivos, onSave
       titulo: draft.titulo.trim(),
       descripcion: draft.descripcion.trim(),
       procesoId: draft.procesoId || null,
-      responsablePersonaId: draft.responsablePersonaId || null,
+      responsablePersonaId: null,
       objetivoId: draft.objetivoId || null,
-      prioridad: draft.prioridad,
-      fechaCompromiso: draft.fechaCompromiso || null,
+      prioridad: "Media",
+      fechaCompromiso: null,
     });
   }
 
@@ -67,13 +69,13 @@ export default function NuevaAccionModal({ procesos, personas, objetivos, onSave
           </div>
 
           <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
-            Título
-            <input value={draft.titulo} onChange={(e) => update("titulo", e.target.value)} placeholder="Ej. Corregir desviación en reporte de producción" className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+            Problema / situación detectada
+            <input value={draft.titulo} onChange={(e) => update("titulo", e.target.value)} placeholder="Ej. Se detectó una desviación en el reporte de producción" className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
           </label>
 
           <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
             Descripción
-            <textarea value={draft.descripcion} onChange={(e) => update("descripcion", e.target.value)} rows={2} placeholder="Contexto breve de la acción" className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+            <textarea value={draft.descripcion} onChange={(e) => update("descripcion", e.target.value)} rows={2} placeholder="Contexto: qué pasó, dónde, cuándo se detectó" className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
           </label>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -85,33 +87,15 @@ export default function NuevaAccionModal({ procesos, personas, objetivos, onSave
               </select>
             </label>
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Responsable
-              <select value={draft.responsablePersonaId} onChange={(e) => update("responsablePersonaId", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
-                <option value="">Sin asignar</option>
-                {personas.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-              </select>
-            </label>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
               Objetivo estratégico
               <select value={draft.objetivoId} onChange={(e) => update("objetivoId", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
                 <option value="">Sin vincular</option>
                 {objetivos.map((o) => <option key={o.id} value={o.id}>{o.codigo}</option>)}
               </select>
             </label>
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Prioridad
-              <select value={draft.prioridad} onChange={(e) => update("prioridad", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
-                {PRIORIDADES_ACCION.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </label>
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Fecha compromiso
-              <input type="date" value={draft.fechaCompromiso} onChange={(e) => update("fechaCompromiso", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
-            </label>
           </div>
+
+          <p className="text-[10px] font-semibold text-slate-400">Responsable, prioridad y fecha compromiso se definen después, en "Plan de acción" — una vez identificada la causa.</p>
 
           {error && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{error}</div>}
 

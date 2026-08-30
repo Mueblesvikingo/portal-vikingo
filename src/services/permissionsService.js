@@ -361,20 +361,25 @@ export function canApproveSopEtapa(user, etapa) {
 // Coordinador SIG, Analista de Procesos — mismos STRATEGIC_TEAM_ROLES ya
 // usados en el resto del portal). Operativa → además el responsable real
 // del proceso vinculado (mismo criterio que canEditProcess/isProcessOwner
-// en Diseño Organizacional). `proceso` es el objeto de procesos (con su
-// campo `responsable`) ya cargado por el módulo, no se vuelve a consultar.
+// en Diseño Organizacional). Y, sin importar el nivel, quien planteó el
+// problema (created_by_persona_id) siempre puede seguir editándolo y hacer
+// su propio análisis de causa — la idea es que el análisis lo genere quien
+// vivió el problema, no solo quien tenga un permiso más amplio. `proceso`
+// es el objeto de procesos (con su campo `responsable`) ya cargado por el
+// módulo, no se vuelve a consultar.
 export function canEditAccion(user, accion, proceso) {
   if (!accion) return false;
   if (isStrategicTeamMember(user)) return true;
+  if (Number(user?.persona_id) === Number(accion.created_by_persona_id)) return true;
   if (accion.nivel === "Operativa" && proceso) return isProcessOwner(user, proceso);
   return false;
 }
 
-// Aprobar una acción (pasar a "Aprobada") es más restrictivo que editarla —
-// hoy solo el equipo estratégico, sin importar el nivel (igual que
-// canApproveOrAuditProcess para subprocesos).
+// Aprobar una acción (pasar a "Aprobada") queda reservado al Director
+// General — es la firma de que la acción propuesta, ya con su causa raíz
+// identificada, se autoriza a convertirse en proyecto o asignación real.
 export function canApproveAction(user) {
-  return isStrategicTeamMember(user);
+  return isDirectorGeneral(user);
 }
 
 export function hasWorkloadFullAccess(user) {

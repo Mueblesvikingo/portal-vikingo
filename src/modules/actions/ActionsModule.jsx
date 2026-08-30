@@ -10,6 +10,7 @@ import { getMacroprocesos } from "../../services/performanceService";
 import { getPersonas } from "../../services/organizationCatalogService";
 import { getObjetivos } from "../../services/strategicDeploymentService";
 import { createWorkloadAssignment } from "../../services/workloadService";
+import { getProyectos, createProyecto, createRecordatorio, PM_PERSONA_ID } from "../../services/pmoService";
 import { NIVELES_ACCION, TIPOS_ACCION, ESTADOS_ACCION, getFlujoConfig } from "./actionsHelpers";
 import DashboardTab from "./DashboardTab";
 import KanbanTab from "./KanbanTab";
@@ -101,6 +102,15 @@ export default function ActionsModule({ currentUser }) {
     setSelectedAccionId((current) => (current === id ? null : current));
   }
 
+  // Avisa a la PM (persona fija, PM_PERSONA_ID) cuando una acción ya
+  // aprobada se convierte en proyecto o asignación real — es ella quien le
+  // da seguimiento a partir de ahí. No bloquea el flujo si falla: la
+  // conversión ya se hizo, el aviso es un plus.
+  async function notificarPMConversion(accion, mensaje, proyectoId = null) {
+    const result = await createRecordatorio({ proyectoId, destinatarioPersonaId: PM_PERSONA_ID, mensaje }, { actor: currentUser });
+    if (!result?.ok) console.error("No fue posible avisar a la PM:", result?.error);
+  }
+
   // Genérico para el botón "→ Asignación" — usado tanto desde la tabla
   // (fila expandida) como desde el detalle de la acción, mismo destino en
   // Balance de Carga → Asignaciones.
@@ -124,7 +134,24 @@ export default function ActionsModule({ currentUser }) {
       origen_estrategico: "Acciones",
     });
     if (!result?.ok) { console.error(result?.error); alert("No fue posible crear la asignación."); return false; }
+    await notificarPMConversion(accion, `Acción ${accion.codigo} convertida en asignación para ${payload.personaNombre}: ${accion.titulo}`);
     alert(`Asignación creada para ${payload.personaNombre} en Balance de Carga.`);
+    return true;
+  }
+
+  // Botón "→ Proyecto" del detalle — crea el proyecto en el tablero PMO
+  // (mismo createProyecto ya usado desde Balance de Carga → Proyectos) y
+  // avisa a la PM referenciando el proyecto recién creado.
+  async function handleCrearProyecto(accion, payload) {
+    const proyectosActuales = await getProyectos(false);
+    const orden = proyectosActuales.reduce((max, p) => Math.max(max, p.orden || 0), 0) + 1;
+    const result = await createProyecto(
+      { nombre: payload.nombre, orden, asignacionId: null, liderProyectoPersonaId: payload.liderPersonaId || null },
+      { actor: currentUser }
+    );
+    if (!result?.ok) { console.error(result?.error); alert("No fue posible crear el proyecto."); return false; }
+    await notificarPMConversion(accion, `Acción ${accion.codigo} convertida en proyecto: ${payload.nombre}`, result.data.id);
+    alert(`Proyecto "${payload.nombre}" creado en el Tablero PMO.`);
     return true;
   }
 
@@ -247,6 +274,7 @@ export default function ActionsModule({ currentUser }) {
           onDeactivate={() => handleDeactivateAccion(selectedAccion.id)}
           onClose={() => setSelectedAccionId(null)}
           onCreateAssignment={handleCrearAsignacion}
+          onCreateProyecto={handleCrearProyecto}
         />
       )}
     </section>

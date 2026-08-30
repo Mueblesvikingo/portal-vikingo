@@ -8,7 +8,7 @@ import {
   getAdjuntos,
   addAdjunto,
 } from "../../services/accionesService";
-import { canEditAccion } from "../../services/permissionsService";
+import { canEditAccion, canApproveAction } from "../../services/permissionsService";
 import { createStrategicDecision } from "../../services/decisionService";
 import {
   TIPOS_ACCION,
@@ -137,8 +137,51 @@ function AsignacionForm({ personas, defaultPersonaId, defaultTitulo, onConfirm, 
   );
 }
 
+// Formulario compacto para crear el proyecto en el Tablero PMO desde una
+// acción ya aprobada — mismo espíritu que AsignacionForm, campos mínimos
+// (nombre del proyecto, líder de proyecto).
+function ProyectoForm({ personas, defaultNombre, defaultLiderPersonaId, onConfirm, onCancel }) {
+  const [nombre, setNombre] = useState(defaultNombre || "");
+  const [liderPersonaId, setLiderPersonaId] = useState(defaultLiderPersonaId || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleConfirm() {
+    if (!nombre.trim()) { setError("El nombre del proyecto no puede quedar vacío."); return; }
+    setError("");
+    setSaving(true);
+    const ok = await onConfirm({ nombre: nombre.trim(), liderPersonaId: liderPersonaId ? Number(liderPersonaId) : null });
+    setSaving(false);
+    if (ok) onCancel();
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-2.5">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="min-w-[180px] flex-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Nombre del proyecto
+          <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Líder de proyecto
+          <select value={liderPersonaId} onChange={(e) => setLiderPersonaId(e.target.value)} className="mt-1 h-9 w-48 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            <option value="">Sin asignar</option>
+            {personas.map((p) => (<option key={p.id} value={p.id}>{p.nombre}</option>))}
+          </select>
+        </label>
+        <button type="button" disabled={saving} onClick={handleConfirm} className="h-9 rounded-lg bg-[#111827] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+          {saving ? "Enviando..." : "Confirmar"}
+        </button>
+        <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+      </div>
+      {error && <p className="mt-1.5 text-[10px] font-bold text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 const SUB_TABS = [
   { key: "causa", label: "Análisis de causa" },
+  { key: "plan", label: "Plan de acción" },
   { key: "historial", label: "Historial" },
   { key: "comentarios", label: "Comentarios" },
   { key: "adjuntos", label: "Adjuntos" },
@@ -146,7 +189,7 @@ const SUB_TABS = [
 
 export default function AccionDetailPanel({
   accion, tiposFlujo, procesos, personas, objetivos, procesosById, personasById, objetivosById,
-  currentUser, onUpdate, onDeactivate, onClose, onCreateAssignment,
+  currentUser, onUpdate, onDeactivate, onClose, onCreateAssignment, onCreateProyecto,
 }) {
   const [subTab, setSubTab] = useState("causa");
   const [analisisList, setAnalisisList] = useState([]);
@@ -158,11 +201,20 @@ export default function AccionDetailPanel({
   const [nuevoAdjunto, setNuevoAdjunto] = useState({ nombre: "", url: "" });
   const [loadingSub, setLoadingSub] = useState(true);
   const [convertingToAssignment, setConvertingToAssignment] = useState(false);
+  const [convertingToProyecto, setConvertingToProyecto] = useState(false);
   const [escalando, setEscalando] = useState(false);
 
   const proceso = accion.proceso_id ? procesosById[accion.proceso_id] : null;
   const canEdit = canEditAccion(currentUser, accion, proceso);
+  const canApprove = canApproveAction(currentUser);
   const etapas = getFlujoEtapas(tiposFlujo, accion.tipo);
+  // Si el flujo de este tipo de acción no contempla "Aprobada", no hay
+  // aprobación que esperar y la conversión queda libre desde que exista
+  // canEdit. Si sí la contempla, convertir en proyecto/asignación requiere
+  // haber llegado ya a esa etapa (o una posterior) — la aprobación del
+  // Director es la que habilita el paso a ejecución real.
+  const etapaAprobadaIndex = etapas.indexOf("Aprobada");
+  const yaAprobada = etapaAprobadaIndex === -1 || etapas.indexOf(accion.estado) >= etapaAprobadaIndex;
   const vencida = isVencida(accion);
   const esCritica = accion.prioridad === "Crítica";
 
@@ -218,6 +270,12 @@ export default function AccionDetailPanel({
   }, [accion.id, accion.updated_at]);
 
   const analisisActual = analisisList.find((a) => a.herramienta === herramienta) || null;
+  // Referencia para "Plan de acción": la causa raíz más reciente que se
+  // haya concluido, sin importar con cuál de las 3 herramientas se llegó
+  // a ella.
+  const causaRaizReferencia = analisisList
+    .filter((a) => a.conclusion_causa_raiz && a.conclusion_causa_raiz.trim())
+    .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))[0] || null;
 
   async function handleSaveAnalisis(payload) {
     const result = await upsertAnalisisCausa({ accionId: accion.id, herramienta, ...payload }, currentUser);
@@ -282,28 +340,6 @@ export default function AccionDetailPanel({
                     <EditableSelect value={accion.tipo} options={TIPOS_ACCION} canEdit={canEdit} onSave={(v) => onUpdate({ tipo: v })} />
                   </div>
                   <div>
-                    <p className="font-black uppercase tracking-widest text-slate-400">Prioridad</p>
-                    <EditableSelect value={accion.prioridad} options={PRIORIDADES_ACCION} canEdit={canEdit} onSave={(v) => onUpdate({ prioridad: v })} />
-                  </div>
-                  <div>
-                    <p className="font-black uppercase tracking-widest text-slate-400">Fecha compromiso</p>
-                    {canEdit ? (
-                      <input type="date" value={accion.fecha_compromiso || ""} onChange={(e) => onUpdate({ fecha_compromiso: e.target.value })} className="w-full rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[10px] font-bold text-slate-700 outline-none" />
-                    ) : (
-                      <span className="text-slate-600">{formatDate(accion.fecha_compromiso) || "—"}</span>
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-black uppercase tracking-widest text-slate-400">Responsable</p>
-                    <EditableSelect
-                      value={accion.responsable_persona_id || ""}
-                      options={[{ value: "", label: "Sin asignar" }, ...personas.map((p) => ({ value: p.id, label: p.nombre }))]}
-                      canEdit={canEdit}
-                      onSave={(v) => onUpdate({ responsable_persona_id: v || null })}
-                      labelFor={() => (accion.responsable_persona_id ? personasById[accion.responsable_persona_id]?.nombre : "Sin asignar")}
-                    />
-                  </div>
-                  <div>
                     <p className="font-black uppercase tracking-widest text-slate-400">Proceso</p>
                     <EditableSelect
                       value={accion.proceso_id || ""}
@@ -348,17 +384,6 @@ export default function AccionDetailPanel({
                   </div>
                 )}
 
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Enlace de ejecución (texto)</p>
-                    <EditableText value={accion.enlace_ejecucion_texto} canEdit={canEdit} onSave={(v) => onUpdate({ enlace_ejecucion_texto: v })} placeholder="Ej. Planner — Tablero Calidad" className="text-slate-700" />
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Enlace de ejecución (URL)</p>
-                    <EditableText value={accion.enlace_ejecucion_url} canEdit={canEdit} onSave={(v) => onUpdate({ enlace_ejecucion_url: v })} placeholder="https://…" className="text-slate-700" />
-                  </div>
-                </div>
-
                 {canEdit && (
                   <div className="mt-3 border-t border-slate-100 pt-2">
                     <div className="flex justify-end gap-2">
@@ -373,27 +398,10 @@ export default function AccionDetailPanel({
                       >
                         {escalando ? "Enviando…" : "→ Dirección"}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setConvertingToAssignment((current) => !current)}
-                        title="Enviar a Asignaciones"
-                        className={`rounded-lg border px-3 py-1 text-[10px] font-black transition ${convertingToAssignment ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600"}`}
-                      >
-                        → Asignación
-                      </button>
                       <button type="button" onClick={onDeactivate} className="rounded-lg border border-red-200 px-3 py-1 text-[10px] font-black text-red-500 transition hover:bg-red-50">
                         Eliminar acción
                       </button>
                     </div>
-                    {convertingToAssignment && (
-                      <AsignacionForm
-                        personas={personas}
-                        defaultPersonaId={accion.responsable_persona_id || ""}
-                        defaultTitulo={accion.titulo}
-                        onCancel={() => setConvertingToAssignment(false)}
-                        onConfirm={(payload) => onCreateAssignment(accion, payload)}
-                      />
-                    )}
                   </div>
                 )}
               </div>
@@ -405,15 +413,19 @@ export default function AccionDetailPanel({
                   {etapas.map((etapa, index) => {
                     const isCurrent = accion.estado === etapa;
                     const isPast = etapas.indexOf(accion.estado) > index;
+                    // "Aprobada" es la única etapa que no basta con canEdit —
+                    // es la firma del Director, no un paso más del flujo.
+                    const bloqueadaPorAprobacion = etapa === "Aprobada" && !isCurrent && !isPast && !canApprove;
                     return (
                       <button
                         key={etapa}
                         type="button"
-                        disabled={!canEdit}
+                        disabled={!canEdit || bloqueadaPorAprobacion}
                         onClick={() => onUpdate({ estado: etapa })}
+                        title={bloqueadaPorAprobacion ? "Solo el Director General puede aprobar" : undefined}
                         className={`rounded-full border px-2.5 py-1 text-[9px] font-black transition ${
                           isCurrent ? ESTADO_BADGE[etapa] : isPast ? "border-emerald-100 bg-emerald-50/60 text-emerald-600" : "border-slate-200 bg-slate-50 text-slate-400"
-                        } ${canEdit ? "hover:opacity-80" : ""}`}
+                        } ${canEdit && !bloqueadaPorAprobacion ? "hover:opacity-80" : ""} ${bloqueadaPorAprobacion ? "cursor-not-allowed opacity-50" : ""}`}
                       >
                         {etapa}
                       </button>
@@ -458,6 +470,100 @@ export default function AccionDetailPanel({
                     {herramienta === "5 Porqués" && <CincoPorques analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} />}
                     {herramienta === "Ishikawa" && <Ishikawa analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} />}
                     {herramienta === "5W2H" && <CincoW2H analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} />}
+                  </div>
+                ) : subTab === "plan" ? (
+                  <div className="space-y-3">
+                    {causaRaizReferencia ? (
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-2.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700">Causa raíz identificada ({causaRaizReferencia.herramienta})</p>
+                        <p className="mt-1 text-[11px] font-bold text-slate-700">{causaRaizReferencia.conclusion_causa_raiz}</p>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-2.5 text-[11px] font-bold text-amber-700">
+                        Aún no hay una causa raíz registrada en Análisis de causa — se recomienda completarlo antes de definir la acción.
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                      <div>
+                        <p className="font-black uppercase tracking-widest text-slate-400">Responsable</p>
+                        <EditableSelect
+                          value={accion.responsable_persona_id || ""}
+                          options={[{ value: "", label: "Sin asignar" }, ...personas.map((p) => ({ value: p.id, label: p.nombre }))]}
+                          canEdit={canEdit}
+                          onSave={(v) => onUpdate({ responsable_persona_id: v || null })}
+                          labelFor={() => (accion.responsable_persona_id ? personasById[accion.responsable_persona_id]?.nombre : "Sin asignar")}
+                        />
+                      </div>
+                      <div>
+                        <p className="font-black uppercase tracking-widest text-slate-400">Prioridad</p>
+                        <EditableSelect value={accion.prioridad} options={PRIORIDADES_ACCION} canEdit={canEdit} onSave={(v) => onUpdate({ prioridad: v })} />
+                      </div>
+                      <div>
+                        <p className="font-black uppercase tracking-widest text-slate-400">Fecha compromiso</p>
+                        {canEdit ? (
+                          <input type="date" value={accion.fecha_compromiso || ""} onChange={(e) => onUpdate({ fecha_compromiso: e.target.value })} className="w-full rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[10px] font-bold text-slate-700 outline-none" />
+                        ) : (
+                          <span className="text-slate-600">{formatDate(accion.fecha_compromiso) || "—"}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Enlace de ejecución (texto)</p>
+                        <EditableText value={accion.enlace_ejecucion_texto} canEdit={canEdit} onSave={(v) => onUpdate({ enlace_ejecucion_texto: v })} placeholder="Ej. Planner — Tablero Calidad" className="text-slate-700" />
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Enlace de ejecución (URL)</p>
+                        <EditableText value={accion.enlace_ejecucion_url} canEdit={canEdit} onSave={(v) => onUpdate({ enlace_ejecucion_url: v })} placeholder="https://…" className="text-slate-700" />
+                      </div>
+                    </div>
+
+                    {canEdit && (
+                      <div className="border-t border-slate-100 pt-2.5">
+                        <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">Convertir en ejecución real</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={!yaAprobada}
+                            title={yaAprobada ? "Enviar a Asignaciones" : "Requiere aprobación del Director General primero"}
+                            onClick={() => setConvertingToAssignment((current) => !current)}
+                            className={`rounded-lg border px-3 py-1 text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${convertingToAssignment ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600"}`}
+                          >
+                            → Asignación
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!yaAprobada}
+                            title={yaAprobada ? "Crear proyecto en el Tablero PMO" : "Requiere aprobación del Director General primero"}
+                            onClick={() => setConvertingToProyecto((current) => !current)}
+                            className={`rounded-lg border px-3 py-1 text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${convertingToProyecto ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"}`}
+                          >
+                            → Proyecto
+                          </button>
+                        </div>
+                        {!yaAprobada && <p className="mt-1.5 text-[9px] font-bold text-amber-600">Pendiente de aprobación del Director General (etapa "Aprobada" en Flujo).</p>}
+                        {convertingToAssignment && (
+                          <AsignacionForm
+                            personas={personas}
+                            defaultPersonaId={accion.responsable_persona_id || ""}
+                            defaultTitulo={accion.titulo}
+                            onCancel={() => setConvertingToAssignment(false)}
+                            onConfirm={(payload) => onCreateAssignment(accion, payload)}
+                          />
+                        )}
+                        {convertingToProyecto && (
+                          <ProyectoForm
+                            personas={personas}
+                            defaultNombre={accion.titulo}
+                            defaultLiderPersonaId={accion.responsable_persona_id || ""}
+                            onCancel={() => setConvertingToProyecto(false)}
+                            onConfirm={(payload) => onCreateProyecto(accion, payload)}
+                          />
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : subTab === "historial" ? (
                   <div className="space-y-1.5">
