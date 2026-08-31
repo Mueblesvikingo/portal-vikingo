@@ -11,6 +11,7 @@ import { getPersonas } from "../../services/organizationCatalogService";
 import { getObjetivos } from "../../services/strategicDeploymentService";
 import { createWorkloadAssignment } from "../../services/workloadService";
 import { getProyectos, createProyecto, createRecordatorio, PM_PERSONA_ID } from "../../services/pmoService";
+import { isStrategicTeamMember, esParticipanteAccion } from "../../services/permissionsService";
 import { NIVELES_ACCION, TIPOS_ACCION, ESTADOS_ACCION, getFlujoConfig } from "./actionsHelpers";
 import DashboardTab from "./DashboardTab";
 import KanbanTab from "./KanbanTab";
@@ -25,11 +26,14 @@ export default function ActionsModule({ currentUser }) {
   const [personas, setPersonas] = useState([]);
   const [objetivos, setObjetivos] = useState([]);
   const [loading, setLoading] = useState(true);
-  // "Tabla" es lo primero que ve cualquiera al entrar — una lista concreta
-  // de acciones da un punto de partida más claro para un líder de proceso
-  // que un dashboard de KPIs, que se queda como una pestaña más, no la de
-  // aterrizaje.
-  const [activeTab, setActiveTab] = useState("tabla");
+  const [activeTab, setActiveTab] = useState("dashboard");
+  // Un líder de proceso debe sentir este módulo como su propio gestor: entra
+  // viendo SUS acciones (las que creó, en las que es responsable, o de un
+  // proceso suyo aunque otro la haya levantado), no el tablero completo de
+  // toda la organización. Equipo estratégico sí necesita esa vista global
+  // de entrada, así que arranca en "todas". Cualquiera puede cambiar el
+  // alcance con el toggle — nada queda oculto, solo cambia el default.
+  const [scope, setScope] = useState(() => (isStrategicTeamMember(currentUser) ? "todas" : "mias"));
   const [filtroNivel, setFiltroNivel] = useState("all");
   const [filtroTipo, setFiltroTipo] = useState("all");
   const [filtroEstado, setFiltroEstado] = useState("all");
@@ -59,18 +63,24 @@ export default function ActionsModule({ currentUser }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const personasById = useMemo(() => Object.fromEntries(personas.map((p) => [p.id, p])), [personas]);
+  const procesosById = useMemo(() => Object.fromEntries(procesos.map((p) => [p.id, p])), [procesos]);
+  const objetivosById = useMemo(() => Object.fromEntries(objetivos.map((o) => [o.id, o])), [objetivos]);
+
+  const misAcciones = useMemo(
+    () => acciones.filter((a) => esParticipanteAccion(currentUser, a, a.proceso_id ? procesosById[a.proceso_id] : null)),
+    [acciones, procesosById, currentUser]
+  );
+
   const filteredAcciones = useMemo(() => {
-    return acciones.filter((a) => {
+    const base = scope === "mias" ? misAcciones : acciones;
+    return base.filter((a) => {
       if (filtroNivel !== "all" && a.nivel !== filtroNivel) return false;
       if (filtroTipo !== "all" && a.tipo !== filtroTipo) return false;
       if (filtroEstado !== "all" && a.estado !== filtroEstado) return false;
       return true;
     });
-  }, [acciones, filtroNivel, filtroTipo, filtroEstado]);
-
-  const personasById = useMemo(() => Object.fromEntries(personas.map((p) => [p.id, p])), [personas]);
-  const procesosById = useMemo(() => Object.fromEntries(procesos.map((p) => [p.id, p])), [procesos]);
-  const objetivosById = useMemo(() => Object.fromEntries(objetivos.map((o) => [o.id, o])), [objetivos]);
+  }, [acciones, misAcciones, scope, filtroNivel, filtroTipo, filtroEstado]);
 
   async function handleCreateAccion(payload) {
     const flujo = getFlujoConfig(tiposFlujo, payload.tipo);
@@ -162,9 +172,9 @@ export default function ActionsModule({ currentUser }) {
   const selectedAccion = acciones.find((a) => a.id === selectedAccionId) || null;
 
   const tabs = [
+    { key: "dashboard", label: "Dashboard" },
     { key: "tabla", label: "Tabla" },
     { key: "kanban", label: "Kanban" },
-    { key: "dashboard", label: "Dashboard" },
   ];
 
   // Guía de 4 pasos, siempre visible arriba del módulo — pensada para que
@@ -199,6 +209,22 @@ export default function ActionsModule({ currentUser }) {
 
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
           <div className="flex flex-wrap items-center gap-3">
+            <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              <button
+                type="button"
+                onClick={() => setScope("mias")}
+                className={`rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${scope === "mias" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                Mis acciones
+              </button>
+              <button
+                type="button"
+                onClick={() => setScope("todas")}
+                className={`rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${scope === "todas" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                Todas
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setCreating(true)}
@@ -229,13 +255,13 @@ export default function ActionsModule({ currentUser }) {
             </label>
           </div>
           <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black text-slate-500">
-            {filteredAcciones.length} acciones
+            {filteredAcciones.length} {scope === "mias" ? "acciones mías" : "acciones en total"}
           </span>
         </div>
 
         <div className="mt-2 overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-3 bg-[#001225] px-4 py-1.5 text-white">
-            <h2 className="text-[13px] font-black uppercase tracking-tight">Acciones de Mejora</h2>
+            <h2 className="text-[13px] font-black uppercase tracking-tight">{scope === "mias" ? "Mis Acciones de Mejora" : "Acciones de Mejora"}</h2>
             <div className="flex gap-1 rounded-xl bg-white/10 p-0.5">
               {tabs.map((tab) => (
                 <button

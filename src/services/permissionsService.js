@@ -382,6 +382,21 @@ export function canApproveAction(user) {
   return isDirectorGeneral(user);
 }
 
+// "¿Esto me toca a mí?" — más amplio que canEditAccion (que además admite
+// operativa+dueño de proceso como regla de edición, e ignora nivel para el
+// creador). Aquí no se decide permiso de edición sino pertenencia: alimenta
+// el toggle "Mis acciones" de ActionsModule.jsx para que un líder vea de
+// entrada lo suyo — lo que creó, lo que le asignaron como responsable, o lo
+// que le compete por ser dueño del proceso afectado — aunque alguien más lo
+// haya levantado.
+export function esParticipanteAccion(user, accion, proceso) {
+  if (!accion) return false;
+  if (Number(user?.persona_id) === Number(accion.created_by_persona_id)) return true;
+  if (Number(user?.persona_id) === Number(accion.responsable_persona_id)) return true;
+  if (proceso && isProcessOwner(user, proceso)) return true;
+  return false;
+}
+
 export function hasWorkloadFullAccess(user) {
   const userOverride = getUserModuleOverride(user, "workload-balance");
   if (userOverride && typeof userOverride.editar === "boolean") return userOverride.editar;
