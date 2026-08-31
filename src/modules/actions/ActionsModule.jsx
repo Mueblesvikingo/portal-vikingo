@@ -333,7 +333,7 @@ export default function ActionsModule({ currentUser }) {
             {loading ? (
               <div className="py-10 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
             ) : activeTab === "dashboard" ? (
-              <DashboardTab acciones={filteredAcciones} procesosById={procesosById} />
+              <DashboardTab acciones={filteredAcciones} procesosById={procesosById} scope={scope} />
             ) : activeTab === "kanban" ? (
               <KanbanTab
                 acciones={filteredAcciones}
