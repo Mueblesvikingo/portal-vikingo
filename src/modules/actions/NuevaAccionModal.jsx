@@ -7,7 +7,6 @@ const initialDraft = {
   titulo: "",
   descripcion: "",
   procesoId: "",
-  objetivoId: "",
 };
 
 // Esta captura inicial es deliberadamente ligera: solo registra el
@@ -15,7 +14,7 @@ const initialDraft = {
 // se definen después, en la pestaña "Plan de acción" del detalle — una vez
 // que ya se sabe (por el análisis de causa) qué acción concreta se necesita
 // y quién la puede ejecutar, en vez de comprometerlos de entrada.
-export default function NuevaAccionModal({ procesos, personas, objetivos, onSave, onClose }) {
+export default function NuevaAccionModal({ procesos, personas, onSave, onClose }) {
   const [draft, setDraft] = useState(initialDraft);
   const [error, setError] = useState("");
 
@@ -35,7 +34,7 @@ export default function NuevaAccionModal({ procesos, personas, objetivos, onSave
       descripcion: draft.descripcion.trim(),
       procesoId: draft.procesoId || null,
       responsablePersonaId: null,
-      objetivoId: draft.objetivoId || null,
+      objetivoId: null,
       prioridad: "Media",
       fechaCompromiso: null,
     });
@@ -78,22 +77,13 @@ export default function NuevaAccionModal({ procesos, personas, objetivos, onSave
             <textarea value={draft.descripcion} onChange={(e) => update("descripcion", e.target.value)} rows={2} placeholder="Contexto: qué pasó, dónde, cuándo se detectó" className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
           </label>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Proceso
-              <select value={draft.procesoId} onChange={(e) => update("procesoId", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
-                <option value="">Sin proceso</option>
-                {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-              </select>
-            </label>
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Objetivo estratégico
-              <select value={draft.objetivoId} onChange={(e) => update("objetivoId", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
-                <option value="">Sin vincular</option>
-                {objetivos.map((o) => <option key={o.id} value={o.id}>{o.codigo}</option>)}
-              </select>
-            </label>
-          </div>
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Proceso
+            <select value={draft.procesoId} onChange={(e) => update("procesoId", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              <option value="">Sin proceso</option>
+              {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+            </select>
+          </label>
 
           <p className="text-[10px] font-semibold text-slate-400">Responsable, prioridad y fecha compromiso se definen después, en "Plan de acción" — una vez identificada la causa.</p>
 
