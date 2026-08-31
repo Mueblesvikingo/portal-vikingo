@@ -153,19 +153,47 @@ export default function ActionsModule({ currentUser }) {
     return true;
   }
 
-  // Botón "→ Proyecto" del detalle — crea el proyecto en el tablero PMO
-  // (mismo createProyecto ya usado desde Balance de Carga → Proyectos) y
-  // avisa a la PM referenciando el proyecto recién creado.
+  // Botón "→ Proyecto" del detalle — no basta con registrarlo en el tablero
+  // PMO: cada persona involucrada (el líder incluido) recibe además su
+  // propia asignación en Balance de Carga con la misma carga/fecha/
+  // prioridad, para que el proyecto quede reflejado donde se planea la
+  // capacidad real, no solo como una fila en el tablero. La asignación del
+  // líder es la que queda enlazada al proyecto (asignacionId), igual que ya
+  // hace el alta de proyectos en WorkloadBalanceModule.jsx.
   async function handleCrearProyecto(accion, payload) {
+    let liderAsignacionId = null;
+    for (const persona of payload.involucrados) {
+      const asigResult = await createWorkloadAssignment({
+        persona_id: persona.personaId,
+        responsable: persona.personaNombre,
+        rol: persona.personaId === payload.liderPersonaId ? "Líder de proyecto" : "Equipo de proyecto",
+        tipo: "Proyecto",
+        prioridad: payload.prioridad,
+        gestion: "Otro",
+        titulo: payload.nombre,
+        descripcion: accion.descripcion || "",
+        revisara: "", aprobara: "", seguimiento: "",
+        carga_horas: payload.horas,
+        fecha_limite: payload.fechaLimite,
+        estado: "Pendiente",
+        asigna: currentUser?.nombre || currentUser?.usuario || "",
+        asigna_rol: "Acciones de Mejora",
+        horas_totales: payload.horas,
+        origen_estrategico: "Acciones",
+      });
+      if (!asigResult?.ok) { console.error(asigResult?.error); alert(`No fue posible crear la asignación para ${persona.personaNombre}.`); return false; }
+      if (persona.personaId === payload.liderPersonaId) liderAsignacionId = asigResult.data.id;
+    }
+
     const proyectosActuales = await getProyectos(false);
     const orden = proyectosActuales.reduce((max, p) => Math.max(max, p.orden || 0), 0) + 1;
     const result = await createProyecto(
-      { nombre: payload.nombre, orden, asignacionId: null, liderProyectoPersonaId: payload.liderPersonaId || null },
+      { nombre: payload.nombre, orden, asignacionId: liderAsignacionId, liderProyectoPersonaId: payload.liderPersonaId || null },
       { actor: currentUser }
     );
     if (!result?.ok) { console.error(result?.error); alert("No fue posible crear el proyecto."); return false; }
     await notificarPMConversion(accion, `Acción ${accion.codigo} convertida en proyecto: ${payload.nombre}`, result.data.id);
-    alert(`Proyecto "${payload.nombre}" creado en el Tablero PMO.`);
+    alert(`Proyecto "${payload.nombre}" creado en el Tablero PMO y asignado a ${payload.involucrados.length} persona(s) en Balance de Carga.`);
     return true;
   }
 

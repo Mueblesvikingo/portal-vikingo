@@ -58,6 +58,33 @@ function EditableText({ value, onSave, canEdit, className = "", placeholder = ""
   );
 }
 
+// Un <input type="date"> normal, atado directo al valor del padre con
+// onChange guardando en cada cambio, se rompe: cada guardado dispara un
+// re-render que le resetea el valor mientras el usuario todavía está
+// escribiendo el día/mes/año (el síntoma es justo ese: el año se queda a
+// medias). Aquí se edita sobre un borrador local y solo se guarda al salir
+// del campo, mismo criterio que EditableText.
+function EditableDate({ value, onSave, canEdit }) {
+  const [draft, setDraft] = useState(value || "");
+
+  useEffect(() => {
+    setDraft(value || "");
+  }, [value]);
+
+  if (!canEdit) {
+    return <span className="text-slate-600">{formatDate(value) || "—"}</span>;
+  }
+  return (
+    <input
+      type="date"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => { if (draft !== (value || "")) onSave(draft); }}
+      className="w-full rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[10px] font-bold text-slate-700 outline-none"
+    />
+  );
+}
+
 function EditableSelect({ value, options, onSave, canEdit, labelFor = (v) => v }) {
   if (!canEdit) return <span>{labelFor(value)}</span>;
   return (
@@ -137,26 +164,54 @@ function AsignacionForm({ personas, defaultPersonaId, defaultTitulo, onConfirm, 
   );
 }
 
-// Formulario compacto para crear el proyecto en el Tablero PMO desde una
-// acción ya aprobada — mismo espíritu que AsignacionForm, campos mínimos
-// (nombre del proyecto, líder de proyecto).
+// Formulario para crear el proyecto en el Tablero PMO desde una acción ya
+// aprobada. No basta con el registro en el tablero: cada persona
+// involucrada (el líder incluido) recibe además su propia asignación en
+// Balance de Carga, con la misma carga de horas/fecha/prioridad — así su
+// trabajo en el proyecto queda reflejado donde se planea la capacidad real,
+// no solo en el tablero PMO.
 function ProyectoForm({ personas, defaultNombre, defaultLiderPersonaId, onConfirm, onCancel }) {
   const [nombre, setNombre] = useState(defaultNombre || "");
   const [liderPersonaId, setLiderPersonaId] = useState(defaultLiderPersonaId || "");
+  const [involucradosIds, setInvolucradosIds] = useState(defaultLiderPersonaId ? [String(defaultLiderPersonaId)] : []);
+  const [horas, setHoras] = useState(4);
+  const [fechaLimite, setFechaLimite] = useState("");
+  const [prioridad, setPrioridad] = useState("Media");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  function handleLiderChange(value) {
+    setLiderPersonaId(value);
+    if (value) setInvolucradosIds((current) => (current.includes(value) ? current : [...current, value]));
+  }
+  function toggleInvolucrado(id) {
+    if (id === String(liderPersonaId)) return; // el líder siempre queda incluido
+    setInvolucradosIds((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+  }
+
   async function handleConfirm() {
     if (!nombre.trim()) { setError("El nombre del proyecto no puede quedar vacío."); return; }
+    if (involucradosIds.length === 0) { setError("Selecciona al menos una persona involucrada."); return; }
     setError("");
     setSaving(true);
-    const ok = await onConfirm({ nombre: nombre.trim(), liderPersonaId: liderPersonaId ? Number(liderPersonaId) : null });
+    const involucrados = involucradosIds.map((id) => {
+      const persona = personas.find((p) => String(p.id) === id);
+      return { personaId: Number(id), personaNombre: persona?.nombre || "" };
+    });
+    const ok = await onConfirm({
+      nombre: nombre.trim(),
+      liderPersonaId: liderPersonaId ? Number(liderPersonaId) : null,
+      involucrados,
+      horas: Number(horas) || 0,
+      fechaLimite: fechaLimite || null,
+      prioridad,
+    });
     setSaving(false);
     if (ok) onCancel();
   }
 
   return (
-    <div className="mt-2 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-2.5">
+    <div className="mt-2 space-y-2 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-2.5">
       <div className="flex flex-wrap items-end gap-2">
         <label className="min-w-[180px] flex-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
           Nombre del proyecto
@@ -164,9 +219,48 @@ function ProyectoForm({ personas, defaultNombre, defaultLiderPersonaId, onConfir
         </label>
         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
           Líder de proyecto
-          <select value={liderPersonaId} onChange={(e) => setLiderPersonaId(e.target.value)} className="mt-1 h-9 w-48 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+          <select value={liderPersonaId} onChange={(e) => handleLiderChange(e.target.value)} className="mt-1 h-9 w-48 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
             <option value="">Sin asignar</option>
             {personas.map((p) => (<option key={p.id} value={p.id}>{p.nombre}</option>))}
+          </select>
+        </label>
+      </div>
+
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Personas involucradas (cada una recibe su asignación en Balance de Carga)</p>
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {personas.map((p) => {
+            const id = String(p.id);
+            const checked = involucradosIds.includes(id);
+            const esLider = id === String(liderPersonaId);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                disabled={esLider}
+                onClick={() => toggleInvolucrado(id)}
+                className={`rounded-full border px-2.5 py-1 text-[9px] font-black transition disabled:cursor-not-allowed ${checked ? "border-emerald-300 bg-emerald-100 text-emerald-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+              >
+                {checked ? "✓ " : ""}{p.nombre}{esLider ? " (líder)" : ""}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Horas (c/u)
+          <input type="number" min="0.5" step="0.5" value={horas} onChange={(e) => setHoras(e.target.value)} className="mt-1 h-9 w-20 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Fecha límite
+          <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Prioridad
+          <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            {["Crítica", "Alta", "Media", "Baja"].map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </label>
         <button type="button" disabled={saving} onClick={handleConfirm} className="h-9 rounded-lg bg-[#111827] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
@@ -501,11 +595,7 @@ export default function AccionDetailPanel({
                       </div>
                       <div>
                         <p className="font-black uppercase tracking-widest text-slate-400">Fecha compromiso</p>
-                        {canEdit ? (
-                          <input type="date" value={accion.fecha_compromiso || ""} onChange={(e) => onUpdate({ fecha_compromiso: e.target.value })} className="w-full rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[10px] font-bold text-slate-700 outline-none" />
-                        ) : (
-                          <span className="text-slate-600">{formatDate(accion.fecha_compromiso) || "—"}</span>
-                        )}
+                        <EditableDate value={accion.fecha_compromiso} canEdit={canEdit} onSave={(v) => onUpdate({ fecha_compromiso: v || null })} />
                       </div>
                     </div>
 
