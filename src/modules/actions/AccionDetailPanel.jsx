@@ -598,6 +598,19 @@ export default function AccionDetailPanel({
                   <div className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
                 ) : subTab === "causa" ? (
                   <div className="space-y-3">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-2.5 py-2">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Responsable de participar en el análisis</p>
+                      <p className="mt-0.5 text-[9px] font-semibold text-slate-400">Útil cuando dos áreas tienen versiones distintas de la causa (ej. RH y Producción) — a quien asignes aquí se le habilita editar este análisis.</p>
+                      <div className="mt-1 max-w-xs">
+                        <EditableSelect
+                          value={accion.analisis_responsable_persona_id || ""}
+                          options={[{ value: "", label: "Sin asignar" }, ...personas.map((p) => ({ value: p.id, label: p.nombre }))]}
+                          canEdit={canEdit}
+                          onSave={(v) => onUpdate({ analisis_responsable_persona_id: v || null })}
+                          labelFor={() => (accion.analisis_responsable_persona_id ? personasById[accion.analisis_responsable_persona_id]?.nombre : "Sin asignar")}
+                        />
+                      </div>
+                    </div>
                     {posiblesAntecedentes.length > 0 && (
                       <details className="rounded-xl border border-amber-100 bg-amber-50/50 px-2.5 py-2">
                         <summary className="cursor-pointer text-[9px] font-black uppercase tracking-widest text-amber-700">

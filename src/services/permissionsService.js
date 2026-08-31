@@ -364,13 +364,19 @@ export function canApproveSopEtapa(user, etapa) {
 // en Diseño Organizacional). Y, sin importar el nivel, quien planteó el
 // problema (created_by_persona_id) siempre puede seguir editándolo y hacer
 // su propio análisis de causa — la idea es que el análisis lo genere quien
-// vivió el problema, no solo quien tenga un permiso más amplio. `proceso`
-// es el objeto de procesos (con su campo `responsable`) ya cargado por el
-// módulo, no se vuelve a consultar.
+// vivió el problema, no solo quien tenga un permiso más amplio. Además,
+// quien creó la acción puede asignar a alguien más como responsable de
+// participar en el análisis (analisis_responsable_persona_id) — pensado
+// para casos donde dos áreas tienen versiones distintas de la misma causa
+// (ej. RH y Producción) y ambas necesitan poder escribir en el mismo
+// Ishikawa, no solo quien lo creó. `proceso` es el objeto de procesos (con
+// su campo `responsable`) ya cargado por el módulo, no se vuelve a
+// consultar.
 export function canEditAccion(user, accion, proceso) {
   if (!accion) return false;
   if (isStrategicTeamMember(user)) return true;
   if (Number(user?.persona_id) === Number(accion.created_by_persona_id)) return true;
+  if (Number(user?.persona_id) === Number(accion.analisis_responsable_persona_id)) return true;
   if (accion.nivel === "Operativa" && proceso) return isProcessOwner(user, proceso);
   return false;
 }
@@ -386,13 +392,14 @@ export function canApproveAction(user) {
 // operativa+dueño de proceso como regla de edición, e ignora nivel para el
 // creador). Aquí no se decide permiso de edición sino pertenencia: alimenta
 // el toggle "Mis acciones" de ActionsModule.jsx para que un líder vea de
-// entrada lo suyo — lo que creó, lo que le asignaron como responsable, o lo
-// que le compete por ser dueño del proceso afectado — aunque alguien más lo
-// haya levantado.
+// entrada lo suyo — lo que creó, lo que le asignaron como responsable (de
+// ejecución o de participar en el análisis), o lo que le compete por ser
+// dueño del proceso afectado — aunque alguien más lo haya levantado.
 export function esParticipanteAccion(user, accion, proceso) {
   if (!accion) return false;
   if (Number(user?.persona_id) === Number(accion.created_by_persona_id)) return true;
   if (Number(user?.persona_id) === Number(accion.responsable_persona_id)) return true;
+  if (Number(user?.persona_id) === Number(accion.analisis_responsable_persona_id)) return true;
   if (proceso && isProcessOwner(user, proceso)) return true;
   return false;
 }
