@@ -1051,7 +1051,9 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [historialLoading, setHistorialLoading] = useState(false);
   const [historialEntries, setHistorialEntries] = useState([]);
   const [convertingSection, setConvertingSection] = useState(null);
-  const [sigKpiId, setSigKpiId] = useState(null);
+  // Mapa macroproceso -> id de su propio KPI "% diagnóstico implementación
+  // SIG" (existe uno por cada uno de los 16 procesos, no solo uno global).
+  const [sigKpiIds, setSigKpiIds] = useState({});
 
   // Vista discreta: alterna entre el diagnóstico HLS de siempre y el nuevo
   // Plan de implementación — mismo módulo, sin rediseño, solo un toggle.
@@ -1144,6 +1146,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     setStatusOverrides(nextStatus);
     setEvidenceOverrides(nextEvidence);
     savedEvidenceRef.current = nextEvidence;
+    return nextStatus;
   }
 
   async function loadPeople() {
@@ -1152,36 +1155,79 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     setPeople(data || []);
   }
 
-  async function loadSigKpiId() {
+  // Existe una fila "% diagnóstico implementación SIG" por cada uno de los
+  // 16 macroprocesos (mapProcesses), no solo una — antes solo se cargaba (y
+  // sincronizaba) la de "Planeación estratégica del SIG", así que era el
+  // único tablero que se actualizaba solo; el resto de los líderes se
+  // quedaba en "—" para siempre.
+  async function loadSigKpiIds() {
     const { data, error } = await supabase
       .from("desempeno_kpis")
-      .select("id")
-      .eq("macroproceso", SIG_KPI_MACROPROCESO)
+      .select("id, macroproceso")
       .eq("nombre_indicador", SIG_KPI_NOMBRE)
-      .eq("activo", true)
-      .maybeSingle();
-    if (error) { console.error("Error al buscar el KPI de avance del SIG:", error); return; }
-    if (data) setSigKpiId(data.id);
+      .eq("activo", true);
+    if (error) { console.error("Error al buscar los KPIs de avance del SIG:", error); return; }
+    const map = {};
+    (data || []).forEach((row) => { map[row.macroproceso] = row.id; });
+    setSigKpiIds(map);
+    return map;
   }
 
-  // Empuja el % global del SIG (ya con el score recién guardado) al KPI de
-  // Desempeño Organizacional — se calcula en el momento (no depende de que
-  // React ya haya vuelto a renderizar) para no mandar un valor desfasado.
-  async function syncSigKpi(nextStatusOverrides) {
-    if (!sigKpiId) return;
-    const globalPct = globalAverageWithOverrides(sigSections, nextStatusOverrides);
+  // Empuja el % recién guardado a cada KPI "% diagnóstico implementación
+  // SIG" que exista: el de "Planeación estratégica del SIG" recibe el
+  // promedio global (es el tablero del Coordinador SIG, refleja el avance
+  // del sistema completo); el resto recibe el promedio de SU PROPIO proceso
+  // (processAverageWithOverrides), que es lo que su líder realmente ve en
+  // Diagnóstico HLS al filtrar por su proceso. Antes de escribir se compara
+  // contra el valor ya guardado ese mes: si no cambió, no se vuelve a
+  // guardar (evita entradas de historial falsas). Esto también sirve de
+  // reparación automática: se llama al entrar al módulo (no solo al editar
+  // un criterio), así que los 15 KPIs que se habían quedado en "—" se
+  // corrigen solos la primera vez que cualquiera abra Diagnóstico SIG.
+  async function syncSigKpi(nextStatusOverrides, kpiIdsOverride) {
+    const ids = kpiIdsOverride || sigKpiIds;
+    if (!ids || Object.keys(ids).length === 0) return;
     const now = new Date();
-    const result = await upsertResultado(
-      { kpiId: sigKpiId, anio: now.getFullYear(), mes: now.getMonth() + 1, tipo: "real", valor: globalPct / 100 },
-      { actor: currentUser }
+    const anio = now.getFullYear();
+    const mes = now.getMonth() + 1;
+    const kpiIdList = Object.values(ids);
+    const { data: existentes, error: existentesError } = await supabase
+      .from("desempeno_resultados")
+      .select("kpi_id, valor")
+      .in("kpi_id", kpiIdList)
+      .eq("anio", anio)
+      .eq("mes", mes)
+      .eq("tipo", "real")
+      .is("semana", null);
+    if (existentesError) console.error("Error al leer resultados previos del KPI de avance del SIG:", existentesError);
+    const valorPrevioPorKpi = Object.fromEntries((existentes || []).map((r) => [r.kpi_id, r.valor]));
+
+    await Promise.all(
+      mapProcesses.map(async (proceso) => {
+        const kpiId = ids[proceso];
+        if (!kpiId) return;
+        const pct = proceso === SIG_KPI_MACROPROCESO
+          ? globalAverageWithOverrides(sigSections, nextStatusOverrides)
+          : processAverageWithOverrides(sigSections, proceso, nextStatusOverrides);
+        const nuevoValor = pct / 100;
+        const valorPrevio = valorPrevioPorKpi[kpiId];
+        if (valorPrevio != null && Math.abs(Number(valorPrevio) - nuevoValor) < 0.0001) return;
+        const result = await upsertResultado(
+          { kpiId, anio, mes, tipo: "real", valor: nuevoValor },
+          { actor: currentUser, previousValor: valorPrevio }
+        );
+        if (!result?.ok) console.error(`Error al sincronizar el KPI de avance del SIG (${proceso}):`, result?.error);
+      })
     );
-    if (!result?.ok) console.error("Error al sincronizar el KPI de avance del SIG:", result?.error);
   }
 
   useEffect(() => {
-    loadEstados();
+    async function initSigKpiSync() {
+      const [nextStatus, kpiIds] = await Promise.all([loadEstados(), loadSigKpiIds()]);
+      syncSigKpi(nextStatus, kpiIds);
+    }
+    initSigKpiSync();
     loadPeople();
-    loadSigKpiId();
     if (currentUser?.persona_id) esAuditadoDeAlguna(currentUser.persona_id).then(setEsAuditado);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
