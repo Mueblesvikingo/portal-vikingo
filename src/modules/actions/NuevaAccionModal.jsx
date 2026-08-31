@@ -7,6 +7,7 @@ const initialDraft = {
   titulo: "",
   descripcion: "",
   procesoId: "",
+  correccionOrigenId: "",
 };
 
 // Esta captura inicial es deliberadamente ligera: solo registra el
@@ -14,9 +15,14 @@ const initialDraft = {
 // se definen después, en la pestaña "Plan de acción" del detalle — una vez
 // que ya se sabe (por el análisis de causa) qué acción concreta se necesita
 // y quién la puede ejecutar, en vez de comprometerlos de entrada.
-export default function NuevaAccionModal({ procesos, personas, onSave, onClose }) {
+export default function NuevaAccionModal({ procesos, personas, acciones, onSave, onClose }) {
   const [draft, setDraft] = useState(initialDraft);
   const [error, setError] = useState("");
+
+  // HLS 10.2: la Acción Correctiva (eliminar la causa) suele nacer de una
+  // Corrección (reacción inmediata) ya registrada — se ofrece ligarla,
+  // opcional, solo cuando el tipo elegido es justo ese.
+  const correcciones = (acciones || []).filter((a) => a.tipo === "Corrección" && a.estado !== "Cerrada");
 
   function update(field, value) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -27,6 +33,7 @@ export default function NuevaAccionModal({ procesos, personas, onSave, onClose }
       setError("Captura el problema o situación detectada.");
       return;
     }
+    const correccionId = draft.tipo === "Acción Correctiva" && draft.correccionOrigenId ? Number(draft.correccionOrigenId) : null;
     onSave({
       tipo: draft.tipo,
       nivel: draft.nivel,
@@ -37,6 +44,9 @@ export default function NuevaAccionModal({ procesos, personas, onSave, onClose }
       objetivoId: null,
       prioridad: "Media",
       fechaCompromiso: null,
+      origenModulo: correccionId ? "Acciones de Mejora" : null,
+      origenTabla: correccionId ? "acciones" : null,
+      origenId: correccionId,
     });
   }
 
@@ -84,6 +94,16 @@ export default function NuevaAccionModal({ procesos, personas, onSave, onClose }
               {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
             </select>
           </label>
+
+          {draft.tipo === "Acción Correctiva" && correcciones.length > 0 && (
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+              ¿Corrección de origen? (opcional)
+              <select value={draft.correccionOrigenId} onChange={(e) => update("correccionOrigenId", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                <option value="">Sin ligar a una corrección</option>
+                {correcciones.map((c) => <option key={c.id} value={c.id}>{c.codigo} — {c.titulo}</option>)}
+              </select>
+            </label>
+          )}
 
           <p className="text-[10px] font-semibold text-slate-400">Responsable, prioridad y fecha compromiso se definen después, en "Plan de acción" — una vez identificada la causa.</p>
 

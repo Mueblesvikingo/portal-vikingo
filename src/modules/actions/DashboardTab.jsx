@@ -68,12 +68,16 @@ function Pipeline({ acciones }) {
 // Por cada acción abierta, junta las razones concretas por las que le toca
 // al líder hacer algo — no es un conteo, es una lista clickeable directo a
 // la acción. Se basa solo en campos que ya trae `acciones` (sin consultas
-// extra): vencida, marcada con riesgo, o todavía sin empezar el análisis.
+// extra): vencida, marcada con riesgo, sin empezar el análisis, o ya le
+// tocó su fecha de verificación de eficacia (HLS 10.2 d) y sigue sin
+// evaluar.
 function construirAtencion(acciones) {
+  const hoy = new Date().toISOString().slice(0, 10);
   const RAZONES = [
     { test: (a) => isVencida(a), tag: "Vencida", color: "#d03b3b" },
     { test: (a) => a.con_riesgo, tag: "Con riesgo", color: "#eb6834" },
     { test: (a) => ["Borrador", "Registrada"].includes(a.estado), tag: "Sin analizar", color: "#2a78d6" },
+    { test: (a) => a.requiere_verificacion_eficacia && !a.eficacia_resultado && a.fecha_verificacion_eficacia && a.fecha_verificacion_eficacia <= hoy, tag: "Verificar eficacia", color: "#0891b2" },
   ];
   return acciones
     .filter((a) => a.estado !== "Cerrada")

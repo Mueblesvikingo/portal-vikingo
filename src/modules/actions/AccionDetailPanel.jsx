@@ -282,8 +282,8 @@ const SUB_TABS = [
 ];
 
 export default function AccionDetailPanel({
-  accion, tiposFlujo, procesos, personas, objetivos, procesosById, personasById, objetivosById,
-  currentUser, onUpdate, onDeactivate, onClose, onCreateAssignment, onCreateProyecto,
+  accion, acciones, tiposFlujo, procesos, personas, objetivos, procesosById, personasById, objetivosById,
+  currentUser, onUpdate, onDeactivate, onClose, onCreateAssignment, onCreateProyecto, onNavigateToAccion,
 }) {
   const [subTab, setSubTab] = useState("causa");
   const [analisisList, setAnalisisList] = useState([]);
@@ -311,6 +311,27 @@ export default function AccionDetailPanel({
   const yaAprobada = etapaAprobadaIndex === -1 || etapas.indexOf(accion.estado) >= etapaAprobadaIndex;
   const vencida = isVencida(accion);
   const esCritica = accion.prioridad === "Crítica";
+
+  // HLS 10.2: "reaccionar" (Corrección inmediata) y "eliminar la causa"
+  // (Acción Correctiva) son dos pasos distintos de la misma no conformidad
+  // — se enlazan reutilizando origen_modulo/origen_tabla/origen_id (mismo
+  // mecanismo genérico ya usado para ligar acciones a su origen en otros
+  // módulos), sin campo nuevo dedicado.
+  const correccionOrigen = accion.origen_tabla === "acciones" && accion.origen_id
+    ? (acciones || []).find((a) => a.id === accion.origen_id) || null
+    : null;
+  const derivadas = (acciones || []).filter((a) => a.origen_tabla === "acciones" && a.origen_id === accion.id);
+
+  // HLS 10.2 b.3: "determinar si existen o podrían existir no conformidades
+  // similares" — antecedentes del mismo proceso, para que el líder juzgue
+  // si esto ya pasó antes (recurrencia), no una búsqueda automática de
+  // similitud de texto.
+  const posiblesAntecedentes = accion.proceso_id
+    ? (acciones || [])
+        .filter((a) => a.id !== accion.id && a.proceso_id === accion.proceso_id)
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+        .slice(0, 5)
+    : [];
 
   // Escalar la acción al Centro de Decisiones — mismo mecanismo
   // (createStrategicDecision, status "Solicitud") que ya usan S&OP,
@@ -424,6 +445,28 @@ export default function AccionDetailPanel({
                   <EditableText value={accion.descripcion} canEdit={canEdit} onSave={(v) => onUpdate({ descripcion: v })} placeholder="Sin descripción" multiline />
                 </div>
 
+                {(correccionOrigen || derivadas.length > 0) && (
+                  <div className="mt-2 space-y-1">
+                    {correccionOrigen && (
+                      <button type="button" onClick={() => onNavigateToAccion?.(correccionOrigen.id)} className="flex w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-left text-[10px] font-bold text-slate-600 hover:bg-slate-100">
+                        <span className="text-slate-400">↳ Corrección de origen:</span> {correccionOrigen.codigo} — {correccionOrigen.titulo}
+                      </button>
+                    )}
+                    {derivadas.length > 0 && (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{derivadas.length} acción(es) correctiva(s) derivada(s)</p>
+                        <div className="mt-0.5 flex flex-wrap gap-1">
+                          {derivadas.map((d) => (
+                            <button key={d.id} type="button" onClick={() => onNavigateToAccion?.(d.id)} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-bold text-slate-600 hover:bg-slate-100">
+                              {d.codigo}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]">
                   <div>
                     <p className="font-black uppercase tracking-widest text-slate-400">Nivel</p>
@@ -467,14 +510,20 @@ export default function AccionDetailPanel({
                 </div>
 
                 {accion.requiere_verificacion_eficacia && (
-                  <div className="mt-3 rounded-xl border border-cyan-100 bg-cyan-50/60 p-2">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-cyan-700">Verificación de eficacia</p>
-                    <EditableSelect
-                      value={accion.eficacia_resultado || ""}
-                      options={[{ value: "", label: "Sin evaluar" }, "Eficaz", "Parcialmente eficaz", "No eficaz"]}
-                      canEdit={canEdit}
-                      onSave={(v) => onUpdate({ eficacia_resultado: v || null, eficacia_evaluada_en: new Date().toISOString() })}
-                    />
+                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-cyan-100 bg-cyan-50/60 p-2">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-cyan-700">Verificación de eficacia</p>
+                      <EditableSelect
+                        value={accion.eficacia_resultado || ""}
+                        options={[{ value: "", label: "Sin evaluar" }, "Eficaz", "Parcialmente eficaz", "No eficaz"]}
+                        canEdit={canEdit}
+                        onSave={(v) => onUpdate({ eficacia_resultado: v || null, eficacia_evaluada_en: new Date().toISOString() })}
+                      />
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-cyan-700">Fecha para verificar</p>
+                      <EditableDate value={accion.fecha_verificacion_eficacia} canEdit={canEdit} onSave={(v) => onUpdate({ fecha_verificacion_eficacia: v || null })} />
+                    </div>
                   </div>
                 )}
 
@@ -549,6 +598,21 @@ export default function AccionDetailPanel({
                   <div className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
                 ) : subTab === "causa" ? (
                   <div className="space-y-3">
+                    {posiblesAntecedentes.length > 0 && (
+                      <details className="rounded-xl border border-amber-100 bg-amber-50/50 px-2.5 py-2">
+                        <summary className="cursor-pointer text-[9px] font-black uppercase tracking-widest text-amber-700">
+                          🔁 {posiblesAntecedentes.length} antecedente(s) en este proceso — ¿es recurrente?
+                        </summary>
+                        <div className="mt-1.5 space-y-1">
+                          {posiblesAntecedentes.map((a) => (
+                            <button key={a.id} type="button" onClick={() => onNavigateToAccion?.(a.id)} className="flex w-full items-center justify-between gap-2 rounded-lg bg-white px-2 py-1 text-left text-[10px] font-bold text-slate-600 hover:bg-slate-50">
+                              <span className="truncate">{a.codigo} · {a.titulo}</span>
+                              <span className="shrink-0 text-[9px] text-slate-400">{a.estado}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </details>
+                    )}
                     <div className="flex flex-wrap gap-1">
                       {HERRAMIENTAS_MVP.map((h) => (
                         <button

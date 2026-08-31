@@ -360,6 +360,7 @@ export default function ActionsModule({ currentUser }) {
           procesos={procesos}
           personas={personas}
           objetivos={objetivos}
+          acciones={acciones}
           onSave={handleCreateAccion}
           onClose={() => setCreating(false)}
         />
@@ -368,6 +369,7 @@ export default function ActionsModule({ currentUser }) {
       {selectedAccion && (
         <AccionDetailPanel
           accion={selectedAccion}
+          acciones={acciones}
           tiposFlujo={tiposFlujo}
           procesos={procesos}
           personas={personas}
@@ -381,6 +383,7 @@ export default function ActionsModule({ currentUser }) {
           onClose={() => setSelectedAccionId(null)}
           onCreateAssignment={handleCrearAsignacion}
           onCreateProyecto={handleCrearProyecto}
+          onNavigateToAccion={setSelectedAccionId}
         />
       )}
     </section>
