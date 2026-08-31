@@ -25,7 +25,11 @@ export default function ActionsModule({ currentUser }) {
   const [personas, setPersonas] = useState([]);
   const [objetivos, setObjetivos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("dashboard");
+  // "Tabla" es lo primero que ve cualquiera al entrar — una lista concreta
+  // de acciones da un punto de partida más claro para un líder de proceso
+  // que un dashboard de KPIs, que se queda como una pestaña más, no la de
+  // aterrizaje.
+  const [activeTab, setActiveTab] = useState("tabla");
   const [filtroNivel, setFiltroNivel] = useState("all");
   const [filtroTipo, setFiltroTipo] = useState("all");
   const [filtroEstado, setFiltroEstado] = useState("all");
@@ -158,16 +162,50 @@ export default function ActionsModule({ currentUser }) {
   const selectedAccion = acciones.find((a) => a.id === selectedAccionId) || null;
 
   const tabs = [
-    { key: "dashboard", label: "Dashboard" },
-    { key: "kanban", label: "Kanban" },
     { key: "tabla", label: "Tabla" },
+    { key: "kanban", label: "Kanban" },
+    { key: "dashboard", label: "Dashboard" },
+  ];
+
+  // Guía de 4 pasos, siempre visible arriba del módulo — pensada para que
+  // un líder de proceso que nunca lo ha usado entienda de un vistazo qué
+  // hacer y qué sigue, sin tener que preguntar. Mismo orden que ya impone
+  // el flujo real (ver AccionDetailPanel.jsx: Análisis de causa → Plan de
+  // acción → aprobación del Director → conversión).
+  const PASOS_GUIA = [
+    { n: "1", icono: "📝", titulo: "Reporta el problema", detalle: "Cualquiera puede registrar una situación con \"+ Nueva Acción\"." },
+    { n: "2", icono: "🔍", titulo: "Analiza la causa", detalle: "Tú, como líder, usas 5 Porqués / Ishikawa / 5W2H." },
+    { n: "3", icono: "✅", titulo: "Dirección aprueba", detalle: "Con la causa raíz clara, el Director autoriza la acción." },
+    { n: "4", icono: "🚀", titulo: "Se ejecuta", detalle: "Se convierte en asignación o proyecto, y se le da seguimiento." },
   ];
 
   return (
     <section className="space-y-3">
       <div className="rounded-[22px] border border-slate-200 bg-white/70 p-3 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
+        <div className="rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-3">
+          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-sky-700">¿Cómo funciona este módulo?</p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {PASOS_GUIA.map((paso) => (
+              <div key={paso.n} className="flex items-start gap-2 rounded-xl border border-sky-100 bg-white/80 px-2.5 py-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#001225] text-[10px] font-black text-white">{paso.n}</span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-black text-slate-800">{paso.icono} {paso.titulo}</p>
+                  <p className="text-[9.5px] font-semibold leading-tight text-slate-500">{paso.detalle}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="h-9 rounded-lg bg-[#001225] px-4 text-[10px] font-black text-white transition hover:bg-[#0a1c3a]"
+            >
+              + Reportar problema / Nueva acción
+            </button>
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
               Nivel:
               <select value={filtroNivel} onChange={(e) => setFiltroNivel(e.target.value)} className="ml-2 h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
@@ -189,13 +227,6 @@ export default function ActionsModule({ currentUser }) {
                 {ESTADOS_ACCION.map((e) => <option key={e} value={e}>{e}</option>)}
               </select>
             </label>
-            <button
-              type="button"
-              onClick={() => setCreating(true)}
-              className="h-9 rounded-lg border border-dashed border-slate-300 px-3 text-[10px] font-black text-slate-500 transition hover:border-sky-300 hover:text-sky-600"
-            >
-              + Nueva Acción
-            </button>
           </div>
           <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black text-slate-500">
             {filteredAcciones.length} acciones
