@@ -1793,7 +1793,7 @@ export default function WorkloadBalanceModule({
     [activePersonRoleLinks, effectivePersonFilter]
   );
   const canEditSelectedPerson =
-    canViewAllWorkloads || isOwnRecordSelected || canEditWorkloadForPersonRoles(currentUser, selectedPersonRoles);
+    canViewAllWorkloads || isOwnRecordSelected || canEditWorkloadForPersonRoles(currentUser, selectedPersonRoles, effectivePersonFilter);
   const selectedPersonOption = useMemo(
     () => peopleOptions.find((person) => String(person.id) === String(effectivePersonFilter)) || null,
     [peopleOptions, effectivePersonFilter]

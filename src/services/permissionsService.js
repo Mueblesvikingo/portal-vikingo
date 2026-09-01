@@ -423,17 +423,31 @@ export function hasWorkloadFullAccess(user) {
 // excepción por persona, no un rol general de "supervisor edita a su equipo".
 const WORKLOAD_SCOPED_EDITORS = {
   11: ["Inspector de Calidad"], // RUIZ CARREON BEATRIZ → persona_roles.rol de Laura y Sulidey
-  5: ["Auxiliar de Almacén", "Responsable / Encargado de Almacén"], // HERNANDO GONZALEZ KEVYN (Kevin) → persona_roles.rol de Erika y Erick
+  5: ["Supervisor de Almacén"], // HERNANDO GONZALEZ KEVYN (Kevin) → persona_roles.rol de Erika y Erick (unificado 01/09/2026, antes eran 2 roles distintos)
   3: ["Chofer-Repartidor"], // HERNANDEZ ESCOBEDO EDUARDO (Coordinador de Distribución) → persona_roles.rol de su equipo de reparto
+};
+
+// Respaldo por persona_id (no por texto de rol) para quien no tiene ningún
+// persona_roles activo que matchear — ej. Laura, que se quedó sin rol de
+// Diseño Organizacional a propósito (ver AccionesModule/WorkloadBalance) y
+// cuya carga real se captura como bloques manuales. El texto de un rol
+// puede cambiar (como ya pasó arriba con Kevin) y romper el permiso sin
+// avisar; esto no depende de ese texto.
+const WORKLOAD_SCOPED_EDITOR_PERSONAS = {
+  5: [23], // Kevin → Laura Alvarado Sámano
 };
 
 // `targetPersonRoles` son los `persona_roles.rol` (activos) de la persona
 // cuya carga se quiere editar — ya cargados por WorkloadBalanceModule, no se
-// vuelven a consultar aquí.
-export function canEditWorkloadForPersonRoles(user, targetPersonRoles = []) {
-  const allowedRoles = WORKLOAD_SCOPED_EDITORS[Number(user?.persona_id)];
-  if (!allowedRoles) return false;
-  return targetPersonRoles.some((rol) => allowedRoles.includes(rol));
+// vuelven a consultar aquí. `targetPersonId` es opcional, para el respaldo
+// por persona cuando no hay rol activo que matchear.
+export function canEditWorkloadForPersonRoles(user, targetPersonRoles = [], targetPersonId = null) {
+  const userId = Number(user?.persona_id);
+  const allowedRoles = WORKLOAD_SCOPED_EDITORS[userId];
+  if (allowedRoles && targetPersonRoles.some((rol) => allowedRoles.includes(rol))) return true;
+  const allowedPersonas = WORKLOAD_SCOPED_EDITOR_PERSONAS[userId];
+  if (allowedPersonas && targetPersonId != null && allowedPersonas.includes(Number(targetPersonId))) return true;
+  return false;
 }
 
 // Tablero Gerencial de Proyectos (PMO): por pedido explícito, solo PM y
