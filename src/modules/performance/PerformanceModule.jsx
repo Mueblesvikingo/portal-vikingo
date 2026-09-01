@@ -181,7 +181,7 @@ export default function PerformanceModule({ currentUser }) {
       { key: "tablero", label: "Tablero" },
       { key: "resultados", label: "Resultados" },
       ...PERSPECTIVAS.map((p) => ({ key: `persp-${p}`, label: p })),
-      { key: "despliegue", label: "🧭 Despliegue Estratégico", accent: true },
+      { key: "despliegue", label: "🧭 Despliegue", accent: true },
     ]
     : [
       { key: "tablero", label: "Tablero" },
@@ -314,31 +314,31 @@ export default function PerformanceModule({ currentUser }) {
         </div>
 
         <div className="mt-2 overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between gap-3 bg-[#001225] px-4 py-1.5 text-white">
-            <div className="flex items-center gap-1.5">
+          <div className="flex flex-nowrap items-center justify-between gap-3 bg-[#001225] px-4 py-1.5 text-white">
+            <div className="flex shrink-0 items-center gap-1.5">
               <h2 className="text-[13px] font-black uppercase tracking-tight">Desempeño Organizacional {isEstrategico ? "· Estratégico" : `· ${scope}`}</h2>
               <button
                 type="button"
                 onClick={() => setShowVideo(true)}
-                className="rounded-lg bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/20"
+                className="shrink-0 rounded-lg bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/20"
               >
                 ▶ Guía en video
               </button>
               <button
                 type="button"
                 onClick={() => window.open(PERFORMANCE_MANUAL_URL, "_blank")}
-                className="rounded-lg bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/20"
+                className="shrink-0 rounded-lg bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/20"
               >
                 📄 Guía en PDF
               </button>
             </div>
-            <div className="flex gap-1 rounded-xl bg-white/10 p-0.5">
+            <div className="flex flex-nowrap gap-1 overflow-x-auto rounded-xl bg-white/10 p-0.5">
               {tabs.map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
-                  className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${
+                  className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${
                     activeTab === tab.key
                       ? tab.accent ? "bg-gradient-to-r from-amber-400 to-orange-500 text-[#001225] shadow-sm" : "bg-white text-[#001225]"
                       : tab.accent ? "bg-gradient-to-r from-amber-400/20 to-orange-500/20 text-amber-200 hover:from-amber-400/30 hover:to-orange-500/30" : "text-white/70 hover:bg-white/10"
