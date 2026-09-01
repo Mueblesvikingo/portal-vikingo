@@ -7,7 +7,6 @@ const menuItems = [
   // { label: "Inicio Ejecutivo", route: "/", moduleKey: "home" },
   { label: "Centro de Decisiones", route: "/decision-center", moduleKey: "decision-center" },
   { label: "Seguimiento Estratégico", route: "/strategic-followup", moduleKey: "strategic-followup" },
-  { label: "Despliegue Estratégico", route: "/strategic-deployment", moduleKey: "strategic-deployment" },
   { label: "S&OP", route: "/sop", moduleKey: "sop" },
   { label: "Desempeño Organizacional", route: "/performance", moduleKey: "performance" },
   { label: "Diseño organizacional", route: "/capacity", moduleKey: "capacity" },

@@ -6,7 +6,6 @@ const pageTitles = {
   "/performance": "Desempeño Organizacional",
   "/strategic-followup": "Seguimiento Estratégico",
   "/capacity": "Diseño organizacional",
-  "/strategic-deployment": "Despliegue Estratégico",
   "/organization-catalog": "Catálogo Organizacional",
   "/workload-balance": "Balance de Carga",
   "/decision-center": "Centro de Decisiones",

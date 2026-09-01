@@ -18,6 +18,7 @@ import TableroTab from "./TableroTab";
 import ResultadosTab from "./ResultadosTab";
 import PerspectivaChartsTab from "./PerspectivaChartsTab";
 import ProcesoChartsTab from "./ProcesoChartsTab";
+import StrategicDeploymentModule from "../StrategicDeploymentModule";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -180,6 +181,7 @@ export default function PerformanceModule({ currentUser }) {
       { key: "tablero", label: "Tablero" },
       { key: "resultados", label: "Resultados" },
       ...PERSPECTIVAS.map((p) => ({ key: `persp-${p}`, label: p })),
+      { key: "despliegue", label: "🧭 Despliegue Estratégico", accent: true },
     ]
     : [
       { key: "tablero", label: "Tablero" },
@@ -336,7 +338,11 @@ export default function PerformanceModule({ currentUser }) {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
-                  className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${activeTab === tab.key ? "bg-white text-[#001225]" : "text-white/70 hover:bg-white/10"}`}
+                  className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${
+                    activeTab === tab.key
+                      ? tab.accent ? "bg-gradient-to-r from-amber-400 to-orange-500 text-[#001225] shadow-sm" : "bg-white text-[#001225]"
+                      : tab.accent ? "bg-gradient-to-r from-amber-400/20 to-orange-500/20 text-amber-200 hover:from-amber-400/30 hover:to-orange-500/30" : "text-white/70 hover:bg-white/10"
+                  }`}
                 >
                   {tab.label}
                 </button>
@@ -373,6 +379,8 @@ export default function PerformanceModule({ currentUser }) {
               />
             ) : activeTab === "graficas" ? (
               <ProcesoChartsTab kpis={activeScopedKpis} resultados={resultados} anio={CURRENT_YEAR} />
+            ) : activeTab === "despliegue" ? (
+              <StrategicDeploymentModule currentUser={currentUser} />
             ) : (
               <PerspectivaChartsTab
                 kpis={activeScopedKpis}

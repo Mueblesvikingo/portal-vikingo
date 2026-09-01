@@ -68,7 +68,6 @@ const PERMISSION_MODULES = [
   { key: "home", label: "Inicio Ejecutivo", editable: false },
   { key: "performance", label: "Desempeño Organizacional", editable: false },
   { key: "strategic-followup", label: "Seguimiento Estratégico", editable: false },
-  { key: "strategic-deployment", label: "Despliegue Estratégico", editable: false },
   { key: "capacity", label: "Diseño Organizacional", editable: true },
   { key: "organigrama", label: "Organigrama", editable: true },
   { key: "workload-balance", label: "Balance de Carga", editable: true },
