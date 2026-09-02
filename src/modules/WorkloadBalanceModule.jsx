@@ -2177,7 +2177,7 @@ export default function WorkloadBalanceModule({
   // bloques de Asignación (proyectos/formación/mejora/eventual) y cualquier
   // actividad de proceso Mensual/Quincenal.
   const typicoMonthlyBlocks = useMemo(
-    () => planningMonthlyBlocks.filter((block) => !(block.origen === "Procesos" && normalizeText(block.frecuencia) === "semanal")),
+    () => planningMonthlyBlocks.filter((block) => !(block.origen === "Procesos" && translateFrequency(block.frecuencia) === "Semanal")),
     [planningMonthlyBlocks]
   );
   // Igual que monthlyMatrix, pero SÍ incluye la carga base de Semana típica
@@ -2515,7 +2515,7 @@ function canCreatePersonScopedBlock() {
   function showMonthlyDropIndicator(rowType, weekNumber, targetIndex) { if (!draggedMonthlyBlock?.id) return; setMonthlyDropIndicator({ rowType, weekNumber, targetIndex }); }
   function isMonthlyDropIndicatorActive(rowType, weekNumber, targetIndex) { return monthlyDropIndicator?.rowType === rowType && monthlyDropIndicator?.weekNumber === weekNumber && monthlyDropIndicator?.targetIndex === targetIndex; }
   function renderMonthlyInsertLine(rowType, weekNumber, targetIndex) { const active = isMonthlyDropIndicatorActive(rowType, weekNumber, targetIndex); return <div onDragOver={(event) => { event.preventDefault(); showMonthlyDropIndicator(rowType, weekNumber, targetIndex); }} onDragEnter={(event) => { event.preventDefault(); showMonthlyDropIndicator(rowType, weekNumber, targetIndex); }} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); const draggedId = draggedMonthlyBlock?.id || event.dataTransfer.getData("text/plain"); if (!draggedId) return; moveMonthlyBlock(draggedId, rowType, weekNumber, targetIndex); }} className="relative h-3"><div className={`absolute left-0 right-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full transition ${active ? "bg-sky-500 opacity-100 shadow-sm" : "bg-transparent opacity-0"}`} /><div className={`absolute left-0 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full transition ${active ? "bg-sky-500 opacity-100" : "bg-transparent opacity-0"}`} /></div>; }
-  function getMonthlyFrequencyLabel(block) { if (block?.frecuencia === "Mensual") return "Mensual"; if (block?.frecuencia === "Quincenal") return "Quincenal"; if (block?.frecuencia === "Semanal") return "Semanal"; return "Adicional"; }
+  function getMonthlyFrequencyLabel(block) { const label = translateFrequency(block?.frecuencia); if (label === "Mensual" || label === "Quincenal" || label === "Semanal") return label; return "Adicional"; }
   function startEditMonthlyBlock(block, rowType, weekNumber) { if (!block?.isMonthlyBlock) return; setEditingMonthlyBlockId(block.id); setMonthlyQuickTarget({ rowType: rowType || block.origen, weekNumber }); setMonthlyBlockName(block.actividad || ""); setMonthlyBlockMinutes(String(block.duracionMinutos || 60)); setMonthlyBlockFrequency(block.frecuencia || "Mensual"); setMonthlyBlockType(block.tipoBloque || block.origen || "Proyecto"); }
   function renderMonthlyQuickForm(rowType, weekNumber) {
     const isOpen = monthlyQuickTarget?.rowType === rowType && monthlyQuickTarget?.weekNumber === weekNumber;
