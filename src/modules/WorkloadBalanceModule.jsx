@@ -2171,14 +2171,25 @@ export default function WorkloadBalanceModule({
   const monthlyMatrix = useMemo(() => buildMonthlyMatrix({ weekOccurrences: [], monthlyBlocks: planningMonthlyBlocks }), [planningMonthlyBlocks]);
   // "Mes típico" es un estándar de referencia (Semana típica × 4 + carga
   // propiamente mensual/quincenal) — NO debe mostrar como tarjeta individual
-  // una actividad de PROCESO cuya frecuencia real es Semanal, porque esa
-  // carga ya está representada en el bloque consolidado "Carga base de
-  // procesos" (weekOccurrences). Sí se conservan como tarjetas propias los
-  // bloques de Asignación (proyectos/formación/mejora/eventual) y cualquier
-  // actividad de proceso Mensual/Quincenal.
+  // una actividad de PROCESO que YA está programada en Semana típica de esta
+  // persona (weekOccurrences), sin importar qué frecuencia tenga declarada en
+  // el catálogo: en varias personas (ej. Hugo) el plan mensual quedó como una
+  // copia manual heredada de su plan semanal, actividad por actividad, de
+  // antes de que existiera el bloque consolidado "Carga base de procesos" —
+  // filtrar solo por frecuencia "Semanal" no bastaba porque muchas de esas
+  // copias quedaron con frecuencia "Mensual"/"Diaria" en el catálogo aunque
+  // el registro real es el mismo actividad_id ya cubierto por la semana
+  // típica. Comparar por sourceActivityId es la señal real de duplicado, no
+  // la frecuencia declarada. Se conservan como tarjetas propias los bloques
+  // de Asignación (proyectos/formación/mejora/eventual) y cualquier
+  // actividad de proceso que NO esté en la semana típica de la persona.
+  const weekOccurrenceActivityIds = useMemo(
+    () => new Set(weekOccurrences.map((activity) => activity.sourceActivityId).filter((id) => id != null)),
+    [weekOccurrences]
+  );
   const typicoMonthlyBlocks = useMemo(
-    () => planningMonthlyBlocks.filter((block) => !(block.origen === "Procesos" && translateFrequency(block.frecuencia) === "Semanal")),
-    [planningMonthlyBlocks]
+    () => planningMonthlyBlocks.filter((block) => !(block.origen === "Procesos" && weekOccurrenceActivityIds.has(block.sourceActivityId))),
+    [planningMonthlyBlocks, weekOccurrenceActivityIds]
   );
   // Igual que monthlyMatrix, pero SÍ incluye la carga base de Semana típica
   // (weekOccurrences) consolidada en cada semana — es lo que pinta la
