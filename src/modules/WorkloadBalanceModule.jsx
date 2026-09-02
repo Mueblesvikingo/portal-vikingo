@@ -2169,13 +2169,24 @@ export default function WorkloadBalanceModule({
   const weekOccurrences = useMemo(() => expandWeeklyOccurrences(scheduledWeeklyActivities).filter((activity) => WEEK_VISIBLE_TYPES.includes(activity.origen)).concat(scheduledAssignmentWeeklyActivities, manualProjects).sort(compareOrderCreated), [scheduledWeeklyActivities, scheduledAssignmentWeeklyActivities, manualProjects]);
   const planningMonthlyBlocks = monthlySnapshotMode ? monthlyBlocks : scheduledMonthlyBlocks.concat(scheduledAssignmentMonthlyBlocks, monthlyBlocks);
   const monthlyMatrix = useMemo(() => buildMonthlyMatrix({ weekOccurrences: [], monthlyBlocks: planningMonthlyBlocks }), [planningMonthlyBlocks]);
+  // "Mes típico" es un estándar de referencia (Semana típica × 4 + carga
+  // propiamente mensual/quincenal) — NO debe mostrar como tarjeta individual
+  // una actividad de PROCESO cuya frecuencia real es Semanal, porque esa
+  // carga ya está representada en el bloque consolidado "Carga base de
+  // procesos" (weekOccurrences). Sí se conservan como tarjetas propias los
+  // bloques de Asignación (proyectos/formación/mejora/eventual) y cualquier
+  // actividad de proceso Mensual/Quincenal.
+  const typicoMonthlyBlocks = useMemo(
+    () => planningMonthlyBlocks.filter((block) => !(block.origen === "Procesos" && normalizeText(block.frecuencia) === "semanal")),
+    [planningMonthlyBlocks]
+  );
   // Igual que monthlyMatrix, pero SÍ incluye la carga base de Semana típica
   // (weekOccurrences) consolidada en cada semana — es lo que pinta la
   // pestaña "Mes" (viewMode "month"). monthlyMatrix se deja intacto porque
   // también alimenta monthlyPlanningBaseBlocks (semilla de Planificación
   // mensual), donde meter ese bloque consolidado de solo lectura no
   // corresponde.
-  const monthlyTypicoMatrix = useMemo(() => buildMonthlyMatrix({ weekOccurrences, monthlyBlocks: planningMonthlyBlocks }), [weekOccurrences, planningMonthlyBlocks]);
+  const monthlyTypicoMatrix = useMemo(() => buildMonthlyMatrix({ weekOccurrences, monthlyBlocks: typicoMonthlyBlocks }), [weekOccurrences, typicoMonthlyBlocks]);
   const monthlyPlanningBaseBlocks = useMemo(() => monthlyMatrix.flatMap((row) =>
     row.weeks.flatMap((week) =>
       safeArray(week.blocks)
