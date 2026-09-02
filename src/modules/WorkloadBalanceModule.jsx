@@ -2170,25 +2170,34 @@ export default function WorkloadBalanceModule({
   const planningMonthlyBlocks = monthlySnapshotMode ? monthlyBlocks : scheduledMonthlyBlocks.concat(scheduledAssignmentMonthlyBlocks, monthlyBlocks);
   const monthlyMatrix = useMemo(() => buildMonthlyMatrix({ weekOccurrences: [], monthlyBlocks: planningMonthlyBlocks }), [planningMonthlyBlocks]);
   // "Mes típico" es un estándar de referencia (Semana típica × 4 + carga
-  // propiamente mensual/quincenal) — NO debe mostrar como tarjeta individual
-  // una actividad de PROCESO que YA está programada en Semana típica de esta
-  // persona (weekOccurrences), sin importar qué frecuencia tenga declarada en
-  // el catálogo: en varias personas (ej. Hugo) el plan mensual quedó como una
-  // copia manual heredada de su plan semanal, actividad por actividad, de
-  // antes de que existiera el bloque consolidado "Carga base de procesos" —
-  // filtrar solo por frecuencia "Semanal" no bastaba porque muchas de esas
-  // copias quedaron con frecuencia "Mensual"/"Diaria" en el catálogo aunque
-  // el registro real es el mismo actividad_id ya cubierto por la semana
-  // típica. Comparar por sourceActivityId es la señal real de duplicado, no
-  // la frecuencia declarada. Se conservan como tarjetas propias los bloques
-  // de Asignación (proyectos/formación/mejora/eventual) y cualquier
-  // actividad de proceso que NO esté en la semana típica de la persona.
+  // propiamente mensual/quincenal): una actividad de PROCESO no debe
+  // aparecer como tarjeta individual si (a) su frecuencia declarada es
+  // Semanal/Diaria-equivalente-a-semanal (el pedido explícito es "solo
+  // mensuales o quincenales"), o (b) ya está programada en la Semana típica
+  // de esta persona (weekOccurrences) con el mismo sourceActivityId, sin
+  // importar qué frecuencia tenga declarada: en varias personas (ej. Hugo)
+  // el plan mensual quedó como una copia manual heredada de su plan semanal,
+  // actividad por actividad, de antes de que existiera el bloque
+  // consolidado "Carga base de procesos", y varias de esas copias quedaron
+  // con frecuencia "Mensual" en el catálogo aunque el registro real es el
+  // mismo actividad_id ya cubierto por la semana típica. Se necesitan ambos
+  // criterios: (a) sola no basta porque deja pasar duplicados reales
+  // etiquetados "Mensual"; (b) sola no basta porque deja pasar actividades
+  // semanales que están inactivas en el plan semanal pero activas en el
+  // mensual. Se conservan como tarjetas propias los bloques de Asignación
+  // (proyectos/formación/mejora/eventual) y cualquier actividad de proceso
+  // que sea Mensual/Quincenal Y no esté ya en la semana típica.
   const weekOccurrenceActivityIds = useMemo(
     () => new Set(weekOccurrences.map((activity) => activity.sourceActivityId).filter((id) => id != null)),
     [weekOccurrences]
   );
   const typicoMonthlyBlocks = useMemo(
-    () => planningMonthlyBlocks.filter((block) => !(block.origen === "Procesos" && weekOccurrenceActivityIds.has(block.sourceActivityId))),
+    () => planningMonthlyBlocks.filter((block) => {
+      if (block.origen !== "Procesos") return true;
+      if (weekOccurrenceActivityIds.has(block.sourceActivityId)) return false;
+      if (translateFrequency(block.frecuencia) === "Semanal") return false;
+      return true;
+    }),
     [planningMonthlyBlocks, weekOccurrenceActivityIds]
   );
   // Igual que monthlyMatrix, pero SÍ incluye la carga base de Semana típica
