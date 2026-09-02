@@ -903,10 +903,18 @@ function buildMonthlyMatrix({ weekOccurrences, monthlyBlocks }) {
     type,
     weeks: [1, 2, 3, 4].map((weekNumber) => {
       const sourceType = sourceMap[type] || type;
-      const baseBlocksForType = safeArray(weekOccurrences).filter((activity) => activity.origen === sourceType);
+      const additionalBlocks = safeArray(monthlyBlocks).filter((block) => block.origen === type && getMonthlyBlockWeeks(block).includes(weekNumber)).map((block) => ({ ...block, source: "Bloque adicional", monthlyOccurrenceId: `${block.id}-w${weekNumber}`, orden: block.monthlyOrder, created_at: block.monthlyCreatedAt })).sort(compareOrderCreated);
+      // Algunas personas ya tenían sus actividades de Semana típica
+      // re-capturadas a mano como bloques "adicionales" en Mes típico (antes
+      // de que existiera la tarjeta de carga base consolidada). Si no se
+      // excluyen aquí, esa misma actividad se cuenta dos veces: una por la
+      // tarjeta consolidada y otra por su bloque adicional duplicado.
+      const additionalActivityIds = new Set(additionalBlocks.map((block) => block.sourceActivityId).filter((id) => id != null));
+      const baseBlocksForType = safeArray(weekOccurrences).filter(
+        (activity) => activity.origen === sourceType && !additionalActivityIds.has(activity.sourceActivityId)
+      );
       const baseMinutes = baseBlocksForType.reduce((sum, activity) => sum + getDurationMinutes(activity), 0);
       const consolidatedBaseBlock = baseBlocksForType.length > 0 ? { id: `${type}-semana-tipica-w${weekNumber}`, monthlyOccurrenceId: `${type}-semana-tipica-w${weekNumber}`, origen: type, actividad: `Carga base de ${type.toLowerCase()}`, rol: "Semana típica consolidada", duracionMinutos: baseMinutes, source: "Semana típica consolidada", isConsolidatedWeeklyBase: true, itemCount: baseBlocksForType.length } : null;
-      const additionalBlocks = safeArray(monthlyBlocks).filter((block) => block.origen === type && getMonthlyBlockWeeks(block).includes(weekNumber)).map((block) => ({ ...block, source: "Bloque adicional", monthlyOccurrenceId: `${block.id}-w${weekNumber}`, orden: block.monthlyOrder, created_at: block.monthlyCreatedAt })).sort(compareOrderCreated);
       const blocks = [consolidatedBaseBlock, ...additionalBlocks].filter(Boolean);
       const usedMinutes = blocks.reduce((sum, block) => sum + getDurationMinutes(block), 0);
       return { weekNumber, weekLabel: `Semana ${weekNumber}`, blocks, usedMinutes };
