@@ -2639,8 +2639,6 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                       <th className="px-3 py-2">👥 Equipo</th>
                       <th className="px-3 py-2">✍️ Firmas</th>
                       <th className="px-3 py-2">🔍 Hallazgos</th>
-                      <th className="px-3 py-2">📎 Reporte</th>
-                      <th className="px-3 py-2">✅ Acciones generadas</th>
                       <th className="px-3 py-2 text-right">Acciones</th>
                     </tr>
                   </thead>
@@ -2687,24 +2685,6 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                               onChange={(e) => handleSaveAuditoriaField(auditoria, "hallazgos", Number(e.target.value) || 0)}
                               className="h-8 w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none disabled:bg-white"
                             />
-                          </td>
-                          <td className="px-3 py-2.5">
-                            {auditoria.reporte_url ? (
-                              <a href={auditoria.reporte_url} target="_blank" rel="noreferrer" className="font-black text-sky-600 hover:underline">Ver reporte ↗</a>
-                            ) : (
-                              <span className="text-slate-300">—</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <div className="flex flex-col gap-1">
-                              {(accionesPorAuditoria[auditoria.id] || []).map((accion) => (
-                                <span key={accion.id} className="font-bold text-emerald-600">{accion.codigo}</span>
-                              ))}
-                              {canEditPlanes && (
-                                <button type="button" onClick={() => openAuditoriaAccionForm(auditoria)} className="text-left font-black text-slate-400 hover:text-sky-600">▸ Nueva acción</button>
-                              )}
-                              {!canEditPlanes && !(accionesPorAuditoria[auditoria.id] || []).length && <span className="text-slate-300">—</span>}
-                            </div>
                           </td>
                           <td className="px-3 py-2.5">
                             <div className="flex items-center justify-end gap-2">
