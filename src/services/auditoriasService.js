@@ -552,6 +552,69 @@ export async function getPendingFichasParaFirmar(personaId) {
   }
 }
 
+// ---- Acuerdos de la sesión — capturados en vivo durante la auditoría,
+// independientes de los criterios evaluados (no llevan nivel 0/3/5/10, son
+// compromisos o puntos acordados con el auditado). Uno o más por auditoría,
+// en filas separadas, mismo patrón que sig_auditoria_equipo.
+
+export async function getAcuerdos(auditoriaId) {
+  if (!auditoriaId) return [];
+  try {
+    const { data, error } = await supabase
+      .from("sig_auditoria_acuerdos")
+      .select("*")
+      .eq("auditoria_id", auditoriaId)
+      .order("orden", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (error) {
+      console.error("Error al cargar los acuerdos de la auditoría:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar los acuerdos de la auditoría:", err);
+    return [];
+  }
+}
+
+export async function createAcuerdo(auditoriaId, orden, actor) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    const { data, error } = await supabase
+      .from("sig_auditoria_acuerdos")
+      .insert({ auditoria_id: auditoriaId, texto: "", orden, created_by_persona_id: personaId, created_by_nombre: nombre })
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al crear el acuerdo:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function updateAcuerdo(id, texto) {
+  try {
+    const { data, error } = await supabase.from("sig_auditoria_acuerdos").update({ texto }).eq("id", id).select("*").single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al actualizar el acuerdo:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function deleteAcuerdo(id) {
+  try {
+    const { error } = await supabase.from("sig_auditoria_acuerdos").delete().eq("id", id);
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    console.error("Error inesperado al eliminar el acuerdo:", err);
+    return { ok: false, error: err };
+  }
+}
+
 // ---- Hallazgos de auditoría (ISO 19011 §6.5 g) — uno por criterio evaluado ----
 
 export async function getHallazgos(auditoriaId) {
@@ -920,7 +983,7 @@ export function downloadProgramaPdf(programa) {
 // `criterios` viene ya resuelto por la UI: [{ tag, texto, evidenciaEsperada,
 // nivelConfirmado, evidenciaObservada }] — este servicio no conoce el
 // catálogo de criterios (sigSections vive en el módulo), solo lo dibuja.
-function buildFichaAuditoriaPdfDoc(auditoria, criterios) {
+function buildFichaAuditoriaPdfDoc(auditoria, criterios, acuerdos = []) {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const marginX = 40;
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -1012,6 +1075,13 @@ function buildFichaAuditoriaPdfDoc(auditoria, criterios) {
   });
   y += 6;
 
+  const acuerdosTexto = acuerdos.map((a) => a.texto).filter(Boolean).join("\n");
+  if (acuerdosTexto) {
+    const layout = measureFieldCard(doc, contentWidth, acuerdosTexto);
+    y = ensureSpace(y, layout.height);
+    y = drawFieldCard(doc, marginX, y, contentWidth, "Acuerdos de la sesión", layout) + 12;
+  }
+
   const cierre = [
     ["Conclusiones de la auditoría (h)", auditoria.conclusiones],
     ["Declaración del grado de cumplimiento (i)", auditoria.declaracion_cumplimiento],
@@ -1041,8 +1111,8 @@ function buildFichaAuditoriaPdfDoc(auditoria, criterios) {
   return doc;
 }
 
-export function downloadFichaAuditoriaPdf(auditoria, criterios) {
-  const doc = buildFichaAuditoriaPdfDoc(auditoria, criterios);
+export function downloadFichaAuditoriaPdf(auditoria, criterios, acuerdos = []) {
+  const doc = buildFichaAuditoriaPdfDoc(auditoria, criterios, acuerdos);
   const safeTitle = (auditoria.macroproceso || "auditoria").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
   doc.save(`informe-auditoria-${safeTitle}-${auditoria.fecha_programada || "sin-fecha"}.pdf`);
 }

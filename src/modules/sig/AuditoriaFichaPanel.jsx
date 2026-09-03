@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   updateAuditoria, getHallazgos, upsertHallazgo, downloadFichaAuditoriaPdf, FICHA_FIRMAS_CLEAR,
   firmarFichaComoCoordinador, firmarFichaComoDirector, firmarFichaComoAuditado,
+  getAcuerdos, createAcuerdo, updateAcuerdo, deleteAcuerdo,
 } from "../../services/auditoriasService";
 import { isDirectorGeneral } from "../../services/permissionsService";
 import { sigSections, cellStyle, scoreMeaning, cleanSubtitle, resolveProceso, COORDINADOR_SIG_PERSONA_ID } from "./SigDiagnosisModule";
@@ -26,6 +27,7 @@ function findCriterioTexto(numeral, subtitulo, numero) {
 
 export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, onUpdated }) {
   const [hallazgos, setHallazgos] = useState([]);
+  const [acuerdos, setAcuerdos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cierre, setCierre] = useState({
     conclusiones: auditoria.conclusiones || "",
@@ -39,11 +41,30 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getHallazgos(auditoria.id).then((data) => {
-      if (!cancelled) { setHallazgos(data); setLoading(false); }
+    Promise.all([getHallazgos(auditoria.id), getAcuerdos(auditoria.id)]).then(([hallazgosData, acuerdosData]) => {
+      if (!cancelled) { setHallazgos(hallazgosData); setAcuerdos(acuerdosData); setLoading(false); }
     });
     return () => { cancelled = true; };
   }, [auditoria.id]);
+
+  async function handleAddAcuerdo() {
+    const result = await createAcuerdo(auditoria.id, acuerdos.length, currentUser);
+    if (!result.ok) { console.error(result.error); alert("No fue posible agregar el acuerdo."); return; }
+    setAcuerdos((current) => [...current, result.data]);
+  }
+
+  async function handleAcuerdoBlur(id, texto, previousTexto) {
+    if (texto === previousTexto) return;
+    const result = await updateAcuerdo(id, texto);
+    if (!result.ok) { console.error(result.error); return; }
+    setAcuerdos((current) => current.map((a) => (a.id === id ? result.data : a)));
+  }
+
+  async function handleDeleteAcuerdo(id) {
+    const result = await deleteAcuerdo(id);
+    if (!result.ok) { console.error(result.error); alert("No fue posible eliminar el acuerdo."); return; }
+    setAcuerdos((current) => current.filter((a) => a.id !== id));
+  }
 
   const criterios = (auditoria.criterios || []).map((c) => {
     const { texto, evidenciaEsperada, proceso } = findCriterioTexto(c.numeral, c.subtitulo, c.numero);
@@ -134,7 +155,7 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
     <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm font-black text-slate-800">Plan de auditoría — {auditoria.macroproceso}</div>
-        <button type="button" onClick={() => downloadFichaAuditoriaPdf(auditoria, criterios)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-slate-300">↓ PDF</button>
+        <button type="button" onClick={() => downloadFichaAuditoriaPdf(auditoria, criterios, acuerdos)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500 hover:border-slate-300">↓ PDF</button>
       </div>
 
       <div className="grid gap-2 md:grid-cols-3">
@@ -240,6 +261,37 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border-2 border-amber-300 bg-amber-50/70 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[10px] font-black uppercase tracking-widest text-amber-700">⚑ Acuerdos de la sesión</div>
+          {canEdit && (
+            <button type="button" onClick={handleAddAcuerdo} className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-[10px] font-black text-amber-700 hover:bg-amber-100">+ Agregar acuerdo</button>
+          )}
+        </div>
+        {acuerdos.length === 0 ? (
+          <div className="mt-2 text-[11px] font-medium text-amber-700/70">Sin acuerdos registrados todavía.</div>
+        ) : (
+          <div className="mt-2 space-y-1.5">
+            {acuerdos.map((a, index) => (
+              <div key={a.id} className="flex items-start gap-2">
+                <span className="mt-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-white">{index + 1}</span>
+                <textarea
+                  rows={1}
+                  defaultValue={a.texto}
+                  disabled={!canEdit}
+                  placeholder="Acuerdo alcanzado durante la auditoría..."
+                  onBlur={(e) => handleAcuerdoBlur(a.id, e.target.value, a.texto)}
+                  className="flex-1 resize-none rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-amber-900 outline-none disabled:bg-amber-50/50"
+                />
+                {canEdit && (
+                  <button type="button" onClick={() => handleDeleteAcuerdo(a.id)} title="Eliminar acuerdo" className="mt-1 shrink-0 text-amber-400 hover:text-rose-500">✕</button>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
