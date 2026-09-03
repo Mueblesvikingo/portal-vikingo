@@ -960,11 +960,12 @@ function AuditoriaEnviarFirmaButton({ auditoria, onClick, sending }) {
   const firmado = Boolean(auditoria.firmado_auditado_nombre);
   const enviado = Boolean(auditoria.enviado_auditado_at) && !firmado;
   const nombreAuditado = auditoria.auditado?.nombre || "el auditado";
+  const destinatarios = `${nombreAuditado}, Director General y Project Manager`;
   const title = firmado
-    ? `${nombreAuditado} ya firmó — clic para reenviar y pedir nueva firma`
+    ? `${nombreAuditado} ya firmó — clic para reenviar y pedir nueva firma a los 3`
     : enviado
-      ? `Enviado a ${nombreAuditado} — pendiente de firma. Clic para reenviar.`
-      : `Enviar a ${nombreAuditado} para firmar`;
+      ? `Enviado a ${destinatarios} — pendiente de firma. Clic para reenviar.`
+      : `Enviar a ${destinatarios} para firmar`;
   return (
     <button
       type="button"
@@ -2646,7 +2647,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                   <tbody>
                     {auditoriasVisibles.map((auditoria) => {
                       const puedeVerFicha = canEdit || Number(currentUser?.persona_id) === Number(auditoria.auditado_persona_id);
-                      const firmasCount = [auditoria.firmado_coordinador_nombre, auditoria.firmado_director_nombre, auditoria.firmado_auditado_nombre].filter(Boolean).length;
+                      const firmasCount = [auditoria.firmado_coordinador_nombre, auditoria.firmado_director_nombre, auditoria.firmado_pm_nombre, auditoria.firmado_auditado_nombre].filter(Boolean).length;
                       return (
                       <React.Fragment key={auditoria.id}>
                         <tr className="border-b border-slate-50 hover:bg-slate-50/40">
@@ -2675,7 +2676,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                             {auditoria.equipo?.length ? auditoria.equipo.map((e) => e.persona?.nombre).filter(Boolean).join(", ") : <span className="text-slate-300">—</span>}
                           </td>
                           <td className="px-3 py-2.5">
-                            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${firmasCount === 3 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{firmasCount}/3</span>
+                            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${firmasCount === 4 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{firmasCount}/4</span>
                           </td>
                           <td className="px-3 py-2.5">
                             <input
