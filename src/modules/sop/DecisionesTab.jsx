@@ -133,7 +133,8 @@ export default function DecisionesTab({ decisiones, canEdit, canRequestDirectorD
       )}
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full border-collapse text-[10px]">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] border-collapse text-[10px]">
           <thead>
             <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
               <th className="px-3 py-2 text-white">Mes reunión</th>
@@ -189,6 +190,7 @@ export default function DecisionesTab({ decisiones, canEdit, canRequestDirectorD
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

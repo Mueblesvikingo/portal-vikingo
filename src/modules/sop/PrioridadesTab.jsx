@@ -187,7 +187,8 @@ export default function PrioridadesTab({ prioridades, control, canEdit, onUpsert
         <div className="flex items-center gap-2 bg-slate-50 px-4 py-2.5">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Histórico de prioridades semanales</p>
         </div>
-        <table className="w-full border-collapse text-[10px]">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[700px] border-collapse text-[10px]">
           <thead>
             <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
               <th className="px-3 py-2 text-white">Mes / Semana</th>
@@ -216,6 +217,7 @@ export default function PrioridadesTab({ prioridades, control, canEdit, onUpsert
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

@@ -1214,7 +1214,7 @@ export default function StrategicFollowupModule({ currentUser }) {
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         {activeTab === "ENFOQUE" && (
-          <table className="w-full table-fixed border-collapse text-left">
+          <div className="overflow-x-auto"><table className="w-full min-w-[820px] table-fixed border-collapse text-left">
             <thead>
               <tr className="bg-slate-50">
                 <Th className="w-[44px]">✓</Th>
@@ -1303,10 +1303,11 @@ export default function StrategicFollowupModule({ currentUser }) {
               })}
             </tbody>
           </table>
+          </div>
         )}
 
         {activeTab === "INSUMOS" && (
-          <table className="w-full table-fixed border-collapse text-left">
+          <div className="overflow-x-auto"><table className="w-full min-w-[820px] table-fixed border-collapse text-left">
             <thead>
               <tr className="bg-slate-50">
                 <Th className="w-[22%]">Tema</Th>
@@ -1371,10 +1372,11 @@ export default function StrategicFollowupModule({ currentUser }) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
 
         {activeTab === "SESIÓN" && (
-          <table className="w-full table-fixed border-collapse text-left">
+          <div className="overflow-x-auto"><table className="w-full min-w-[820px] table-fixed border-collapse text-left">
             <thead>
               <tr className="bg-slate-50">
                 <Th className="w-[42px]">✓</Th>
@@ -1450,6 +1452,7 @@ export default function StrategicFollowupModule({ currentUser }) {
               })}
             </tbody>
           </table>
+          </div>
         )}
 
         {activeTab === "MINUTAS" && (

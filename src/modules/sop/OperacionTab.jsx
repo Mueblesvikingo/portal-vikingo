@@ -177,7 +177,8 @@ function ManoDeObraSection({
         <div className="mt-3 border-t border-slate-100 pt-3">
           <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Dotación por proceso</p>
           <div className="mt-1.5 overflow-hidden rounded-xl border border-slate-100">
-            <table className="w-full border-collapse text-[10px]">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[620px] border-collapse text-[10px]">
               <thead>
                 <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-widest text-slate-400">
                   <th className="px-2 py-1.5">Proceso</th>
@@ -214,6 +215,7 @@ function ManoDeObraSection({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           {canEdit && (
@@ -276,7 +278,8 @@ function InfraestructuraSection({ infraestructura, parametros, canEdit, onCreate
         </p>
 
         <div className="mt-3 overflow-hidden rounded-xl border border-slate-100">
-          <table className="w-full border-collapse text-[10px]">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[700px] border-collapse text-[10px]">
             <thead>
               <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-widest text-slate-400">
                 <th className="px-2 py-1.5">Equipo</th>
@@ -324,6 +327,7 @@ function InfraestructuraSection({ infraestructura, parametros, canEdit, onCreate
               </tfoot>
             )}
           </table>
+          </div>
         </div>
 
         {canEdit && (

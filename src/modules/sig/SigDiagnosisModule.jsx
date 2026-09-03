@@ -2077,8 +2077,8 @@ export default function DiagnosticoSIGModule({ currentUser }) {
             </div>
           </div>
 
-          <div className="overflow-hidden">
-            <table className="w-full table-fixed text-[11px]">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] table-fixed text-[11px]">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
                   <th className="w-[4%] px-2 py-2 text-left font-black">N°</th>
@@ -2207,7 +2207,8 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                   <span className={`rounded-2xl px-5 py-3 text-2xl font-black shadow-sm ${statusBg(groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess) ?? 0)}`}>{groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess) === null ? "Sin evaluar" : `${groupAverageWithOverrides(selectedCell.group, statusOverrides, selectedCell.selectedProcess)}%`}</span>
                 </div>
                 <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] text-sm">
                     <thead className="bg-slate-50/80 text-slate-500 backdrop-blur-sm"><tr><th className="w-12 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wide">#</th><th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wide">Criterio</th><th className="w-[260px] px-4 py-3 text-left text-[11px] font-black uppercase tracking-wide">Proceso / responsable</th><th className="w-[180px] px-4 py-3 text-left text-[11px] font-black uppercase tracking-wide">Evidencia</th><th className="w-32 px-4 py-3 text-center font-black">Estado</th></tr></thead>
                     <tbody>
                       {(selectedCell.filteredRows?.length ? selectedCell.filteredRows : selectedCell.group.rows).map((row) => {
@@ -2236,6 +2237,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                       })}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
             </div>
