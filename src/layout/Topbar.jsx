@@ -16,6 +16,7 @@ const pageTitles = {
 export default function Topbar({
   currentUser,
   onLogout,
+  onMenuClick,
 }) {
   const { pathname } = useLocation();
 
@@ -24,21 +25,31 @@ export default function Topbar({
     "Portal Estratégico Vikingo";
 
   return (
-    <header className="h-[82px] bg-white border-b border-gray-200 px-8 flex items-center justify-between">
-      <div>
-        <div className="text-xs uppercase tracking-[0.25em] font-black text-gray-400">
-          Portal de Desempeño Organizacional
-        </div>
+    <header className="flex min-h-[64px] flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-gray-200 bg-white px-3 py-2 sm:min-h-[82px] sm:px-8 sm:py-0">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <button
+          type="button"
+          onClick={onMenuClick}
+          aria-label="Abrir menú"
+          className="shrink-0 rounded-lg border border-gray-200 p-2 text-[#0f172a] hover:bg-gray-50 lg:hidden"
+        >
+          ☰
+        </button>
+        <div className="min-w-0">
+          <div className="hidden text-xs uppercase tracking-[0.25em] font-black text-gray-400 sm:block">
+            Portal de Desempeño Organizacional
+          </div>
 
-        <h1 className="mt-1 text-4xl font-black text-[#0f172a] leading-none">
-          {pageTitle}
-        </h1>
+          <h1 className="truncate text-xl font-black leading-tight text-[#0f172a] sm:mt-1 sm:text-2xl lg:text-4xl lg:leading-none">
+            {pageTitle}
+          </h1>
+        </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         <NotificationBell currentUser={currentUser} />
 
-        <div className="text-right">
+        <div className="hidden text-right sm:block">
           <div className="text-xs text-slate-400">
             Usuario activo
           </div>
@@ -52,7 +63,7 @@ export default function Topbar({
 
         <button
           onClick={onLogout}
-          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold transition-all"
+          className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white transition-all hover:bg-red-700 sm:px-4 sm:text-base"
         >
           Salir
         </button>
