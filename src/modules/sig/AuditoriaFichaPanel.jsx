@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react";
 import {
   updateAuditoria, getHallazgos, upsertHallazgo, downloadFichaAuditoriaPdf, FICHA_FIRMAS_CLEAR,
-  firmarFichaComoCoordinador, firmarFichaComoDirector, firmarFichaComoAuditado,
+  firmarFichaComoCoordinador, firmarFichaComoDirector, firmarFichaComoPM, firmarFichaComoAuditado,
   getAcuerdos, createAcuerdo, updateAcuerdo, deleteAcuerdo,
 } from "../../services/auditoriasService";
 import { isDirectorGeneral } from "../../services/permissionsService";
 import { sigSections, cellStyle, scoreMeaning, cleanSubtitle, resolveProceso, COORDINADOR_SIG_PERSONA_ID } from "./SigDiagnosisModule";
 import { getSubcriterios } from "./auditoriaSubcriterios";
 import { getWorkloadPeople, createWorkloadAssignment, getAsignacionesPorAcuerdoIds } from "../../services/workloadService";
+import { PM_PERSONA_ID } from "../../services/pmoService";
 
 const DECLARACIONES = ["Cumple", "Cumple parcialmente", "No cumple"];
 const NIVELES = [0, 3, 5, 10];
@@ -491,7 +492,7 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
 
       <div>
         <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Firmas</div>
-        <div className="mt-1 grid gap-2 sm:grid-cols-3">
+        <div className="mt-1 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {[
             {
               rol: "Coordinador SIG",
@@ -506,6 +507,13 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
               fecha: auditoria.firmado_director_at,
               puedeFirmar: isDirectorGeneral(currentUser),
               onFirmar: () => handleFirmar(firmarFichaComoDirector),
+            },
+            {
+              rol: "Project Manager",
+              nombre: auditoria.firmado_pm_nombre,
+              fecha: auditoria.firmado_pm_at,
+              puedeFirmar: Number(currentUser?.persona_id) === PM_PERSONA_ID,
+              onFirmar: () => handleFirmar(firmarFichaComoPM),
             },
             {
               rol: "Auditado",

@@ -4,6 +4,7 @@ import { createAccion } from "./accionesService";
 import { upsertEstado } from "./sigService";
 import { VIKINGO_LOGO_PNG_BASE64 } from "../assets/vikingoLogoBase64";
 import { isDirectorGeneral } from "./permissionsService";
+import { PM_PERSONA_ID } from "./pmoService";
 
 // Mismo encabezado de documento controlado del SIG que minutasService.js
 // (Código/Edición/Fecha/Aplicación + logo Vikingo) — códigos siguientes en
@@ -326,6 +327,7 @@ export async function updatePrograma(id, changes, actor) {
         ...changes,
         aprobado_por_persona_id: null, aprobado_por_nombre: null, aprobado_at: null,
         firmado_coordinador_persona_id: null, firmado_coordinador_nombre: null, firmado_coordinador_at: null,
+        firmado_pm_persona_id: null, firmado_pm_nombre: null, firmado_pm_at: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
@@ -380,6 +382,26 @@ export async function firmarProgramaComoCoordinador(id, actor) {
   }
 }
 
+export async function firmarProgramaComoPM(id, actor) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    if (personaId !== PM_PERSONA_ID) {
+      return { ok: false, error: "Solo el Project Manager puede firmar aquí.", data: null };
+    }
+    const { data, error } = await supabase
+      .from("sig_programas_auditoria")
+      .update({ firmado_pm_persona_id: personaId, firmado_pm_nombre: nombre, firmado_pm_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("*, aprobado_por:personas!sig_programas_auditoria_aprobado_por_persona_id_fkey(id,nombre)")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al firmar el programa como Project Manager:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
 // Editar cualquier contenido de la Ficha (plan, hallazgos, cierre) invalida
 // las 3 firmas ya capturadas — mismo criterio que Programa: un cambio de
 // contenido exige volver a firmar. Se exporta para que la UI lo incluya en
@@ -388,6 +410,7 @@ export async function firmarProgramaComoCoordinador(id, actor) {
 export const FICHA_FIRMAS_CLEAR = {
   firmado_coordinador_persona_id: null, firmado_coordinador_nombre: null, firmado_coordinador_at: null,
   firmado_director_persona_id: null, firmado_director_nombre: null, firmado_director_at: null,
+  firmado_pm_persona_id: null, firmado_pm_nombre: null, firmado_pm_at: null,
   firmado_auditado_persona_id: null, firmado_auditado_nombre: null, firmado_auditado_at: null,
 };
 
@@ -430,6 +453,26 @@ export async function firmarFichaComoDirector(auditoriaId, actor) {
     return { ok: true, error: null, data };
   } catch (err) {
     console.error("Error inesperado al firmar la ficha como Director General:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function firmarFichaComoPM(auditoriaId, actor) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    if (personaId !== PM_PERSONA_ID) {
+      return { ok: false, error: "Solo el Project Manager puede firmar aquí.", data: null };
+    }
+    const { data, error } = await supabase
+      .from("sig_auditorias")
+      .update({ firmado_pm_persona_id: personaId, firmado_pm_nombre: nombre, firmado_pm_at: new Date().toISOString() })
+      .eq("id", auditoriaId)
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al firmar la ficha como Project Manager:", err);
     return { ok: false, error: err, data: null };
   }
 }
@@ -542,7 +585,7 @@ export async function getPendingFichasParaFirmar(personaId) {
   try {
     const { data, error } = await supabase
       .from("sig_auditorias")
-      .select("id, macroproceso, enviado_auditado_at, enviado_auditado_por_nombre, auditado_persona_id, firmado_auditado_nombre, firmado_director_nombre")
+      .select("id, macroproceso, enviado_auditado_at, enviado_auditado_por_nombre, auditado_persona_id, firmado_auditado_nombre, firmado_director_nombre, firmado_pm_nombre")
       .not("enviado_auditado_at", "is", null)
       .order("enviado_auditado_at", { ascending: false });
     if (error) {
@@ -551,10 +594,12 @@ export async function getPendingFichasParaFirmar(personaId) {
     }
     const id = Number(personaId);
     const esDirector = id === DIRECTOR_GENERAL_PERSONA_ID;
+    const esPM = id === PM_PERSONA_ID;
     return (data || []).filter((item) => {
       const esAuditadoPendiente = Number(item.auditado_persona_id) === id && !item.firmado_auditado_nombre;
       const esDirectorPendiente = esDirector && !item.firmado_director_nombre;
-      return esAuditadoPendiente || esDirectorPendiente;
+      const esPMPendiente = esPM && !item.firmado_pm_nombre;
+      return esAuditadoPendiente || esDirectorPendiente || esPMPendiente;
     });
   } catch (err) {
     console.error("Error inesperado al cargar fichas pendientes de firma:", err);
@@ -934,9 +979,11 @@ function buildProgramaPdfDoc(programa) {
   doc.text("Firmas", marginX, y);
   y += 14;
 
-  const colW = (contentWidth - 20) / 2;
+  const colGap = 16;
+  const colW = (contentWidth - colGap * 2) / 3;
   drawFirmaBlock(doc, marginX, y, colW, "Coordinador SIG", programa.firmado_coordinador_nombre, programa.firmado_coordinador_at);
-  drawFirmaBlock(doc, marginX + colW + 20, y, colW, "Director General", programa.aprobado_por_nombre, programa.aprobado_at);
+  drawFirmaBlock(doc, marginX + colW + colGap, y, colW, "Director General", programa.aprobado_por_nombre, programa.aprobado_at);
+  drawFirmaBlock(doc, marginX + (colW + colGap) * 2, y, colW, "Project Manager", programa.firmado_pm_nombre, programa.firmado_pm_at);
   y += 92;
 
   finishPagination(doc, paginaSpots);
@@ -1111,11 +1158,12 @@ function buildFichaAuditoriaPdfDoc(auditoria, criterios, acuerdos = []) {
   doc.text("Firmas", marginX, y);
   y += 14;
 
-  const firmaGap = 16;
-  const firmaColW = (contentWidth - firmaGap * 2) / 3;
+  const firmaGap = 14;
+  const firmaColW = (contentWidth - firmaGap * 3) / 4;
   drawFirmaBlock(doc, marginX, y, firmaColW, "Coordinador SIG", auditoria.firmado_coordinador_nombre, auditoria.firmado_coordinador_at);
-  drawFirmaBlock(doc, marginX + firmaColW + firmaGap, y, firmaColW, "Director General", auditoria.firmado_director_nombre, auditoria.firmado_director_at);
-  drawFirmaBlock(doc, marginX + (firmaColW + firmaGap) * 2, y, firmaColW, "Auditado", auditoria.firmado_auditado_nombre, auditoria.firmado_auditado_at, auditoria.auditado?.nombre);
+  drawFirmaBlock(doc, marginX + (firmaColW + firmaGap), y, firmaColW, "Director General", auditoria.firmado_director_nombre, auditoria.firmado_director_at);
+  drawFirmaBlock(doc, marginX + (firmaColW + firmaGap) * 2, y, firmaColW, "Project Manager", auditoria.firmado_pm_nombre, auditoria.firmado_pm_at);
+  drawFirmaBlock(doc, marginX + (firmaColW + firmaGap) * 3, y, firmaColW, "Auditado", auditoria.firmado_auditado_nombre, auditoria.firmado_auditado_at, auditoria.auditado?.nombre);
 
   finishPagination(doc, paginaSpots);
   return doc;

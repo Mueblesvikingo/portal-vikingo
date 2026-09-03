@@ -15,9 +15,10 @@ import { canEvaluateCambio, canApproveCambio, canImplementCambio, isDirectorGene
 import {
   getAuditorias, createAuditoria, updateAuditoria, deleteAuditoria, createAccionDesdeHallazgo,
   getProgramas, createPrograma, updatePrograma, aprobarPrograma, downloadProgramaPdf,
-  firmarProgramaComoCoordinador, esAuditadoDeAlguna, enviarFichaParaFirma,
+  firmarProgramaComoCoordinador, firmarProgramaComoPM, esAuditadoDeAlguna, enviarFichaParaFirma,
 } from "../../services/auditoriasService";
 import { getAcciones } from "../../services/accionesService";
+import { PM_PERSONA_ID } from "../../services/pmoService";
 import AuditoriaFichaPanel from "./AuditoriaFichaPanel";
 
 const ESTADOS_AUDITORIA = ["Programada", "En curso", "Cerrada"];
@@ -1389,6 +1390,12 @@ export default function DiagnosticoSIGModule({ currentUser }) {
     setProgramas((current) => (current || []).map((p) => (p.id === id ? result.data : p)));
   }
 
+  async function handleFirmarProgramaPM(id) {
+    const result = await firmarProgramaComoPM(id, currentUser);
+    if (!result.ok) { console.error(result.error); setProgramaMessage(typeof result.error === "string" ? result.error : "No fue posible registrar la firma."); return; }
+    setProgramas((current) => (current || []).map((p) => (p.id === id ? result.data : p)));
+  }
+
   function handleDescargarProgramaPdf(p) {
     if (p) downloadProgramaPdf(p);
   }
@@ -1486,7 +1493,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
         </div>
         <div>
           <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Firmas</div>
-          <div className="mt-1 grid gap-2 sm:grid-cols-2">
+          <div className="mt-1 grid gap-2 sm:grid-cols-3">
             {[
               {
                 rol: "Coordinador SIG",
@@ -1501,6 +1508,13 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                 fecha: p.aprobado_at,
                 puedeFirmar: isDirectorGeneral(currentUser),
                 onFirmar: () => handleAprobarPrograma(p.id),
+              },
+              {
+                rol: "Project Manager",
+                nombre: p.firmado_pm_nombre,
+                fecha: p.firmado_pm_at,
+                puedeFirmar: Number(currentUser?.persona_id) === PM_PERSONA_ID,
+                onFirmar: () => handleFirmarProgramaPM(p.id),
               },
             ].map((f) => (
               <div key={f.rol} className={`rounded-2xl border p-3 ${f.nombre ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-slate-50/60"}`}>
