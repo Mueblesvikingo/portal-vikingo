@@ -326,6 +326,7 @@ export async function createWorkloadAssignment(payload) {
         estado_programacion: payload.estado_programacion || "Sin programar",
         fecha_inicio: payload.fecha_inicio || null,
         url_externa: payload.url_externa || null,
+        acuerdo_id: payload.acuerdo_id || null,
       })
       .select("*")
       .single();
@@ -334,6 +335,28 @@ export async function createWorkloadAssignment(payload) {
     return { ok: true, error: null, data };
   } catch (err) {
     return { ok: false, error: err, data: null };
+  }
+}
+
+// Asignaciones ya enviadas a partir de un acuerdo de auditoría — para
+// mostrar en la Ficha, debajo de cada acuerdo, quién ya recibió qué. Trae
+// varias de un jalón (una consulta con "in") en vez de una por acuerdo.
+export async function getAsignacionesPorAcuerdoIds(acuerdoIds) {
+  if (!acuerdoIds?.length) return [];
+  try {
+    const { data, error } = await supabase
+      .from("workload_asignaciones")
+      .select("id, acuerdo_id, persona_id, responsable, titulo, tipo, prioridad, estado, carga_horas, fecha_limite, created_at")
+      .in("acuerdo_id", acuerdoIds)
+      .order("created_at", { ascending: true });
+    if (error) {
+      console.error("Error al cargar asignaciones por acuerdo:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar asignaciones por acuerdo:", err);
+    return [];
   }
 }
 

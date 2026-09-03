@@ -7,7 +7,7 @@ import {
 import { isDirectorGeneral } from "../../services/permissionsService";
 import { sigSections, cellStyle, scoreMeaning, cleanSubtitle, resolveProceso, COORDINADOR_SIG_PERSONA_ID } from "./SigDiagnosisModule";
 import { getSubcriterios } from "./auditoriaSubcriterios";
-import { getWorkloadPeople, createWorkloadAssignment } from "../../services/workloadService";
+import { getWorkloadPeople, createWorkloadAssignment, getAsignacionesPorAcuerdoIds } from "../../services/workloadService";
 
 const DECLARACIONES = ["Cumple", "Cumple parcialmente", "No cumple"];
 const NIVELES = [0, 3, 5, 10];
@@ -51,7 +51,7 @@ function AcuerdoAsignacionForm({ acuerdo, personas, onConfirm, onCancel }) {
     if (!titulo.trim()) { setError("Escribe un título."); return; }
     setError("");
     setSaving(true);
-    const ok = await onConfirm({ personaIds: selectedIds, titulo: titulo.trim(), descripcion: acuerdo.texto, tipo, horas: Number(horas) || 0, fechaLimite: fechaLimite || null, prioridad });
+    const ok = await onConfirm(acuerdo, { personaIds: selectedIds, titulo: titulo.trim(), descripcion: acuerdo.texto, tipo, horas: Number(horas) || 0, fechaLimite: fechaLimite || null, prioridad });
     setSaving(false);
     if (ok) onCancel();
   }
@@ -115,6 +115,7 @@ function AcuerdoAsignacionForm({ acuerdo, personas, onConfirm, onCancel }) {
 export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, onUpdated }) {
   const [hallazgos, setHallazgos] = useState([]);
   const [acuerdos, setAcuerdos] = useState([]);
+  const [asignacionesPorAcuerdo, setAsignacionesPorAcuerdo] = useState([]);
   const [personas, setPersonas] = useState([]);
   const [asignacionAbiertaId, setAsignacionAbiertaId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -131,7 +132,15 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
     let cancelled = false;
     setLoading(true);
     Promise.all([getHallazgos(auditoria.id), getAcuerdos(auditoria.id)]).then(([hallazgosData, acuerdosData]) => {
-      if (!cancelled) { setHallazgos(hallazgosData); setAcuerdos(acuerdosData); setLoading(false); }
+      if (cancelled) return;
+      setHallazgos(hallazgosData);
+      setAcuerdos(acuerdosData);
+      setLoading(false);
+      if (acuerdosData.length) {
+        getAsignacionesPorAcuerdoIds(acuerdosData.map((a) => a.id)).then((data) => { if (!cancelled) setAsignacionesPorAcuerdo(data); });
+      } else {
+        setAsignacionesPorAcuerdo([]);
+      }
     });
     return () => { cancelled = true; };
   }, [auditoria.id]);
@@ -144,7 +153,7 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
     return () => { cancelled = true; };
   }, []);
 
-  async function handleConfirmAcuerdoAsignacion(formValues) {
+  async function handleConfirmAcuerdoAsignacion(acuerdo, formValues) {
     const results = await Promise.all(
       formValues.personaIds.map((personaId) => {
         const persona = personas.find((p) => String(p.id) === String(personaId));
@@ -168,11 +177,13 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
           asigna_rol: "Auditor líder",
           horas_totales: formValues.horas,
           origen_estrategico: "SIG",
+          acuerdo_id: acuerdo.id,
         });
       })
     );
     const fallidas = results.filter((r) => !r.ok);
     if (fallidas.length) { console.error(fallidas.map((r) => r.error)); alert("Alguna asignación no se pudo crear."); return false; }
+    setAsignacionesPorAcuerdo((current) => [...current, ...results.map((r) => r.data)]);
     return true;
   }
 
@@ -421,6 +432,16 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
                     <button type="button" onClick={() => handleDeleteAcuerdo(a.id)} title="Eliminar acuerdo" className="mt-1 shrink-0 text-amber-400 hover:text-rose-500">✕</button>
                   )}
                 </div>
+                {asignacionesPorAcuerdo.filter((asig) => asig.acuerdo_id === a.id).length > 0 && (
+                  <div className="ml-7 mt-1.5 flex flex-wrap gap-1.5">
+                    {asignacionesPorAcuerdo.filter((asig) => asig.acuerdo_id === a.id).map((asig) => (
+                      <span key={asig.id} title={`${asig.titulo} · ${asig.carga_horas || 0}h${asig.fecha_limite ? ` · vence ${new Date(asig.fecha_limite).toLocaleDateString("es-MX")}` : ""}`} className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
+                        ✓ {asig.responsable}
+                        <span className="font-medium text-emerald-500">· {asig.estado}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {canEdit && (
                   <div className="ml-7 mt-1">
                     <button
