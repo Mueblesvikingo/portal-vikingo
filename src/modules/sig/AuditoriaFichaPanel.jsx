@@ -40,6 +40,7 @@ function AcuerdoAsignacionForm({ acuerdo, personas, onConfirm, onCancel }) {
   const [horas, setHoras] = useState(2);
   const [fechaLimite, setFechaLimite] = useState("");
   const [prioridad, setPrioridad] = useState("Media");
+  const [urlExterna, setUrlExterna] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -52,7 +53,7 @@ function AcuerdoAsignacionForm({ acuerdo, personas, onConfirm, onCancel }) {
     if (!titulo.trim()) { setError("Escribe un título."); return; }
     setError("");
     setSaving(true);
-    const ok = await onConfirm(acuerdo, { personaIds: selectedIds, titulo: titulo.trim(), descripcion: acuerdo.texto, tipo, horas: Number(horas) || 0, fechaLimite: fechaLimite || null, prioridad });
+    const ok = await onConfirm(acuerdo, { personaIds: selectedIds, titulo: titulo.trim(), descripcion: acuerdo.texto, tipo, horas: Number(horas) || 0, fechaLimite: fechaLimite || null, prioridad, urlExterna: urlExterna.trim() || null });
     setSaving(false);
     if (ok) onCancel();
   }
@@ -87,6 +88,10 @@ function AcuerdoAsignacionForm({ acuerdo, personas, onConfirm, onCancel }) {
           </select>
         </label>
       </div>
+      <label className="mt-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">
+        URL / enlace (opcional — curso, material, referencia)
+        <input type="url" placeholder="https://..." value={urlExterna} onChange={(e) => setUrlExterna(e.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+      </label>
       <div className="mt-2">
         <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Enviar a (una o varias personas)</div>
         <div className="mt-1 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/60 p-2">
@@ -179,6 +184,7 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
           horas_totales: formValues.horas,
           origen_estrategico: "SIG",
           acuerdo_id: acuerdo.id,
+          url_externa: formValues.urlExterna || null,
         });
       })
     );
@@ -436,9 +442,12 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
                 {asignacionesPorAcuerdo.filter((asig) => asig.acuerdo_id === a.id).length > 0 && (
                   <div className="ml-7 mt-1.5 flex flex-wrap gap-1.5">
                     {asignacionesPorAcuerdo.filter((asig) => asig.acuerdo_id === a.id).map((asig) => (
-                      <span key={asig.id} title={`${asig.titulo} · ${asig.carga_horas || 0}h${asig.fecha_limite ? ` · vence ${new Date(asig.fecha_limite).toLocaleDateString("es-MX")}` : ""}`} className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
+                      <span key={asig.id} title={`${asig.titulo} · ${asig.carga_horas || 0}h${asig.fecha_limite ? ` · vence ${new Date(asig.fecha_limite).toLocaleDateString("es-MX")}` : ""}${asig.url_externa ? ` · ${asig.url_externa}` : ""}`} className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
                         ✓ {asig.responsable}
                         <span className="font-medium text-emerald-500">· {asig.estado}</span>
+                        {asig.url_externa && (
+                          <a href={asig.url_externa} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-emerald-600 hover:text-emerald-800" title="Abrir enlace">🔗</a>
+                        )}
                       </span>
                     ))}
                   </div>

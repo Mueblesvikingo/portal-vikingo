@@ -346,7 +346,7 @@ export async function getAsignacionesPorAcuerdoIds(acuerdoIds) {
   try {
     const { data, error } = await supabase
       .from("workload_asignaciones")
-      .select("id, acuerdo_id, persona_id, responsable, titulo, tipo, prioridad, estado, carga_horas, fecha_limite, created_at")
+      .select("id, acuerdo_id, persona_id, responsable, titulo, tipo, prioridad, estado, carga_horas, fecha_limite, url_externa, created_at")
       .in("acuerdo_id", acuerdoIds)
       .order("created_at", { ascending: true });
     if (error) {
