@@ -22,7 +22,7 @@ function getFirmaAudienceText(currentUser) {
   if (id === PM_PERSONA_ID) {
     return "Nuevo informe de auditoría pendiente de firma. Léelo con atención — varios acuerdos ahí pueden convertirse en asignaciones para dar seguimiento.";
   }
-  return "Importante: lee el informe completo antes de firmar — ahí quedaron los acuerdos que definimos juntos en la sesión.";
+  return "Antes de firmar, date un momento para leer tu informe completo — ahí quedaron los hallazgos de tu proceso y los acuerdos que definimos juntos para seguir avanzando en el cumplimiento del SIG.";
 }
 
 const POLL_INTERVAL_MS = 25000;
