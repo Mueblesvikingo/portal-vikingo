@@ -7,6 +7,7 @@ import {
 import { isDirectorGeneral } from "../../services/permissionsService";
 import { sigSections, cellStyle, scoreMeaning, cleanSubtitle, resolveProceso, COORDINADOR_SIG_PERSONA_ID } from "./SigDiagnosisModule";
 import { getSubcriterios } from "./auditoriaSubcriterios";
+import { getWorkloadPeople, createWorkloadAssignment } from "../../services/workloadService";
 
 const DECLARACIONES = ["Cumple", "Cumple parcialmente", "No cumple"];
 const NIVELES = [0, 3, 5, 10];
@@ -16,6 +17,8 @@ const NIVEL_DESCRIPCION = {
   5: "se aplica de forma consistente",
   10: "documentado, medido y con mejora continua",
 };
+const TIPOS_ASIGNACION = ["Mejora", "Proyecto", "Formación", "Eventual"];
+const PRIORIDADES_ASIGNACION = ["Alta", "Media", "Baja"];
 
 function findCriterioTexto(numeral, subtitulo, numero) {
   const section = sigSections.find((s) => s.numeral === numeral);
@@ -25,9 +28,95 @@ function findCriterioTexto(numeral, subtitulo, numero) {
   return { texto: row[1], evidenciaEsperada: row[2], proceso: row[3] };
 }
 
+// Botón discreto por acuerdo que abre un formulario (nunca envía solo) para
+// convertir ese acuerdo en una o más asignaciones de Balance de Carga, a una
+// o varias personas a la vez — mismo patrón que ConvertirEnAsignacionForm de
+// DecisionesTab.jsx, pero con selección múltiple de personas en vez de una.
+function AcuerdoAsignacionForm({ acuerdo, personas, onConfirm, onCancel }) {
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [titulo, setTitulo] = useState((acuerdo.texto || "").slice(0, 140));
+  const [tipo, setTipo] = useState("Mejora");
+  const [horas, setHoras] = useState(2);
+  const [fechaLimite, setFechaLimite] = useState("");
+  const [prioridad, setPrioridad] = useState("Media");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function togglePersona(id) {
+    setSelectedIds((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+  }
+
+  async function handleConfirm() {
+    if (selectedIds.length === 0) { setError("Selecciona al menos una persona."); return; }
+    if (!titulo.trim()) { setError("Escribe un título."); return; }
+    setError("");
+    setSaving(true);
+    const ok = await onConfirm({ personaIds: selectedIds, titulo: titulo.trim(), descripcion: acuerdo.texto, tipo, horas: Number(horas) || 0, fechaLimite: fechaLimite || null, prioridad });
+    setSaving(false);
+    if (ok) onCancel();
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-amber-300 bg-white p-3">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Título de la asignación
+          <input type="text" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Tipo
+          <select value={tipo} onChange={(e) => setTipo(e.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            {TIPOS_ASIGNACION.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Horas estimadas
+          <input type="number" min="0.5" step="0.5" value={horas} onChange={(e) => setHoras(e.target.value)} className="mt-1 h-9 w-24 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Fecha límite
+          <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Prioridad
+          <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            {PRIORIDADES_ASIGNACION.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="mt-2">
+        <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Enviar a (una o varias personas)</div>
+        <div className="mt-1 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/60 p-2">
+          {personas.length === 0 ? (
+            <span className="text-[10px] font-medium text-slate-400">Cargando personas…</span>
+          ) : (
+            personas.map((p) => (
+              <label key={p.id} className={`flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-bold transition ${selectedIds.includes(p.id) ? "border-amber-400 bg-amber-100 text-amber-800" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+                <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => togglePersona(p.id)} className="hidden" />
+                {p.nombre}
+              </label>
+            ))
+          )}
+        </div>
+      </div>
+      <div className="mt-2.5 flex items-center gap-2">
+        <button type="button" disabled={saving} onClick={handleConfirm} className="h-9 rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+          {saving ? "Enviando..." : `Crear ${selectedIds.length > 1 ? `${selectedIds.length} asignaciones` : "asignación"}`}
+        </button>
+        <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+      </div>
+      {error && <p className="mt-1.5 text-[10px] font-bold text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, onUpdated }) {
   const [hallazgos, setHallazgos] = useState([]);
   const [acuerdos, setAcuerdos] = useState([]);
+  const [personas, setPersonas] = useState([]);
+  const [asignacionAbiertaId, setAsignacionAbiertaId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [cierre, setCierre] = useState({
     conclusiones: auditoria.conclusiones || "",
@@ -46,6 +135,46 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
     });
     return () => { cancelled = true; };
   }, [auditoria.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getWorkloadPeople().then((data) => {
+      if (!cancelled) setPersonas((data || []).filter((p) => p.activo).sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  async function handleConfirmAcuerdoAsignacion(formValues) {
+    const results = await Promise.all(
+      formValues.personaIds.map((personaId) => {
+        const persona = personas.find((p) => String(p.id) === String(personaId));
+        return createWorkloadAssignment({
+          persona_id: Number(personaId),
+          responsable: persona?.nombre || "",
+          rol: "Auditoría SIG",
+          tipo: formValues.tipo,
+          prioridad: formValues.prioridad,
+          gestion: "Otro",
+          titulo: formValues.titulo,
+          descripcion: formValues.descripcion,
+          revisara: "",
+          aprobara: "",
+          seguimiento: "",
+          carga_horas: formValues.horas,
+          duracion_minutos: Math.round(formValues.horas * 60),
+          fecha_limite: formValues.fechaLimite,
+          estado: "Pendiente",
+          asigna: currentUser?.nombre || currentUser?.usuario || "",
+          asigna_rol: "Auditor líder",
+          horas_totales: formValues.horas,
+          origen_estrategico: "SIG",
+        });
+      })
+    );
+    const fallidas = results.filter((r) => !r.ok);
+    if (fallidas.length) { console.error(fallidas.map((r) => r.error)); alert("Alguna asignación no se pudo crear."); return false; }
+    return true;
+  }
 
   async function handleAddAcuerdo() {
     const result = await createAcuerdo(auditoria.id, acuerdos.length, currentUser);
@@ -277,18 +406,39 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
         ) : (
           <div className="mt-2 space-y-1.5">
             {acuerdos.map((a, index) => (
-              <div key={a.id} className="flex items-start gap-2">
-                <span className="mt-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-white">{index + 1}</span>
-                <textarea
-                  rows={1}
-                  defaultValue={a.texto}
-                  disabled={!canEdit}
-                  placeholder="Acuerdo alcanzado durante la auditoría..."
-                  onBlur={(e) => handleAcuerdoBlur(a.id, e.target.value, a.texto)}
-                  className="flex-1 resize-none rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-amber-900 outline-none disabled:bg-amber-50/50"
-                />
+              <div key={a.id}>
+                <div className="flex items-start gap-2">
+                  <span className="mt-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-white">{index + 1}</span>
+                  <textarea
+                    rows={1}
+                    defaultValue={a.texto}
+                    disabled={!canEdit}
+                    placeholder="Acuerdo alcanzado durante la auditoría..."
+                    onBlur={(e) => handleAcuerdoBlur(a.id, e.target.value, a.texto)}
+                    className="flex-1 resize-none rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-amber-900 outline-none disabled:bg-amber-50/50"
+                  />
+                  {canEdit && (
+                    <button type="button" onClick={() => handleDeleteAcuerdo(a.id)} title="Eliminar acuerdo" className="mt-1 shrink-0 text-amber-400 hover:text-rose-500">✕</button>
+                  )}
+                </div>
                 {canEdit && (
-                  <button type="button" onClick={() => handleDeleteAcuerdo(a.id)} title="Eliminar acuerdo" className="mt-1 shrink-0 text-amber-400 hover:text-rose-500">✕</button>
+                  <div className="ml-7 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setAsignacionAbiertaId(asignacionAbiertaId === a.id ? null : a.id)}
+                      className="text-[10px] font-bold text-amber-600/70 underline decoration-dotted hover:text-amber-700"
+                    >
+                      → Enviar asignación
+                    </button>
+                    {asignacionAbiertaId === a.id && (
+                      <AcuerdoAsignacionForm
+                        acuerdo={a}
+                        personas={personas}
+                        onConfirm={handleConfirmAcuerdoAsignacion}
+                        onCancel={() => setAsignacionAbiertaId(null)}
+                      />
+                    )}
+                  </div>
                 )}
               </div>
             ))}
