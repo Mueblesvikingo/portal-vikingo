@@ -312,6 +312,8 @@ export async function createPrograma(payload, actor) {
 // Mismo criterio que ya usa AUDITORIA_LIDER_PERSONA_IDS en
 // SigDiagnosisModule.jsx: Cristian (id 15) es el Coordinador SIG.
 const COORDINADOR_SIG_PERSONA_ID = 15;
+// Alejandro (id 14) es el Director General — confirmado vía persona_roles.
+const DIRECTOR_GENERAL_PERSONA_ID = 14;
 
 // Editar un programa ya firmado/aprobado limpia ambas firmas — un cambio
 // de contenido exige volver a firmar, no se queda "firmado" sobre texto
@@ -525,27 +527,35 @@ export async function marcarFirmaAvisoVisto(auditoriaId) {
   }
 }
 
-// Fichas que ya se enviaron a firmar y siguen sin la firma del auditado —
-// esto es lo que MeetingAttendanceAlarm.jsx sondea para disparar la alerta
-// a pantalla completa (sin sonido) de ese auditado específico. Si el
-// contenido de la ficha se edita después de firmada, FICHA_FIRMAS_CLEAR
-// borra firmado_auditado_nombre pero no enviado_auditado_at — por lo que
-// vuelve a aparecer aquí automáticamente, sin necesidad de reenviarla.
+// Fichas que ya se enviaron a firmar y siguen sin la firma de esta persona
+// — esto es lo que MeetingAttendanceAlarm.jsx sondea para disparar la
+// alerta a pantalla completa (sin sonido). Dos audiencias posibles: el
+// auditado de esa sesión (siempre), y también el Director General (para
+// que reciba la misma notificación de "enviar a firmar" en paralelo, sin
+// esperar a que el auditado firme primero — no hay orden secuencial entre
+// las 3 firmas de la ficha). Si el contenido de la ficha se edita después
+// de firmada, FICHA_FIRMAS_CLEAR borra la firma correspondiente pero no
+// enviado_auditado_at — por lo que vuelve a aparecer aquí automáticamente,
+// sin necesidad de reenviarla.
 export async function getPendingFichasParaFirmar(personaId) {
   if (!personaId) return [];
   try {
     const { data, error } = await supabase
       .from("sig_auditorias")
-      .select("id, macroproceso, enviado_auditado_at, enviado_auditado_por_nombre, auditado_persona_id, firmado_auditado_nombre")
-      .eq("auditado_persona_id", personaId)
+      .select("id, macroproceso, enviado_auditado_at, enviado_auditado_por_nombre, auditado_persona_id, firmado_auditado_nombre, firmado_director_nombre")
       .not("enviado_auditado_at", "is", null)
-      .is("firmado_auditado_nombre", null)
       .order("enviado_auditado_at", { ascending: false });
     if (error) {
       console.error("Error al cargar fichas pendientes de firma:", error);
       return [];
     }
-    return data || [];
+    const id = Number(personaId);
+    const esDirector = id === DIRECTOR_GENERAL_PERSONA_ID;
+    return (data || []).filter((item) => {
+      const esAuditadoPendiente = Number(item.auditado_persona_id) === id && !item.firmado_auditado_nombre;
+      const esDirectorPendiente = esDirector && !item.firmado_director_nombre;
+      return esAuditadoPendiente || esDirectorPendiente;
+    });
   } catch (err) {
     console.error("Error inesperado al cargar fichas pendientes de firma:", err);
     return [];
