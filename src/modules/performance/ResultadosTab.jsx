@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import {
   MESES, PERSPECTIVAS, PERSPECTIVA_COLOR, formatKpiValue, getResultadoRow, formatDateTime,
-  getWeeksInMonth, getMonthlyRealValue, getResultadoValue, getCumplimientoStatus,
+  getWeeksInMonth, getMonthlyRealValue, getResultadoValue, getCumplimientoStatus, computeCumplimientoValue,
 } from "./performanceHelpers";
 
 function EditableValue({ kpi, mesIndex, tipo, semana = null, resultados, anio, canEdit, onSave, compact = false }) {
@@ -66,7 +66,7 @@ function WeeklyRealCells({ kpi, mesIndex, resultados, anio, canEdit, onSave }) {
   const semanas = Array.from({ length: totalSemanas }, (_, i) => i + 1);
   const real = getMonthlyRealValue(resultados, kpi, anio, mes);
   const meta = getResultadoValue(resultados, kpi.id, anio, mes, "meta");
-  const pct = real !== null && meta ? Math.round((real / meta) * 100) : null;
+  const pct = computeCumplimientoValue(real, meta, kpi.sentido);
   const status = getCumplimientoStatus(pct);
 
   return (

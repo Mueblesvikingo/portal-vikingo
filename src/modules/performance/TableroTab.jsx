@@ -6,6 +6,7 @@ import {
   UNIDAD_OPTIONS,
   TIPO_GRAFICO_OPTIONS,
   PERIODICIDAD_OPTIONS,
+  SENTIDO_OPTIONS,
   computeCumplimiento,
   getCumplimientoStatus,
   getCurrentMonthInfo,
@@ -259,6 +260,9 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                               </DetailField>
                               <DetailField label="Gráfico">
                                 <EditableSelect value={kpi.tipo_grafico} options={TIPO_GRAFICO_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { tipo_grafico: v })} />
+                              </DetailField>
+                              <DetailField label="Sentido">
+                                <EditableSelect value={kpi.sentido || "Mayor es mejor"} options={SENTIDO_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { sentido: v })} />
                               </DetailField>
                             </div>
                             <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-2">

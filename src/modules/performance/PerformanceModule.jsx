@@ -34,6 +34,7 @@ const KPI_FIELD_LABELS = {
   unidad_medida: "Medida",
   responsable_rol: "Responsable",
   tipo_grafico: "Gráfico",
+  sentido: "Sentido",
   perspectiva: "Perspectiva",
   activo: "Estado",
   creado: "Creación del KPI",

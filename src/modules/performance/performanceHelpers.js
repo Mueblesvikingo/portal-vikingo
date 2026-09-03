@@ -126,17 +126,34 @@ export function getCurrentMonthInfo() {
   return { mes: currentMonth, anio: currentYear, label: MESES[currentMonth - 1] };
 }
 
+export const SENTIDO_OPTIONS = ["Mayor es mejor", "Menor es mejor"];
+
+// Para KPIs "Mayor es mejor" (ventas, cumplimiento) el % de cumplimiento es
+// Real/Meta de siempre. Para KPIs "Menor es mejor" (tasas de defecto,
+// devolución, desviación, accidentes) la Meta es un TECHO — quedar por
+// debajo es lo bueno — así que se invierte a Meta/Real; si Real es 0 (el
+// mejor caso posible) se usa un cumplimiento alto fijo en vez de dividir
+// entre cero.
+export function computeCumplimientoValue(real, meta, sentido) {
+  if (real === null || real === undefined || !meta) return null;
+  if (sentido === "Menor es mejor") {
+    if (real <= 0) return 999;
+    return Math.round((meta / real) * 100);
+  }
+  return Math.round((real / meta) * 100);
+}
+
 // Real/Meta del mes en curso, contra ese mismo mes. `kpi` es el objeto
 // completo (no solo el id) porque el real de un KPI de captura semanal se
 // calcula distinto (promedio de semanas capturadas hasta ahora, ver
-// getMonthlyRealValue).
+// getMonthlyRealValue), y porque el sentido (mayor/menor es mejor) también
+// vive en el propio KPI.
 export function computeCumplimiento(resultados, kpi, anio) {
   const { mes, anio: mesAnio, label } = getCurrentMonthInfo();
   const targetAnio = mesAnio ?? anio;
   const real = getMonthlyRealValue(resultados, kpi, targetAnio, mes);
   const meta = getResultadoValue(resultados, kpi.id, targetAnio, mes, "meta");
-  if (real === null || !meta) return { real, meta, cumplimiento: null, mesLabel: label };
-  const cumplimiento = Math.round((real / meta) * 100);
+  const cumplimiento = computeCumplimientoValue(real, meta, kpi.sentido);
   return { real, meta, cumplimiento, mesLabel: label };
 }
 
