@@ -6,8 +6,24 @@ import {
   getPendingMeetingConfirmations,
   getPendingPreMeetingReminders,
 } from "../services/workloadService";
-import { getPendingRecordatorios, markRecordatorioVisto } from "../services/pmoService";
-import { getPendingFichasParaFirmar } from "../services/auditoriasService";
+import { getPendingRecordatorios, markRecordatorioVisto, PM_PERSONA_ID } from "../services/pmoService";
+import { getPendingFichasParaFirmar, DIRECTOR_GENERAL_PERSONA_ID } from "../services/auditoriasService";
+
+// Mismo aviso de "informe pendiente de firmar", pero con el motivo por el
+// que le importa a CADA audiencia leerlo completo — no solo "hay que
+// firmar". Se decide por persona_id del usuario en sesión, no por rol
+// declarado, porque son personas puntuales (Director/PM), no un puesto
+// genérico.
+function getFirmaAudienceText(currentUser) {
+  const id = Number(currentUser?.persona_id);
+  if (id === DIRECTOR_GENERAL_PERSONA_ID) {
+    return "Informe de auditoría listo para tu firma. Importante leerlo completo antes de aprobar: incluye hallazgos y los acuerdos generados con el proceso auditado.";
+  }
+  if (id === PM_PERSONA_ID) {
+    return "Nuevo informe de auditoría pendiente de firma. Léelo con atención — varios acuerdos ahí pueden convertirse en asignaciones para dar seguimiento.";
+  }
+  return "Importante: lee el informe completo antes de firmar — ahí quedaron los acuerdos que definimos juntos en la sesión.";
+}
 
 const POLL_INTERVAL_MS = 25000;
 const SNOOZE_MS = 90000;
@@ -200,7 +216,7 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
     const body = activeType === "recordatorio"
       ? `${active.proyecto?.nombre || "Proyecto"} · ${active.mensaje || ""}`
       : activeType === "firma"
-        ? `${active.macroproceso || "Auditoría"} · enviado por ${active.enviado_auditado_por_nombre || "Equipo SIG"}`
+        ? `${active.macroproceso || "Auditoría"} — ${getFirmaAudienceText(currentUser)}`
         : `${active.nombre || active.titulo || "Reunión"} · ${formatMeetingWhen(active)}`;
     if (Notification.permission === "granted") {
       new Notification(title, {
@@ -315,6 +331,7 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
           <>
             <p className="mt-3 text-base font-black text-slate-900">{active.macroproceso || "Auditoría"}</p>
             <p className="mt-1 text-[11px] font-bold text-slate-500">Enviado por {active.enviado_auditado_por_nombre || "Equipo SIG"}</p>
+            <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] font-semibold leading-snug text-amber-800">{getFirmaAudienceText(currentUser)}</p>
           </>
         ) : isRecordatorio ? (
           <>

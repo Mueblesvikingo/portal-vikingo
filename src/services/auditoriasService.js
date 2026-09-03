@@ -314,7 +314,7 @@ export async function createPrograma(payload, actor) {
 // SigDiagnosisModule.jsx: Cristian (id 15) es el Coordinador SIG.
 const COORDINADOR_SIG_PERSONA_ID = 15;
 // Alejandro (id 14) es el Director General — confirmado vía persona_roles.
-const DIRECTOR_GENERAL_PERSONA_ID = 14;
+export const DIRECTOR_GENERAL_PERSONA_ID = 14;
 
 // Editar un programa ya firmado/aprobado limpia ambas firmas — un cambio
 // de contenido exige volver a firmar, no se queda "firmado" sobre texto

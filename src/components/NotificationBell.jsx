@@ -83,7 +83,7 @@ export default function NotificationBell({ currentUser }) {
 
   const items = [
     ...firmas.map((item) => ({ kind: "firma", id: item.id, titulo: item.macroproceso || "Auditoría", mensaje: `${item.firmado_auditado_nombre} ya firmó el plan.`, when: item.firmado_auditado_at })),
-    ...recordatorios.map((item) => ({ kind: "recordatorio", id: item.id, titulo: item.proyecto?.nombre || "Proyecto", mensaje: item.mensaje, from: item.created_by_nombre, when: item.created_at })),
+    ...recordatorios.map((item) => ({ kind: "recordatorio", id: item.id, titulo: item.proyecto?.nombre || "Aviso", mensaje: item.mensaje, from: item.created_by_nombre, when: item.created_at })),
   ];
 
   async function handleDismiss(item) {

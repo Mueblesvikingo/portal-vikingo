@@ -8,7 +8,7 @@ import { isDirectorGeneral } from "../../services/permissionsService";
 import { sigSections, cellStyle, scoreMeaning, cleanSubtitle, resolveProceso, COORDINADOR_SIG_PERSONA_ID } from "./SigDiagnosisModule";
 import { getSubcriterios } from "./auditoriaSubcriterios";
 import { getWorkloadPeople, createWorkloadAssignment, getAsignacionesPorAcuerdoIds } from "../../services/workloadService";
-import { PM_PERSONA_ID } from "../../services/pmoService";
+import { PM_PERSONA_ID, createRecordatorio } from "../../services/pmoService";
 
 const DECLARACIONES = ["Cumple", "Cumple parcialmente", "No cumple"];
 const NIVELES = [0, 3, 5, 10];
@@ -191,6 +191,16 @@ export default function AuditoriaFichaPanel({ auditoria, currentUser, canEdit, o
     const fallidas = results.filter((r) => !r.ok);
     if (fallidas.length) { console.error(fallidas.map((r) => r.error)); alert("Alguna asignación no se pudo crear."); return false; }
     setAsignacionesPorAcuerdo((current) => [...current, ...results.map((r) => r.data)]);
+
+    // Aviso en la campanita para cada persona que recibió una asignación —
+    // proyectoId null (no es un proyecto del Tablero PMO), la campanita ya
+    // sabe mostrar "Aviso" en ese caso.
+    const mensaje = `Nueva asignación: "${formValues.titulo}" (${formValues.horas}h${formValues.fechaLimite ? `, vence ${new Date(formValues.fechaLimite).toLocaleDateString("es-MX")}` : ""})`;
+    await Promise.all(
+      formValues.personaIds.map((personaId) =>
+        createRecordatorio({ proyectoId: null, destinatarioPersonaId: Number(personaId), mensaje }, { actor: currentUser })
+      )
+    );
     return true;
   }
 
