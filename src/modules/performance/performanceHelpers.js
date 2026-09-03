@@ -148,13 +148,27 @@ export function computeCumplimientoValue(real, meta, sentido) {
 // calcula distinto (promedio de semanas capturadas hasta ahora, ver
 // getMonthlyRealValue), y porque el sentido (mayor/menor es mejor) también
 // vive en el propio KPI.
+//
+// Si el mes en curso todavía no tiene "Real" capturado (normal los primeros
+// días de cada mes, antes de que se suba el cierre del mes anterior), se
+// retrocede dentro del mismo año hasta el último mes que sí tenga captura,
+// en vez de mostrar "sin datos" teniendo un cierre reciente disponible. Se
+// compara siempre Real y Meta del MISMO mes usado (nunca Real de un mes
+// contra Meta de otro). `mesUsadoLabel`/`esMesAnterior` le dicen a la UI de
+// qué mes es en realidad el dato mostrado, para no rotularlo como si fuera
+// del mes en curso.
 export function computeCumplimiento(resultados, kpi, anio) {
-  const { mes, anio: mesAnio, label } = getCurrentMonthInfo();
+  const { mes: mesActual, anio: mesAnio, label } = getCurrentMonthInfo();
   const targetAnio = mesAnio ?? anio;
-  const real = getMonthlyRealValue(resultados, kpi, targetAnio, mes);
+  let mes = mesActual;
+  let real = getMonthlyRealValue(resultados, kpi, targetAnio, mes);
+  while (real === null && mes > 1) {
+    mes -= 1;
+    real = getMonthlyRealValue(resultados, kpi, targetAnio, mes);
+  }
   const meta = getResultadoValue(resultados, kpi.id, targetAnio, mes, "meta");
   const cumplimiento = computeCumplimientoValue(real, meta, kpi.sentido);
-  return { real, meta, cumplimiento, mesLabel: label };
+  return { real, meta, cumplimiento, mesLabel: label, mesUsado: mes, mesUsadoLabel: MESES[mes - 1], esMesAnterior: mes !== mesActual };
 }
 
 export function getCumplimientoStatus(cumplimiento) {

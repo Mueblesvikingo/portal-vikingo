@@ -177,7 +177,7 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                   </tr>
                 )}
                 {group.items.map((kpi) => {
-                  const { real, meta, cumplimiento } = computeCumplimiento(resultados, kpi, anio);
+                  const { real, meta, cumplimiento, mesUsadoLabel, esMesAnterior } = computeCumplimiento(resultados, kpi, anio);
                   const status = getCumplimientoStatus(cumplimiento);
                   const isOpen = openKpiId === kpi.id;
                   const isInactivo = !kpi.activo;
@@ -202,7 +202,10 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                             )}
                           </button>
                         </td>
-                        <td className="px-3 py-1.5 text-right font-black text-slate-800">{formatKpiValue(real, kpi.unidad_medida)}</td>
+                        <td className="px-3 py-1.5 text-right font-black text-slate-800">
+                          {formatKpiValue(real, kpi.unidad_medida)}
+                          {esMesAnterior && real !== null && <span className="ml-1 text-[8px] font-bold text-amber-500" title={`Último dato capturado: ${mesUsadoLabel} (aún sin captura de ${mesActualLabel})`}>{mesUsadoLabel}</span>}
+                        </td>
                         <td className="px-3 py-1.5 text-right text-slate-500">{formatKpiValue(meta, kpi.unidad_medida)}</td>
                         <td className="px-3 py-1.5 text-right">
                           <span className="rounded-full px-2 py-0.5 text-[9px] font-black" style={{ backgroundColor: `${status.color}1f`, color: status.color }}>
