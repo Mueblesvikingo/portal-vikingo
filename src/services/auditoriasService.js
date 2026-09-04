@@ -134,7 +134,7 @@ export async function esAuditadoDeAlguna(personaId) {
 export async function getAuditorias() {
   try {
     const [{ data: auditorias, error: aErr }, { data: equipo, error: eErr }] = await Promise.all([
-      supabase.from("sig_auditorias").select("*, auditor_lider:personas!sig_auditorias_auditor_persona_id_fkey(id,nombre), auditado:personas!sig_auditorias_auditado_persona_id_fkey(id,nombre,correo), programa:sig_programas_auditoria(id,nombre)").order("fecha_programada", { ascending: true }),
+      supabase.from("sig_auditorias").select("*, auditor_lider:personas!sig_auditorias_auditor_persona_id_fkey(id,nombre), auditado:personas!sig_auditorias_auditado_persona_id_fkey(id,nombre), programa:sig_programas_auditoria(id,nombre)").order("fecha_programada", { ascending: true }),
       supabase.from("sig_auditoria_equipo").select("*, persona:personas(id,nombre)").order("orden"),
     ]);
     if (aErr || eErr) {
@@ -172,7 +172,7 @@ export async function createAuditoria(payload, actor) {
         created_by_persona_id: personaId,
         created_by_nombre: nombre,
       })
-      .select("*, auditor_lider:personas!sig_auditorias_auditor_persona_id_fkey(id,nombre), auditado:personas!sig_auditorias_auditado_persona_id_fkey(id,nombre,correo)")
+      .select("*, auditor_lider:personas!sig_auditorias_auditor_persona_id_fkey(id,nombre), auditado:personas!sig_auditorias_auditado_persona_id_fkey(id,nombre)")
       .single();
     if (error) return { ok: false, error, data: null };
 
