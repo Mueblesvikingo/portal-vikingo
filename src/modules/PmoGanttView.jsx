@@ -11,6 +11,11 @@ const DAY_MS = 86400000;
 const ROW_H = 40;
 const SEMAFORO_COLOR = { Verde: "#10b981", Amarillo: "#f59e0b", Rojo: "#ef4444" };
 const DEFAULT_COLOR = "#64748b";
+// Paleta pastel discreta para separar filas visualmente — deliberadamente
+// fuera de la familia rojo/ámbar/verde del semáforo (esa sí es semántica,
+// vive en las barras) para que el fondo de fila nunca se lea como si
+// dijera algo sobre el estado del proyecto.
+const ROW_TINTS = ["#ffffff", "#eef4fb", "#f2eefb", "#eef7f6"];
 
 function toDate(s) {
   return new Date(`${s}T00:00:00`);
@@ -151,7 +156,7 @@ export default function PmoGanttView({ proyectos }) {
             )}
 
             {rows.map(({ p, start, end }, rowIndex) => {
-              const stripe = rowIndex % 2 === 1;
+              const rowTint = ROW_TINTS[rowIndex % ROW_TINTS.length];
               const barColor = SEMAFORO_COLOR[p.semaforo] || DEFAULT_COLOR;
               const isOpen = openId === p.id;
               const isHovered = hoveredId === p.id;
@@ -168,9 +173,9 @@ export default function PmoGanttView({ proyectos }) {
                 <div key={p.id}>
                   <div
                     className="flex items-stretch border-b border-slate-50 hover:bg-slate-50/60"
-                    style={{ height: ROW_H, background: stripe ? "#eef2f9" : undefined }}
+                    style={{ height: ROW_H, background: rowTint }}
                   >
-                    <div className="sticky left-0 z-10 flex w-[220px] min-w-0 shrink-0 items-center gap-1.5 px-3" style={{ background: stripe ? "#eef2f9" : "#fff" }}>
+                    <div className="sticky left-0 z-10 flex w-[220px] min-w-0 shrink-0 items-center gap-1.5 px-3" style={{ background: rowTint }}>
                       <button type="button" onClick={() => setOpenId((cur) => (cur === p.id ? null : p.id))} className="shrink-0" title={done ? "Cerrado / 100% avance" : "En curso"}>
                         {done ? (
                           <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-[8px] font-black text-white" style={{ background: barColor }}>✓</span>
