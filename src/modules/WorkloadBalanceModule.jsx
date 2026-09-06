@@ -5,6 +5,7 @@ import { updateActivitySemaforo, getSubprocesosCatalog, updateSubprocesoPriorida
 import { getProyectos, updateProyecto, createProyecto, closeProyecto, reopenProyecto, createRecordatorio, getPendingRecordatorios, markRecordatorioVisto, getRecordatoriosByProyecto } from "../services/pmoService";
 import { mapProcesses as pmoProcessOptions } from "../services/processCatalog";
 import SemaforoDot from "../shared/components/SemaforoDot";
+import PmoGanttView from "./PmoGanttView";
 
 // Los campos de texto libre del Tablero de Proyectos (etapa, próximo hito,
 // decisión) son celdas angostas — sin esto el texto se desbordaba oculto
@@ -1519,6 +1520,7 @@ export default function WorkloadBalanceModule({
   // banderas de pmo revienta el componente entero (ReferenceError de
   // temporal dead zone) en cuanto se evalúa ese useEffect.
   const [pmoShowHistorico, setPmoShowHistorico] = useState(false);
+  const [pmoShowGantt, setPmoShowGantt] = useState(false);
   async function loadPmoData() {
     setPmoLoading(true);
     const [proyectos, recordatorios] = await Promise.all([
@@ -4569,11 +4571,18 @@ function canReviewPlan() {
                     <button type="button" onClick={() => setPmoShowHistorico(false)} className={`rounded-md px-3 py-1.5 transition ${!pmoShowHistorico ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Activos</button>
                     <button type="button" onClick={() => setPmoShowHistorico(true)} className={`rounded-md px-3 py-1.5 transition ${pmoShowHistorico ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Histórico</button>
                   </div>
-                  {!pmoShowHistorico && isStrategicTeamMember(currentUser) && (
-                    <button type="button" onClick={() => setPmoCreating((current) => !current)} className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 px-3 py-1.5 text-[10px] font-black text-sky-700 transition hover:border-sky-400 hover:bg-sky-100">
-                      + Nuevo proyecto
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {!pmoShowHistorico && (
+                      <button type="button" onClick={() => setPmoShowGantt((current) => !current)} title="Ver proyectos como línea de tiempo" className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-black transition ${pmoShowGantt ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:text-slate-600"}`}>
+                        📊 Gantt
+                      </button>
+                    )}
+                    {!pmoShowHistorico && isStrategicTeamMember(currentUser) && (
+                      <button type="button" onClick={() => setPmoCreating((current) => !current)} className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 px-3 py-1.5 text-[10px] font-black text-sky-700 transition hover:border-sky-400 hover:bg-sky-100">
+                        + Nuevo proyecto
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {pmoCreating && (
@@ -4608,6 +4617,8 @@ function canReviewPlan() {
 
                 {pmoLoading ? (
                   <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-[11px] font-bold text-slate-400">Cargando tablero de proyectos…</div>
+                ) : pmoShowGantt && !pmoShowHistorico ? (
+                  <PmoGanttView proyectos={pmoProyectos} />
                 ) : (
                   <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div className="overflow-x-auto">
