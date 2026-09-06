@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Diagrama de Gantt del Tablero de Proyectos — mismo diseño y mecánica de
 // línea de tiempo que el Gantt de metas de portal-crisali (src/modules/goals/GanttView.jsx),
@@ -11,11 +11,21 @@ const DAY_MS = 86400000;
 const ROW_H = 40;
 const SEMAFORO_COLOR = { Verde: "#10b981", Amarillo: "#f59e0b", Rojo: "#ef4444" };
 const DEFAULT_COLOR = "#64748b";
-// Paleta pastel discreta para separar filas visualmente — deliberadamente
-// fuera de la familia rojo/ámbar/verde del semáforo (esa sí es semántica,
-// vive en las barras) para que el fondo de fila nunca se lea como si
-// dijera algo sobre el estado del proyecto.
-const ROW_TINTS = ["#ffffff", "#eef4fb", "#f2eefb", "#eef7f6"];
+// Tono pastel de las filas intercaladas — elegible por quien ve el
+// tablero (ícono de paleta en el encabezado), no fijo. Ninguna opción cae
+// en la familia rojo/ámbar/verde del semáforo (esa sí es semántica, vive
+// en las barras) para que el fondo de fila nunca se lea como si dijera
+// algo sobre el estado del proyecto.
+const TINT_SWATCHES = [
+  { name: "Azul", value: "#eef4fb" },
+  { name: "Menta", value: "#eafaf3" },
+  { name: "Rosa", value: "#fdeef3" },
+  { name: "Lila", value: "#f3eefb" },
+  { name: "Amarillo", value: "#fdf8e6" },
+  { name: "Turquesa", value: "#e8f8f7" },
+  { name: "Durazno", value: "#fdf1e6" },
+];
+const TINT_STORAGE_KEY = "vikingo-gantt-row-tint";
 
 function toDate(s) {
   return new Date(`${s}T00:00:00`);
@@ -35,6 +45,34 @@ function mondayOnOrAfter(d) {
 export default function PmoGanttView({ proyectos }) {
   const [openId, setOpenId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
+  const [rowTint, setRowTint] = useState(TINT_SWATCHES[0].value);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef(null);
+
+  // Preferencia por navegador, no por usuario de Supabase — es solo un
+  // gusto visual de quien mira el tablero en ese equipo, no un dato de
+  // negocio que valga la pena guardar en la base de datos.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(TINT_STORAGE_KEY);
+      if (saved) setRowTint(saved);
+    } catch { /* localStorage no disponible — se queda en el default */ }
+  }, []);
+
+  useEffect(() => {
+    if (!pickerOpen) return undefined;
+    function handleClickOutside(event) {
+      if (pickerRef.current && !pickerRef.current.contains(event.target)) setPickerOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [pickerOpen]);
+
+  function chooseTint(value) {
+    setRowTint(value);
+    setPickerOpen(false);
+    try { localStorage.setItem(TINT_STORAGE_KEY, value); } catch { /* ignorar */ }
+  }
 
   const dated = (proyectos || []).filter((p) => p.fecha_hito);
   const undated = (proyectos || []).filter((p) => !p.fecha_hito);
@@ -100,13 +138,37 @@ export default function PmoGanttView({ proyectos }) {
           <span className="text-sm text-sky-500">✨</span>
           <p className="text-sm font-black text-slate-900">Diagrama de Gantt</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {["Verde", "Amarillo", "Rojo"].filter((k) => counts[k] > 0).map((k) => (
             <span key={k} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide" style={{ background: `${SEMAFORO_COLOR[k]}18`, color: SEMAFORO_COLOR[k] }}>
               <span className="h-1.5 w-1.5 rounded-full" style={{ background: SEMAFORO_COLOR[k] }} />
               {k} · {counts[k]}
             </span>
           ))}
+          <div ref={pickerRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setPickerOpen((cur) => !cur)}
+              title="Color de las filas intercaladas"
+              className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-[11px] shadow-sm transition hover:border-slate-300"
+            >
+              🎨
+            </button>
+            {pickerOpen && (
+              <div className="absolute right-0 top-8 z-30 flex gap-1.5 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                {TINT_SWATCHES.map((swatch) => (
+                  <button
+                    key={swatch.value}
+                    type="button"
+                    onClick={() => chooseTint(swatch.value)}
+                    title={swatch.name}
+                    className={`h-6 w-6 rounded-full border-2 transition ${rowTint === swatch.value ? "border-slate-500" : "border-white hover:border-slate-200"}`}
+                    style={{ background: swatch.value, boxShadow: "inset 0 0 0 1px rgba(148,163,184,0.4)" }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -156,7 +218,7 @@ export default function PmoGanttView({ proyectos }) {
             )}
 
             {rows.map(({ p, start, end }, rowIndex) => {
-              const rowTint = ROW_TINTS[rowIndex % ROW_TINTS.length];
+              const rowBg = rowIndex % 2 === 1 ? rowTint : "#ffffff";
               const barColor = SEMAFORO_COLOR[p.semaforo] || DEFAULT_COLOR;
               const isOpen = openId === p.id;
               const isHovered = hoveredId === p.id;
@@ -173,9 +235,9 @@ export default function PmoGanttView({ proyectos }) {
                 <div key={p.id}>
                   <div
                     className="flex items-stretch border-b border-slate-50 hover:bg-slate-50/60"
-                    style={{ height: ROW_H, background: rowTint }}
+                    style={{ height: ROW_H, background: rowBg }}
                   >
-                    <div className="sticky left-0 z-10 flex w-[220px] min-w-0 shrink-0 items-center gap-1.5 px-3" style={{ background: rowTint }}>
+                    <div className="sticky left-0 z-10 flex w-[220px] min-w-0 shrink-0 items-center gap-1.5 px-3" style={{ background: rowBg }}>
                       <button type="button" onClick={() => setOpenId((cur) => (cur === p.id ? null : p.id))} className="shrink-0" title={done ? "Cerrado / 100% avance" : "En curso"}>
                         {done ? (
                           <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-[8px] font-black text-white" style={{ background: barColor }}>✓</span>
