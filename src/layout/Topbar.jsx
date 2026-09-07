@@ -1,5 +1,6 @@
 import { useLocation } from "react-router-dom";
 import NotificationBell from "../components/NotificationBell";
+import MessagesPanel from "../components/MessagesPanel";
 
 const pageTitles = {
   "/": "Inicio Ejecutivo",
@@ -48,6 +49,7 @@ export default function Topbar({
 
       <div className="flex items-center gap-2 sm:gap-4">
         <NotificationBell currentUser={currentUser} />
+        <MessagesPanel currentUser={currentUser} />
 
         <div className="hidden text-right sm:block">
           <div className="text-xs text-slate-400">
