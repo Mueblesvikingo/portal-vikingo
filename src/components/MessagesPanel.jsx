@@ -3,11 +3,42 @@ import {
   getDirectorioPersonas,
   getMensajesDePersona,
   enviarMensaje,
-  marcarMensajeLeido,
   marcarConversacionLeida,
 } from "../services/mensajesService";
 
 const POLL_INTERVAL_MS = 15000;
+
+const AVATAR_COLORS = ["bg-rose-500", "bg-amber-500", "bg-emerald-500", "bg-sky-500", "bg-violet-500", "bg-teal-500", "bg-orange-500"];
+
+function getInitials(name) {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  return (words[0][0] + (words[1]?.[0] || "")).toUpperCase();
+}
+
+function getAvatarColor(name) {
+  const str = String(name || "");
+  let hash = 0;
+  for (let i = 0; i < str.length; i += 1) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+function Avatar({ name, size = "h-8 w-8 text-[10px]" }) {
+  return (
+    <span className={`flex ${size} shrink-0 items-center justify-center rounded-full font-black text-white ${getAvatarColor(name)}`}>
+      {getInitials(name)}
+    </span>
+  );
+}
+
+// Palomitas estilo WhatsApp: una gris (enviado), dos azules (leído).
+function ReadTicks({ leido }) {
+  return (
+    <span className={`inline-flex text-[11px] leading-none ${leido ? "text-sky-400" : "text-white/50"}`}>
+      {leido ? "✓✓" : "✓"}
+    </span>
+  );
+}
 
 function formatWhen(value) {
   if (!value) return "";
@@ -33,8 +64,15 @@ export default function MessagesPanel({ currentUser }) {
   const [nuevoDestinatarioId, setNuevoDestinatarioId] = useState("");
   const [borrador, setBorrador] = useState("");
   const [sending, setSending] = useState(false);
+  const [panelVisible, setPanelVisible] = useState(false);
   const containerRef = useRef(null);
   const threadEndRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) { setPanelVisible(false); return undefined; }
+    const id = requestAnimationFrame(() => setPanelVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, [open]);
 
   useEffect(() => {
     if (!personaId) { setMensajes([]); return undefined; }
@@ -99,23 +137,26 @@ export default function MessagesPanel({ currentUser }) {
     setNuevoDestinatarioId("");
   }
 
-  async function handleMarcarLeido(mensajeId) {
-    const result = await marcarMensajeLeido(mensajeId);
-    if (!result?.ok) return;
-    setMensajes((current) => current.map((m) => (m.id === mensajeId ? { ...m, leido: true, leido_at: new Date().toISOString() } : m)));
-  }
-
-  async function handleMarcarTodoLeido() {
-    if (!activeConvo) return;
-    await marcarConversacionLeida(personaId, activeConvo.personaId);
+  async function marcarConversacionComoLeida(otraPersonaId) {
+    await marcarConversacionLeida(personaId, otraPersonaId);
     setMensajes((current) =>
       current.map((m) =>
-        Number(m.remitente_persona_id) === Number(activeConvo.personaId) && Number(m.destinatario_persona_id) === Number(personaId)
+        Number(m.remitente_persona_id) === Number(otraPersonaId) && Number(m.destinatario_persona_id) === Number(personaId)
           ? { ...m, leido: true, leido_at: new Date().toISOString() }
           : m
       )
     );
   }
+
+  // Como WhatsApp: con la conversación abierta, cualquier mensaje recibido
+  // (el que ya estaba, o uno nuevo que llegue mientras se sigue viendo el
+  // hilo) se marca leído solo, sin que la persona tenga que darle clic a nada.
+  useEffect(() => {
+    if (activeConvoId == null) return;
+    const convo = conversaciones.find((c) => Number(c.personaId) === Number(activeConvoId));
+    if (convo && convo.unread > 0) marcarConversacionComoLeida(convo.personaId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConvoId, mensajes]);
 
   async function handleEnviar() {
     const texto = borrador.trim();
@@ -143,36 +184,32 @@ export default function MessagesPanel({ currentUser }) {
         type="button"
         onClick={() => setOpen((current) => !current)}
         title="Mensajes"
-        className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg transition hover:bg-slate-50"
+        className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg transition hover:bg-slate-50 active:scale-90"
       >
         💬
         {totalUnread > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-black text-white">
+          <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] animate-pulse items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-black text-white">
             {totalUnread > 9 ? "9+" : totalUnread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-50 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:w-96">
+        <div
+          className={`absolute right-0 top-12 z-50 w-80 origin-top-right overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl transition-all duration-150 ease-out sm:w-96 ${
+            panelVisible ? "scale-100 opacity-100" : "scale-95 opacity-0"
+          }`}
+        >
           <div className="flex items-center gap-2 bg-[#001225] px-4 py-2.5">
             {activeConvoId != null && (
               <button type="button" onClick={() => { setActiveConvoId(null); setActiveConvoNombre(""); }} className="text-white/70 hover:text-white" title="Volver">
                 ←
               </button>
             )}
+            {activeConvoId != null && <Avatar name={activeConvoNombre || activeConvo?.nombre} size="h-6 w-6 text-[9px]" />}
             <p className="flex-1 truncate text-[10px] font-black uppercase tracking-widest text-white">
               {activeConvoId != null ? activeConvoNombre || activeConvo?.nombre || "Conversación" : "Mensajes"}
             </p>
-            {activeConvoId != null && activeConvo?.unread > 0 && (
-              <button
-                type="button"
-                onClick={handleMarcarTodoLeido}
-                className="shrink-0 rounded-md border border-white/20 bg-white/10 px-1.5 py-0.5 text-[9px] font-black text-white hover:bg-white/20"
-              >
-                ✓ Marcar todo
-              </button>
-            )}
           </div>
 
           {activeConvoId == null ? (
@@ -205,11 +242,12 @@ export default function MessagesPanel({ currentUser }) {
                         key={c.personaId}
                         type="button"
                         onClick={() => abrirConversacionExistente(c.personaId, c.nombre)}
-                        className="flex w-full items-start justify-between gap-2 border-b border-slate-100 px-4 py-3 text-left last:border-b-0 hover:bg-slate-50"
+                        className="flex w-full items-center gap-2.5 border-b border-slate-100 px-4 py-3 text-left last:border-b-0 hover:bg-slate-50"
                       >
-                        <div className="min-w-0">
+                        <Avatar name={c.nombre} />
+                        <div className="min-w-0 flex-1">
                           <p className="truncate text-[11px] font-black text-slate-700">{c.nombre || "Persona"}</p>
-                          <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">{last?.mensaje}</p>
+                          <p className={`mt-0.5 truncate text-[10px] ${c.unread > 0 ? "font-black text-slate-600" : "font-semibold text-slate-400"}`}>{last?.mensaje}</p>
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1">
                           <span className="text-[9px] font-bold text-slate-300">{formatWhen(last?.created_at)}</span>
@@ -232,20 +270,11 @@ export default function MessagesPanel({ currentUser }) {
                   const esMio = Number(m.remitente_persona_id) === Number(personaId);
                   return (
                     <div key={m.id} className={`mb-1.5 flex ${esMio ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[80%] rounded-2xl px-3 py-1.5 ${esMio ? "bg-[#001225] text-white" : "bg-slate-100 text-slate-700"}`}>
+                      <div className={`max-w-[80%] rounded-2xl px-3 py-1.5 shadow-sm ${esMio ? "bg-[#001225] text-white" : "bg-slate-100 text-slate-700"}`}>
                         <p className="text-[11px] font-semibold leading-snug">{m.mensaje}</p>
-                        <div className={`mt-0.5 flex items-center gap-1 text-[9px] font-bold ${esMio ? "text-white/50" : "text-slate-400"}`}>
+                        <div className={`mt-0.5 flex items-center justify-end gap-1 text-[9px] font-bold ${esMio ? "text-white/50" : "text-slate-400"}`}>
                           <span>{formatWhen(m.created_at)}</span>
-                          {esMio && <span>{m.leido ? "✓✓ Leído" : "✓ Enviado"}</span>}
-                          {!esMio && !m.leido && (
-                            <button
-                              type="button"
-                              onClick={() => handleMarcarLeido(m.id)}
-                              className="ml-1 rounded border border-slate-300 bg-white px-1 text-slate-500 hover:bg-slate-50"
-                            >
-                              ✓ Leído
-                            </button>
-                          )}
+                          {esMio && <ReadTicks leido={m.leido} />}
                         </div>
                       </div>
                     </div>
@@ -265,7 +294,7 @@ export default function MessagesPanel({ currentUser }) {
                   type="button"
                   onClick={handleEnviar}
                   disabled={sending || !borrador.trim()}
-                  className="h-9 shrink-0 rounded-xl bg-[#001225] px-3 text-[11px] font-black text-white disabled:opacity-40"
+                  className="h-9 shrink-0 rounded-xl bg-[#001225] px-3 text-[11px] font-black text-white transition active:scale-95 disabled:opacity-40 disabled:active:scale-100"
                 >
                   Enviar
                 </button>
