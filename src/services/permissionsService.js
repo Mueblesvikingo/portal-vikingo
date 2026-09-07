@@ -425,6 +425,7 @@ const WORKLOAD_SCOPED_EDITORS = {
   11: ["Inspector de Calidad"], // RUIZ CARREON BEATRIZ → persona_roles.rol de Laura y Sulidey
   5: ["Supervisor de Almacén"], // HERNANDO GONZALEZ KEVYN (Kevin) → persona_roles.rol de Erika y Erick (unificado 01/09/2026, antes eran 2 roles distintos)
   3: ["Chofer-Repartidor"], // HERNANDEZ ESCOBEDO EDUARDO (Coordinador de Distribución) → persona_roles.rol de su equipo de reparto
+  13: ["Supervisor de Área"], // TERRONES TAPIA HUGO (Gerente de operaciones) → persona_roles.rol de sus supervisores de "Planeación y control de la producción" (Martín Cisneros, José Guadalupe Hernández, Sandra Neri, Joseline Orduña); ese texto de rol solo existe en ese proceso (07/09/2026)
 };
 
 // Respaldo por persona_id (no por texto de rol) para quien no tiene ningún
