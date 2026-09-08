@@ -2638,7 +2638,6 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                       <th className="px-3 py-2">📅 Fecha</th>
                       <th className="px-3 py-2">🚦 Estado</th>
                       <th className="px-3 py-2">🧑‍💼 Auditor líder</th>
-                      <th className="px-3 py-2">👥 Equipo</th>
                       <th className="px-3 py-2">✍️ Firmas</th>
                       <th className="px-3 py-2">🔍 Hallazgos</th>
                       <th className="px-3 py-2 text-right">Acciones</th>
@@ -2672,9 +2671,6 @@ export default function DiagnosticoSIGModule({ currentUser }) {
                             </button>
                           </td>
                           <td className="px-3 py-2.5 font-semibold text-slate-500">{auditoria.auditor_lider?.nombre || "Sin asignar"}</td>
-                          <td className="px-3 py-2.5 font-semibold text-slate-500">
-                            {auditoria.equipo?.length ? auditoria.equipo.map((e) => e.persona?.nombre).filter(Boolean).join(", ") : <span className="text-slate-300">—</span>}
-                          </td>
                           <td className="px-3 py-2.5">
                             <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${firmasCount === 4 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{firmasCount}/4</span>
                           </td>
