@@ -436,6 +436,7 @@ const WORKLOAD_SCOPED_EDITORS = {
 // avisar; esto no depende de ese texto.
 const WORKLOAD_SCOPED_EDITOR_PERSONAS = {
   5: [23], // Kevin → Laura Alvarado Sámano
+  13: [29], // Hugo Terrones → Sofía Benítez Chávez (Auxiliar de Embalaje), sin persona_roles activo que matchear
 };
 
 // `targetPersonRoles` son los `persona_roles.rol` (activos) de la persona
