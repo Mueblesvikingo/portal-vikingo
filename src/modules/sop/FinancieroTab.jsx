@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from "recharts";
 import { buildHorizonte, formatMoney, LINEAS } from "./sopHelpers";
 import SolicitudModal from "./SolicitudModal";
+import VentanaSemanalButton from "./VentanaSemanalButton";
 
 // Numero clicable -> input, mismo patron que EditableNum de OperacionTab.jsx.
 function EditableMonto({ value, canEdit, onSave }) {
@@ -222,6 +223,7 @@ export default function FinancieroTab({
 
   return (
     <div className="space-y-3 p-3">
+      <VentanaSemanalButton pestana="financiero" currentUser={currentUser} />
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-sky-200 bg-sky-50 p-3 text-[10px] font-bold text-sky-700">
         <span>
           Escenario de venta activo: <b>{escenarioActivo}</b> · Ventas netas, Margen bruto ($) y Gastos fijos vienen de Plan de venta/Parámetros, pero se pueden ajustar manualmente aquí (punto ámbar = ajustado). <b>Ojo</b>: Dashboard y Plan de operación siguen mostrando el valor real de Plan de venta, no el ajuste — úsalo solo cuando Finanzas tenga información que aún no está en Plan de venta.

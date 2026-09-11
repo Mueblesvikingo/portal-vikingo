@@ -722,6 +722,7 @@ export default function SopModule({ currentUser }) {
                 historico={historico}
                 canEdit={canEdit}
                 onSaveVentaReal={handleSaveVentaReal}
+                currentUser={currentUser}
               />
             )}
             {activeTab === "plan-venta" && (

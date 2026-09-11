@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import VentanaSemanalButton from "./VentanaSemanalButton";
 
 const EMPTY_DRAFT = { mes_reunion: "", decision: "", opcion_elegida: "", responsable: "", fecha: "" };
 const PRIORIDADES = ["Crítica", "Alta", "Media", "Baja"];
@@ -98,6 +99,7 @@ export default function DecisionesTab({ decisiones, canEdit, canRequestDirectorD
 
   return (
     <div className="space-y-3 p-3">
+      <VentanaSemanalButton pestana="decisiones" currentUser={currentUser} />
       {canEdit && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Registrar acuerdo de la reunión S&amp;OP</p>

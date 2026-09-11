@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { buildHorizonte, formatMoney, formatNumber, LINEAS } from "./sopHelpers";
+import VentanaSemanalButton from "./VentanaSemanalButton";
 
 const LINEA_STYLE = {
   Bases: { badge: "border-sky-200 bg-sky-50 text-sky-700", row: "bg-sky-50/50", total: "bg-sky-50 text-sky-700", dot: "bg-sky-400" },
@@ -195,6 +196,7 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
     <div className="space-y-3 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
+          <VentanaSemanalButton pestana="plan-venta" currentUser={currentUser} />
           {canEdit && !showAgregar && (
             <button
               type="button"
