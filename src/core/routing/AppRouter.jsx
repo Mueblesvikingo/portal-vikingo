@@ -23,6 +23,9 @@ export default function AppRouter({
 }) {
   const restrictedStart = !canViewModule(currentUser, "home");
   const directorStart = isDirectorGeneral(currentUser);
+  // Roles operativos (Supervisor/Auxiliar) no ven Diseño organizacional —
+  // caerían en una ruta fuera de su menú si mandáramos "/capacity" a ciegas.
+  const restrictedFallbackRoute = canViewModule(currentUser, "capacity") ? "/capacity" : "/workload-balance";
 
   return (
     <BrowserRouter>
@@ -35,7 +38,7 @@ export default function AppRouter({
             path="/"
             element={
               restrictedStart ? (
-                <Navigate to="/capacity" replace />
+                <Navigate to={restrictedFallbackRoute} replace />
               ) : directorStart ? (
                 // Temporal: Inicio Ejecutivo se oculta mientras se pule —
                 // Centro de Decisiones es el primer módulo que debe ver
