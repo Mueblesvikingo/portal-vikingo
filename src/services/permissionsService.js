@@ -217,17 +217,25 @@ export function canViewModule(user, moduleKey) {
   return defaultVisible(user, moduleKey);
 }
 
+// Módulos donde, a falta de un override explícito, solo el equipo
+// estratégico puede editar (todos pueden verlos, pero no modificarlos) —
+// Organigrama por pedido explícito del usuario: cualquiera puede consultarlo,
+// solo Director/PM/Coordinador SIG/Analista de Procesos lo modifica.
+const STRATEGIC_TEAM_ONLY_EDIT_MODULES = ["organigrama"];
+
 // Default de edición: hoy ningún módulo bloquea la edición salvo las reglas
 // específicas de Balance de Carga (ver hasWorkloadFullAccess /
-// canEditWorkloadPendingActivities más abajo). Para el resto de los módulos,
-// "editar" solo cambia de comportamiento si hay un override explícito (de
-// usuario o de algún rol aplicable).
+// canEditWorkloadPendingActivities más abajo) y los módulos listados arriba.
+// Para el resto, "editar" solo cambia de comportamiento si hay un override
+// explícito (de usuario o de algún rol aplicable).
 export function canEditModule(user, moduleKey) {
   const userOverride = getUserModuleOverride(user, moduleKey);
   if (userOverride && typeof userOverride.editar === "boolean") return userOverride.editar;
 
   const rolesEditar = getRolesFieldValue(user, moduleKey, "editar");
   if (rolesEditar !== null) return rolesEditar;
+
+  if (STRATEGIC_TEAM_ONLY_EDIT_MODULES.includes(moduleKey)) return isStrategicTeamMember(user);
 
   return true;
 }
