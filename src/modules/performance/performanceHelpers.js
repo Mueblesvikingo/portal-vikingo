@@ -137,7 +137,7 @@ export const SENTIDO_OPTIONS = ["Mayor es mejor", "Menor es mejor"];
 export function computeCumplimientoValue(real, meta, sentido) {
   if (real === null || real === undefined || !meta) return null;
   if (sentido === "Menor es mejor") {
-    if (real <= 0) return 999;
+    if (real <= 0) return 100;
     return Math.round((meta / real) * 100);
   }
   return Math.round((real / meta) * 100);
