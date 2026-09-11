@@ -35,6 +35,18 @@ const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
   "acciones",
 ];
 
+// Supervisores y auxiliares (cualquier rol que empiece con estas palabras,
+// de cualquier proceso) ven únicamente Organigrama y Balance de Carga —
+// pedido explícito del usuario.
+const OPERATIVE_ROLE_PREFIXES = ["Supervisor", "Auxiliar"];
+const MODULES_VISIBLE_FOR_OPERATIVE_ROLES = ["organigrama", "workload-balance"];
+
+function isOperativeRole(user) {
+  return getApplicableRoles(user).some((role) =>
+    OPERATIVE_ROLE_PREFIXES.some((prefix) => role.startsWith(prefix))
+  );
+}
+
 const WORKLOAD_FULL_ACCESS_ROLES = [
   "Director",
   "PM",
@@ -173,6 +185,10 @@ function getRolesFieldValue(user, moduleKey, field) {
 
 function defaultVisible(user, moduleKey) {
   if (MODULES_HIDDEN_BY_DEFAULT.includes(moduleKey)) return false;
+
+  if (isOperativeRole(user)) {
+    return MODULES_VISIBLE_FOR_OPERATIVE_ROLES.includes(moduleKey);
+  }
 
   if (STRATEGIC_TEAM_ONLY_MODULES.includes(moduleKey)) {
     const roles = getApplicableRoles(user);
