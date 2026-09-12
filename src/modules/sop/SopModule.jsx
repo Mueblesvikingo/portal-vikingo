@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getSemanaReferenciaISO } from "./sopHelpers";
 import { canViewModule, canEditSopOperacionParams, canEditSopFinancieroParams, canEditSopPlanVenta, canCreateSopSolicitud } from "../../services/permissionsService";
 import {
   getProductos,
@@ -16,6 +17,9 @@ import {
   getDecisiones,
   createDecision,
   deleteDecision,
+  getSopSemanas,
+  createSopSemana,
+  cerrarSopSemana,
   getHistorico,
   closeCurrentMonth,
   getFirmasCiclo,
@@ -86,6 +90,8 @@ export default function SopModule({ currentUser }) {
   const [planVenta, setPlanVenta] = useState([]);
   const [ventaReal, setVentaReal] = useState([]);
   const [decisiones, setDecisiones] = useState([]);
+  const [sopSemanas, setSopSemanas] = useState([]);
+  const [currentSopSemana, setCurrentSopSemana] = useState(null);
   const [historico, setHistorico] = useState([]);
   const [firmas, setFirmas] = useState([]);
   const [prioridades, setPrioridades] = useState([]);
@@ -107,13 +113,14 @@ export default function SopModule({ currentUser }) {
 
   async function loadAll() {
     setLoading(true);
-    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, historicoData, prioridadesData, capacidadProcesosData, infraestructuraData, financieroFilasData, financieroMontosData, financieroAjustesData, personasData] = await Promise.all([
+    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, sopSemanasData, historicoData, prioridadesData, capacidadProcesosData, infraestructuraData, financieroFilasData, financieroMontosData, financieroAjustesData, personasData] = await Promise.all([
       getProductos(),
       getControl(),
       getParametros(),
       getPlanVenta(),
       getVentaReal(),
       getDecisiones(),
+      getSopSemanas(),
       getHistorico(),
       getPrioridadesSemana(),
       getCapacidadProcesos(),
@@ -129,6 +136,7 @@ export default function SopModule({ currentUser }) {
     setPlanVenta(planData);
     setVentaReal(ventaRealData);
     setDecisiones(decisionesData);
+    setSopSemanas(sopSemanasData);
     setHistorico(historicoData);
     setPrioridades(prioridadesData);
     setCapacidadProcesos(capacidadProcesosData);
@@ -242,7 +250,7 @@ export default function SopModule({ currentUser }) {
   }
 
   async function handleCreateDecision(payload, actor) {
-    const result = await createDecision(payload, actor);
+    const result = await createDecision({ ...payload, semana_id: currentSopSemana?.id || null }, actor);
     if (!result.ok) {
       console.error(result.error);
       setMessage("No fue posible guardar la decisión.");
@@ -263,6 +271,46 @@ export default function SopModule({ currentUser }) {
     }
     setDecisiones((current) => current.filter((d) => d.id !== id));
     setMessage("Decisión eliminada.");
+  }
+
+  // Semana de la junta de alineación S&OP — mismo patrón de
+  // Nueva/Guardar/Consultar/Cerrar que ya usa Seguimiento Estratégico,
+  // adaptado: aquí "guardar" es crear el registro de la semana (los
+  // acuerdos ya se guardan uno a uno al capturarlos, no en bloque).
+  function handleNuevaSopSemana() {
+    const { lunesISO, domingoISO } = getSemanaReferenciaISO();
+    setCurrentSopSemana({ id: null, fecha_inicio: lunesISO, fecha_fin: domingoISO, estado: "abierta" });
+  }
+
+  async function handleGuardarSopSemana() {
+    if (!currentSopSemana || currentSopSemana.id) return;
+    const result = await createSopSemana(currentSopSemana);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar la semana.");
+      return;
+    }
+    setCurrentSopSemana(result.data);
+    setSopSemanas((current) => [result.data, ...current]);
+    setMessage("Semana guardada.");
+  }
+
+  function handleConsultarSopSemana(semana) {
+    setCurrentSopSemana(semana);
+  }
+
+  async function handleCerrarSopSemana() {
+    if (!currentSopSemana?.id) return;
+    if (!window.confirm("¿Cerrar esta semana? Seguirás pudiendo consultarla, pero quedará marcada como cerrada.")) return;
+    const result = await cerrarSopSemana(currentSopSemana.id);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible cerrar la semana.");
+      return;
+    }
+    setCurrentSopSemana((current) => ({ ...current, estado: "cerrada" }));
+    setSopSemanas((current) => current.map((s) => (s.id === currentSopSemana.id ? { ...s, estado: "cerrada" } : s)));
+    setMessage("Semana cerrada.");
   }
 
   // Un líder de área escala un acuerdo a Dirección desde su propia pestaña
@@ -810,6 +858,12 @@ export default function SopModule({ currentUser }) {
                 onConvertToAssignment={handleConvertToAssignment}
                 personasCatalogo={personasCatalogo}
                 currentUser={currentUser}
+                sopSemanas={sopSemanas}
+                currentSopSemana={currentSopSemana}
+                onNuevaSemana={handleNuevaSopSemana}
+                onGuardarSemana={handleGuardarSopSemana}
+                onConsultarSemana={handleConsultarSopSemana}
+                onCerrarSemana={handleCerrarSopSemana}
               />
             )}
             {activeTab === "prioridades" && (

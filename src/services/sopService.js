@@ -305,6 +305,7 @@ export async function createDecision(payload, actor) {
         opcion_elegida: payload.opcion_elegida || null,
         responsable: payload.responsable || null,
         fecha: payload.fecha || null,
+        semana_id: payload.semana_id || null,
         created_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
         created_by_nombre: actor?.nombre || actor?.usuario || null,
       })
@@ -315,6 +316,52 @@ export async function createDecision(payload, actor) {
     return { ok: true, error: null, data };
   } catch (err) {
     return { ok: false, error: err, data: null };
+  }
+}
+
+// Semanas de la junta de alineación S&OP — mismo patrón que
+// seguimiento_semanas de Seguimiento Estratégico (Nueva/Guardar/Consultar/
+// Cerrar semana), adaptado a S&OP: los acuerdos capturados durante la junta
+// de una semana quedan ligados a esa semana (sop_decisiones.semana_id) en
+// vez de inferirse solo por fecha.
+export async function getSopSemanas() {
+  try {
+    const { data, error } = await supabase
+      .from("sop_semanas")
+      .select("*")
+      .order("fecha_inicio", { ascending: false });
+    if (error) {
+      console.error("Error al cargar semanas S&OP:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar semanas S&OP:", err);
+    return [];
+  }
+}
+
+export async function createSopSemana({ fecha_inicio, fecha_fin }) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_semanas")
+      .insert({ fecha_inicio, fecha_fin, estado: "abierta" })
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function cerrarSopSemana(id) {
+  try {
+    const { error } = await supabase.from("sop_semanas").update({ estado: "cerrada" }).eq("id", id);
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: err };
   }
 }
 

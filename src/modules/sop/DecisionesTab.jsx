@@ -1,5 +1,10 @@
 import { Fragment, useMemo, useState } from "react";
-import { formatFechaCorta, getSemanaReferenciaISO } from "./sopHelpers";
+import { formatFechaCorta } from "./sopHelpers";
+
+function formatDate(iso) {
+  if (!iso) return "";
+  return formatFechaCorta(new Date(`${iso}T00:00:00`));
+}
 
 const EMPTY_DRAFT = { mes_reunion: "", decision: "", opcion_elegida: "", responsable: "", fecha: "" };
 const PRIORIDADES = ["Crítica", "Alta", "Media", "Baja"];
@@ -72,14 +77,44 @@ function ConvertirEnAsignacionForm({ decision, personasCatalogo, onConfirm, onCa
   );
 }
 
-export default function DecisionesTab({ decisiones, canEdit, canRequestDirectorDecision, onCreate, onDelete, onRequestDirectorDecision, onConvertToAssignment, personasCatalogo = [], currentUser, vistaSemanal }) {
+export default function DecisionesTab({
+  decisiones,
+  canEdit,
+  canRequestDirectorDecision,
+  onCreate,
+  onDelete,
+  onRequestDirectorDecision,
+  onConvertToAssignment,
+  personasCatalogo = [],
+  currentUser,
+  vistaSemanal,
+  sopSemanas = [],
+  currentSopSemana,
+  onNuevaSemana,
+  onGuardarSemana,
+  onConsultarSemana,
+  onCerrarSemana,
+}) {
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [convertingId, setConvertingId] = useState(null);
   const [sendingId, setSendingId] = useState(null);
+  const [showSemanas, setShowSemanas] = useState(false);
 
   async function handleSave() {
+    if (vistaSemanal) {
+      if (!currentSopSemana?.id || !draft.decision.trim()) {
+        setError("Guarda la semana y captura al menos el acuerdo.");
+        return;
+      }
+      setError("");
+      setSaving(true);
+      const result = await onCreate({ ...draft, mes_reunion: `${currentSopSemana.fecha_inicio.slice(0, 7)}-01` }, currentUser);
+      setSaving(false);
+      if (result) setDraft(EMPTY_DRAFT);
+      return;
+    }
     if (!draft.mes_reunion || !draft.decision.trim()) {
       setError("Captura al menos el mes de reunión y el acuerdo.");
       return;
@@ -97,32 +132,75 @@ export default function DecisionesTab({ decisiones, canEdit, canRequestDirectorD
     setSendingId(null);
   }
 
-  // Vista semanal: no es un formulario aparte — es la misma tabla y el mismo
-  // alta de siempre, nada más filtrada a lo que hay que resolver en la junta
-  // de esta semana (sin fecha compromiso capturada todavía, o con fecha
-  // dentro de la semana que viene, o ya vencida sin resolver).
-  const { lunes, domingo, domingoISO } = getSemanaReferenciaISO();
+  // Vista semanal: mismos tabla y alta de siempre, ligados a un registro
+  // real de semana (sop_semanas) — igual patrón de Nueva/Guardar/Consultar/
+  // Cerrar que ya usa Seguimiento Estratégico — en vez de solo inferir "la
+  // semana" filtrando por fecha.
   const decisionesMostradas = useMemo(() => {
     if (!vistaSemanal) return decisiones;
-    return decisiones.filter((d) => !d.fecha || d.fecha <= domingoISO);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decisiones, vistaSemanal, domingoISO]);
+    if (!currentSopSemana?.id) return [];
+    return decisiones.filter((d) => d.semana_id === currentSopSemana.id);
+  }, [decisiones, vistaSemanal, currentSopSemana]);
 
   return (
     <div className="space-y-3 p-3">
       {vistaSemanal && (
-        <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-indigo-700">
-          Vista semanal · acuerdos a resolver en la junta del {formatFechaCorta(lunes)} al {formatFechaCorta(domingo)} (sin fecha, o vencidos/próximos a vencer)
+        <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-700">
+              {currentSopSemana ? (
+                <>Junta del {formatDate(currentSopSemana.fecha_inicio)} al {formatDate(currentSopSemana.fecha_fin)} {currentSopSemana.id ? (currentSopSemana.estado === "cerrada" ? "· cerrada" : "· abierta") : "· sin guardar"}</>
+              ) : (
+                "Vista semanal · inicia o consulta una semana para registrar sus acuerdos"
+              )}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={onNuevaSemana} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Nueva</button>
+              {currentSopSemana && !currentSopSemana.id && (
+                <button type="button" onClick={onGuardarSemana} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[10px] font-black text-white">Guardar semana</button>
+              )}
+              <div className="relative">
+                <button type="button" onClick={() => setShowSemanas((v) => !v)} className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-[10px] font-black text-indigo-700">Consultar</button>
+                {showSemanas && (
+                  <div className="absolute right-0 top-9 z-10 max-h-56 w-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                    {sopSemanas.length === 0 && <p className="px-2 py-2 text-[10px] font-bold text-slate-300">Sin semanas guardadas.</p>}
+                    {sopSemanas.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => { onConsultarSemana(s); setShowSemanas(false); }}
+                        className="block w-full rounded-lg px-2 py-1.5 text-left text-[10px] font-bold text-slate-600 hover:bg-indigo-50"
+                      >
+                        {formatDate(s.fecha_inicio)} – {formatDate(s.fecha_fin)} {s.estado === "cerrada" ? "🔒" : ""}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {currentSopSemana?.id && (
+                <button
+                  type="button"
+                  onClick={onCerrarSemana}
+                  disabled={currentSopSemana.estado === "cerrada"}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Cerrar semana
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
-      {canEdit && (
+      {canEdit && (!vistaSemanal || currentSopSemana?.id) && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Registrar acuerdo de la reunión S&amp;OP</p>
-          <div className="mt-2 grid gap-2 md:grid-cols-5">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-1">
-              Mes de reunión
-              <input type="month" value={draft.mes_reunion} onChange={(e) => setDraft((c) => ({ ...c, mes_reunion: e.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
-            </label>
+          <div className={`mt-2 grid gap-2 ${vistaSemanal ? "md:grid-cols-4" : "md:grid-cols-5"}`}>
+            {!vistaSemanal && (
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-1">
+                Mes de reunión
+                <input type="month" value={draft.mes_reunion} onChange={(e) => setDraft((c) => ({ ...c, mes_reunion: e.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+              </label>
+            )}
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 md:col-span-2">
               Acuerdo
               <input value={draft.decision} onChange={(e) => setDraft((c) => ({ ...c, decision: e.target.value }))} placeholder="Ej. Ampliar capacidad a 2 turnos" className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
@@ -164,7 +242,7 @@ export default function DecisionesTab({ decisiones, canEdit, canRequestDirectorD
           </thead>
           <tbody>
             {decisionesMostradas.length === 0 && (
-              <tr><td colSpan={6} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">{vistaSemanal ? "Nada pendiente para la junta de esta semana." : "Aún no hay acuerdos registrados."}</td></tr>
+              <tr><td colSpan={6} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">{vistaSemanal ? (currentSopSemana ? "Aún no hay acuerdos registrados para esta semana." : "Da clic en \"Nueva\" o \"Consultar\" para empezar.") : "Aún no hay acuerdos registrados."}</td></tr>
             )}
             {decisionesMostradas.map((d) => (
               <Fragment key={d.id}>
