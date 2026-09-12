@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react";
-import VentanaSemanalButton from "./VentanaSemanalButton";
+import VentanaSemanalPanel from "./VentanaSemanalPanel";
 
 const EMPTY_DRAFT = { mes_reunion: "", decision: "", opcion_elegida: "", responsable: "", fecha: "" };
 const PRIORIDADES = ["Crítica", "Alta", "Media", "Baja"];
@@ -72,7 +72,7 @@ function ConvertirEnAsignacionForm({ decision, personasCatalogo, onConfirm, onCa
   );
 }
 
-export default function DecisionesTab({ decisiones, canEdit, canRequestDirectorDecision, onCreate, onDelete, onRequestDirectorDecision, onConvertToAssignment, personasCatalogo = [], currentUser }) {
+export default function DecisionesTab({ decisiones, canEdit, canRequestDirectorDecision, onCreate, onDelete, onRequestDirectorDecision, onConvertToAssignment, personasCatalogo = [], currentUser, vistaSemanal }) {
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -97,9 +97,10 @@ export default function DecisionesTab({ decisiones, canEdit, canRequestDirectorD
     setSendingId(null);
   }
 
+  if (vistaSemanal) return <VentanaSemanalPanel pestana="decisiones" currentUser={currentUser} />;
+
   return (
     <div className="space-y-3 p-3">
-      <VentanaSemanalButton pestana="decisiones" currentUser={currentUser} />
       {canEdit && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Registrar acuerdo de la reunión S&amp;OP</p>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { buildHorizonte, formatMoney, formatNumber, LINEAS, MES_NOMBRE } from "./sopHelpers";
-import VentanaSemanalButton from "./VentanaSemanalButton";
+import VentanaSemanalPanel from "./VentanaSemanalPanel";
 
 // Captura de venta real (solo el importe total del mes, sin desglose por
 // SKU) — clic para editar, igual que las celdas de Plan de venta.
@@ -76,7 +76,7 @@ function KpiCard({ label, value, sub, tone = "slate" }) {
   );
 }
 
-export default function DashboardTab({ productos, planVenta, control, parametros, ventaReal = [], historico = [], canEdit = false, onSaveVentaReal, currentUser }) {
+export default function DashboardTab({ productos, planVenta, control, parametros, ventaReal = [], historico = [], canEdit = false, onSaveVentaReal, currentUser, vistaSemanal }) {
   const horizonte = useMemo(() => buildHorizonte(control?.mes_activo, control?.horizonte_meses || 6), [control]);
   const escenarioActivo = parametros?.escenario_venta || "Base";
 
@@ -180,9 +180,10 @@ export default function DashboardTab({ productos, planVenta, control, parametros
   );
   const gapPlanVsReal = ventaRealTotal - planParaMesesConReal;
 
+  if (vistaSemanal) return <VentanaSemanalPanel pestana="dashboard" currentUser={currentUser} />;
+
   return (
     <div className="space-y-3 p-3">
-      <VentanaSemanalButton pestana="dashboard" currentUser={currentUser} />
       <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3 text-[10px] font-bold text-sky-700">
         Escenario activo (definido en Parámetros): <b>{escenarioActivo}</b> — horizonte {control?.mes_activo ? `${horizonte[0]?.label} a ${horizonte[horizonte.length - 1]?.label}` : "sin definir"}.
       </div>

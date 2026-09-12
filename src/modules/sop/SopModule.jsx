@@ -74,6 +74,11 @@ const TABS = [
 
 export default function SopModule({ currentUser }) {
   const [activeTab, setActiveTab] = useState("dashboard");
+  // Capa temporal mientras el ciclo mensual madura: cambia la vista de las
+  // pestañas de captura a modo semanal (visibilidad real de la semana
+  // siguiente para la junta de alineación de cada martes). Un solo control
+  // global en vez de repetir el switch en cada pestaña.
+  const [vistaSemanal, setVistaSemanal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [productos, setProductos] = useState([]);
   const [control, setControl] = useState(null);
@@ -690,19 +695,31 @@ export default function SopModule({ currentUser }) {
               </button>
             )}
           </div>
-          <div className="flex gap-1 rounded-xl bg-white/10 p-1">
-            {TABS.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${
-                  activeTab === tab.key ? "bg-white text-[#001225]" : "text-white/60 hover:bg-white/10"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-1 rounded-xl bg-white/10 p-1">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${
+                    activeTab === tab.key ? "bg-white text-[#001225]" : "text-white/60 hover:bg-white/10"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setVistaSemanal((v) => !v)}
+              title="Mientras el ciclo mensual madura: captura de la semana siguiente, para la junta de alineación de cada martes."
+              className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${
+                vistaSemanal ? "bg-indigo-500 text-white" : "bg-white/10 text-white/60 hover:bg-white/20"
+              }`}
+            >
+              📅 Vista semanal
+            </button>
           </div>
         </div>
 
@@ -723,6 +740,7 @@ export default function SopModule({ currentUser }) {
                 canEdit={canEdit}
                 onSaveVentaReal={handleSaveVentaReal}
                 currentUser={currentUser}
+                vistaSemanal={vistaSemanal}
               />
             )}
             {activeTab === "plan-venta" && (
@@ -736,6 +754,7 @@ export default function SopModule({ currentUser }) {
                 onCreateProducto={handleCreateProducto}
                 onDeactivateProducto={handleDeactivateProducto}
                 currentUser={currentUser}
+                vistaSemanal={vistaSemanal}
               />
             )}
             {activeTab === "operacion" && (
@@ -755,6 +774,7 @@ export default function SopModule({ currentUser }) {
                 onUpdateInfra={handleUpdateInfra}
                 onDeactivateInfra={handleDeactivateInfra}
                 onSolicitarCapacidad={handleSolicitarCapacidad}
+                vistaSemanal={vistaSemanal}
               />
             )}
             {activeTab === "financiero" && (
@@ -775,6 +795,7 @@ export default function SopModule({ currentUser }) {
                 onUpsertAjuste={handleUpsertFinancieroAjuste}
                 onDeleteAjuste={handleDeleteFinancieroAjuste}
                 onSolicitarFinanciero={handleSolicitarFinanciero}
+                vistaSemanal={vistaSemanal}
               />
             )}
             {activeTab === "decisiones" && (
@@ -783,6 +804,7 @@ export default function SopModule({ currentUser }) {
                 canEdit={canEdit}
                 canRequestDirectorDecision={canCreateSolicitud}
                 onCreate={handleCreateDecision}
+                vistaSemanal={vistaSemanal}
                 onDelete={handleDeleteDecision}
                 onRequestDirectorDecision={handleRequestDirectorDecision}
                 onConvertToAssignment={handleConvertToAssignment}

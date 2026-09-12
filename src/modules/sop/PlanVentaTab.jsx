@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { buildHorizonte, formatMoney, formatNumber, LINEAS } from "./sopHelpers";
-import VentanaSemanalButton from "./VentanaSemanalButton";
+import VentanaSemanalPanel from "./VentanaSemanalPanel";
 
 const LINEA_STYLE = {
   Bases: { badge: "border-sky-200 bg-sky-50 text-sky-700", row: "bg-sky-50/50", total: "bg-sky-50 text-sky-700", dot: "bg-sky-400" },
@@ -122,7 +122,7 @@ function AgregarProductoForm({ onCreate, onClose, currentUser, siguienteOrden })
 // se sigue filtrando/guardando con este valor fijo.
 const ESCENARIO_UNICO = "Base";
 
-export default function PlanVentaTab({ productos, planVenta, control, canEdit, onSave, onSavePrecio, onCreateProducto, onDeactivateProducto, currentUser }) {
+export default function PlanVentaTab({ productos, planVenta, control, canEdit, onSave, onSavePrecio, onCreateProducto, onDeactivateProducto, currentUser, vistaSemanal }) {
   const escenario = ESCENARIO_UNICO;
   const [showAgregar, setShowAgregar] = useState(false);
   const [mesExportarIdx, setMesExportarIdx] = useState(0);
@@ -192,11 +192,12 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
     URL.revokeObjectURL(url);
   }
 
+  if (vistaSemanal) return <VentanaSemanalPanel pestana="plan-venta" currentUser={currentUser} />;
+
   return (
     <div className="space-y-3 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <VentanaSemanalButton pestana="plan-venta" currentUser={currentUser} />
           {canEdit && !showAgregar && (
             <button
               type="button"

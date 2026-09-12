@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { buildHorizonte, formatNumber, LINEAS } from "./sopHelpers";
 import SolicitudModal from "./SolicitudModal";
-import VentanaSemanalButton from "./VentanaSemanalButton";
+import VentanaSemanalPanel from "./VentanaSemanalPanel";
 
 function getEstado(utilizacion) {
   if (utilizacion > 1) return { label: "Saturado", tone: "border-red-200 bg-red-50 text-red-700", bar: "bg-red-500" };
@@ -379,6 +379,7 @@ export default function OperacionTab({
   onUpdateInfra,
   onDeactivateInfra,
   onSolicitarCapacidad,
+  vistaSemanal,
 }) {
   const [showSolicitud, setShowSolicitud] = useState(false);
 
@@ -435,9 +436,10 @@ export default function OperacionTab({
     return ok;
   }
 
+  if (vistaSemanal) return <VentanaSemanalPanel pestana="operacion" currentUser={currentUser} />;
+
   return (
     <div className="space-y-3 p-3">
-      <VentanaSemanalButton pestana="operacion" currentUser={currentUser} />
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-sky-200 bg-sky-50 p-3 text-[10px] font-bold text-sky-700">
         <span>
           Escenario de venta activo: <b>{escenarioActivo}</b> · Capacidad disponible: <b>{formatNumber(capacidadDisponible)} pzas/mes</b> ({parametros?.escenario_capacidad}) · La capacidad se edita en Parámetros.
