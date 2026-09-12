@@ -1,5 +1,5 @@
-import { Fragment, useState } from "react";
-import VentanaSemanalPanel from "./VentanaSemanalPanel";
+import { Fragment, useMemo, useState } from "react";
+import { formatFechaCorta, getSemanaReferenciaISO } from "./sopHelpers";
 
 const EMPTY_DRAFT = { mes_reunion: "", decision: "", opcion_elegida: "", responsable: "", fecha: "" };
 const PRIORIDADES = ["Crítica", "Alta", "Media", "Baja"];
@@ -97,10 +97,24 @@ export default function DecisionesTab({ decisiones, canEdit, canRequestDirectorD
     setSendingId(null);
   }
 
-  if (vistaSemanal) return <VentanaSemanalPanel pestana="decisiones" currentUser={currentUser} />;
+  // Vista semanal: no es un formulario aparte — es la misma tabla y el mismo
+  // alta de siempre, nada más filtrada a lo que hay que resolver en la junta
+  // de esta semana (sin fecha compromiso capturada todavía, o con fecha
+  // dentro de la semana que viene, o ya vencida sin resolver).
+  const { lunes, domingo, domingoISO } = getSemanaReferenciaISO();
+  const decisionesMostradas = useMemo(() => {
+    if (!vistaSemanal) return decisiones;
+    return decisiones.filter((d) => !d.fecha || d.fecha <= domingoISO);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decisiones, vistaSemanal, domingoISO]);
 
   return (
     <div className="space-y-3 p-3">
+      {vistaSemanal && (
+        <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-indigo-700">
+          Vista semanal · acuerdos a resolver en la junta del {formatFechaCorta(lunes)} al {formatFechaCorta(domingo)} (sin fecha, o vencidos/próximos a vencer)
+        </div>
+      )}
       {canEdit && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Registrar acuerdo de la reunión S&amp;OP</p>
@@ -149,10 +163,10 @@ export default function DecisionesTab({ decisiones, canEdit, canRequestDirectorD
             </tr>
           </thead>
           <tbody>
-            {decisiones.length === 0 && (
-              <tr><td colSpan={6} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay acuerdos registrados.</td></tr>
+            {decisionesMostradas.length === 0 && (
+              <tr><td colSpan={6} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">{vistaSemanal ? "Nada pendiente para la junta de esta semana." : "Aún no hay acuerdos registrados."}</td></tr>
             )}
-            {decisiones.map((d) => (
+            {decisionesMostradas.map((d) => (
               <Fragment key={d.id}>
                 <tr key={d.id} className="border-b border-slate-50">
                   <td className="px-3 py-1.5 font-bold text-slate-700">{d.mes_reunion?.slice(0, 7)}</td>

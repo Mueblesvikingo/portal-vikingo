@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
-import { buildHorizonte, formatMoney, formatNumber, LINEAS } from "./sopHelpers";
-import VentanaSemanalPanel from "./VentanaSemanalPanel";
+import { useEffect, useMemo, useState } from "react";
+import { buildHorizonte, formatFechaCorta, formatMoney, formatNumber, getProximoLunes, LINEAS, toISODate } from "./sopHelpers";
+import { getVentana, upsertVentana } from "../../services/sopVentanaSemanalService";
 
 const LINEA_STYLE = {
   Bases: { badge: "border-sky-200 bg-sky-50 text-sky-700", row: "bg-sky-50/50", total: "bg-sky-50 text-sky-700", dot: "bg-sky-400" },
@@ -116,6 +116,129 @@ function AgregarProductoForm({ onCreate, onClose, currentUser, siguienteOrden })
   );
 }
 
+// Vista semanal de Plan de venta — a diferencia del formulario genérico de
+// 3 campos que se usaba antes (igual en las 5 pestañas de S&OP), esta
+// respeta el concepto real de la pestaña: la misma tabla de productos
+// agrupada por línea, con la misma celda editable, pero con una sola
+// columna (la semana que viene) en vez del horizonte de 6 meses — el dato
+// se guarda en la misma tabla genérica `sop_ventana_semanal` (pestaña
+// "plan-venta"), solo que su `datos` es un mapa {productoId: piezas} en
+// vez de los 3 campos planos que usan las demás pestañas.
+function PlanVentaSemanalTable({ productos, grouped, currentUser }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(null);
+  const [piezasPorProducto, setPiezasPorProducto] = useState({});
+
+  const lunes = getProximoLunes();
+  const viernes = new Date(lunes);
+  viernes.setDate(lunes.getDate() + 4);
+  const semanaLunes = toISODate(lunes);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getVentana("plan-venta", semanaLunes).then((result) => {
+      if (cancelled) return;
+      setPiezasPorProducto(result?.data?.datos?.piezasPorProducto || {});
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [semanaLunes]);
+
+  async function handleGuardarProducto(productoId, piezas) {
+    const next = { ...piezasPorProducto, [productoId]: piezas };
+    setSaving(productoId);
+    const result = await upsertVentana({ pestana: "plan-venta", semanaLunes, datos: { piezasPorProducto: next } }, { actor: currentUser });
+    setSaving(null);
+    if (result?.ok) setPiezasPorProducto(next);
+  }
+
+  const granTotalPiezas = productos.reduce((sum, p) => sum + Number(piezasPorProducto[p.id] || 0), 0);
+  const granTotalMonto = productos.reduce((sum, p) => sum + Number(piezasPorProducto[p.id] || 0) * Number(p.precio || 0), 0);
+
+  return (
+    <div className="p-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-indigo-700">
+          Vista semanal · compromiso de venta del {formatFechaCorta(lunes)} al {formatFechaCorta(viernes)}
+        </span>
+        <div className="flex gap-2">
+          <div className="rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-right">
+            <p className="text-[9px] font-black uppercase tracking-widest text-sky-500">Total piezas (semana)</p>
+            <p className="text-sm font-black text-sky-900">{formatNumber(granTotalPiezas)}</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-2 text-right">
+            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Total ventas (semana)</p>
+            <p className="text-sm font-black text-emerald-900">{formatMoney(granTotalMonto)}</p>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</p>
+      ) : (
+        <div className="max-h-[75vh] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full min-w-[420px] border-collapse text-[10px]">
+            <thead>
+              <tr className="text-left text-[9px] font-black uppercase tracking-widest text-white/60">
+                <th className="sticky left-0 top-0 z-30 bg-[#001225] px-3 py-2 text-white">Producto</th>
+                <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">Precio</th>
+                <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">Semana {formatFechaCorta(lunes)}–{formatFechaCorta(viernes)}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grouped.map((group) => {
+                const lineaTotal = group.items.reduce((sum, p) => sum + Number(piezasPorProducto[p.id] || 0), 0);
+                const style = LINEA_STYLE[group.linea] || LINEA_STYLE.Bases;
+                return (
+                  <>
+                    <tr key={`h-${group.linea}`}>
+                      <td colSpan={3} className={`px-3 py-1.5 ${style.row}`}>
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${style.badge}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
+                          {group.linea}
+                        </span>
+                      </td>
+                    </tr>
+                    {group.items.map((p) => (
+                      <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/70">
+                        <td className="sticky left-0 z-10 bg-white px-3 py-1 font-bold text-slate-700">
+                          <span className="text-[9px] text-slate-300">{p.codigo}</span> {p.nombre}
+                        </td>
+                        <td className="px-2 py-1 text-right text-[9px] font-bold text-slate-400">{formatMoney(p.precio)}</td>
+                        <td className="px-1 py-1">
+                          <EditableCell
+                            value={piezasPorProducto[p.id] || 0}
+                            canEdit
+                            onSave={(n) => handleGuardarProducto(p.id, n)}
+                          />
+                          {saving === p.id && <span className="ml-1 text-[9px] text-slate-300">guardando…</span>}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr key={`t-${group.linea}`} className={`border-b border-slate-100 ${style.total}`}>
+                      <td className={`sticky left-0 z-10 px-3 py-1 text-[9px] font-black uppercase ${style.total}`}>Total {group.linea}</td>
+                      <td />
+                      <td className="px-2 py-1 text-right text-[9px] font-black">{formatNumber(lineaTotal)}</td>
+                    </tr>
+                  </>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-[#001225] text-white">
+                <td className="sticky left-0 z-10 bg-[#001225] px-3 py-2 text-[9px] font-black uppercase tracking-widest">Total general (piezas)</td>
+                <td />
+                <td className="px-2 py-2 text-right text-[10px] font-black">{formatNumber(granTotalPiezas)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Escenario unico (Base) — se dejo de mostrar el toggle Base/Objetivo en
 // esta pestana, pero la columna "escenario" sigue existiendo en
 // sop_plan_venta (compartida con Dashboard/Operacion/Financiero), asi que
@@ -192,7 +315,7 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
     URL.revokeObjectURL(url);
   }
 
-  if (vistaSemanal) return <VentanaSemanalPanel pestana="plan-venta" currentUser={currentUser} />;
+  if (vistaSemanal) return <PlanVentaSemanalTable productos={productos} grouped={grouped} currentUser={currentUser} />;
 
   return (
     <div className="space-y-3 p-3">

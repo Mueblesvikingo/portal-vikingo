@@ -34,6 +34,35 @@ export function formatNumber(value) {
 
 export const LINEAS = ["Bases", "Recámaras", "Salas"];
 
+// Semana de referencia para la "Vista semanal" de S&OP (capa temporal
+// mientras el ciclo mensual madura): siempre el próximo lunes a viernes, la
+// semana que se revisa en la junta de alineación de cada martes.
+export function getProximoLunes() {
+  const hoy = new Date();
+  const dia = hoy.getDay(); // 0=domingo ... 1=lunes ... 6=sábado
+  const diasHastaLunes = dia === 1 ? 7 : ((8 - dia) % 7) || 7;
+  const lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() + diasHastaLunes);
+  return lunes;
+}
+
+export function formatFechaCorta(date) {
+  return date.toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
+}
+
+export function toISODate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+// Rango [lunes, domingo] de la semana de referencia, en ISO — útil para
+// filtrar registros reales (ej. sop_decisiones) que caigan en esa semana.
+export function getSemanaReferenciaISO() {
+  const lunes = getProximoLunes();
+  const domingo = new Date(lunes);
+  domingo.setDate(lunes.getDate() + 6);
+  return { lunes, domingo, lunesISO: toISODate(lunes), domingoISO: toISODate(domingo) };
+}
+
 // Ciclo mensual S&OP (VEN-SP-03): 4 etapas en orden, con su día límite
 // dentro del mes del ciclo — tomado directo del taller con el consultor
 // (comercial primeros 5 días, operativo hasta el 15, financiero hasta el 20

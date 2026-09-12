@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from "recharts";
-import { buildHorizonte, formatMoney, LINEAS } from "./sopHelpers";
+import { buildHorizonte, formatFechaCorta, formatMoney, getProximoLunes, LINEAS, toISODate } from "./sopHelpers";
 import SolicitudModal from "./SolicitudModal";
-import VentanaSemanalPanel from "./VentanaSemanalPanel";
+import { getVentana, upsertVentana } from "../../services/sopVentanaSemanalService";
+
+const SEMANAS_POR_MES = 4.33;
 
 // Numero clicable -> input, mismo patron que EditableNum de OperacionTab.jsx.
 function EditableMonto({ value, canEdit, onSave }) {
@@ -68,6 +70,167 @@ function CeldaAjustable({ value, ajustada, canEdit, onSave, onReset }) {
         />
       )}
     </span>
+  );
+}
+
+// Vista semanal de Plan financiero — mismo P&L y misma tabla de "Otras
+// partidas" que la vista mensual, para la semana que viene: Ventas
+// netas/Margen/Gastos fijos salen del mismo compromiso semanal ya
+// capturado en Plan de venta (piezasPorProducto), y "Otras partidas" se
+// captura por semana en la misma tabla genérica (sop_ventana_semanal,
+// pestana "financiero"), con un mapa {filaId: monto} — mismo patrón que
+// usa Plan de venta con {productoId: piezas}.
+function FinancieroSemanalView({ productos, parametros, financieroFilas, currentUser }) {
+  const [loading, setLoading] = useState(true);
+  const [piezasPorProducto, setPiezasPorProducto] = useState({});
+  const [montosPorFila, setMontosPorFila] = useState({});
+  const [savingFila, setSavingFila] = useState(null);
+
+  const lunes = getProximoLunes();
+  const viernes = new Date(lunes);
+  viernes.setDate(lunes.getDate() + 4);
+  const semanaLunes = toISODate(lunes);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([getVentana("plan-venta", semanaLunes), getVentana("financiero", semanaLunes)]).then(([planResult, finResult]) => {
+      if (cancelled) return;
+      setPiezasPorProducto(planResult?.data?.datos?.piezasPorProducto || {});
+      setMontosPorFila(finResult?.data?.datos?.montosPorFila || {});
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [semanaLunes]);
+
+  const productoMap = useMemo(() => new Map(productos.map((p) => [p.id, p])), [productos]);
+
+  const ventaPorLinea = useMemo(() => {
+    const map = Object.fromEntries(LINEAS.map((l) => [l, 0]));
+    for (const [productoId, piezas] of Object.entries(piezasPorProducto)) {
+      const producto = productoMap.get(Number(productoId));
+      if (!producto || !Number(piezas)) continue;
+      map[producto.linea] += Number(piezas) * Number(producto.precio || 0);
+    }
+    return map;
+  }, [piezasPorProducto, productoMap]);
+
+  const margenPorLinea = {
+    Bases: Number(parametros?.margen_bruto_bases ?? 0),
+    "Recámaras": Number(parametros?.margen_bruto_recamaras ?? 0),
+    Salas: Number(parametros?.margen_bruto_salas ?? 0),
+  };
+  const ventasNetas = LINEAS.reduce((s, l) => s + ventaPorLinea[l], 0);
+  const margenBruto = LINEAS.reduce((s, l) => s + ventaPorLinea[l] * margenPorLinea[l], 0);
+  const gastosFijos = Number(parametros?.gastos_fijos_mensuales || 0) / SEMANAS_POR_MES;
+  const margenBrutoPct = ventasNetas > 0 ? margenBruto / ventasNetas : 0;
+  const utilidadOperativa = margenBruto - gastosFijos;
+  const margenOperativoPct = ventasNetas > 0 ? utilidadOperativa / ventasNetas : 0;
+
+  const ajuste = financieroFilas.reduce((sum, fila) => {
+    const monto = Number(montosPorFila[fila.id] || 0);
+    return sum + (fila.categoria === "Ingreso" ? monto : -monto);
+  }, 0);
+  const flujoDelPeriodo = utilidadOperativa + ajuste;
+
+  async function handleGuardarMonto(filaId, monto) {
+    const next = { ...montosPorFila, [filaId]: monto };
+    setSavingFila(filaId);
+    const result = await upsertVentana({ pestana: "financiero", semanaLunes, datos: { montosPorFila: next } }, { actor: currentUser });
+    setSavingFila(null);
+    if (result?.ok) setMontosPorFila(next);
+  }
+
+  if (loading) return <div className="p-3"><p className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</p></div>;
+
+  return (
+    <div className="space-y-3 p-3">
+      <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-indigo-700">
+        Vista semanal · del {formatFechaCorta(lunes)} al {formatFechaCorta(viernes)} — a partir del compromiso ya capturado en Plan de venta
+      </div>
+
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <table className="w-full min-w-[360px] border-collapse text-[10px]">
+          <thead>
+            <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
+              <th className="px-3 py-2 text-white">Concepto</th>
+              <th className="px-2 py-2 text-right">Semana {formatFechaCorta(lunes)}–{formatFechaCorta(viernes)}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-slate-50">
+              <td className="px-3 py-1.5 font-bold text-slate-700">Ventas netas</td>
+              <td className="px-2 py-1.5 text-right text-slate-600">{formatMoney(ventasNetas)}</td>
+            </tr>
+            <tr className="border-b border-slate-50">
+              <td className="px-3 py-1.5 font-bold text-slate-700">Margen bruto %</td>
+              <td className="px-2 py-1.5 text-right text-slate-600">{(margenBrutoPct * 100).toFixed(1)}%</td>
+            </tr>
+            <tr className="border-b border-slate-50">
+              <td className="px-3 py-1.5 font-bold text-slate-700">Margen bruto ($)</td>
+              <td className="px-2 py-1.5 text-right text-slate-600">{formatMoney(margenBruto)}</td>
+            </tr>
+            <tr className="border-b border-slate-50">
+              <td className="px-3 py-1.5 font-bold text-slate-700">Gastos fijos (aprox.)</td>
+              <td className="px-2 py-1.5 text-right text-slate-600">{formatMoney(gastosFijos)}</td>
+            </tr>
+            <tr className="border-b border-slate-100 bg-slate-50/60">
+              <td className="px-3 py-1.5 font-black uppercase text-[9px] text-slate-500">Utilidad operativa</td>
+              <td className={`px-2 py-1.5 text-right font-black ${utilidadOperativa < 0 ? "text-red-600" : "text-slate-700"}`}>{formatMoney(utilidadOperativa)}</td>
+            </tr>
+            <tr>
+              <td className="px-3 py-1.5 font-black uppercase text-[9px] text-slate-500">Margen operativo %</td>
+              <td className="px-2 py-1.5 text-right font-black text-slate-700">{(margenOperativoPct * 100).toFixed(1)}%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+        <div className="flex items-center gap-2 bg-amber-50/60 px-4 py-2.5">
+          <span className="h-2 w-2 rounded-full bg-amber-400" />
+          <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Otras partidas — semana</p>
+        </div>
+        <div className="p-4">
+          <table className="w-full min-w-[420px] border-collapse text-[10px]">
+            <thead>
+              <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-widest text-slate-400">
+                <th className="px-2 py-1.5">Concepto</th>
+                <th className="px-2 py-1.5">Tipo</th>
+                <th className="px-2 py-1.5 text-right">Semana</th>
+              </tr>
+            </thead>
+            <tbody>
+              {financieroFilas.length === 0 && (
+                <tr><td colSpan={3} className="px-2 py-4 text-center text-[10px] font-bold text-slate-300">Aún no hay partidas capturadas.</td></tr>
+              )}
+              {financieroFilas.map((fila) => (
+                <tr key={fila.id} className="border-t border-slate-50">
+                  <td className="px-2 py-1 font-bold text-slate-700">{fila.concepto}</td>
+                  <td className="px-2 py-1">
+                    <span className={`rounded-full border px-2 py-0.5 text-[8px] font-black uppercase ${fila.categoria === "Ingreso" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+                      {fila.categoria}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1 text-right">
+                    <EditableMonto value={montosPorFila[fila.id] || 0} canEdit onSave={(n) => handleGuardarMonto(fila.id, n)} />
+                    {savingFila === fila.id && <span className="ml-1 text-[9px] text-slate-300">guardando…</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            {financieroFilas.length > 0 && (
+              <tfoot>
+                <tr className="border-t border-slate-100 bg-slate-50/60">
+                  <td colSpan={2} className="px-2 py-1.5 font-black uppercase text-[9px] text-slate-500">Flujo de efectivo de la semana</td>
+                  <td className={`px-2 py-1.5 text-right font-black ${flujoDelPeriodo < 0 ? "text-red-600" : "text-slate-700"}`}>{formatMoney(flujoDelPeriodo)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -222,7 +385,7 @@ export default function FinancieroTab({
     riesgo: algunMesNegativo ? "Alto" : "Moderado",
   };
 
-  if (vistaSemanal) return <VentanaSemanalPanel pestana="financiero" currentUser={currentUser} />;
+  if (vistaSemanal) return <FinancieroSemanalView productos={productos} parametros={parametros} financieroFilas={financieroFilas} currentUser={currentUser} />;
 
   return (
     <div className="space-y-3 p-3">

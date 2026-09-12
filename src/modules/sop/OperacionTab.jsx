@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
-import { buildHorizonte, formatNumber, LINEAS } from "./sopHelpers";
+import { useEffect, useMemo, useState } from "react";
+import { buildHorizonte, formatFechaCorta, formatNumber, getProximoLunes, LINEAS, toISODate } from "./sopHelpers";
 import SolicitudModal from "./SolicitudModal";
-import VentanaSemanalPanel from "./VentanaSemanalPanel";
+import { getVentana } from "../../services/sopVentanaSemanalService";
+
+const SEMANAS_POR_MES = 4.33;
 
 function getEstado(utilizacion) {
   if (utilizacion > 1) return { label: "Saturado", tone: "border-red-200 bg-red-50 text-red-700", bar: "bg-red-500" };
@@ -73,6 +75,7 @@ function ManoDeObraSection({
   onUpdateProceso,
   onDeactivateProceso,
   currentUser,
+  soloDotacion = false,
 }) {
   const [nuevo, setNuevo] = useState({ proceso: "", operarios: 1, horas_turno: 8, turnos_activos: 1 });
   const [saving, setSaving] = useState(false);
@@ -117,62 +120,66 @@ function ManoDeObraSection({
         <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Mano de obra</p>
       </div>
       <div className="p-4">
-        <p className="text-[9px] font-bold normal-case tracking-normal text-slate-400">
-          Horas-hombre requeridas = Σ (piezas del mes × peso de complejidad del producto) × horas por unidad de complejidad. Horas-hombre disponibles = Σ de los procesos capturados abajo (operarios × horas/turno × turnos) × días hábiles del mes × eficiencia operativa.
-          Es capacidad de planta agregada, no por estación individual — no hay dato de qué % de cada pieza pasa por cada proceso.
-        </p>
-        {faltaConfig && (
-          <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[9px] font-bold text-amber-700">
-            Falta capturar: {!diasHabiles && "días hábiles del mes (Parámetros). "}{!horasPorComplejidad && "horas-hombre por unidad de complejidad (Parámetros). "}{capacidadProcesos.length === 0 && "al menos un proceso con su dotación (abajo)."}
-          </p>
-        )}
-        {!faltaConfig && (
-          <p className="mt-2 text-[9px] font-bold normal-case tracking-normal text-slate-400">
-            Eficiencia operativa aplicada: <b className="text-slate-600">{(eficiencia * 100).toFixed(0)}%</b>
-            {parametros?.eficiencia_operativa == null && " (sin capturar, se asume 100% — captúrala en Parámetros para un cálculo más realista)."}
-          </p>
-        )}
+        {!soloDotacion && (
+          <>
+            <p className="text-[9px] font-bold normal-case tracking-normal text-slate-400">
+              Horas-hombre requeridas = Σ (piezas del mes × peso de complejidad del producto) × horas por unidad de complejidad. Horas-hombre disponibles = Σ de los procesos capturados abajo (operarios × horas/turno × turnos) × días hábiles del mes × eficiencia operativa.
+              Es capacidad de planta agregada, no por estación individual — no hay dato de qué % de cada pieza pasa por cada proceso.
+            </p>
+            {faltaConfig && (
+              <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[9px] font-bold text-amber-700">
+                Falta capturar: {!diasHabiles && "días hábiles del mes (Parámetros). "}{!horasPorComplejidad && "horas-hombre por unidad de complejidad (Parámetros). "}{capacidadProcesos.length === 0 && "al menos un proceso con su dotación (abajo)."}
+              </p>
+            )}
+            {!faltaConfig && (
+              <p className="mt-2 text-[9px] font-bold normal-case tracking-normal text-slate-400">
+                Eficiencia operativa aplicada: <b className="text-slate-600">{(eficiencia * 100).toFixed(0)}%</b>
+                {parametros?.eficiencia_operativa == null && " (sin capturar, se asume 100% — captúrala en Parámetros para un cálculo más realista)."}
+              </p>
+            )}
 
-        {!faltaConfig && (
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[700px] border-collapse text-[10px]">
-              <thead>
-                <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
-                  <th className="px-3 py-2 text-white">Concepto</th>
-                  {demandaHoras.map((m) => (
-                    <th key={`${m.anio}-${m.mes}`} className="px-2 py-2 text-right">{m.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-slate-50">
-                  <td className="px-3 py-1.5 font-bold text-slate-700">Horas-hombre requeridas</td>
-                  {demandaHoras.map((m, i) => (
-                    <td key={i} className="px-2 py-1.5 text-right text-slate-600">{formatNumber(m.horasRequeridas)}</td>
-                  ))}
-                </tr>
-                <tr className="border-b border-slate-50">
-                  <td className="px-3 py-1.5 font-bold text-slate-700">Horas-hombre disponibles</td>
-                  {demandaHoras.map((_, i) => (
-                    <td key={i} className="px-2 py-1.5 text-right text-slate-600">{formatNumber(horasHombreDisponibles)}</td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className="px-3 py-1.5 font-black uppercase text-[9px] text-slate-500">% Utilización</td>
-                  {demandaHoras.map((m, i) => {
-                    const estado = getEstado(m.utilizacion);
-                    return (
-                      <td key={i} className="px-2 py-1.5 text-right">
-                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[8px] font-black uppercase ${estado.tone}`}>
-                          {(m.utilizacion * 100).toFixed(0)}% {estado.label}
-                        </span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              </tbody>
-            </table>
-          </div>
+            {!faltaConfig && (
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[700px] border-collapse text-[10px]">
+                  <thead>
+                    <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
+                      <th className="px-3 py-2 text-white">Concepto</th>
+                      {demandaHoras.map((m) => (
+                        <th key={`${m.anio}-${m.mes}`} className="px-2 py-2 text-right">{m.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-slate-50">
+                      <td className="px-3 py-1.5 font-bold text-slate-700">Horas-hombre requeridas</td>
+                      {demandaHoras.map((m, i) => (
+                        <td key={i} className="px-2 py-1.5 text-right text-slate-600">{formatNumber(m.horasRequeridas)}</td>
+                      ))}
+                    </tr>
+                    <tr className="border-b border-slate-50">
+                      <td className="px-3 py-1.5 font-bold text-slate-700">Horas-hombre disponibles</td>
+                      {demandaHoras.map((_, i) => (
+                        <td key={i} className="px-2 py-1.5 text-right text-slate-600">{formatNumber(horasHombreDisponibles)}</td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-1.5 font-black uppercase text-[9px] text-slate-500">% Utilización</td>
+                      {demandaHoras.map((m, i) => {
+                        const estado = getEstado(m.utilizacion);
+                        return (
+                          <td key={i} className="px-2 py-1.5 text-right">
+                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[8px] font-black uppercase ${estado.tone}`}>
+                              {(m.utilizacion * 100).toFixed(0)}% {estado.label}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
 
         <div className="mt-3 border-t border-slate-100 pt-3">
@@ -363,6 +370,140 @@ function InfraestructuraSection({ infraestructura, parametros, canEdit, onCreate
   );
 }
 
+// Vista semanal de Plan de operación — mismo concepto (demanda vs.
+// capacidad) que la tabla mensual, pero para la semana que viene: la
+// demanda sale del mismo compromiso de piezas por producto ya capturado en
+// Plan de venta (sop_ventana_semanal, pestana "plan-venta"), y la
+// capacidad/horas-hombre disponibles se aproximan prorrateando el dato
+// mensual de Parámetros/Dotación entre semanas del mes (no existe una
+// captura de capacidad semanal real, así que se avisa que es aproximado).
+function OperacionSemanalView({ productos, parametros, capacidadProcesos }) {
+  const [loading, setLoading] = useState(true);
+  const [piezasPorProducto, setPiezasPorProducto] = useState({});
+
+  const lunes = getProximoLunes();
+  const viernes = new Date(lunes);
+  viernes.setDate(lunes.getDate() + 4);
+  const semanaLunes = toISODate(lunes);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getVentana("plan-venta", semanaLunes).then((result) => {
+      if (cancelled) return;
+      setPiezasPorProducto(result?.data?.datos?.piezasPorProducto || {});
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [semanaLunes]);
+
+  const productoLinea = useMemo(() => new Map(productos.map((p) => [p.id, p.linea])), [productos]);
+  const productoPeso = useMemo(() => new Map(productos.map((p) => [p.id, p.peso_complejidad != null ? Number(p.peso_complejidad) : null])), [productos]);
+
+  const porLinea = useMemo(() => {
+    const map = Object.fromEntries(LINEAS.map((l) => [l, 0]));
+    for (const [productoId, piezas] of Object.entries(piezasPorProducto)) {
+      const linea = productoLinea.get(Number(productoId));
+      if (!linea || !Number(piezas)) continue;
+      map[linea] += Number(piezas);
+    }
+    return map;
+  }, [piezasPorProducto, productoLinea]);
+
+  const totalPiezas = LINEAS.reduce((s, l) => s + porLinea[l], 0);
+  const capacidadDisponibleMes =
+    parametros?.escenario_capacidad === "2 turnos" && parametros?.capacidad_tapiceria_2_turnos
+      ? Number(parametros.capacidad_tapiceria_2_turnos)
+      : Number(parametros?.capacidad_tapiceria_1_turno || 0);
+  const capacidadSemana = capacidadDisponibleMes / SEMANAS_POR_MES;
+  const gap = capacidadSemana - totalPiezas;
+  const utilizacion = capacidadSemana > 0 ? totalPiezas / capacidadSemana : 0;
+  const estado = getEstado(utilizacion);
+
+  const diasHabiles = Number(parametros?.dias_habiles_mes || 0);
+  const horasPorComplejidad = Number(parametros?.horas_por_unidad_complejidad || 0);
+  const eficiencia = parametros?.eficiencia_operativa != null ? Number(parametros.eficiencia_operativa) : 1;
+  const horasHombreDisponiblesMes = capacidadProcesos.reduce((s, p) => s + Number(p.operarios || 0) * Number(p.horas_turno || 0) * Number(p.turnos_activos || 0), 0) * diasHabiles * eficiencia;
+  const horasHombreDisponiblesSemana = horasHombreDisponiblesMes / SEMANAS_POR_MES;
+  const unidadesComplejidad = Object.entries(piezasPorProducto).reduce((s, [productoId, piezas]) => {
+    const peso = productoPeso.get(Number(productoId));
+    return peso == null ? s : s + Number(piezas || 0) * peso;
+  }, 0);
+  const horasRequeridasSemana = unidadesComplejidad * horasPorComplejidad;
+  const faltaConfigManoObra = !diasHabiles || !horasPorComplejidad || capacidadProcesos.length === 0;
+
+  return (
+    <div className="space-y-3 p-3">
+      <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-indigo-700">
+        Vista semanal · del {formatFechaCorta(lunes)} al {formatFechaCorta(viernes)} — demanda real de Plan de venta, capacidad aproximada (mensual ÷ {SEMANAS_POR_MES})
+      </div>
+      {loading ? (
+        <p className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</p>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full min-w-[420px] border-collapse text-[10px]">
+            <thead>
+              <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
+                <th className="px-3 py-2 text-white">Concepto</th>
+                <th className="px-2 py-2 text-right">Semana {formatFechaCorta(lunes)}–{formatFechaCorta(viernes)}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {LINEAS.map((linea) => (
+                <tr key={linea} className="border-b border-slate-50">
+                  <td className="px-3 py-1.5 font-bold text-slate-700">{linea}</td>
+                  <td className="px-2 py-1.5 text-right text-slate-600">{formatNumber(porLinea[linea])}</td>
+                </tr>
+              ))}
+              <tr className="border-b border-slate-100 bg-slate-50/60">
+                <td className="px-3 py-1.5 font-black uppercase text-[9px] text-slate-500">Total piezas demandadas</td>
+                <td className="px-2 py-1.5 text-right font-black text-slate-700">{formatNumber(totalPiezas)}</td>
+              </tr>
+              <tr className="border-b border-slate-50">
+                <td className="px-3 py-1.5 font-bold text-slate-700">Capacidad disponible (aprox.)</td>
+                <td className="px-2 py-1.5 text-right text-slate-600">{formatNumber(capacidadSemana)}</td>
+              </tr>
+              <tr className="border-b border-slate-50">
+                <td className="px-3 py-1.5 font-bold text-slate-700">Gap (piezas)</td>
+                <td className={`px-2 py-1.5 text-right font-bold ${gap < 0 ? "text-red-600" : "text-slate-600"}`}>{formatNumber(gap)}</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-1.5 font-black uppercase text-[9px] text-slate-500">% Utilización</td>
+                <td className="px-2 py-1.5 text-right">
+                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-[8px] font-black uppercase ${estado.tone}`}>{(utilizacion * 100).toFixed(0)}% {estado.label}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {!loading && !faltaConfigManoObra && (
+        <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+          <div className="flex items-center gap-2 bg-emerald-50/60 px-4 py-2.5">
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Mano de obra — semana</p>
+          </div>
+          <div className="p-4">
+            <table className="w-full min-w-[300px] border-collapse text-[10px]">
+              <tbody>
+                <tr className="border-b border-slate-50">
+                  <td className="px-3 py-1.5 font-bold text-slate-700">Horas-hombre requeridas</td>
+                  <td className="px-2 py-1.5 text-right text-slate-600">{formatNumber(horasRequeridasSemana)}</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-1.5 font-bold text-slate-700">Horas-hombre disponibles (aprox.)</td>
+                  <td className="px-2 py-1.5 text-right text-slate-600">{formatNumber(horasHombreDisponiblesSemana)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OperacionTab({
   productos,
   planVenta,
@@ -436,7 +577,38 @@ export default function OperacionTab({
     return ok;
   }
 
-  if (vistaSemanal) return <VentanaSemanalPanel pestana="operacion" currentUser={currentUser} />;
+  if (vistaSemanal) {
+    return (
+      <>
+        <OperacionSemanalView productos={productos} parametros={parametros} capacidadProcesos={capacidadProcesos} />
+        <div className="space-y-3 p-3 pt-0">
+          <ManoDeObraSection
+            horizonte={horizonte}
+            planVenta={planVenta}
+            escenarioActivo={escenarioActivo}
+            productoPeso={productoPeso}
+            parametros={parametros}
+            capacidadProcesos={capacidadProcesos}
+            canEdit={canEdit}
+            onCreateProceso={onCreateProceso}
+            onUpdateProceso={onUpdateProceso}
+            onDeactivateProceso={onDeactivateProceso}
+            currentUser={currentUser}
+            soloDotacion
+          />
+          <InfraestructuraSection
+            infraestructura={infraestructura}
+            parametros={parametros}
+            canEdit={canEdit}
+            onCreateInfra={onCreateInfra}
+            onUpdateInfra={onUpdateInfra}
+            onDeactivateInfra={onDeactivateInfra}
+            currentUser={currentUser}
+          />
+        </div>
+      </>
+    );
+  }
 
   return (
     <div className="space-y-3 p-3">
