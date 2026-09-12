@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getAnalisisCausa,
   upsertAnalisisCausa,
@@ -94,6 +94,55 @@ function EditableSelect({ value, options, onSave, canEdit, labelFor = (v) => v }
         <option key={opt.value ?? opt} value={opt.value ?? opt}>{opt.label ?? opt}</option>
       ))}
     </select>
+  );
+}
+
+// Desplegable compacto de selección múltiple — mismo patrón ya usado en
+// Seguimiento Estratégico (src/modules/strategic-followup/StrategicFollowupModule.jsx).
+function MultiSelectDropdown({ options, selectedIds, onToggle, placeholder = "Sin asignar" }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selected = options.filter((o) => selectedIds.includes(o.value));
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between rounded border border-slate-200 bg-slate-50 px-1.5 py-1 text-left text-[10px] font-bold text-slate-700 outline-none"
+      >
+        <span className="truncate">{selected.length ? `${selected.length} seleccionado${selected.length > 1 ? "s" : ""}` : placeholder}</span>
+        <span className="shrink-0 text-slate-400">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {selected.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {selected.map((p) => (
+            <span key={p.value} className="rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-bold text-white">{p.label}</span>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
+          {options.map((p) => (
+            <label key={p.value} className="flex items-center gap-2 rounded px-1.5 py-1 text-[10px] font-bold text-slate-700 hover:bg-slate-50">
+              <input type="checkbox" checked={selectedIds.includes(p.value)} onChange={() => onToggle(p.value)} />
+              {p.label}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -710,13 +759,26 @@ export default function AccionDetailPanel({
                       <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Responsable de participar en el análisis</p>
                       <p className="mt-0.5 text-[9px] font-semibold text-slate-400">Útil cuando dos áreas tienen versiones distintas de la causa (ej. RH y Producción) — a quien asignes aquí se le habilita editar este análisis.</p>
                       <div className="mt-1 max-w-xs">
-                        <EditableSelect
-                          value={accion.analisis_responsable_persona_id || ""}
-                          options={[{ value: "", label: "Sin asignar" }, ...personas.map((p) => ({ value: p.id, label: p.nombre }))]}
-                          canEdit={canEdit}
-                          onSave={(v) => onUpdate({ analisis_responsable_persona_id: v || null })}
-                          labelFor={() => (accion.analisis_responsable_persona_id ? personasById[accion.analisis_responsable_persona_id]?.nombre : "Sin asignar")}
-                        />
+                        {(() => {
+                          const idsAsignados = Array.isArray(accion.analisis_responsable_persona_id) ? accion.analisis_responsable_persona_id : [];
+                          if (!canEdit) {
+                            return (
+                              <span className="text-[10px] font-bold text-slate-500">
+                                {idsAsignados.length ? idsAsignados.map((id) => personasById[id]?.nombre).filter(Boolean).join(", ") : "Sin asignar"}
+                              </span>
+                            );
+                          }
+                          return (
+                            <MultiSelectDropdown
+                              options={personas.map((p) => ({ value: p.id, label: p.nombre }))}
+                              selectedIds={idsAsignados}
+                              onToggle={(id) => {
+                                const next = idsAsignados.includes(id) ? idsAsignados.filter((x) => x !== id) : [...idsAsignados, id];
+                                onUpdate({ analisis_responsable_persona_id: next });
+                              }}
+                            />
+                          );
+                        })()}
                       </div>
                     </div>
                     {canEdit && (

@@ -396,11 +396,16 @@ export function canApproveSopEtapa(user, etapa) {
 // Ishikawa, no solo quien lo creó. `proceso` es el objeto de procesos (con
 // su campo `responsable`) ya cargado por el módulo, no se vuelve a
 // consultar.
+function esResponsableAnalisis(user, accion) {
+  const ids = Array.isArray(accion?.analisis_responsable_persona_id) ? accion.analisis_responsable_persona_id : [];
+  return ids.map(Number).includes(Number(user?.persona_id));
+}
+
 export function canEditAccion(user, accion, proceso) {
   if (!accion) return false;
   if (isStrategicTeamMember(user)) return true;
   if (Number(user?.persona_id) === Number(accion.created_by_persona_id)) return true;
-  if (Number(user?.persona_id) === Number(accion.analisis_responsable_persona_id)) return true;
+  if (esResponsableAnalisis(user, accion)) return true;
   if (accion.nivel === "Operativa" && proceso) return isProcessOwner(user, proceso);
   return false;
 }
@@ -423,7 +428,7 @@ export function esParticipanteAccion(user, accion, proceso) {
   if (!accion) return false;
   if (Number(user?.persona_id) === Number(accion.created_by_persona_id)) return true;
   if (Number(user?.persona_id) === Number(accion.responsable_persona_id)) return true;
-  if (Number(user?.persona_id) === Number(accion.analisis_responsable_persona_id)) return true;
+  if (esResponsableAnalisis(user, accion)) return true;
   if (proceso && isProcessOwner(user, proceso)) return true;
   return false;
 }
