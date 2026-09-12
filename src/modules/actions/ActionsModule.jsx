@@ -8,6 +8,7 @@ import {
   deactivateAccion,
   notificarNuevaAccion,
   notificarInvolucrados,
+  updatePlanResponsable,
 } from "../../services/accionesService";
 import { getMacroprocesos } from "../../services/performanceService";
 import { getPersonas } from "../../services/organizationCatalogService";
@@ -199,7 +200,48 @@ export default function ActionsModule({ currentUser }) {
     await handleUpdateAccion(accion.id, { workload_asignacion_id: result.data.id });
     await notificarPMConversion(accion, `Acción ${accion.codigo} convertida en asignación para ${payload.personaNombre}: ${accion.titulo}`);
     alert(`Asignación creada para ${payload.personaNombre} en Balance de Carga.`);
-    return true;
+    // Se regresa el id (verdadero) en vez de solo `true` — lo reutiliza el
+    // envío por lote del Plan de acción para saber qué asignación quedó
+    // ligada a cada responsable.
+    return result.data.id;
+  }
+
+  // Botón discreto "→ Enviar todo a Asignación" del Plan de acción: una vez
+  // aprobada la acción, baja de un golpe a Balance de Carga cada responsable
+  // de ejecución ya capturado (con su propio detalle/horas/fecha), en vez de
+  // repetir el formulario de "→ Asignación" persona por persona. Solo se
+  // envían los que aún no tienen `workload_asignacion_id` (evita duplicar si
+  // se agregó gente después de un primer envío).
+  async function handleEnviarPlanResponsables(accion, filas) {
+    let enviados = 0;
+    for (const fila of filas) {
+      const result = await createWorkloadAssignment({
+        persona_id: fila.persona_id,
+        responsable: fila.personaNombre,
+        rol: "Responsable de acción",
+        tipo: "Mejora",
+        prioridad: accion.prioridad,
+        gestion: "Otro",
+        titulo: accion.titulo,
+        descripcion: fila.detalle || accion.descripcion || "",
+        revisara: "", aprobara: "", seguimiento: "",
+        carga_horas: fila.horas || 0,
+        fecha_limite: fila.fecha_limite || accion.fecha_compromiso || null,
+        estado: "Pendiente",
+        asigna: currentUser?.nombre || currentUser?.usuario || "",
+        asigna_rol: "Acciones de Mejora",
+        horas_totales: fila.horas || 0,
+        origen_estrategico: "Acciones",
+      });
+      if (!result?.ok) { console.error(result?.error); alert(`No fue posible crear la asignación de ${fila.personaNombre}.`); continue; }
+      await updatePlanResponsable(fila.id, { workload_asignacion_id: result.data.id, enviado_at: new Date().toISOString() });
+      enviados += 1;
+    }
+    if (enviados > 0) {
+      await notificarPMConversion(accion, `Acción ${accion.codigo}: ${enviados} responsable(s) de ejecución enviados a Balance de Carga.`);
+      alert(`${enviados} asignación(es) creada(s) en Balance de Carga.`);
+    }
+    return enviados;
   }
 
   // Botón "Programar junta rápida" del detalle — la PM y quien registró la
@@ -452,8 +494,8 @@ export default function ActionsModule({ currentUser }) {
           onUpdate={(updates) => handleUpdateAccion(selectedAccion.id, updates)}
           onDeactivate={() => handleDeactivateAccion(selectedAccion.id)}
           onClose={() => setSelectedAccionId(null)}
-          onCreateAssignment={handleCrearAsignacion}
           onCreateProyecto={handleCrearProyecto}
+          onEnviarPlanResponsables={handleEnviarPlanResponsables}
           onProgramarJunta={handleProgramarJunta}
           onNavigateToAccion={setSelectedAccionId}
         />

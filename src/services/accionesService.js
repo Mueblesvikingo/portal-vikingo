@@ -302,6 +302,71 @@ export async function addAdjunto({ accionId, nombreArchivo, url, tipo }, actor) 
   }
 }
 
+// --- Plan de acción: responsables de ejecución (multi-persona, con detalle
+// propio de cada quien) --------------------------------------------------
+// Distinto de `accion_involucrados` (lista de a quién se le notifica de la
+// acción, se arma sola con equipo estratégico + quien se elija al crearla)
+// y de `analisis_responsable_persona_id` (quién más puede editar el análisis
+// de causa). Este es el desglose de ejecución del Plan de acción: quién hace
+// qué, con cuántas horas y para cuándo, y si ya se envió a Balance de Carga.
+
+export async function getPlanResponsables(accionId) {
+  try {
+    const { data, error } = await supabase
+      .from("accion_plan_responsables")
+      .select("*")
+      .eq("accion_id", accionId)
+      .order("created_at", { ascending: true });
+    if (error) { console.error("Error al cargar responsables del plan de acción:", error); return []; }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar responsables del plan de acción:", err);
+    return [];
+  }
+}
+
+export async function addPlanResponsable(accionId, personaId) {
+  try {
+    const { data, error } = await supabase
+      .from("accion_plan_responsables")
+      .insert({ accion_id: accionId, persona_id: personaId })
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al agregar responsable del plan de acción:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function updatePlanResponsable(id, changes) {
+  try {
+    const { data, error } = await supabase
+      .from("accion_plan_responsables")
+      .update(changes)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al actualizar responsable del plan de acción:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function removePlanResponsable(id) {
+  try {
+    const { error } = await supabase.from("accion_plan_responsables").delete().eq("id", id);
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    console.error("Error inesperado al quitar responsable del plan de acción:", err);
+    return { ok: false, error: err };
+  }
+}
+
 // --- Involucrados y notificaciones del flujo ------------------------------
 
 export async function getInvolucrados(accionId) {

@@ -8,6 +8,10 @@ import {
   getAdjuntos,
   addAdjunto,
   getInvolucrados,
+  getPlanResponsables,
+  addPlanResponsable,
+  updatePlanResponsable,
+  removePlanResponsable,
 } from "../../services/accionesService";
 import { canEditAccion, canApproveAction, isStrategicTeamMember } from "../../services/permissionsService";
 import { createStrategicDecision } from "../../services/decisionService";
@@ -146,71 +150,25 @@ function MultiSelectDropdown({ options, selectedIds, onToggle, placeholder = "Si
   );
 }
 
-// Formulario compacto para crear la asignación en Balance de Carga — mismo
-// patrón (persona/rol/horas/fecha límite/prioridad) ya usado en Diagnóstico
-// SIG / Seguimiento Estratégico / Acuerdos S&OP para esta misma conexión.
-function AsignacionForm({ personas, defaultPersonaId, defaultTitulo, onConfirm, onCancel }) {
-  const [personaId, setPersonaId] = useState(defaultPersonaId || "");
-  const [titulo, setTitulo] = useState(defaultTitulo || "");
-  const [horas, setHoras] = useState(2);
-  const [fechaLimite, setFechaLimite] = useState("");
-  const [prioridad, setPrioridad] = useState("Media");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleConfirm() {
-    if (!personaId) { setError("Selecciona a quién se le asigna."); return; }
-    if (!titulo.trim()) { setError("El título no puede quedar vacío."); return; }
-    setError("");
-    setSaving(true);
-    const persona = personas.find((p) => String(p.id) === String(personaId));
-    const ok = await onConfirm({
-      personaId: Number(personaId),
-      personaNombre: persona?.nombre || "",
-      titulo: titulo.trim(),
-      horas: Number(horas) || 0,
-      fechaLimite: fechaLimite || null,
-      prioridad,
-    });
-    setSaving(false);
-    if (ok) onCancel();
+// Campo chico editable con guardado al perder foco — usado en las filas de
+// "Responsables de ejecución" del Plan de acción (detalle/horas/fecha), sin
+// el overhead de EditableText/EditableDate (que están pensados para un
+// valor por celda, no para una fila de varios campos a la vez).
+function EditableSmallField({ value, onSave, canEdit, placeholder = "", type = "text" }) {
+  const [draft, setDraft] = useState(value ?? "");
+  useEffect(() => { setDraft(value ?? ""); }, [value]);
+  if (!canEdit) {
+    return <span className="text-[10px] font-semibold text-slate-600">{value || <span className="text-slate-300">{placeholder}</span>}</span>;
   }
-
   return (
-    <div className="mt-2 rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5">
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-          Persona
-          <select value={personaId} onChange={(e) => setPersonaId(e.target.value)} className="mt-1 h-9 w-48 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
-            <option value="">Selecciona...</option>
-            {personas.map((p) => (<option key={p.id} value={p.id}>{p.nombre}</option>))}
-          </select>
-        </label>
-        <label className="min-w-[180px] flex-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
-          Título
-          <input type="text" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
-        </label>
-        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-          Horas
-          <input type="number" min="0.5" step="0.5" value={horas} onChange={(e) => setHoras(e.target.value)} className="mt-1 h-9 w-20 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
-        </label>
-        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-          Fecha límite
-          <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
-        </label>
-        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-          Prioridad
-          <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
-            {["Crítica", "Alta", "Media", "Baja"].map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </label>
-        <button type="button" disabled={saving} onClick={handleConfirm} className="h-9 rounded-lg bg-[#111827] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
-          {saving ? "Enviando..." : "Confirmar"}
-        </button>
-        <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
-      </div>
-      {error && <p className="mt-1.5 text-[10px] font-bold text-red-600">{error}</p>}
-    </div>
+    <input
+      type={type}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => { if (String(draft) !== String(value ?? "")) onSave(draft); }}
+      placeholder={placeholder}
+      className="w-full rounded border border-slate-200 bg-slate-50 px-1.5 py-1 text-[10px] font-bold text-slate-700 outline-none focus:border-sky-300"
+    />
   );
 }
 
@@ -403,7 +361,7 @@ const SUB_TABS = [
 
 export default function AccionDetailPanel({
   accion, acciones, tiposFlujo, procesos, personas, objetivos, procesosById, personasById, objetivosById,
-  currentUser, onUpdate, onDeactivate, onClose, onCreateAssignment, onCreateProyecto, onProgramarJunta, onNavigateToAccion,
+  currentUser, onUpdate, onDeactivate, onClose, onCreateProyecto, onEnviarPlanResponsables, onProgramarJunta, onNavigateToAccion,
 }) {
   const [subTab, setSubTab] = useState("causa");
   const [analisisList, setAnalisisList] = useState([]);
@@ -412,10 +370,12 @@ export default function AccionDetailPanel({
   const [comentarios, setComentarios] = useState([]);
   const [adjuntos, setAdjuntos] = useState([]);
   const [involucrados, setInvolucrados] = useState([]);
+  const [planResponsables, setPlanResponsables] = useState([]);
+  const [nuevoPlanPersonaId, setNuevoPlanPersonaId] = useState("");
+  const [enviandoPlan, setEnviandoPlan] = useState(false);
   const [nuevoComentario, setNuevoComentario] = useState("");
   const [nuevoAdjunto, setNuevoAdjunto] = useState({ nombre: "", url: "" });
   const [loadingSub, setLoadingSub] = useState(true);
-  const [convertingToAssignment, setConvertingToAssignment] = useState(false);
   const [convertingToProyecto, setConvertingToProyecto] = useState(false);
   const [programandoJunta, setProgramandoJunta] = useState(false);
   const [escalando, setEscalando] = useState(false);
@@ -491,21 +451,58 @@ export default function AccionDetailPanel({
     setEscalando(false);
   }
 
+  // Plan de acción → Responsables de ejecución: a diferencia del campo único
+  // "Responsable" (accountability/permisos), aquí se puede detallar a varias
+  // personas con su propia tarea, horas y fecha, y mandarlas todas de un
+  // golpe a Balance de Carga una vez aprobada la acción.
+  async function handleAddPlanResponsable() {
+    if (!nuevoPlanPersonaId) return;
+    const result = await addPlanResponsable(accion.id, Number(nuevoPlanPersonaId));
+    if (!result?.ok) { console.error(result?.error); alert("No fue posible agregar al responsable (¿ya estaba en la lista?)."); return; }
+    setPlanResponsables((current) => [...current, result.data]);
+    setNuevoPlanPersonaId("");
+  }
+
+  async function handleUpdatePlanResponsableField(id, field, value) {
+    const result = await updatePlanResponsable(id, { [field]: value || null });
+    if (!result?.ok) { console.error(result?.error); return; }
+    setPlanResponsables((current) => current.map((r) => (r.id === id ? result.data : r)));
+  }
+
+  async function handleRemovePlanResponsable(id) {
+    const result = await removePlanResponsable(id);
+    if (!result?.ok) { console.error(result?.error); return; }
+    setPlanResponsables((current) => current.filter((r) => r.id !== id));
+  }
+
+  async function handleEnviarPlanAAsignacion() {
+    const pendientes = planResponsables.filter((r) => !r.workload_asignacion_id);
+    if (!pendientes.length) return;
+    if (!window.confirm(`¿Enviar ${pendientes.length} responsable(s) a Balance de Carga?`)) return;
+    setEnviandoPlan(true);
+    const filas = pendientes.map((r) => ({ ...r, personaNombre: personasById[r.persona_id]?.nombre || "" }));
+    const enviados = await onEnviarPlanResponsables(accion, filas);
+    if (enviados > 0) setPlanResponsables(await getPlanResponsables(accion.id));
+    setEnviandoPlan(false);
+  }
+
   useEffect(() => {
     async function load() {
       setLoadingSub(true);
-      const [analisisData, historialData, comentariosData, adjuntosData, involucradosData] = await Promise.all([
+      const [analisisData, historialData, comentariosData, adjuntosData, involucradosData, planResponsablesData] = await Promise.all([
         getAnalisisCausa(accion.id),
         getHistorial(accion.id),
         getComentarios(accion.id),
         getAdjuntos(accion.id),
         getInvolucrados(accion.id),
+        getPlanResponsables(accion.id),
       ]);
       setAnalisisList(analisisData);
       setHistorial(historialData);
       setComentarios(comentariosData);
       setAdjuntos(adjuntosData);
       setInvolucrados(involucradosData);
+      setPlanResponsables(planResponsablesData);
       setLoadingSub(false);
     }
     load();
@@ -876,18 +873,81 @@ export default function AccionDetailPanel({
                       </div>
                     </div>
 
+                    <div className="border-t border-slate-100 pt-2.5">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Responsables de ejecución</p>
+                      <p className="mt-0.5 text-[9px] font-semibold text-slate-400">Detalla qué le toca hacer a cada persona — al aprobarse, se envían todos juntos a Balance de Carga.</p>
+
+                      <div className="mt-2 space-y-1.5">
+                        {planResponsables.map((fila) => {
+                          const enviado = !!fila.workload_asignacion_id;
+                          return (
+                            <div key={fila.id} className={`grid grid-cols-12 items-center gap-1.5 rounded-lg border px-2 py-1.5 ${enviado ? "border-emerald-100 bg-emerald-50/40" : "border-slate-200 bg-slate-50/60"}`}>
+                              <div className="col-span-3 truncate text-[10px] font-black text-slate-700">{personasById[fila.persona_id]?.nombre || "—"}</div>
+                              <div className="col-span-5">
+                                <EditableSmallField
+                                  value={fila.detalle}
+                                  canEdit={canEdit && !enviado}
+                                  placeholder="Qué debe hacer..."
+                                  onSave={(v) => handleUpdatePlanResponsableField(fila.id, "detalle", v)}
+                                />
+                              </div>
+                              <div className="col-span-1">
+                                <EditableSmallField
+                                  type="number"
+                                  value={fila.horas}
+                                  canEdit={canEdit && !enviado}
+                                  placeholder="Hrs"
+                                  onSave={(v) => handleUpdatePlanResponsableField(fila.id, "horas", v ? Number(v) : null)}
+                                />
+                              </div>
+                              <div className="col-span-2">
+                                <EditableSmallField
+                                  type="date"
+                                  value={fila.fecha_limite}
+                                  canEdit={canEdit && !enviado}
+                                  onSave={(v) => handleUpdatePlanResponsableField(fila.id, "fecha_limite", v)}
+                                />
+                              </div>
+                              <div className="col-span-1 text-right">
+                                {enviado ? (
+                                  <span title="Ya está en Balance de Carga" className="text-[12px] text-emerald-600">✓</span>
+                                ) : canEdit ? (
+                                  <button type="button" onClick={() => handleRemovePlanResponsable(fila.id)} className="text-[12px] text-slate-300 hover:text-red-500">×</button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {!planResponsables.length && <p className="text-[10px] font-semibold text-slate-300">Sin responsables de ejecución capturados.</p>}
+                      </div>
+
+                      {canEdit && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <select value={nuevoPlanPersonaId} onChange={(e) => setNuevoPlanPersonaId(e.target.value)} className="h-7 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none">
+                            <option value="">+ Agregar persona...</option>
+                            {personas.filter((p) => !planResponsables.some((r) => r.persona_id === p.id)).map((p) => (
+                              <option key={p.id} value={p.id}>{p.nombre}</option>
+                            ))}
+                          </select>
+                          <button type="button" disabled={!nuevoPlanPersonaId} onClick={handleAddPlanResponsable} className="h-7 rounded-lg border border-slate-200 px-2.5 text-[10px] font-black text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-40">
+                            Agregar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     {canEdit && (
                       <div className="border-t border-slate-100 pt-2.5">
                         <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">Convertir en ejecución real</p>
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
-                            disabled={!yaAprobada}
-                            title={yaAprobada ? "Enviar a Asignaciones" : "Requiere aprobación del Director General primero"}
-                            onClick={() => setConvertingToAssignment((current) => !current)}
-                            className={`rounded-lg border px-3 py-1 text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${convertingToAssignment ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600"}`}
+                            disabled={!yaAprobada || enviandoPlan || !planResponsables.some((r) => !r.workload_asignacion_id)}
+                            title={yaAprobada ? "Enviar responsables de ejecución a Balance de Carga" : "Requiere aprobación del Director General primero"}
+                            onClick={handleEnviarPlanAAsignacion}
+                            className="rounded-lg border border-slate-200 px-3 py-1 text-[10px] font-black text-slate-500 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
                           >
-                            → Asignación
+                            {enviandoPlan ? "Enviando..." : "→ Enviar todo a Asignación"}
                           </button>
                           <button
                             type="button"
@@ -900,15 +960,6 @@ export default function AccionDetailPanel({
                           </button>
                         </div>
                         {!yaAprobada && <p className="mt-1.5 text-[9px] font-bold text-amber-600">Pendiente de aprobación del Director General (etapa "Aprobada" en Flujo).</p>}
-                        {convertingToAssignment && (
-                          <AsignacionForm
-                            personas={personas}
-                            defaultPersonaId={accion.responsable_persona_id || ""}
-                            defaultTitulo={accion.titulo}
-                            onCancel={() => setConvertingToAssignment(false)}
-                            onConfirm={(payload) => onCreateAssignment(accion, payload)}
-                          />
-                        )}
                         {convertingToProyecto && (
                           <ProyectoForm
                             personas={personas}
