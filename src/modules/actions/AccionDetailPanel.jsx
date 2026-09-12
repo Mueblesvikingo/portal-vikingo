@@ -597,13 +597,13 @@ export default function AccionDetailPanel({
                       <EditableSelect
                         value={accion.eficacia_resultado || ""}
                         options={[{ value: "", label: "Sin evaluar" }, "Eficaz", "Parcialmente eficaz", "No eficaz"]}
-                        canEdit={canEdit}
+                        canEdit={canVerify}
                         onSave={(v) => onUpdate({ eficacia_resultado: v || null, eficacia_evaluada_en: new Date().toISOString() })}
                       />
                     </div>
                     <div>
                       <p className="text-[9px] font-black uppercase tracking-widest text-cyan-700">Fecha para verificar</p>
-                      <EditableDate value={accion.fecha_verificacion_eficacia} canEdit={canEdit} onSave={(v) => onUpdate({ fecha_verificacion_eficacia: v || null })} />
+                      <EditableDate value={accion.fecha_verificacion_eficacia} canEdit={canVerify} onSave={(v) => onUpdate({ fecha_verificacion_eficacia: v || null })} />
                     </div>
                   </div>
                 )}
