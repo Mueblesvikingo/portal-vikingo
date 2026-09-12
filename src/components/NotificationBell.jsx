@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getPendingRecordatorios, markRecordatorioVisto } from "../services/pmoService";
 import { getFichasFirmadasPendientesAviso, marcarFirmaAvisoVisto } from "../services/auditoriasService";
+import { getPendingAccionNotificaciones, marcarNotificacionVista } from "../services/accionesService";
 
 const POLL_INTERVAL_MS = 30000;
 
@@ -26,6 +27,7 @@ export default function NotificationBell({ currentUser }) {
   const personaId = currentUser?.persona_id;
   const [recordatorios, setRecordatorios] = useState([]);
   const [firmas, setFirmas] = useState([]);
+  const [accionNotifs, setAccionNotifs] = useState([]);
   const [open, setOpen] = useState(false);
   const [dismissing, setDismissing] = useState(null);
   const containerRef = useRef(null);
@@ -49,6 +51,18 @@ export default function NotificationBell({ currentUser }) {
     async function poll() {
       const result = await getFichasFirmadasPendientesAviso(personaId);
       if (!cancelled) setFirmas(result || []);
+    }
+    poll();
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [personaId]);
+
+  useEffect(() => {
+    if (!personaId) { setAccionNotifs([]); return undefined; }
+    let cancelled = false;
+    async function poll() {
+      const result = await getPendingAccionNotificaciones(personaId);
+      if (!cancelled) setAccionNotifs(result || []);
     }
     poll();
     const interval = setInterval(poll, POLL_INTERVAL_MS);
@@ -84,16 +98,35 @@ export default function NotificationBell({ currentUser }) {
   const items = [
     ...firmas.map((item) => ({ kind: "firma", id: item.id, titulo: item.macroproceso || "Auditoría", mensaje: `${item.firmado_auditado_nombre} ya firmó el plan.`, when: item.firmado_auditado_at })),
     ...recordatorios.map((item) => ({ kind: "recordatorio", id: item.id, titulo: item.proyecto?.nombre || "Aviso", mensaje: item.mensaje, from: item.created_by_nombre, when: item.created_at })),
+    ...accionNotifs.map((item) => ({
+      kind: "accion",
+      id: item.id,
+      accionId: item.accion_id,
+      tipo: item.tipo,
+      titulo: item.acciones?.codigo || "Acción de mejora",
+      mensaje: item.mensaje,
+      when: item.created_at,
+    })),
   ];
 
   async function handleDismiss(item) {
     const key = `${item.kind}-${item.id}`;
     setDismissing(key);
-    const result = item.kind === "firma" ? await marcarFirmaAvisoVisto(item.id) : await markRecordatorioVisto(item.id);
-    setDismissing(null);
-    if (!result?.ok) return;
-    if (item.kind === "firma") setFirmas((current) => current.filter((f) => f.id !== item.id));
-    else setRecordatorios((current) => current.filter((r) => r.id !== item.id));
+    if (item.kind === "firma") {
+      const result = await marcarFirmaAvisoVisto(item.id);
+      setDismissing(null);
+      if (!result?.ok) return;
+      setFirmas((current) => current.filter((f) => f.id !== item.id));
+    } else if (item.kind === "accion") {
+      await marcarNotificacionVista(item.id, { accionId: item.accionId, personaId, tipo: item.tipo });
+      setDismissing(null);
+      setAccionNotifs((current) => current.filter((a) => a.id !== item.id));
+    } else {
+      const result = await markRecordatorioVisto(item.id);
+      setDismissing(null);
+      if (!result?.ok) return;
+      setRecordatorios((current) => current.filter((r) => r.id !== item.id));
+    }
   }
 
   if (!personaId) return null;
@@ -126,10 +159,11 @@ export default function NotificationBell({ currentUser }) {
               items.map((item) => {
                 const key = `${item.kind}-${item.id}`;
                 const isFirma = item.kind === "firma";
+                const isAccion = item.kind === "accion";
                 return (
                   <div key={key} className="border-b border-slate-100 px-4 py-3 last:border-b-0">
-                    <p className={`text-[9px] font-black uppercase tracking-wide ${isFirma ? "text-emerald-600" : "text-amber-600"}`}>
-                      {isFirma ? "✍️ " : ""}{item.titulo}
+                    <p className={`text-[9px] font-black uppercase tracking-wide ${isFirma ? "text-emerald-600" : isAccion ? "text-red-600" : "text-amber-600"}`}>
+                      {isFirma ? "✍️ " : isAccion ? "🚩 " : ""}{item.titulo}
                     </p>
                     <p className="mt-1 text-[11px] font-semibold text-slate-700">{item.mensaje}</p>
                     <div className="mt-1.5 flex items-center justify-between gap-2">

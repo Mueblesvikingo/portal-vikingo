@@ -7,8 +7,9 @@ import {
   addComentario,
   getAdjuntos,
   addAdjunto,
+  getInvolucrados,
 } from "../../services/accionesService";
-import { canEditAccion, canApproveAction } from "../../services/permissionsService";
+import { canEditAccion, canApproveAction, isStrategicTeamMember } from "../../services/permissionsService";
 import { createStrategicDecision } from "../../services/decisionService";
 import {
   TIPOS_ACCION,
@@ -273,9 +274,79 @@ function ProyectoForm({ personas, defaultNombre, defaultLiderPersonaId, onConfir
   );
 }
 
+// Formulario compacto para programar la junta rápida de análisis colectivo
+// (dirigida por la PM con quien registró la acción) — mismo patrón de
+// pastillas con checkbox que ProyectoForm usa para "involucrados", pero
+// para elegir a los asistentes de la reunión.
+function JuntaForm({ personas, defaultAsistenteIds, onConfirm, onCancel }) {
+  const [asistentesIds, setAsistentesIds] = useState(defaultAsistenteIds || []);
+  const [fecha, setFecha] = useState("");
+  const [hora, setHora] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function toggleAsistente(id) {
+    setAsistentesIds((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+  }
+
+  async function handleConfirm() {
+    if (asistentesIds.length === 0) { setError("Elige al menos un asistente."); return; }
+    if (!fecha) { setError("Elige una fecha."); return; }
+    setError("");
+    setSaving(true);
+    const asistentes = asistentesIds.map((id) => {
+      const persona = personas.find((p) => String(p.id) === String(id));
+      return { personaId: Number(id), personaNombre: persona?.nombre || "" };
+    });
+    const ok = await onConfirm({ asistentes, fecha, hora });
+    setSaving(false);
+    if (ok) onCancel();
+  }
+
+  return (
+    <div className="mt-2 space-y-2 rounded-xl border border-violet-100 bg-violet-50/50 px-3 py-2.5">
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Asistentes</p>
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {personas.map((p) => {
+            const id = String(p.id);
+            const checked = asistentesIds.map(String).includes(id);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => toggleAsistente(p.id)}
+                className={`rounded-full border px-2.5 py-1 text-[9px] font-black transition ${checked ? "border-violet-300 bg-violet-100 text-violet-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+              >
+                {checked ? "✓ " : ""}{p.nombre}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Fecha
+          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Hora (opcional)
+          <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="mt-1 h-9 rounded-xl border border-slate-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+        </label>
+        <button type="button" disabled={saving} onClick={handleConfirm} className="h-9 rounded-lg bg-[#111827] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+          {saving ? "Enviando..." : "Confirmar"}
+        </button>
+        <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-500">Cancelar</button>
+      </div>
+      {error && <p className="mt-1.5 text-[10px] font-bold text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 const SUB_TABS = [
   { key: "causa", label: "Análisis de causa" },
   { key: "plan", label: "Plan de acción" },
+  { key: "linea_tiempo", label: "Línea de tiempo" },
   { key: "historial", label: "Historial" },
   { key: "comentarios", label: "Comentarios" },
   { key: "adjuntos", label: "Adjuntos" },
@@ -283,7 +354,7 @@ const SUB_TABS = [
 
 export default function AccionDetailPanel({
   accion, acciones, tiposFlujo, procesos, personas, objetivos, procesosById, personasById, objetivosById,
-  currentUser, onUpdate, onDeactivate, onClose, onCreateAssignment, onCreateProyecto, onNavigateToAccion,
+  currentUser, onUpdate, onDeactivate, onClose, onCreateAssignment, onCreateProyecto, onProgramarJunta, onNavigateToAccion,
 }) {
   const [subTab, setSubTab] = useState("causa");
   const [analisisList, setAnalisisList] = useState([]);
@@ -291,16 +362,24 @@ export default function AccionDetailPanel({
   const [historial, setHistorial] = useState([]);
   const [comentarios, setComentarios] = useState([]);
   const [adjuntos, setAdjuntos] = useState([]);
+  const [involucrados, setInvolucrados] = useState([]);
   const [nuevoComentario, setNuevoComentario] = useState("");
   const [nuevoAdjunto, setNuevoAdjunto] = useState({ nombre: "", url: "" });
   const [loadingSub, setLoadingSub] = useState(true);
   const [convertingToAssignment, setConvertingToAssignment] = useState(false);
   const [convertingToProyecto, setConvertingToProyecto] = useState(false);
+  const [programandoJunta, setProgramandoJunta] = useState(false);
   const [escalando, setEscalando] = useState(false);
 
   const proceso = accion.proceso_id ? procesosById[accion.proceso_id] : null;
   const canEdit = canEditAccion(currentUser, accion, proceso);
   const canApprove = canApproveAction(currentUser);
+  // "Verificación de eficacia" la valida el auditor SIG — en este sistema no
+  // existe ese rol como tal, así que se usa el más cercano ya existente
+  // (Coordinador SIG), que además ya es parte del equipo estratégico, lo
+  // cual también cubre la petición de que el equipo estratégico pueda
+  // validarlo.
+  const canVerify = isStrategicTeamMember(currentUser);
   const etapas = getFlujoEtapas(tiposFlujo, accion.tipo);
   // Si el flujo de este tipo de acción no contempla "Aprobada", no hay
   // aprobación que esperar y la conversión queda libre desde que exista
@@ -366,16 +445,18 @@ export default function AccionDetailPanel({
   useEffect(() => {
     async function load() {
       setLoadingSub(true);
-      const [analisisData, historialData, comentariosData, adjuntosData] = await Promise.all([
+      const [analisisData, historialData, comentariosData, adjuntosData, involucradosData] = await Promise.all([
         getAnalisisCausa(accion.id),
         getHistorial(accion.id),
         getComentarios(accion.id),
         getAdjuntos(accion.id),
+        getInvolucrados(accion.id),
       ]);
       setAnalisisList(analisisData);
       setHistorial(historialData);
       setComentarios(comentariosData);
       setAdjuntos(adjuntosData);
+      setInvolucrados(involucradosData);
       setLoadingSub(false);
     }
     load();
@@ -559,16 +640,20 @@ export default function AccionDetailPanel({
                     // "Aprobada" es la única etapa que no basta con canEdit —
                     // es la firma del Director, no un paso más del flujo.
                     const bloqueadaPorAprobacion = etapa === "Aprobada" && !isCurrent && !isPast && !canApprove;
+                    // "Verificación de eficacia" la valida el auditor SIG /
+                    // equipo estratégico, no cualquiera con canEdit.
+                    const bloqueadaPorVerificacion = etapa === "Verificación de eficacia" && !isCurrent && !isPast && !canVerify;
+                    const bloqueada = bloqueadaPorAprobacion || bloqueadaPorVerificacion;
                     return (
                       <button
                         key={etapa}
                         type="button"
-                        disabled={!canEdit || bloqueadaPorAprobacion}
+                        disabled={!canEdit || bloqueada}
                         onClick={() => onUpdate({ estado: etapa })}
-                        title={bloqueadaPorAprobacion ? "Solo el Director General puede aprobar" : undefined}
+                        title={bloqueadaPorAprobacion ? "Solo el Director General puede aprobar" : bloqueadaPorVerificacion ? "Solo el Coordinador SIG o el equipo estratégico puede verificar la eficacia" : undefined}
                         className={`rounded-full border px-2.5 py-1 text-[9px] font-black transition ${
                           isCurrent ? ESTADO_BADGE[etapa] : isPast ? "border-emerald-100 bg-emerald-50/60 text-emerald-600" : "border-slate-200 bg-slate-50 text-slate-400"
-                        } ${canEdit && !bloqueadaPorAprobacion ? "hover:opacity-80" : ""} ${bloqueadaPorAprobacion ? "cursor-not-allowed opacity-50" : ""}`}
+                        } ${canEdit && !bloqueada ? "hover:opacity-80" : ""} ${bloqueada ? "cursor-not-allowed opacity-50" : ""}`}
                       >
                         {etapa}
                       </button>
@@ -576,6 +661,29 @@ export default function AccionDetailPanel({
                   })}
                 </div>
               </div>
+
+              {involucrados.length > 0 && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <p className="mb-2 text-[9px] font-black uppercase tracking-widest text-slate-400">Involucrados — notificados de esta acción</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {involucrados.map((i) => (
+                      <span
+                        key={i.id}
+                        title={i.visto_en ? `Abrió el registro (${formatDateTime(i.visto_en)})` : "Todavía no abre el registro"}
+                        className={`rounded-full border px-2.5 py-1 text-[9px] font-black ${i.visto_en ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}
+                      >
+                        {i.visto_en ? "✓ " : "○ "}{i.persona_nombre}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {accion.workload_asignacion_id && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3 text-[10px] font-black text-emerald-700">
+                  ✓ Ya baja a Balance de Carga como asignación real — la PM le da seguimiento desde ahí.
+                </div>
+              )}
             </div>
 
             {/* Columna derecha: sub-tabs */}
@@ -611,6 +719,25 @@ export default function AccionDetailPanel({
                         />
                       </div>
                     </div>
+                    {canEdit && (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setProgramandoJunta((current) => !current)}
+                          className={`rounded-lg border px-3 py-1 text-[10px] font-black transition ${programandoJunta ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-500 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"}`}
+                        >
+                          📅 Programar junta rápida
+                        </button>
+                        {programandoJunta && (
+                          <JuntaForm
+                            personas={personas}
+                            defaultAsistenteIds={accion.created_by_persona_id ? [accion.created_by_persona_id] : []}
+                            onCancel={() => setProgramandoJunta(false)}
+                            onConfirm={(payload) => onProgramarJunta(accion, payload)}
+                          />
+                        )}
+                      </div>
+                    )}
                     {posiblesAntecedentes.length > 0 && (
                       <details className="rounded-xl border border-amber-100 bg-amber-50/50 px-2.5 py-2">
                         <summary className="cursor-pointer text-[9px] font-black uppercase tracking-widest text-amber-700">
@@ -731,6 +858,43 @@ export default function AccionDetailPanel({
                         )}
                       </div>
                     )}
+                  </div>
+                ) : subTab === "linea_tiempo" ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-1">
+                      {etapas.map((etapa, index) => {
+                        const isCurrent = accion.estado === etapa;
+                        const isPast = etapas.indexOf(accion.estado) > index;
+                        return (
+                          <div key={etapa} className="flex items-center">
+                            <span
+                              className={`rounded-full border px-2.5 py-1 text-[9px] font-black ${
+                                isCurrent ? ESTADO_BADGE[etapa] : isPast ? "border-emerald-100 bg-emerald-50/60 text-emerald-600" : "border-slate-200 bg-slate-50 text-slate-400"
+                              }`}
+                            >
+                              {etapa}
+                            </span>
+                            {index < etapas.length - 1 && <span className="mx-1 text-slate-300">→</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="space-y-1.5 border-t border-slate-100 pt-2">
+                      {historial.filter((h) => h.campo === "estado" || h.campo === "creado").length === 0 ? (
+                        <p className="py-6 text-center text-[11px] font-bold text-slate-300">Sin recorrido registrado todavía.</p>
+                      ) : (
+                        [...historial]
+                          .filter((h) => h.campo === "estado" || h.campo === "creado")
+                          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+                          .map((entry) => (
+                            <div key={entry.id} className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-[10px]">
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
+                              <span className="font-black text-slate-700">{entry.campo === "creado" ? "Registrada" : entry.valor_nuevo}</span>
+                              <span className="ml-auto shrink-0 text-[9px] font-bold text-slate-400">{entry.usuario_nombre} · {formatDateTime(entry.created_at)}</span>
+                            </div>
+                          ))
+                      )}
+                    </div>
                   </div>
                 ) : subTab === "historial" ? (
                   <div className="space-y-1.5">

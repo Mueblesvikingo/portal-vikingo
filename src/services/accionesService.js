@@ -1,4 +1,6 @@
 import { supabase } from "./supabase";
+import { getUsuarios } from "./organizationCatalogService";
+import { isStrategicTeamMember } from "./permissionsService";
 
 function actorFields(actor) {
   return {
@@ -297,5 +299,142 @@ export async function addAdjunto({ accionId, nombreArchivo, url, tipo }, actor) 
   } catch (err) {
     console.error("Error inesperado al guardar adjunto de acción:", err);
     return { ok: false, error: err, data: null };
+  }
+}
+
+// --- Involucrados y notificaciones del flujo ------------------------------
+
+export async function getInvolucrados(accionId) {
+  try {
+    const { data, error } = await supabase
+      .from("accion_involucrados")
+      .select("*")
+      .eq("accion_id", accionId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Error al cargar involucrados de acción:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar involucrados de acción:", err);
+    return [];
+  }
+}
+
+async function insertNotificaciones(accionId, personaIds, { tipo, mensaje, urgente }) {
+  if (!personaIds.length) return;
+  const rows = personaIds.map((personaId) => ({
+    accion_id: accionId,
+    destinatario_persona_id: personaId,
+    tipo,
+    mensaje,
+    urgente: !!urgente,
+  }));
+  const { error } = await supabase.from("accion_notificaciones").insert(rows);
+  if (error) console.error("Error al notificar involucrados de acción:", error);
+}
+
+// Se llama justo después de crear una acción: une los involucrados que el
+// usuario eligió a mano con todo el equipo estratégico (siempre se entera de
+// una acción nueva, la haya elegido o no quien la registró), guarda quién
+// quedó como involucrado y le manda una notificación urgente a cada uno
+// (campanita + sirena — ver NotificationBell/MeetingAttendanceAlarm).
+export async function notificarNuevaAccion(accion, involucradosSeleccionadosIds, personas) {
+  try {
+    const usuarios = await getUsuarios();
+    const equipoEstrategicoPersonaIds = (usuarios || [])
+      .filter((u) => u.activo !== false && u.persona_id && isStrategicTeamMember(u))
+      .map((u) => Number(u.persona_id));
+
+    const personaIds = Array.from(
+      new Set([...(involucradosSeleccionadosIds || []).map(Number), ...equipoEstrategicoPersonaIds])
+    );
+    if (!personaIds.length) return { ok: true, error: null };
+
+    const personasById = new Map((personas || []).map((p) => [p.id, p.nombre]));
+    const rows = personaIds.map((personaId) => ({
+      accion_id: accion.id,
+      persona_id: personaId,
+      persona_nombre: personasById.get(personaId) || "",
+    }));
+    const { error } = await supabase.from("accion_involucrados").upsert(rows, { onConflict: "accion_id,persona_id" });
+    if (error) { console.error("Error al guardar involucrados de acción:", error); return { ok: false, error }; }
+
+    await insertNotificaciones(accion.id, personaIds, {
+      tipo: "nueva_accion",
+      mensaje: `Nueva acción ${accion.codigo}: ${accion.titulo} — te agregaron como involucrado.`,
+      urgente: true,
+    });
+    return { ok: true, error: null };
+  } catch (err) {
+    console.error("Error inesperado al notificar nueva acción:", err);
+    return { ok: false, error: err };
+  }
+}
+
+// Aviso genérico a todos los involucrados de una acción ya registrada — se
+// usa en las transiciones de estado que el flujo marca como críticas
+// (aprobación de Dirección) o informativas (cierre).
+export async function notificarInvolucrados(accionId, { tipo, mensaje, urgente = false }) {
+  try {
+    const involucrados = await getInvolucrados(accionId);
+    if (!involucrados.length) return { ok: true, error: null };
+    await insertNotificaciones(accionId, involucrados.map((i) => i.persona_id), { tipo, mensaje, urgente });
+    return { ok: true, error: null };
+  } catch (err) {
+    console.error("Error inesperado al notificar involucrados de acción:", err);
+    return { ok: false, error: err };
+  }
+}
+
+// El botón "Visto" de la campanita llama esto cuando la notificación es de
+// tipo 'nueva_accion' — es el "primer check" del flujo: deja constancia de
+// que esa persona en particular ya abrió el registro.
+export async function marcarInvolucradoVisto(accionId, personaId) {
+  try {
+    const { error } = await supabase
+      .from("accion_involucrados")
+      .update({ visto_en: new Date().toISOString() })
+      .eq("accion_id", accionId)
+      .eq("persona_id", personaId)
+      .is("visto_en", null);
+    if (error) console.error("Error al marcar involucrado como visto:", error);
+  } catch (err) {
+    console.error("Error inesperado al marcar involucrado como visto:", err);
+  }
+}
+
+export async function getPendingAccionNotificaciones(personaId) {
+  if (!personaId) return [];
+  try {
+    const { data, error } = await supabase
+      .from("accion_notificaciones")
+      .select("*, acciones(codigo, titulo)")
+      .eq("destinatario_persona_id", personaId)
+      .is("visto_en", null)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Error al cargar notificaciones de acciones:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Error inesperado al cargar notificaciones de acciones:", err);
+    return [];
+  }
+}
+
+export async function marcarNotificacionVista(id, { accionId, personaId, tipo } = {}) {
+  try {
+    const { error } = await supabase.from("accion_notificaciones").update({ visto_en: new Date().toISOString() }).eq("id", id);
+    if (error) { console.error("Error al marcar notificación como vista:", error); return; }
+    if (tipo === "nueva_accion" && accionId && personaId) {
+      await marcarInvolucradoVisto(accionId, personaId);
+    }
+  } catch (err) {
+    console.error("Error inesperado al marcar notificación como vista:", err);
   }
 }

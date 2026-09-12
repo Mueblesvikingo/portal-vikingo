@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TIPOS_ACCION, NIVELES_ACCION } from "./actionsHelpers";
 
 const initialDraft = {
@@ -10,6 +10,58 @@ const initialDraft = {
   correccionOrigenId: "",
 };
 
+// Mismo desplegable compacto de selección múltiple ya usado en Seguimiento
+// Estratégico (`StrategicFollowupModule.jsx`, `MultiSelectDropdown`) —
+// replicado aquí en vez de importado entre módulos, siguiendo el patrón ya
+// establecido de este proyecto de mantener los formularios de cada módulo
+// autocontenidos (ver `ProyectoForm`/`AsignacionForm` en AccionDetailPanel.jsx).
+function InvolucradosSelect({ personas, selectedIds, onToggle }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const seleccionadas = personas.filter((p) => selectedIds.includes(p.id));
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="mt-1 flex h-10 w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-left text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+      >
+        <span className="truncate">{seleccionadas.length ? `${seleccionadas.length} seleccionado${seleccionadas.length > 1 ? "s" : ""}` : "Elige a quién avisar"}</span>
+        <span className="shrink-0 text-slate-400">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {seleccionadas.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {seleccionadas.map((p) => (
+            <span key={p.id} className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-white">{p.nombre}</span>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+          {personas.map((p) => (
+            <label key={p.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-bold normal-case tracking-normal text-slate-700 hover:bg-slate-50">
+              <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => onToggle(p.id)} />
+              {p.nombre}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Esta captura inicial es deliberadamente ligera: solo registra el
 // problema/situación detectada. Responsable, prioridad y fecha compromiso
 // se definen después, en la pestaña "Plan de acción" del detalle — una vez
@@ -17,7 +69,12 @@ const initialDraft = {
 // y quién la puede ejecutar, en vez de comprometerlos de entrada.
 export default function NuevaAccionModal({ procesos, personas, acciones, onSave, onClose }) {
   const [draft, setDraft] = useState(initialDraft);
+  const [involucradosIds, setInvolucradosIds] = useState([]);
   const [error, setError] = useState("");
+
+  function toggleInvolucrado(id) {
+    setInvolucradosIds((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+  }
 
   // HLS 10.2: la Acción Correctiva (eliminar la causa) suele nacer de una
   // Corrección (reacción inmediata) ya registrada — se ofrece ligarla,
@@ -47,6 +104,7 @@ export default function NuevaAccionModal({ procesos, personas, acciones, onSave,
       origenModulo: correccionId ? "Acciones de Mejora" : null,
       origenTabla: correccionId ? "acciones" : null,
       origenId: correccionId,
+      involucradosIds,
     });
   }
 
@@ -94,6 +152,12 @@ export default function NuevaAccionModal({ procesos, personas, acciones, onSave,
               {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
             </select>
           </label>
+
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Involucrados (les llega notificación de esta acción)
+            <InvolucradosSelect personas={personas || []} selectedIds={involucradosIds} onToggle={toggleInvolucrado} />
+          </label>
+          <p className="-mt-1 text-[10px] font-semibold text-slate-400">El equipo estratégico (PM, Coordinador SIG, Analista de Procesos, Director General) se entera automáticamente, aunque no lo elijas aquí.</p>
 
           {draft.tipo === "Acción Correctiva" && correcciones.length > 0 && (
             <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">

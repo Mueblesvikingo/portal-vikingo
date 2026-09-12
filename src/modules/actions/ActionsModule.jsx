@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   getAcciones,
   getTiposFlujo,
   createAccion,
   updateAccion,
   deactivateAccion,
+  notificarNuevaAccion,
+  notificarInvolucrados,
 } from "../../services/accionesService";
 import { getMacroprocesos } from "../../services/performanceService";
 import { getPersonas } from "../../services/organizationCatalogService";
@@ -20,6 +23,7 @@ import AccionDetailPanel from "./AccionDetailPanel";
 import NuevaAccionModal from "./NuevaAccionModal";
 
 export default function ActionsModule({ currentUser }) {
+  const location = useLocation();
   const [acciones, setAcciones] = useState([]);
   const [tiposFlujo, setTiposFlujo] = useState([]);
   const [procesos, setProcesos] = useState([]);
@@ -73,6 +77,14 @@ export default function ActionsModule({ currentUser }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Llegada desde la alarma de notificaciones urgentes (MeetingAttendanceAlarm)
+  // con `state: { openAccionId }` — mismo patrón ya usado por SigDiagnosisModule
+  // para abrir directo la auditoría señalada en el aviso.
+  useEffect(() => {
+    if (location.state?.openAccionId) setSelectedAccionId(location.state.openAccionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
+
   const personasById = useMemo(() => Object.fromEntries(personas.map((p) => [p.id, p])), [personas]);
   const procesosById = useMemo(() => Object.fromEntries(procesos.map((p) => [p.id, p])), [procesos]);
   const objetivosById = useMemo(() => Object.fromEntries(objetivos.map((o) => [o.id, o])), [objetivos]);
@@ -92,7 +104,7 @@ export default function ActionsModule({ currentUser }) {
     });
   }, [acciones, misAcciones, scope, filtroNivel, filtroTipo, filtroEstado]);
 
-  async function handleCreateAccion(payload) {
+  async function handleCreateAccion({ involucradosIds, ...payload }) {
     const flujo = getFlujoConfig(tiposFlujo, payload.tipo);
     const result = await createAccion(
       {
@@ -108,13 +120,36 @@ export default function ActionsModule({ currentUser }) {
     setAcciones((current) => [result.data, ...current]);
     setCreating(false);
     setSelectedAccionId(result.data.id);
+    // No bloquea el alta si falla — la acción ya quedó registrada, avisar a
+    // los involucrados (elegidos a mano + equipo estratégico siempre) es un
+    // paso aparte.
+    await notificarNuevaAccion(result.data, involucradosIds, personas);
   }
 
+  // Notificaciones automáticas del flujo en las dos transiciones críticas:
+  // aprobación de Dirección (sirena, ver MeetingAttendanceAlarm) y cierre
+  // (solo campanita). Centralizado aquí porque tanto las pastillas de flujo
+  // del detalle como el drag-and-drop del Kanban pasan por esta misma
+  // función para cambiar el estado.
   async function handleUpdateAccion(id, updates) {
     const previous = acciones.find((a) => a.id === id);
     const result = await updateAccion(id, updates, { actor: currentUser, previous });
     if (!result?.ok) { console.error(result?.error); setMessage("No fue posible actualizar la acción."); return; }
     setAcciones((current) => current.map((a) => (a.id === id ? { ...a, ...result.data } : a)));
+
+    if (updates.estado === "Aprobada" && previous?.estado !== "Aprobada") {
+      await notificarInvolucrados(id, {
+        tipo: "aprobacion",
+        mensaje: `Dirección aprobó el plan de acción de ${result.data.codigo}: ${result.data.titulo}.`,
+        urgente: true,
+      });
+    } else if (updates.estado === "Cerrada" && previous?.estado !== "Cerrada") {
+      await notificarInvolucrados(id, {
+        tipo: "cierre",
+        mensaje: `Se cerró la acción ${result.data.codigo}: ${result.data.titulo}.`,
+        urgente: false,
+      });
+    }
   }
 
   async function handleDeactivateAccion(id) {
@@ -158,8 +193,44 @@ export default function ActionsModule({ currentUser }) {
       origen_estrategico: "Acciones",
     });
     if (!result?.ok) { console.error(result?.error); alert("No fue posible crear la asignación."); return false; }
+    // `workload_asignacion_id` ya existía en la tabla `acciones` pero nunca
+    // se escribía — sin esto, la PM no tenía forma de ver desde Acciones
+    // cuáles ya bajaron a una asignación real de Balance de Carga.
+    await handleUpdateAccion(accion.id, { workload_asignacion_id: result.data.id });
     await notificarPMConversion(accion, `Acción ${accion.codigo} convertida en asignación para ${payload.personaNombre}: ${accion.titulo}`);
     alert(`Asignación creada para ${payload.personaNombre} en Balance de Carga.`);
+    return true;
+  }
+
+  // Botón "Programar junta rápida" del detalle — la PM y quien registró la
+  // acción (u otros que se agreguen) quedan cada uno con un recordatorio de
+  // reunión real en Balance de Carga; como MeetingAttendanceAlarm.jsx ya
+  // vigila cualquier asignación cuyo tipo contenga "reuni", no hace falta
+  // nada nuevo para que les suene la alarma de confirmación de asistencia.
+  async function handleProgramarJunta(accion, payload) {
+    for (const persona of payload.asistentes) {
+      const result = await createWorkloadAssignment({
+        persona_id: persona.personaId,
+        responsable: persona.personaNombre,
+        rol: "Convocado a junta",
+        tipo: "Reunión: análisis de causa",
+        prioridad: "Alta",
+        gestion: "Otro",
+        titulo: `Análisis colectivo — ${accion.codigo}`,
+        descripcion: accion.titulo,
+        revisara: "", aprobara: "", seguimiento: "",
+        carga_horas: 1,
+        fecha_limite: payload.fecha,
+        hora_limite: payload.hora || null,
+        estado: "Pendiente",
+        asigna: currentUser?.nombre || currentUser?.usuario || "",
+        asigna_rol: "Acciones de Mejora",
+        horas_totales: 1,
+        origen_estrategico: "Acciones",
+      });
+      if (!result?.ok) { console.error(result?.error); alert(`No fue posible programar la junta para ${persona.personaNombre}.`); return false; }
+    }
+    alert(`Junta programada para ${payload.asistentes.length} persona(s).`);
     return true;
   }
 
@@ -383,6 +454,7 @@ export default function ActionsModule({ currentUser }) {
           onClose={() => setSelectedAccionId(null)}
           onCreateAssignment={handleCrearAsignacion}
           onCreateProyecto={handleCrearProyecto}
+          onProgramarJunta={handleProgramarJunta}
           onNavigateToAccion={setSelectedAccionId}
         />
       )}
