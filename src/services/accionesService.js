@@ -82,6 +82,7 @@ export async function createAccion(payload, actor) {
         descripcion: payload.descripcion || "",
         proceso_id: payload.procesoId || null,
         subproceso_id: payload.subprocesoId || null,
+        subproceso_texto: payload.subprocesoTexto || null,
         objetivo_id: payload.objetivoId || null,
         responsable_persona_id: payload.responsablePersonaId || null,
         prioridad: payload.prioridad || "Media",

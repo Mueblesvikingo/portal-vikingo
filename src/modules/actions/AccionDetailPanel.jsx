@@ -154,21 +154,29 @@ function MultiSelectDropdown({ options, selectedIds, onToggle, placeholder = "Si
 // "Responsables de ejecución" del Plan de acción (detalle/horas/fecha), sin
 // el overhead de EditableText/EditableDate (que están pensados para un
 // valor por celda, no para una fila de varios campos a la vez).
-function EditableSmallField({ value, onSave, canEdit, placeholder = "", type = "text" }) {
+function EditableSmallField({ value, onSave, canEdit, placeholder = "", type = "text", suggestions, listId }) {
   const [draft, setDraft] = useState(value ?? "");
   useEffect(() => { setDraft(value ?? ""); }, [value]);
   if (!canEdit) {
     return <span className="text-[10px] font-semibold text-slate-600">{value || <span className="text-slate-300">{placeholder}</span>}</span>;
   }
   return (
-    <input
-      type={type}
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => { if (String(draft) !== String(value ?? "")) onSave(draft); }}
-      placeholder={placeholder}
-      className="w-full rounded border border-slate-200 bg-slate-50 px-1.5 py-1 text-[10px] font-bold text-slate-700 outline-none focus:border-sky-300"
-    />
+    <>
+      <input
+        type={type}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => { if (String(draft) !== String(value ?? "")) onSave(draft); }}
+        placeholder={placeholder}
+        list={suggestions ? listId : undefined}
+        className="w-full rounded border border-slate-200 bg-slate-50 px-1.5 py-1 text-[10px] font-bold text-slate-700 outline-none focus:border-sky-300"
+      />
+      {suggestions && (
+        <datalist id={listId}>
+          {suggestions.map((s) => <option key={s} value={s} />)}
+        </datalist>
+      )}
+    </>
   );
 }
 
@@ -609,22 +617,34 @@ export default function AccionDetailPanel({
                       value={accion.proceso_id || ""}
                       options={[{ value: "", label: "Sin proceso" }, ...procesos.map((p) => ({ value: p.id, label: p.nombre }))]}
                       canEdit={canEdit}
-                      onSave={(v) => onUpdate({ proceso_id: v || null, subproceso_id: null })}
+                      onSave={(v) => onUpdate({ proceso_id: v || null, subproceso_id: null, subproceso_texto: null })}
                       labelFor={() => (accion.proceso_id ? procesosById[accion.proceso_id]?.nombre : "Sin proceso")}
                     />
                   </div>
                   <div>
                     <p className="font-black uppercase tracking-widest text-slate-400">Área / subproceso</p>
                     {(() => {
+                      // Texto libre (no todo caso real cae en el catálogo de Diseño
+                      // Organizacional) con sugerencias de las áreas ya conocidas del
+                      // proceso — si lo escrito coincide con una, se liga también a
+                      // subproceso_id para reportes; si no, se guarda solo el texto.
                       const procesoActual = accion.proceso_id ? procesosById[accion.proceso_id] : null;
                       const areasDisponibles = procesoActual ? (subprocesos || []).filter((s) => s.proceso === procesoActual.nombre) : [];
+                      const valorActual = accion.subproceso_texto || (accion.subproceso_id ? subprocesosById[accion.subproceso_id]?.nombre?.trim() : "") || "";
                       return (
-                        <EditableSelect
-                          value={accion.subproceso_id || ""}
-                          options={[{ value: "", label: "Sin área específica" }, ...areasDisponibles.map((s) => ({ value: s.id, label: s.nombre.trim() }))]}
+                        <EditableSmallField
+                          value={valorActual}
                           canEdit={canEdit && !!procesoActual}
-                          onSave={(v) => onUpdate({ subproceso_id: v || null })}
-                          labelFor={() => (accion.subproceso_id ? subprocesosById[accion.subproceso_id]?.nombre?.trim() : "Sin área específica")}
+                          placeholder={procesoActual ? "Sin área específica" : "Elige primero un proceso"}
+                          suggestions={areasDisponibles.map((s) => s.nombre.trim())}
+                          listId="area-subproceso-sugeridas-detalle"
+                          onSave={(v) => {
+                            const texto = String(v || "").trim();
+                            const coincidencia = texto
+                              ? areasDisponibles.find((s) => s.nombre.trim().toLowerCase() === texto.toLowerCase())
+                              : null;
+                            onUpdate({ subproceso_texto: texto || null, subproceso_id: coincidencia?.id || null });
+                          }}
                         />
                       );
                     })()}

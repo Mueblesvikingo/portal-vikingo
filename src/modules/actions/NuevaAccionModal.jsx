@@ -7,7 +7,7 @@ const initialDraft = {
   titulo: "",
   descripcion: "",
   procesoId: "",
-  subprocesoId: "",
+  subprocesoTexto: "",
   correccionOrigenId: "",
 };
 
@@ -77,17 +77,20 @@ export default function NuevaAccionModal({ procesos, subprocesos, personas, acci
     setInvolucradosIds((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
   }
 
-  // El área/subproceso es el detalle real bajo el proceso elegido (ej.
-  // Gestión de calidad trae 11 subprocesos capturados en Diseño
-  // Organizacional) — se filtra por el nombre del proceso porque así está
-  // ligado hoy `subprocesos.proceso` (texto), no por id.
+  // El área/subproceso es texto libre (no toda situación real cae dentro
+  // del catálogo capturado en Diseño Organizacional) pero se sugiere con las
+  // áreas ya conocidas del proceso elegido, vía <datalist> — mismo patrón
+  // que ya usa Catálogo Organizacional para "texto libre con sugerencias".
+  // Si lo tecleado coincide con una de esas sugerencias, se liga además al
+  // subproceso real (subprocesoId) para reportes; si no, se guarda solo el
+  // texto.
   const procesoSeleccionado = procesos.find((p) => String(p.id) === String(draft.procesoId));
   const areasDisponibles = procesoSeleccionado
     ? (subprocesos || []).filter((s) => s.proceso === procesoSeleccionado.nombre)
     : [];
 
   function handleProcesoChange(value) {
-    setDraft((current) => ({ ...current, procesoId: value, subprocesoId: "" }));
+    setDraft((current) => ({ ...current, procesoId: value, subprocesoTexto: "" }));
   }
 
   // HLS 10.2: la Acción Correctiva (eliminar la causa) suele nacer de una
@@ -105,13 +108,18 @@ export default function NuevaAccionModal({ procesos, subprocesos, personas, acci
       return;
     }
     const correccionId = draft.tipo === "Acción Correctiva" && draft.correccionOrigenId ? Number(draft.correccionOrigenId) : null;
+    const subprocesoTexto = draft.subprocesoTexto.trim();
+    const areaCoincidente = subprocesoTexto
+      ? areasDisponibles.find((s) => s.nombre.trim().toLowerCase() === subprocesoTexto.toLowerCase())
+      : null;
     onSave({
       tipo: draft.tipo,
       nivel: draft.nivel,
       titulo: draft.titulo.trim(),
       descripcion: draft.descripcion.trim(),
       procesoId: draft.procesoId || null,
-      subprocesoId: draft.subprocesoId || null,
+      subprocesoId: areaCoincidente?.id || null,
+      subprocesoTexto: subprocesoTexto || null,
       responsablePersonaId: null,
       objetivoId: null,
       prioridad: "Media",
@@ -170,15 +178,16 @@ export default function NuevaAccionModal({ procesos, subprocesos, personas, acci
             </label>
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
               Área / subproceso
-              <select
-                value={draft.subprocesoId}
-                onChange={(e) => update("subprocesoId", e.target.value)}
-                disabled={!procesoSeleccionado || !areasDisponibles.length}
-                className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="">{!procesoSeleccionado ? "Elige primero un proceso" : areasDisponibles.length ? "Sin área específica" : "Sin áreas registradas"}</option>
-                {areasDisponibles.map((s) => <option key={s.id} value={s.id}>{s.nombre.trim()}</option>)}
-              </select>
+              <input
+                value={draft.subprocesoTexto}
+                onChange={(e) => update("subprocesoTexto", e.target.value)}
+                list="areas-subproceso-sugeridas"
+                placeholder={procesoSeleccionado ? "Escribe el área específica..." : "Elige primero un proceso"}
+                className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+              />
+              <datalist id="areas-subproceso-sugeridas">
+                {areasDisponibles.map((s) => <option key={s.id} value={s.nombre.trim()} />)}
+              </datalist>
             </label>
           </div>
 
