@@ -7,6 +7,7 @@ const initialDraft = {
   titulo: "",
   descripcion: "",
   procesoId: "",
+  subprocesoId: "",
   correccionOrigenId: "",
 };
 
@@ -67,13 +68,26 @@ function InvolucradosSelect({ personas, selectedIds, onToggle }) {
 // se definen después, en la pestaña "Plan de acción" del detalle — una vez
 // que ya se sabe (por el análisis de causa) qué acción concreta se necesita
 // y quién la puede ejecutar, en vez de comprometerlos de entrada.
-export default function NuevaAccionModal({ procesos, personas, acciones, onSave, onClose }) {
+export default function NuevaAccionModal({ procesos, subprocesos, personas, acciones, onSave, onClose }) {
   const [draft, setDraft] = useState(initialDraft);
   const [involucradosIds, setInvolucradosIds] = useState([]);
   const [error, setError] = useState("");
 
   function toggleInvolucrado(id) {
     setInvolucradosIds((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+  }
+
+  // El área/subproceso es el detalle real bajo el proceso elegido (ej.
+  // Gestión de calidad trae 11 subprocesos capturados en Diseño
+  // Organizacional) — se filtra por el nombre del proceso porque así está
+  // ligado hoy `subprocesos.proceso` (texto), no por id.
+  const procesoSeleccionado = procesos.find((p) => String(p.id) === String(draft.procesoId));
+  const areasDisponibles = procesoSeleccionado
+    ? (subprocesos || []).filter((s) => s.proceso === procesoSeleccionado.nombre)
+    : [];
+
+  function handleProcesoChange(value) {
+    setDraft((current) => ({ ...current, procesoId: value, subprocesoId: "" }));
   }
 
   // HLS 10.2: la Acción Correctiva (eliminar la causa) suele nacer de una
@@ -97,6 +111,7 @@ export default function NuevaAccionModal({ procesos, personas, acciones, onSave,
       titulo: draft.titulo.trim(),
       descripcion: draft.descripcion.trim(),
       procesoId: draft.procesoId || null,
+      subprocesoId: draft.subprocesoId || null,
       responsablePersonaId: null,
       objetivoId: null,
       prioridad: "Media",
@@ -145,13 +160,27 @@ export default function NuevaAccionModal({ procesos, personas, acciones, onSave,
             <textarea value={draft.descripcion} onChange={(e) => update("descripcion", e.target.value)} rows={2} placeholder="Contexto: qué pasó, dónde, cuándo se detectó" className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
           </label>
 
-          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
-            Proceso
-            <select value={draft.procesoId} onChange={(e) => update("procesoId", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
-              <option value="">Sin proceso</option>
-              {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-            </select>
-          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Proceso
+              <select value={draft.procesoId} onChange={(e) => handleProcesoChange(e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+                <option value="">Sin proceso</option>
+                {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+            </label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Área / subproceso
+              <select
+                value={draft.subprocesoId}
+                onChange={(e) => update("subprocesoId", e.target.value)}
+                disabled={!procesoSeleccionado || !areasDisponibles.length}
+                className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">{!procesoSeleccionado ? "Elige primero un proceso" : areasDisponibles.length ? "Sin área específica" : "Sin áreas registradas"}</option>
+                {areasDisponibles.map((s) => <option key={s.id} value={s.id}>{s.nombre.trim()}</option>)}
+              </select>
+            </label>
+          </div>
 
           <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
             Involucrados (les llega notificación de esta acción)

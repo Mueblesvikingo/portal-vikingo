@@ -12,6 +12,7 @@ import {
 } from "../../services/accionesService";
 import { getMacroprocesos } from "../../services/performanceService";
 import { getPersonas } from "../../services/organizationCatalogService";
+import { getSubprocesosCatalog } from "../../services/organizationalDesignService";
 import { getObjetivos } from "../../services/strategicDeploymentService";
 import { createWorkloadAssignment } from "../../services/workloadService";
 import { getProyectos, createProyecto, createRecordatorio, PM_PERSONA_ID } from "../../services/pmoService";
@@ -28,6 +29,7 @@ export default function ActionsModule({ currentUser }) {
   const [acciones, setAcciones] = useState([]);
   const [tiposFlujo, setTiposFlujo] = useState([]);
   const [procesos, setProcesos] = useState([]);
+  const [subprocesos, setSubprocesos] = useState([]);
   const [personas, setPersonas] = useState([]);
   const [objetivos, setObjetivos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,16 +60,18 @@ export default function ActionsModule({ currentUser }) {
 
   async function loadAll() {
     setLoading(true);
-    const [accionesData, tiposData, procesosData, personasData, objetivosData] = await Promise.all([
+    const [accionesData, tiposData, procesosData, subprocesosData, personasData, objetivosData] = await Promise.all([
       getAcciones(),
       getTiposFlujo(),
       getMacroprocesos(),
+      getSubprocesosCatalog(),
       getPersonas().catch((err) => { console.error("Error al cargar personas:", err); return []; }),
       getObjetivos(),
     ]);
     setAcciones(accionesData);
     setTiposFlujo(tiposData);
     setProcesos(procesosData);
+    setSubprocesos(subprocesosData);
     setPersonas(personasData.filter((p) => p.activo !== false && (!p.tipo || p.tipo === "persona")));
     setObjetivos(objetivosData.filter((o) => o.codigo !== "GLOBAL"));
     setLoading(false);
@@ -88,6 +92,7 @@ export default function ActionsModule({ currentUser }) {
 
   const personasById = useMemo(() => Object.fromEntries(personas.map((p) => [p.id, p])), [personas]);
   const procesosById = useMemo(() => Object.fromEntries(procesos.map((p) => [p.id, p])), [procesos]);
+  const subprocesosById = useMemo(() => Object.fromEntries(subprocesos.map((s) => [s.id, s])), [subprocesos]);
   const objetivosById = useMemo(() => Object.fromEntries(objetivos.map((o) => [o.id, o])), [objetivos]);
 
   const misAcciones = useMemo(
@@ -471,6 +476,7 @@ export default function ActionsModule({ currentUser }) {
       {creating && (
         <NuevaAccionModal
           procesos={procesos}
+          subprocesos={subprocesos}
           personas={personas}
           objetivos={objetivos}
           acciones={acciones}
@@ -485,9 +491,11 @@ export default function ActionsModule({ currentUser }) {
           acciones={acciones}
           tiposFlujo={tiposFlujo}
           procesos={procesos}
+          subprocesos={subprocesos}
           personas={personas}
           objetivos={objetivos}
           procesosById={procesosById}
+          subprocesosById={subprocesosById}
           personasById={personasById}
           objetivosById={objetivosById}
           currentUser={currentUser}

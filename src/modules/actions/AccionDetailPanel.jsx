@@ -360,7 +360,7 @@ const SUB_TABS = [
 ];
 
 export default function AccionDetailPanel({
-  accion, acciones, tiposFlujo, procesos, personas, objetivos, procesosById, personasById, objetivosById,
+  accion, acciones, tiposFlujo, procesos, subprocesos, personas, objetivos, procesosById, subprocesosById, personasById, objetivosById,
   currentUser, onUpdate, onDeactivate, onClose, onCreateProyecto, onEnviarPlanResponsables, onProgramarJunta, onNavigateToAccion,
 }) {
   const [subTab, setSubTab] = useState("causa");
@@ -609,9 +609,25 @@ export default function AccionDetailPanel({
                       value={accion.proceso_id || ""}
                       options={[{ value: "", label: "Sin proceso" }, ...procesos.map((p) => ({ value: p.id, label: p.nombre }))]}
                       canEdit={canEdit}
-                      onSave={(v) => onUpdate({ proceso_id: v || null })}
+                      onSave={(v) => onUpdate({ proceso_id: v || null, subproceso_id: null })}
                       labelFor={() => (accion.proceso_id ? procesosById[accion.proceso_id]?.nombre : "Sin proceso")}
                     />
+                  </div>
+                  <div>
+                    <p className="font-black uppercase tracking-widest text-slate-400">Área / subproceso</p>
+                    {(() => {
+                      const procesoActual = accion.proceso_id ? procesosById[accion.proceso_id] : null;
+                      const areasDisponibles = procesoActual ? (subprocesos || []).filter((s) => s.proceso === procesoActual.nombre) : [];
+                      return (
+                        <EditableSelect
+                          value={accion.subproceso_id || ""}
+                          options={[{ value: "", label: "Sin área específica" }, ...areasDisponibles.map((s) => ({ value: s.id, label: s.nombre.trim() }))]}
+                          canEdit={canEdit && !!procesoActual}
+                          onSave={(v) => onUpdate({ subproceso_id: v || null })}
+                          labelFor={() => (accion.subproceso_id ? subprocesosById[accion.subproceso_id]?.nombre?.trim() : "Sin área específica")}
+                        />
+                      );
+                    })()}
                   </div>
                   <div>
                     <p className="font-black uppercase tracking-widest text-slate-400">Objetivo estratégico</p>
