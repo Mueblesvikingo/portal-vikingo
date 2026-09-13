@@ -326,11 +326,11 @@ export async function getPlanResponsables(accionId) {
   }
 }
 
-export async function addPlanResponsable(accionId, personaId) {
+export async function addPlanResponsable(accionId, personaId, extra = {}) {
   try {
     const { data, error } = await supabase
       .from("accion_plan_responsables")
-      .insert({ accion_id: accionId, persona_id: personaId })
+      .insert({ accion_id: accionId, persona_id: personaId, ...extra })
       .select("*")
       .single();
     if (error) return { ok: false, error, data: null };

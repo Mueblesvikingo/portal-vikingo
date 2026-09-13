@@ -380,6 +380,9 @@ export default function AccionDetailPanel({
   const [involucrados, setInvolucrados] = useState([]);
   const [planResponsables, setPlanResponsables] = useState([]);
   const [nuevoPlanPersonaId, setNuevoPlanPersonaId] = useState("");
+  const [nuevoPlanDetalle, setNuevoPlanDetalle] = useState("");
+  const [nuevoPlanFecha, setNuevoPlanFecha] = useState("");
+  const [nuevoPlanHoras, setNuevoPlanHoras] = useState(2);
   const [enviandoPlan, setEnviandoPlan] = useState(false);
   const [nuevoComentario, setNuevoComentario] = useState("");
   const [nuevoAdjunto, setNuevoAdjunto] = useState({ nombre: "", url: "" });
@@ -459,16 +462,26 @@ export default function AccionDetailPanel({
     setEscalando(false);
   }
 
-  // Plan de acción → Responsables de ejecución: a diferencia del campo único
-  // "Responsable" (accountability/permisos), aquí se puede detallar a varias
-  // personas con su propia tarea, horas y fecha, y mandarlas todas de un
-  // golpe a Balance de Carga una vez aprobada la acción.
+  // Plan de acción → una fila por persona (acción concreta + fecha +
+  // responsable), captura todo de una vez en el propio "+ Agregar" en vez de
+  // crear la fila vacía y editarla campo por campo — y mandarlas todas de un
+  // golpe a Balance de Carga una vez aprobada la acción. La primera persona
+  // agregada queda además como "Responsable" de la acción (usado en Kanban/
+  // Tabla) si todavía no tenía uno, para no pedir ese dato dos veces.
   async function handleAddPlanResponsable() {
     if (!nuevoPlanPersonaId) return;
-    const result = await addPlanResponsable(accion.id, Number(nuevoPlanPersonaId));
-    if (!result?.ok) { console.error(result?.error); alert("No fue posible agregar al responsable (¿ya estaba en la lista?)."); return; }
+    const result = await addPlanResponsable(accion.id, Number(nuevoPlanPersonaId), {
+      detalle: nuevoPlanDetalle.trim() || null,
+      fecha_limite: nuevoPlanFecha || null,
+      horas: nuevoPlanHoras ? Number(nuevoPlanHoras) : null,
+    });
+    if (!result?.ok) { console.error(result?.error); alert("No fue posible agregar la acción (¿esa persona ya estaba en la lista?)."); return; }
     setPlanResponsables((current) => [...current, result.data]);
+    if (!accion.responsable_persona_id) onUpdate({ responsable_persona_id: Number(nuevoPlanPersonaId) });
     setNuevoPlanPersonaId("");
+    setNuevoPlanDetalle("");
+    setNuevoPlanFecha("");
+    setNuevoPlanHoras(2);
   }
 
   async function handleUpdatePlanResponsableField(id, field, value) {
@@ -879,16 +892,6 @@ export default function AccionDetailPanel({
 
                     <div className="grid grid-cols-2 gap-2 text-[10px]">
                       <div>
-                        <p className="font-black uppercase tracking-widest text-slate-400">Responsable</p>
-                        <EditableSelect
-                          value={accion.responsable_persona_id || ""}
-                          options={[{ value: "", label: "Sin asignar" }, ...personas.map((p) => ({ value: p.id, label: p.nombre }))]}
-                          canEdit={canEdit}
-                          onSave={(v) => onUpdate({ responsable_persona_id: v || null })}
-                          labelFor={() => (accion.responsable_persona_id ? personasById[accion.responsable_persona_id]?.nombre : "Sin asignar")}
-                        />
-                      </div>
-                      <div>
                         <p className="font-black uppercase tracking-widest text-slate-400">Prioridad</p>
                         <EditableSelect value={accion.prioridad} options={PRIORIDADES_ACCION} canEdit={canEdit} onSave={(v) => onUpdate({ prioridad: v })} />
                       </div>
@@ -898,33 +901,38 @@ export default function AccionDetailPanel({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Enlace de ejecución (texto)</p>
-                        <EditableText value={accion.enlace_ejecucion_texto} canEdit={canEdit} onSave={(v) => onUpdate({ enlace_ejecucion_texto: v })} placeholder="Ej. Planner — Tablero Calidad" className="text-slate-700" />
-                      </div>
-                      <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Enlace de ejecución (URL)</p>
-                        <EditableText value={accion.enlace_ejecucion_url} canEdit={canEdit} onSave={(v) => onUpdate({ enlace_ejecucion_url: v })} placeholder="https://…" className="text-slate-700" />
-                      </div>
-                    </div>
-
                     <div className="border-t border-slate-100 pt-2.5">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Responsables de ejecución</p>
-                      <p className="mt-0.5 text-[9px] font-semibold text-slate-400">Detalla qué le toca hacer a cada persona — al aprobarse, se envían todos juntos a Balance de Carga.</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Acciones y responsables</p>
+                      <p className="mt-0.5 text-[9px] font-semibold text-slate-400">Registra qué le toca hacer a cada persona y para cuándo — al aprobarse, se envían todas juntas a Balance de Carga.</p>
 
-                      <div className="mt-2 space-y-1.5">
+                      {planResponsables.length > 0 && (
+                        <div className="mt-2 grid grid-cols-12 gap-1.5 px-2 text-[8px] font-black uppercase tracking-widest text-slate-400">
+                          <span className="col-span-3">Responsable</span>
+                          <span className="col-span-4">Acción</span>
+                          <span className="col-span-2">Fecha</span>
+                          <span className="col-span-1">Hrs</span>
+                        </div>
+                      )}
+                      <div className="mt-1 space-y-1.5">
                         {planResponsables.map((fila) => {
                           const enviado = !!fila.workload_asignacion_id;
                           return (
                             <div key={fila.id} className={`grid grid-cols-12 items-center gap-1.5 rounded-lg border px-2 py-1.5 ${enviado ? "border-emerald-100 bg-emerald-50/40" : "border-slate-200 bg-slate-50/60"}`}>
                               <div className="col-span-3 truncate text-[10px] font-black text-slate-700">{personasById[fila.persona_id]?.nombre || "—"}</div>
-                              <div className="col-span-5">
+                              <div className="col-span-4">
                                 <EditableSmallField
                                   value={fila.detalle}
                                   canEdit={canEdit && !enviado}
                                   placeholder="Qué debe hacer..."
                                   onSave={(v) => handleUpdatePlanResponsableField(fila.id, "detalle", v)}
+                                />
+                              </div>
+                              <div className="col-span-2">
+                                <EditableSmallField
+                                  type="date"
+                                  value={fila.fecha_limite}
+                                  canEdit={canEdit && !enviado}
+                                  onSave={(v) => handleUpdatePlanResponsableField(fila.id, "fecha_limite", v)}
                                 />
                               </div>
                               <div className="col-span-1">
@@ -936,17 +944,9 @@ export default function AccionDetailPanel({
                                   onSave={(v) => handleUpdatePlanResponsableField(fila.id, "horas", v ? Number(v) : null)}
                                 />
                               </div>
-                              <div className="col-span-2">
-                                <EditableSmallField
-                                  type="date"
-                                  value={fila.fecha_limite}
-                                  canEdit={canEdit && !enviado}
-                                  onSave={(v) => handleUpdatePlanResponsableField(fila.id, "fecha_limite", v)}
-                                />
-                              </div>
-                              <div className="col-span-1 text-right">
+                              <div className="col-span-2 text-right">
                                 {enviado ? (
-                                  <span title="Ya está en Balance de Carga" className="text-[12px] text-emerald-600">✓</span>
+                                  <span title="Ya está en Balance de Carga" className="text-[12px] text-emerald-600">✓ Enviado</span>
                                 ) : canEdit ? (
                                   <button type="button" onClick={() => handleRemovePlanResponsable(fila.id)} className="text-[12px] text-slate-300 hover:text-red-500">×</button>
                                 ) : null}
@@ -954,19 +954,22 @@ export default function AccionDetailPanel({
                             </div>
                           );
                         })}
-                        {!planResponsables.length && <p className="text-[10px] font-semibold text-slate-300">Sin responsables de ejecución capturados.</p>}
+                        {!planResponsables.length && <p className="text-[10px] font-semibold text-slate-300">Sin acciones capturadas todavía.</p>}
                       </div>
 
                       {canEdit && (
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <select value={nuevoPlanPersonaId} onChange={(e) => setNuevoPlanPersonaId(e.target.value)} className="h-7 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none">
-                            <option value="">+ Agregar persona...</option>
+                        <div className="mt-2 flex flex-wrap items-end gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-2">
+                          <select value={nuevoPlanPersonaId} onChange={(e) => setNuevoPlanPersonaId(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none">
+                            <option value="">Responsable...</option>
                             {personas.filter((p) => !planResponsables.some((r) => r.persona_id === p.id)).map((p) => (
                               <option key={p.id} value={p.id}>{p.nombre}</option>
                             ))}
                           </select>
-                          <button type="button" disabled={!nuevoPlanPersonaId} onClick={handleAddPlanResponsable} className="h-7 rounded-lg border border-slate-200 px-2.5 text-[10px] font-black text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-40">
-                            Agregar
+                          <input value={nuevoPlanDetalle} onChange={(e) => setNuevoPlanDetalle(e.target.value)} placeholder="Qué debe hacer..." className="h-8 min-w-[160px] flex-1 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
+                          <input type="date" value={nuevoPlanFecha} onChange={(e) => setNuevoPlanFecha(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
+                          <input type="number" value={nuevoPlanHoras} onChange={(e) => setNuevoPlanHoras(e.target.value)} placeholder="Hrs" className="h-8 w-14 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
+                          <button type="button" disabled={!nuevoPlanPersonaId} onClick={handleAddPlanResponsable} className="h-8 rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
+                            + Agregar
                           </button>
                         </div>
                       )}
@@ -974,14 +977,13 @@ export default function AccionDetailPanel({
 
                     {canEdit && (
                       <div className="border-t border-slate-100 pt-2.5">
-                        <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">Convertir en ejecución real</p>
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
                             disabled={!yaAprobada || enviandoPlan || !planResponsables.some((r) => !r.workload_asignacion_id)}
-                            title={yaAprobada ? "Enviar responsables de ejecución a Balance de Carga" : "Requiere aprobación del Director General primero"}
+                            title={yaAprobada ? "Enviar todas las acciones a Balance de Carga" : "Requiere aprobación del Director General primero"}
                             onClick={handleEnviarPlanAAsignacion}
-                            className="rounded-lg border border-slate-200 px-3 py-1 text-[10px] font-black text-slate-500 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white transition hover:bg-[#0a1c3a] disabled:cursor-not-allowed disabled:bg-slate-300"
                           >
                             {enviandoPlan ? "Enviando..." : "→ Enviar todo a Asignación"}
                           </button>
@@ -990,7 +992,7 @@ export default function AccionDetailPanel({
                             disabled={!yaAprobada}
                             title={yaAprobada ? "Crear proyecto en el Tablero PMO" : "Requiere aprobación del Director General primero"}
                             onClick={() => setConvertingToProyecto((current) => !current)}
-                            className={`rounded-lg border px-3 py-1 text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${convertingToProyecto ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"}`}
+                            className={`rounded-lg border px-3 py-1.5 text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${convertingToProyecto ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"}`}
                           >
                             → Proyecto
                           </button>
@@ -1007,6 +1009,20 @@ export default function AccionDetailPanel({
                         )}
                       </div>
                     )}
+
+                    <details className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
+                      <summary className="cursor-pointer select-none text-[9px] font-black uppercase tracking-widest text-slate-400">Enlace de ejecución (opcional)</summary>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Texto</p>
+                          <EditableText value={accion.enlace_ejecucion_texto} canEdit={canEdit} onSave={(v) => onUpdate({ enlace_ejecucion_texto: v })} placeholder="Ej. Planner — Tablero Calidad" className="text-slate-700" />
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">URL</p>
+                          <EditableText value={accion.enlace_ejecucion_url} canEdit={canEdit} onSave={(v) => onUpdate({ enlace_ejecucion_url: v })} placeholder="https://…" className="text-slate-700" />
+                        </div>
+                      </div>
+                    </details>
                   </div>
                 ) : subTab === "linea_tiempo" ? (
                   <div className="space-y-3">
