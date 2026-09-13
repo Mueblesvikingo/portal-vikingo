@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { ESTADOS_ACCION, ESTADO_BADGE, TIPO_COLOR, NIVEL_BADGE, PRIORIDAD_BADGE, isVencida, formatDate } from "./actionsHelpers";
+import { canEditAccion } from "../../services/permissionsService";
 
-function AccionCard({ accion, personasById, onClick, onDragStart }) {
+function AccionCard({ accion, personasById, canDrag, onClick, onDragStart }) {
   const responsable = accion.responsable_persona_id ? personasById[accion.responsable_persona_id]?.nombre : null;
   const vencida = isVencida(accion);
   return (
     <div
-      draggable
-      onDragStart={onDragStart}
+      draggable={canDrag}
+      onDragStart={canDrag ? onDragStart : undefined}
       onClick={onClick}
-      className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-1.5 shadow-sm transition hover:shadow-md active:cursor-grabbing"
+      title={canDrag ? undefined : "Solo consulta — no tienes permiso para mover esta acción"}
+      className={`rounded-lg border border-slate-200 bg-white px-2 py-1.5 shadow-sm transition hover:shadow-md ${canDrag ? "cursor-pointer active:cursor-grabbing" : "cursor-pointer"}`}
       style={{ borderLeft: `3px solid ${TIPO_COLOR[accion.tipo] || "#94a3b8"}` }}
     >
       <div className="flex items-center justify-between gap-1">
@@ -29,7 +31,7 @@ function AccionCard({ accion, personasById, onClick, onDragStart }) {
   );
 }
 
-export default function KanbanTab({ acciones, personasById, onUpdateAccion, onSelectAccion }) {
+export default function KanbanTab({ acciones, personasById, procesosById, currentUser, onUpdateAccion, onSelectAccion }) {
   const [draggedId, setDraggedId] = useState(null);
 
   const columns = ESTADOS_ACCION.map((estado) => ({
@@ -40,7 +42,10 @@ export default function KanbanTab({ acciones, personasById, onUpdateAccion, onSe
   function handleDrop(estado) {
     if (draggedId == null) return;
     const accion = acciones.find((a) => a.id === draggedId);
-    if (accion && accion.estado !== estado) onUpdateAccion(draggedId, { estado });
+    const proceso = accion?.proceso_id ? procesosById[accion.proceso_id] : null;
+    if (accion && accion.estado !== estado && canEditAccion(currentUser, accion, proceso)) {
+      onUpdateAccion(draggedId, { estado });
+    }
     setDraggedId(null);
   }
 
@@ -64,6 +69,7 @@ export default function KanbanTab({ acciones, personasById, onUpdateAccion, onSe
                   key={accion.id}
                   accion={accion}
                   personasById={personasById}
+                  canDrag={canEditAccion(currentUser, accion, accion.proceso_id ? procesosById[accion.proceso_id] : null)}
                   onDragStart={() => setDraggedId(accion.id)}
                   onClick={() => onSelectAccion(accion.id)}
                 />

@@ -45,7 +45,7 @@ const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
 const OPERATIVE_ROLE_PREFIXES = ["Supervisor", "Auxiliar"];
 const MODULES_VISIBLE_FOR_OPERATIVE_ROLES = ["organigrama", "workload-balance", "acciones"];
 
-function isOperativeRole(user) {
+export function isOperativeRole(user) {
   return getApplicableRoles(user).some((role) =>
     OPERATIVE_ROLE_PREFIXES.some((prefix) => role.startsWith(prefix))
   );
@@ -405,10 +405,18 @@ function esResponsableAnalisis(user, accion) {
   return ids.map(Number).includes(Number(user?.persona_id));
 }
 
+// Auxiliares y supervisores pueden REPORTAR ("+ Reportar problema") pero su
+// alcance termina ahí — no siguen el análisis de causa ni el plan de acción
+// aunque hayan sido quienes la crearon. Por diseño explícito: el módulo no
+// es un buzón de quejas donde el mismo reportante empuja el caso, sino que
+// el análisis y la resolución los lleva quien tiene el proceso a su cargo o
+// el equipo estratégico. Para cualquier otro rol, quien creó el reporte sí
+// puede seguir editándolo (ver nota arriba de esResponsableAnalisis).
 export function canEditAccion(user, accion, proceso) {
   if (!accion) return false;
   if (isStrategicTeamMember(user)) return true;
-  if (Number(user?.persona_id) === Number(accion.created_by_persona_id)) return true;
+  const puedeSeguirPorHaberlaCreado = Number(user?.persona_id) === Number(accion.created_by_persona_id) && !isOperativeRole(user);
+  if (puedeSeguirPorHaberlaCreado) return true;
   if (esResponsableAnalisis(user, accion)) return true;
   if (accion.nivel === "Operativa" && proceso) return isProcessOwner(user, proceso);
   return false;

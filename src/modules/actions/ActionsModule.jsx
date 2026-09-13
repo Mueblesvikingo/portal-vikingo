@@ -16,7 +16,7 @@ import { getSubprocesosCatalog } from "../../services/organizationalDesignServic
 import { getObjetivos } from "../../services/strategicDeploymentService";
 import { createWorkloadAssignment } from "../../services/workloadService";
 import { getProyectos, createProyecto, createRecordatorio, PM_PERSONA_ID } from "../../services/pmoService";
-import { isStrategicTeamMember, esParticipanteAccion } from "../../services/permissionsService";
+import { isStrategicTeamMember, esParticipanteAccion, isOperativeRole } from "../../services/permissionsService";
 import { NIVELES_ACCION, TIPOS_ACCION, ESTADOS_ACCION, getFlujoConfig } from "./actionsHelpers";
 import DashboardTab from "./DashboardTab";
 import KanbanTab from "./KanbanTab";
@@ -40,6 +40,10 @@ export default function ActionsModule({ currentUser }) {
   // toda la organización. Equipo estratégico sí necesita esa vista global
   // de entrada, así que arranca en "todas". Cualquiera puede cambiar el
   // alcance con el toggle — nada queda oculto, solo cambia el default.
+  // Auxiliares/supervisores son la excepción: su alcance es reportar, no
+  // supervisar el módulo completo — se quedan fijos en "Mis acciones" (ver
+  // esOperativo más abajo, que además oculta el propio toggle).
+  const esOperativo = isOperativeRole(currentUser);
   const [scope, setScope] = useState(() => (isStrategicTeamMember(currentUser) ? "todas" : "mias"));
   const [filtroNivel, setFiltroNivel] = useState("all");
   const [filtroTipo, setFiltroTipo] = useState("all");
@@ -101,14 +105,14 @@ export default function ActionsModule({ currentUser }) {
   );
 
   const filteredAcciones = useMemo(() => {
-    const base = scope === "mias" ? misAcciones : acciones;
+    const base = (esOperativo || scope === "mias") ? misAcciones : acciones;
     return base.filter((a) => {
       if (filtroNivel !== "all" && a.nivel !== filtroNivel) return false;
       if (filtroTipo !== "all" && a.tipo !== filtroTipo) return false;
       if (filtroEstado !== "all" && a.estado !== filtroEstado) return false;
       return true;
     });
-  }, [acciones, misAcciones, scope, filtroNivel, filtroTipo, filtroEstado]);
+  }, [acciones, misAcciones, scope, esOperativo, filtroNivel, filtroTipo, filtroEstado]);
 
   async function handleCreateAccion({ involucradosIds, ...payload }) {
     const flujo = getFlujoConfig(tiposFlujo, payload.tipo);
@@ -347,7 +351,15 @@ export default function ActionsModule({ currentUser }) {
 
   return (
     <section className="space-y-2.5">
-      {guiaAbierta ? (
+      {esOperativo ? (
+        // Alcance deliberadamente distinto al de un líder de proceso: aquí
+        // solo se reporta la situación detectada — nada de análisis de causa
+        // ni seguimiento del caso. Se deja explícito para que el módulo no
+        // se perciba como un buzón de quejas abierto.
+        <div className="rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-2.5 text-[10px] font-bold text-sky-800">
+          📝 Aquí registras una situación o problema que detectaste. Tu reporte llega al líder del proceso y al equipo estratégico, quienes hacen el análisis y le dan seguimiento — este espacio no es un buzón de quejas, es el punto de partida de una acción de mejora real.
+        </div>
+      ) : guiaAbierta ? (
         <div className="rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-2.5">
           <button type="button" onClick={cerrarGuia} className="mb-2 flex w-full items-center justify-between text-left">
             <span className="text-[10px] font-black uppercase tracking-widest text-sky-700">¿Cómo funciona este módulo?</span>
@@ -373,22 +385,26 @@ export default function ActionsModule({ currentUser }) {
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-            <button
-              type="button"
-              onClick={() => setScope("mias")}
-              className={`rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${scope === "mias" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              Mis acciones
-            </button>
-            <button
-              type="button"
-              onClick={() => setScope("todas")}
-              className={`rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${scope === "todas" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              Todas
-            </button>
-          </div>
+          {esOperativo ? (
+            <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">Mis reportes</span>
+          ) : (
+            <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              <button
+                type="button"
+                onClick={() => setScope("mias")}
+                className={`rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${scope === "mias" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                Mis acciones
+              </button>
+              <button
+                type="button"
+                onClick={() => setScope("todas")}
+                className={`rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${scope === "todas" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                Todas
+              </button>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setCreating(true)}
@@ -457,6 +473,8 @@ export default function ActionsModule({ currentUser }) {
                 acciones={filteredAcciones}
                 tiposFlujo={tiposFlujo}
                 personasById={personasById}
+                procesosById={procesosById}
+                currentUser={currentUser}
                 onUpdateAccion={handleUpdateAccion}
                 onSelectAccion={setSelectedAccionId}
               />
