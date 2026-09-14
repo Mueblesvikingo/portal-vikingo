@@ -17,6 +17,18 @@ import OrganigramaModule from "../../modules/organigrama/OrganigramaModule";
 import CompetenciaDetailPage from "../../modules/competencias/CompetenciaDetailPage";
 import SopModule from "../../modules/sop/SopModule";
 
+// El Sidebar ya oculta los enlaces a los que un usuario no tiene acceso,
+// pero eso no bloqueaba entrar por URL directa (marcador, historial del
+// navegador, o una pestaña que quedó abierta desde antes de que le
+// restringieran el menú) — cualquier ruta sin este guard se renderizaba
+// igual sin importar el permiso. Se detectó porque a Joseline (rol
+// operativo, solo debería ver Organigrama/Balance de Carga/Acciones) su
+// navegador la llevó directo a "/performance". Todas las rutas del menú
+// pasan ahora por el mismo chequeo que ya usa Sidebar.jsx (canViewModule).
+function Guarded({ moduleKey, currentUser, children }) {
+  return canViewModule(currentUser, moduleKey) ? children : <Navigate to="/" replace />;
+}
+
 export default function AppRouter({
   currentUser,
   onLogout,
@@ -57,7 +69,7 @@ export default function AppRouter({
 
           <Route
             path="/performance"
-            element={<PerformanceModule currentUser={currentUser} />}
+            element={<Guarded moduleKey="performance" currentUser={currentUser}><PerformanceModule currentUser={currentUser} /></Guarded>}
           />
 
 {/* Despliegue Estratégico ya no es un módulo aparte: vive como pestaña
@@ -71,46 +83,34 @@ export default function AppRouter({
 
           <Route
             path="/capacity"
-            element={<CapacityModule currentUser={currentUser} />}
+            element={<Guarded moduleKey="capacity" currentUser={currentUser}><CapacityModule currentUser={currentUser} /></Guarded>}
           />
 
           <Route
             path="/decision-center"
-            element={
-              canViewModule(currentUser, "decision-center") ? (
-                <DecisionCenterModule currentUser={currentUser} />
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
+            element={<Guarded moduleKey="decision-center" currentUser={currentUser}><DecisionCenterModule currentUser={currentUser} /></Guarded>}
           />
 
           <Route
             path="/strategic-followup"
-            element={<StrategicFollowupModule currentUser={currentUser} />}
+            element={<Guarded moduleKey="strategic-followup" currentUser={currentUser}><StrategicFollowupModule currentUser={currentUser} /></Guarded>}
           />
 
           <Route
             path="/acciones"
-            element={
-              canViewModule(currentUser, "acciones") ? (
-                <ActionsModule currentUser={currentUser} />
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
+            element={<Guarded moduleKey="acciones" currentUser={currentUser}><ActionsModule currentUser={currentUser} /></Guarded>}
           />
 
 
 
           <Route
             path="/organigrama"
-            element={<OrganigramaModule currentUser={currentUser} />}
+            element={<Guarded moduleKey="organigrama" currentUser={currentUser}><OrganigramaModule currentUser={currentUser} /></Guarded>}
           />
 
           <Route
             path="/organization-catalog"
-            element={<OrganizationCatalogModule />}
+            element={<Guarded moduleKey="organization-catalog" currentUser={currentUser}><OrganizationCatalogModule /></Guarded>}
           />
 
           <Route
@@ -120,28 +120,22 @@ export default function AppRouter({
 
           <Route
             path="/sop"
-            element={
-              canViewModule(currentUser, "sop") ? (
-                <SopModule currentUser={currentUser} />
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
+            element={<Guarded moduleKey="sop" currentUser={currentUser}><SopModule currentUser={currentUser} /></Guarded>}
           />
 
           <Route
             path="/workload-balance"
-            element={<WorkloadBalanceModule currentUser={currentUser} />}
+            element={<Guarded moduleKey="workload-balance" currentUser={currentUser}><WorkloadBalanceModule currentUser={currentUser} /></Guarded>}
           />
 
           <Route
             path="/maturity"
-            element={<MaturityModule currentUser={currentUser} />}
+            element={<Guarded moduleKey="maturity" currentUser={currentUser}><MaturityModule currentUser={currentUser} /></Guarded>}
           />
 
           <Route
             path="/sig"
-            element={<SigDiagnosisModule currentUser={currentUser} />}
+            element={<Guarded moduleKey="sig" currentUser={currentUser}><SigDiagnosisModule currentUser={currentUser} /></Guarded>}
           />
         </Routes>
       </AppLayout>
