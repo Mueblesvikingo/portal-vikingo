@@ -80,6 +80,7 @@ export default function MessagesPanel({ currentUser }) {
   const [panelVisible, setPanelVisible] = useState(false);
   const [adjuntoPendiente, setAdjuntoPendiente] = useState(null); // { file, previewUrl }
   const [adjuntoError, setAdjuntoError] = useState("");
+  const [adjuntoAbierto, setAdjuntoAbierto] = useState(null); // { url, nombre, tipo } — vista previa dentro del propio panel, sin abrir pestaña nueva
   const containerRef = useRef(null);
   const threadEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -356,19 +357,18 @@ export default function MessagesPanel({ currentUser }) {
                     <div key={m.id} className={`mb-1.5 flex ${esMio ? "justify-end" : "justify-start"}`}>
                       <div className={`max-w-[80%] rounded-2xl px-3 py-1.5 shadow-sm ${esMio ? "bg-[#001225] text-white" : "bg-slate-100 text-slate-700"}`}>
                         {m.adjunto_url && esImagen && (
-                          <a href={m.adjunto_url} target="_blank" rel="noreferrer" className="mb-1 block overflow-hidden rounded-lg">
+                          <button type="button" onClick={() => setAdjuntoAbierto({ url: m.adjunto_url, nombre: m.adjunto_nombre, tipo: m.adjunto_tipo })} className="mb-1 block w-full overflow-hidden rounded-lg">
                             <img src={m.adjunto_url} alt={m.adjunto_nombre || "Imagen adjunta"} className="max-h-40 w-full object-cover" />
-                          </a>
+                          </button>
                         )}
                         {m.adjunto_url && !esImagen && (
-                          <a
-                            href={m.adjunto_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className={`mb-1 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px] font-bold ${esMio ? "bg-white/10 text-white" : "bg-white text-sky-700"}`}
+                          <button
+                            type="button"
+                            onClick={() => setAdjuntoAbierto({ url: m.adjunto_url, nombre: m.adjunto_nombre, tipo: m.adjunto_tipo })}
+                            className={`mb-1 flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[10px] font-bold ${esMio ? "bg-white/10 text-white" : "bg-white text-sky-700"}`}
                           >
                             📎 <span className="truncate">{m.adjunto_nombre || "Archivo adjunto"}</span>
-                          </a>
+                          </button>
                         )}
                         {m.mensaje && <p className="text-[11px] font-semibold leading-snug">{m.mensaje}</p>}
                         <div className={`mt-0.5 flex items-center justify-end gap-1 text-[9px] font-bold ${esMio ? "text-white/50" : "text-slate-400"}`}>
@@ -427,6 +427,36 @@ export default function MessagesPanel({ currentUser }) {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {adjuntoAbierto && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4"
+          onClick={() => setAdjuntoAbierto(null)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
+              <span className="flex-1 truncate text-[11px] font-black text-slate-700">{adjuntoAbierto.nombre || "Adjunto"}</span>
+              <a href={adjuntoAbierto.url} download={adjuntoAbierto.nombre || undefined} className="text-[10px] font-black text-sky-600 hover:underline">Descargar</a>
+              <button type="button" onClick={() => setAdjuntoAbierto(null)} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600">×</button>
+            </div>
+            <div className="flex-1 overflow-auto bg-slate-50">
+              {adjuntoAbierto.tipo?.startsWith("image/") ? (
+                <img src={adjuntoAbierto.url} alt={adjuntoAbierto.nombre || "Imagen adjunta"} className="mx-auto max-h-[70vh] w-auto object-contain" />
+              ) : adjuntoAbierto.tipo === "application/pdf" ? (
+                <iframe src={adjuntoAbierto.url} title={adjuntoAbierto.nombre || "Documento"} className="h-[70vh] w-full" />
+              ) : (
+                <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
+                  <span className="text-3xl">📎</span>
+                  <p className="text-[11px] font-bold text-slate-500">No hay vista previa disponible para este tipo de archivo.</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
