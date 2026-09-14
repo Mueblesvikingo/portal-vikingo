@@ -388,6 +388,11 @@ export default function AccionDetailPanel({
   const [nuevoAdjunto, setNuevoAdjunto] = useState({ nombre: "", url: "" });
   const [loadingSub, setLoadingSub] = useState(true);
   const [convertingToProyecto, setConvertingToProyecto] = useState(false);
+  // El detalle (nivel/tipo/proceso/objetivo/flujo/involucrados) no aporta al
+  // siguiente paso del registro (analizar la causa) — se oculta por default
+  // para que Análisis de causa/Plan de acción tengan toda la pantalla, y
+  // queda a un clic de distancia con "Ver detalle" para cuando sí haga falta.
+  const [detalleAbierto, setDetalleAbierto] = useState(false);
   const [programandoJunta, setProgramandoJunta] = useState(false);
   const [escalando, setEscalando] = useState(false);
 
@@ -577,16 +582,33 @@ export default function AccionDetailPanel({
         </div>
 
         <div className="flex-1 overflow-auto p-4">
-          <div className="grid gap-3 lg:grid-cols-[1.3fr_1fr]">
-            {/* Columna izquierda: campos + flujo */}
-            <div className="space-y-3">
-              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" style={{ borderLeft: `4px solid ${TIPO_COLOR[accion.tipo] || "#94a3b8"}` }}>
+          <div className="space-y-3">
+            {/* Encabezado compacto, siempre visible — el detalle completo
+                (campos, flujo, involucrados) se oculta detrás de "Ver
+                detalle" para no robarle pantalla al análisis de causa. */}
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" style={{ borderLeft: `4px solid ${TIPO_COLOR[accion.tipo] || "#94a3b8"}` }}>
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${NIVEL_BADGE[accion.nivel] || ""}`}>{accion.nivel}</span>
                   <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-black text-slate-600">{accion.tipo}</span>
+                  <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${ESTADO_BADGE[accion.estado] || ""}`}>{accion.estado}</span>
                   {accion.con_riesgo && <span className="rounded-full border border-red-100 bg-red-50 px-2 py-0.5 text-[9px] font-black text-red-600">Con riesgo</span>}
                 </div>
-                <h2 className="mt-2 text-lg font-black text-slate-900">
+                <h2 className="mt-1 truncate text-base font-black text-slate-900">{accion.titulo}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetalleAbierto((v) => !v)}
+                className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-[10px] font-black text-slate-500 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600"
+              >
+                {detalleAbierto ? "Ocultar detalle ▲" : "Ver detalle ▾"}
+              </button>
+            </div>
+
+            {detalleAbierto && (
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" style={{ borderLeft: `4px solid ${TIPO_COLOR[accion.tipo] || "#94a3b8"}` }}>
+                <h2 className="text-lg font-black text-slate-900">
                   <EditableText value={accion.titulo} canEdit={canEdit} onSave={(v) => onUpdate({ titulo: v })} />
                 </h2>
                 <div className="mt-1 text-[11px] text-slate-500">
@@ -615,7 +637,7 @@ export default function AccionDetailPanel({
                   </div>
                 )}
 
-                <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]">
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-3">
                   <div>
                     <p className="font-black uppercase tracking-widest text-slate-400">Nivel</p>
                     <EditableSelect value={accion.nivel} options={NIVELES_ACCION} canEdit={canEdit} onSave={(v) => onUpdate({ nivel: v })} />
@@ -780,8 +802,10 @@ export default function AccionDetailPanel({
                 </div>
               )}
             </div>
+            )}
 
-            {/* Columna derecha: sub-tabs */}
+            {/* Sub-tabs: Análisis de causa / Plan de acción / etc — a todo lo
+                ancho, sin competir por espacio con el detalle. */}
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="flex flex-wrap gap-1 border-b border-slate-100 bg-slate-50 p-1.5">
                 {SUB_TABS.map((tab) => (
@@ -796,7 +820,7 @@ export default function AccionDetailPanel({
                 ))}
               </div>
 
-              <div className="max-h-[55vh] overflow-auto p-3">
+              <div className={`overflow-auto p-3 ${detalleAbierto ? "max-h-[45vh]" : "max-h-[65vh]"}`}>
                 {loadingSub ? (
                   <div className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
                 ) : subTab === "causa" ? (
