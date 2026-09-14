@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 
 import AppRouter from "./core/routing/AppRouter";
 import LoginModule from "./modules/auth/LoginModule";
-import { getSession, clearSession } from "./services/authService";
+import { getSession, clearSession, marcarActividad } from "./services/authService";
 import { loadRolePermissionDefaults } from "./services/permissionsService";
+
+const HEARTBEAT_MS = 45000;
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(getSession());
@@ -22,6 +24,15 @@ export default function App() {
     return () => {
       cancelled = true;
     };
+  }, [currentUser?.id]);
+
+  // Heartbeat de presencia para "en línea" en Mensajes — ver marcarActividad
+  // en authService.js.
+  useEffect(() => {
+    if (!currentUser?.id) return undefined;
+    marcarActividad(currentUser.id);
+    const interval = setInterval(() => marcarActividad(currentUser.id), HEARTBEAT_MS);
+    return () => clearInterval(interval);
   }, [currentUser?.id]);
 
   function handleLogin(user) {

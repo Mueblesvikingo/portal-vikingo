@@ -8,7 +8,7 @@ export async function getDirectorioPersonas(excludePersonaId) {
   try {
     const { data, error } = await supabase
       .from("usuarios")
-      .select("persona_id, nombre, rol_organizacional")
+      .select("persona_id, nombre, rol_organizacional, ultima_actividad")
       .eq("activo", true)
       .not("persona_id", "is", null)
       .order("nombre", { ascending: true });

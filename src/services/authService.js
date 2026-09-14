@@ -52,3 +52,18 @@ export function getSession() {
 export function clearSession() {
   localStorage.removeItem("vikingo_current_user");
 }
+
+// "En línea" en Mensajes (MessagesPanel.jsx) se calcula sobre esto: no hay
+// backend de tiempo real en el proyecto (mismo criterio que el resto de las
+// notificaciones, que funcionan a base de polling), así que la presencia es
+// un heartbeat — mientras la sesión siga abierta, App.jsx llama esto cada
+// ~45s, y se considera "en línea" a quien tenga esta marca reciente.
+export async function marcarActividad(usuarioId) {
+  if (!usuarioId) return;
+  try {
+    const { error } = await supabase.from("usuarios").update({ ultima_actividad: new Date().toISOString() }).eq("id", usuarioId);
+    if (error) console.error("Error al marcar actividad del usuario:", error);
+  } catch (err) {
+    console.error("Error inesperado al marcar actividad del usuario:", err);
+  }
+}

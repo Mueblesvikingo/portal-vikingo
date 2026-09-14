@@ -8,6 +8,10 @@ import {
 } from "../services/mensajesService";
 
 const POLL_INTERVAL_MS = 15000;
+// El heartbeat de presencia (App.jsx, marcarActividad) escribe cada 45s —
+// 2 minutos da margen de sobra a un poll perdido sin tardar en reflejar que
+// alguien se desconectó.
+const ONLINE_THRESHOLD_MS = 120000;
 
 const AVATAR_COLORS = ["bg-rose-500", "bg-amber-500", "bg-emerald-500", "bg-sky-500", "bg-violet-500", "bg-teal-500", "bg-orange-500"];
 
@@ -24,10 +28,18 @@ function getAvatarColor(name) {
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
-function Avatar({ name, size = "h-8 w-8 text-[10px]" }) {
+function Avatar({ name, size = "h-8 w-8 text-[10px]", online }) {
   return (
-    <span className={`flex ${size} shrink-0 items-center justify-center rounded-full font-black text-white ${getAvatarColor(name)}`}>
-      {getInitials(name)}
+    <span className="relative shrink-0">
+      <span className={`flex ${size} items-center justify-center rounded-full font-black text-white ${getAvatarColor(name)}`}>
+        {getInitials(name)}
+      </span>
+      {online != null && (
+        <span
+          title={online ? "En línea" : "Desconectado"}
+          className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${online ? "bg-emerald-500" : "bg-slate-300"}`}
+        />
+      )}
     </span>
   );
 }
@@ -91,9 +103,23 @@ export default function MessagesPanel({ currentUser }) {
   }, [personaId]);
 
   useEffect(() => {
-    if (!personaId) return;
-    getDirectorioPersonas(personaId).then(setDirectorio);
+    if (!personaId) return undefined;
+    let cancelled = false;
+    async function poll() {
+      const result = await getDirectorioPersonas(personaId);
+      if (!cancelled) setDirectorio(result || []);
+    }
+    poll();
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [personaId]);
+
+  const directorioPorPersona = useMemo(() => new Map(directorio.map((d) => [Number(d.persona_id), d])), [directorio]);
+  function estaEnLinea(otraPersonaId) {
+    const ultimaActividad = directorioPorPersona.get(Number(otraPersonaId))?.ultima_actividad;
+    if (!ultimaActividad) return false;
+    return Date.now() - new Date(ultimaActividad).getTime() < ONLINE_THRESHOLD_MS;
+  }
 
   useEffect(() => {
     if (!open) return undefined;
@@ -256,10 +282,17 @@ export default function MessagesPanel({ currentUser }) {
                 ←
               </button>
             )}
-            {activeConvoId != null && <Avatar name={activeConvoNombre || activeConvo?.nombre} size="h-6 w-6 text-[9px]" />}
-            <p className="flex-1 truncate text-[10px] font-black uppercase tracking-widest text-white">
-              {activeConvoId != null ? activeConvoNombre || activeConvo?.nombre || "Conversación" : "Mensajes"}
-            </p>
+            {activeConvoId != null && <Avatar name={activeConvoNombre || activeConvo?.nombre} size="h-6 w-6 text-[9px]" online={estaEnLinea(activeConvoId)} />}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[10px] font-black uppercase tracking-widest text-white">
+                {activeConvoId != null ? activeConvoNombre || activeConvo?.nombre || "Conversación" : "Mensajes"}
+              </p>
+              {activeConvoId != null && (
+                <p className={`text-[9px] font-bold ${estaEnLinea(activeConvoId) ? "text-emerald-400" : "text-white/40"}`}>
+                  {estaEnLinea(activeConvoId) ? "En línea" : "Desconectado"}
+                </p>
+              )}
+            </div>
           </div>
 
           {activeConvoId == null ? (
@@ -294,7 +327,7 @@ export default function MessagesPanel({ currentUser }) {
                         onClick={() => abrirConversacionExistente(c.personaId, c.nombre)}
                         className="flex w-full items-center gap-2.5 border-b border-slate-100 px-4 py-3 text-left last:border-b-0 hover:bg-slate-50"
                       >
-                        <Avatar name={c.nombre} />
+                        <Avatar name={c.nombre} online={estaEnLinea(c.personaId)} />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-[11px] font-black text-slate-700">{c.nombre || "Persona"}</p>
                           <p className={`mt-0.5 truncate text-[10px] ${c.unread > 0 ? "font-black text-slate-600" : "font-semibold text-slate-400"}`}>{last?.mensaje}</p>
