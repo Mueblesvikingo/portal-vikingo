@@ -32,17 +32,21 @@ export default function CincoPorques({ analisis, onSave, canEdit }) {
 
   return (
     <div className="space-y-1">
-      <div className="mb-2 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2">
+      <div className="mb-1 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2">
         <div className="flex items-center gap-1.5">
           <span className="text-[15px]">🔻</span>
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">5 Porqués — de la superficie a la raíz</p>
         </div>
-        <div className="flex gap-1">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <span key={i} className="h-1.5 w-5 rounded-full" style={{ background: i < respondidos ? NIVEL_COLOR[i] : "#e2e8f0" }} />
-          ))}
+        <div className="flex items-center gap-1.5">
+          <div className="flex gap-1">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <span key={i} className="h-1.5 w-5 rounded-full" style={{ background: i < respondidos ? NIVEL_COLOR[i] : "#e2e8f0" }} />
+            ))}
+          </div>
+          <span className="text-[9px] font-black text-slate-400">{respondidos}/5</span>
         </div>
       </div>
+      <p className="mb-2 text-[9px] font-semibold leading-tight text-slate-400">Pregunta "¿por qué?" sobre la respuesta anterior, no sobre el problema original — así cada nivel te acerca más a la causa real y no te quedas en el síntoma.</p>
 
       {niveles.map((nivel, index) => (
         <div key={index} className="relative flex items-start gap-2 pb-1">
@@ -55,14 +59,17 @@ export default function CincoPorques({ analisis, onSave, canEdit }) {
           >
             {index + 1}
           </div>
-          <div className="flex-1 rounded-xl border p-2" style={{ borderColor: `${NIVEL_COLOR[index]}35`, background: `${NIVEL_COLOR[index]}08` }}>
+          <div className="flex-1 rounded-xl border p-2" style={{ borderColor: `${NIVEL_COLOR[index]}40`, background: `${NIVEL_COLOR[index]}12` }}>
             <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: NIVEL_COLOR[index] }}>¿Por qué? — nivel {index + 1}</p>
+            {index > 0 && niveles[index - 1]?.trim() && (
+              <p className="mt-0.5 truncate text-[9px] font-semibold italic text-slate-400">↳ Porque: "{niveles[index - 1]}"</p>
+            )}
             <textarea
               disabled={!canEdit}
               value={nivel}
               onChange={(event) => updateNivel(index, event.target.value)}
               rows={1}
-              placeholder="Escribe la razón de este nivel"
+              placeholder={index === 0 ? "Describe el problema tal como se detectó" : "¿Por qué pasó eso que escribiste arriba?"}
               className="mt-1 w-full resize-none rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-bold text-slate-700 outline-none disabled:bg-white"
             />
           </div>
