@@ -94,7 +94,7 @@ function EditableDate({ value, onSave, canEdit }) {
 function EditableSelect({ value, options, onSave, canEdit, labelFor = (v) => v }) {
   if (!canEdit) return <span>{labelFor(value)}</span>;
   return (
-    <select value={value || ""} onChange={(event) => onSave(event.target.value)} className="w-full rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[10px] font-bold text-slate-700 outline-none">
+    <select value={value || ""} onChange={(event) => onSave(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1 text-[10px] font-bold text-slate-700 outline-none transition hover:border-sky-300 focus:border-sky-400 focus:bg-white">
       {options.map((opt) => (
         <option key={opt.value ?? opt} value={opt.value ?? opt}>{opt.label ?? opt}</option>
       ))}
@@ -591,7 +591,12 @@ export default function AccionDetailPanel({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${NIVEL_BADGE[accion.nivel] || ""}`}>{accion.nivel}</span>
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-black text-slate-600">{accion.tipo}</span>
+                  <span
+                    className="rounded-full border px-2 py-0.5 text-[9px] font-black"
+                    style={{ borderColor: `${TIPO_COLOR[accion.tipo] || "#94a3b8"}40`, background: `${TIPO_COLOR[accion.tipo] || "#94a3b8"}12`, color: TIPO_COLOR[accion.tipo] || "#64748b" }}
+                  >
+                    {accion.tipo}
+                  </span>
                   <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${ESTADO_BADGE[accion.estado] || ""}`}>{accion.estado}</span>
                   {accion.con_riesgo && <span className="rounded-full border border-red-100 bg-red-50 px-2 py-0.5 text-[9px] font-black text-red-600">Con riesgo</span>}
                 </div>
@@ -750,7 +755,7 @@ export default function AccionDetailPanel({
 
               {/* Flujo de estados */}
               <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                <p className="mb-2 text-[9px] font-black uppercase tracking-widest text-slate-400">Flujo</p>
+                <p className="mb-2 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className="text-[12px]">🔄</span> Flujo</p>
                 <div className="flex flex-wrap items-center gap-1">
                   {etapas.map((etapa, index) => {
                     const isCurrent = accion.estado === etapa;
@@ -762,6 +767,8 @@ export default function AccionDetailPanel({
                     // equipo estratégico, no cualquiera con canEdit.
                     const bloqueadaPorVerificacion = etapa === "Verificación de eficacia" && !isCurrent && !isPast && !canVerify;
                     const bloqueada = bloqueadaPorAprobacion || bloqueadaPorVerificacion;
+                    const alcanzada = isCurrent || isPast;
+                    const color = ESTADO_COLOR[etapa] || "#94a3b8";
                     return (
                       <button
                         key={etapa}
@@ -769,11 +776,14 @@ export default function AccionDetailPanel({
                         disabled={!canEdit || bloqueada}
                         onClick={() => onUpdate({ estado: etapa })}
                         title={bloqueadaPorAprobacion ? "Solo el Director General puede aprobar" : bloqueadaPorVerificacion ? "Solo el Coordinador SIG o el equipo estratégico puede verificar la eficacia" : undefined}
-                        className={`rounded-full border px-2.5 py-1 text-[9px] font-black transition ${
-                          isCurrent ? ESTADO_BADGE[etapa] : isPast ? "border-emerald-100 bg-emerald-50/60 text-emerald-600" : "border-slate-200 bg-slate-50 text-slate-400"
-                        } ${canEdit && !bloqueada ? "hover:opacity-80" : ""} ${bloqueada ? "cursor-not-allowed opacity-50" : ""}`}
+                        style={{
+                          borderColor: alcanzada ? color : `${color}30`,
+                          background: alcanzada ? `${color}18` : "#fff",
+                          color: alcanzada ? color : "#94a3b8",
+                        }}
+                        className={`rounded-full border px-2.5 py-1 text-[9px] font-black transition ${canEdit && !bloqueada ? "hover:opacity-80" : ""} ${bloqueada ? "cursor-not-allowed opacity-50" : ""}`}
                       >
-                        {etapa}
+                        {isPast ? "✓ " : ""}{etapa}
                       </button>
                     );
                   })}
@@ -782,7 +792,7 @@ export default function AccionDetailPanel({
 
               {involucrados.length > 0 && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                  <p className="mb-2 text-[9px] font-black uppercase tracking-widest text-slate-400">Involucrados — notificados de esta acción</p>
+                  <p className="mb-2 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className="text-[12px]">👥</span> Involucrados — notificados de esta acción</p>
                   <div className="flex flex-wrap gap-1.5">
                     {involucrados.map((i) => (
                       <span
