@@ -926,111 +926,153 @@ export default function AccionDetailPanel({
                     </div>
 
                     <div className="border-t border-slate-100 pt-2.5">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Acciones y responsables</p>
-                      <p className="mt-0.5 text-[9px] font-semibold text-slate-400">Registra qué le toca hacer a cada persona y para cuándo — al aprobarse, se envían todas juntas a Balance de Carga.</p>
-
-                      {planResponsables.length > 0 && (
-                        <div className="mt-2 grid grid-cols-12 gap-1.5 px-2 text-[8px] font-black uppercase tracking-widest text-slate-400">
-                          <span className="col-span-3">Responsable</span>
-                          <span className="col-span-4">Acción</span>
-                          <span className="col-span-2">Fecha</span>
-                          <span className="col-span-1">Hrs</span>
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#001225] text-[10px] font-black text-white">1</span>
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo: una fila por persona</p>
+                          <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">Cada renglón es una acción concreta con su propio responsable, fecha y horas estimadas. Pueden ser varias personas — al aprobarse, todas bajan juntas a Balance de Carga con un clic.</p>
                         </div>
-                      )}
-                      <div className="mt-1 space-y-1.5">
-                        {planResponsables.map((fila) => {
-                          const enviado = !!fila.workload_asignacion_id;
-                          return (
-                            <div key={fila.id} className={`grid grid-cols-12 items-center gap-1.5 rounded-lg border px-2 py-1.5 ${enviado ? "border-emerald-100 bg-emerald-50/40" : "border-slate-200 bg-slate-50/60"}`}>
-                              <div className="col-span-3 truncate text-[10px] font-black text-slate-700">{personasById[fila.persona_id]?.nombre || "—"}</div>
-                              <div className="col-span-4">
-                                <EditableSmallField
-                                  value={fila.detalle}
-                                  canEdit={canEdit && !enviado}
-                                  placeholder="Qué debe hacer..."
-                                  onSave={(v) => handleUpdatePlanResponsableField(fila.id, "detalle", v)}
-                                />
-                              </div>
-                              <div className="col-span-2">
-                                <EditableSmallField
-                                  type="date"
-                                  value={fila.fecha_limite}
-                                  canEdit={canEdit && !enviado}
-                                  onSave={(v) => handleUpdatePlanResponsableField(fila.id, "fecha_limite", v)}
-                                />
-                              </div>
-                              <div className="col-span-1">
-                                <EditableSmallField
-                                  type="number"
-                                  value={fila.horas}
-                                  canEdit={canEdit && !enviado}
-                                  placeholder="Hrs"
-                                  onSave={(v) => handleUpdatePlanResponsableField(fila.id, "horas", v ? Number(v) : null)}
-                                />
-                              </div>
-                              <div className="col-span-2 text-right">
-                                {enviado ? (
-                                  <span title="Ya está en Balance de Carga" className="text-[12px] text-emerald-600">✓ Enviado</span>
-                                ) : canEdit ? (
-                                  <button type="button" onClick={() => handleRemovePlanResponsable(fila.id)} className="text-[12px] text-slate-300 hover:text-red-500">×</button>
-                                ) : null}
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {!planResponsables.length && <p className="text-[10px] font-semibold text-slate-300">Sin acciones capturadas todavía.</p>}
                       </div>
 
-                      {canEdit && (
-                        <div className="mt-2 flex flex-wrap items-end gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-2">
-                          <select value={nuevoPlanPersonaId} onChange={(e) => setNuevoPlanPersonaId(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none">
-                            <option value="">Responsable...</option>
-                            {personas.filter((p) => !planResponsables.some((r) => r.persona_id === p.id)).map((p) => (
-                              <option key={p.id} value={p.id}>{p.nombre}</option>
-                            ))}
-                          </select>
-                          <input value={nuevoPlanDetalle} onChange={(e) => setNuevoPlanDetalle(e.target.value)} placeholder="Qué debe hacer..." className="h-8 min-w-[160px] flex-1 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
-                          <input type="date" value={nuevoPlanFecha} onChange={(e) => setNuevoPlanFecha(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
-                          <input type="number" value={nuevoPlanHoras} onChange={(e) => setNuevoPlanHoras(e.target.value)} placeholder="Hrs" className="h-8 w-14 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
-                          <button type="button" disabled={!nuevoPlanPersonaId} onClick={handleAddPlanResponsable} className="h-8 rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
-                            + Agregar
-                          </button>
+                      <div className="mt-2 overflow-hidden rounded-xl border border-slate-200">
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[560px] border-collapse text-[10px]">
+                            <thead>
+                              <tr className="bg-[#001225] text-left text-[8px] font-black uppercase tracking-widest text-white/60">
+                                <th className="px-2.5 py-2 text-white">Responsable</th>
+                                <th className="px-2.5 py-2 text-white">Acción</th>
+                                <th className="px-2.5 py-2 text-white">Fecha</th>
+                                <th className="px-2.5 py-2 text-white">Horas</th>
+                                <th className="px-2.5 py-2 text-right text-white">Estado</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {planResponsables.map((fila) => {
+                                const enviado = !!fila.workload_asignacion_id;
+                                return (
+                                  <tr key={fila.id} className={`border-b border-slate-100 ${enviado ? "bg-emerald-50/40" : ""}`}>
+                                    <td className="px-2.5 py-1.5 font-black text-slate-700">{personasById[fila.persona_id]?.nombre || "—"}</td>
+                                    <td className="min-w-[160px] px-2.5 py-1.5">
+                                      <EditableSmallField
+                                        value={fila.detalle}
+                                        canEdit={canEdit && !enviado}
+                                        placeholder="Qué debe hacer..."
+                                        onSave={(v) => handleUpdatePlanResponsableField(fila.id, "detalle", v)}
+                                      />
+                                    </td>
+                                    <td className="px-2.5 py-1.5">
+                                      <EditableSmallField
+                                        type="date"
+                                        value={fila.fecha_limite}
+                                        canEdit={canEdit && !enviado}
+                                        onSave={(v) => handleUpdatePlanResponsableField(fila.id, "fecha_limite", v)}
+                                      />
+                                    </td>
+                                    <td className="w-16 px-2.5 py-1.5">
+                                      <EditableSmallField
+                                        type="number"
+                                        value={fila.horas}
+                                        canEdit={canEdit && !enviado}
+                                        placeholder="Hrs"
+                                        onSave={(v) => handleUpdatePlanResponsableField(fila.id, "horas", v ? Number(v) : null)}
+                                      />
+                                    </td>
+                                    <td className="px-2.5 py-1.5 text-right">
+                                      <div className="flex items-center justify-end gap-1.5">
+                                        <span className={`rounded-full border px-2 py-0.5 text-[8px] font-black ${enviado ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                                          {enviado ? "✓ Enviado" : "Pendiente"}
+                                        </span>
+                                        {!enviado && canEdit && (
+                                          <button type="button" onClick={() => handleRemovePlanResponsable(fila.id)} className="text-[12px] text-slate-300 hover:text-red-500">×</button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {!planResponsables.length && (
+                                <tr>
+                                  <td colSpan={5} className="px-2.5 py-4 text-center text-[10px] font-semibold text-slate-300">
+                                    Aún no hay acciones capturadas — agrega la primera abajo: quién, qué debe hacer y para cuándo.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                            {canEdit && (
+                              <tfoot>
+                                <tr className="border-t-2 border-dashed border-slate-200 bg-slate-50/70">
+                                  <td className="px-2 py-2">
+                                    <select value={nuevoPlanPersonaId} onChange={(e) => setNuevoPlanPersonaId(e.target.value)} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none">
+                                      <option value="">Responsable...</option>
+                                      {personas.filter((p) => !planResponsables.some((r) => r.persona_id === p.id)).map((p) => (
+                                        <option key={p.id} value={p.id}>{p.nombre}</option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="min-w-[160px] px-2 py-2">
+                                    <input value={nuevoPlanDetalle} onChange={(e) => setNuevoPlanDetalle(e.target.value)} placeholder="Qué debe hacer..." className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
+                                  </td>
+                                  <td className="px-2 py-2">
+                                    <input type="date" value={nuevoPlanFecha} onChange={(e) => setNuevoPlanFecha(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
+                                  </td>
+                                  <td className="w-16 px-2 py-2">
+                                    <input type="number" value={nuevoPlanHoras} onChange={(e) => setNuevoPlanHoras(e.target.value)} placeholder="Hrs" className="h-8 w-14 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
+                                  </td>
+                                  <td className="px-2 py-2 text-right">
+                                    <button type="button" disabled={!nuevoPlanPersonaId} onClick={handleAddPlanResponsable} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
+                                      + Agregar
+                                    </button>
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            )}
+                          </table>
                         </div>
-                      )}
+                      </div>
                     </div>
 
                     {canEdit && (
                       <div className="border-t border-slate-100 pt-2.5">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={!yaAprobada || enviandoPlan || !planResponsables.some((r) => !r.workload_asignacion_id)}
-                            title={yaAprobada ? "Enviar todas las acciones a Balance de Carga" : "Requiere aprobación del Director General primero"}
-                            onClick={handleEnviarPlanAAsignacion}
-                            className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white transition hover:bg-[#0a1c3a] disabled:cursor-not-allowed disabled:bg-slate-300"
-                          >
-                            {enviandoPlan ? "Enviando..." : "→ Enviar todo a Asignación"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!yaAprobada}
-                            title={yaAprobada ? "Crear proyecto en el Tablero PMO" : "Requiere aprobación del Director General primero"}
-                            onClick={() => setConvertingToProyecto((current) => !current)}
-                            className={`rounded-lg border px-3 py-1.5 text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${convertingToProyecto ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"}`}
-                          >
-                            → Proyecto
-                          </button>
+                        <div className="flex items-start gap-2">
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#001225] text-[10px] font-black text-white">2</span>
+                          <div className="flex-1">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Envía a ejecución real</p>
+                            <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">
+                              {yaAprobada
+                                ? "Dirección ya aprobó — manda todas las filas pendientes a Balance de Carga, o arma un proyecto en el Tablero PMO."
+                                : "Disponible en cuanto Dirección apruebe la acción (etapa \"Aprobada\" en Flujo)."}
+                            </p>
+                            <div className="mt-1.5 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                disabled={!yaAprobada || enviandoPlan || !planResponsables.some((r) => !r.workload_asignacion_id)}
+                                title={yaAprobada ? "Enviar todas las acciones a Balance de Carga" : "Requiere aprobación del Director General primero"}
+                                onClick={handleEnviarPlanAAsignacion}
+                                className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white transition hover:bg-[#0a1c3a] disabled:cursor-not-allowed disabled:bg-slate-300"
+                              >
+                                {enviandoPlan ? "Enviando..." : "→ Enviar todo a Asignación"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!yaAprobada}
+                                title={yaAprobada ? "Crear proyecto en el Tablero PMO" : "Requiere aprobación del Director General primero"}
+                                onClick={() => setConvertingToProyecto((current) => !current)}
+                                className={`rounded-lg border px-3 py-1.5 text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${convertingToProyecto ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"}`}
+                              >
+                                → Proyecto
+                              </button>
+                            </div>
+                            {convertingToProyecto && (
+                              <ProyectoForm
+                                personas={personas}
+                                defaultNombre={accion.titulo}
+                                defaultLiderPersonaId={accion.responsable_persona_id || ""}
+                                onCancel={() => setConvertingToProyecto(false)}
+                                onConfirm={(payload) => onCreateProyecto(accion, payload)}
+                              />
+                            )}
+                          </div>
                         </div>
-                        {!yaAprobada && <p className="mt-1.5 text-[9px] font-bold text-amber-600">Pendiente de aprobación del Director General (etapa "Aprobada" en Flujo).</p>}
-                        {convertingToProyecto && (
-                          <ProyectoForm
-                            personas={personas}
-                            defaultNombre={accion.titulo}
-                            defaultLiderPersonaId={accion.responsable_persona_id || ""}
-                            onCancel={() => setConvertingToProyecto(false)}
-                            onConfirm={(payload) => onCreateProyecto(accion, payload)}
-                          />
-                        )}
                       </div>
                     )}
 
