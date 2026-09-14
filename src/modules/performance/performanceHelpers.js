@@ -134,13 +134,19 @@ export const SENTIDO_OPTIONS = ["Mayor es mejor", "Menor es mejor"];
 // debajo es lo bueno — así que se invierte a Meta/Real; si Real es 0 (el
 // mejor caso posible) se usa un cumplimiento alto fijo en vez de dividir
 // entre cero.
+//
+// Se limita a 100: superar la meta no debe leerse como "más que completo"
+// en un tablero de cumplimiento — sin este tope, un KPI muy por encima de
+// su meta (ej. 0.7% real contra 5% de techo) mostraba 714%, un número sin
+// sentido que además descuadraba el promedio del grupo (ver groupCumplimientos
+// en TableroTab.jsx).
 export function computeCumplimientoValue(real, meta, sentido) {
   if (real === null || real === undefined || !meta) return null;
   if (sentido === "Menor es mejor") {
     if (real <= 0) return 100;
-    return Math.round((meta / real) * 100);
+    return Math.min(100, Math.round((meta / real) * 100));
   }
-  return Math.round((real / meta) * 100);
+  return Math.min(100, Math.round((real / meta) * 100));
 }
 
 // Real/Meta del mes en curso, contra ese mismo mes. `kpi` es el objeto
