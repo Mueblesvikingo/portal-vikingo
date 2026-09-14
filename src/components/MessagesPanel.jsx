@@ -4,6 +4,7 @@ import {
   getMensajesDePersona,
   enviarMensaje,
   marcarConversacionLeida,
+  subirAdjuntoMensaje,
 } from "../services/mensajesService";
 
 const POLL_INTERVAL_MS = 15000;
@@ -65,8 +66,11 @@ export default function MessagesPanel({ currentUser }) {
   const [borrador, setBorrador] = useState("");
   const [sending, setSending] = useState(false);
   const [panelVisible, setPanelVisible] = useState(false);
+  const [adjuntoPendiente, setAdjuntoPendiente] = useState(null); // { file, previewUrl }
+  const [adjuntoError, setAdjuntoError] = useState("");
   const containerRef = useRef(null);
   const threadEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!open) { setPanelVisible(false); return undefined; }
@@ -158,21 +162,67 @@ export default function MessagesPanel({ currentUser }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConvoId, mensajes]);
 
+  // Adjuntos: se admite tanto elegir archivo (clip) como pegar una captura
+  // de pantalla copiada al portapapeles (Ctrl+V) directo en el campo de
+  // texto — es el flujo más natural para "adjuntar una captura", sin
+  // depender de guardar la imagen a disco primero.
+  function seleccionarAdjunto(file) {
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { setAdjuntoError("El archivo supera el límite de 8MB."); return; }
+    setAdjuntoError("");
+    const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
+    setAdjuntoPendiente({ file, previewUrl });
+  }
+
+  function handlePasteBorrador(event) {
+    const item = Array.from(event.clipboardData?.items || []).find((it) => it.type.startsWith("image/"));
+    if (!item) return;
+    const file = item.getAsFile();
+    if (file) seleccionarAdjunto(file);
+  }
+
+  function quitarAdjuntoPendiente() {
+    if (adjuntoPendiente?.previewUrl) URL.revokeObjectURL(adjuntoPendiente.previewUrl);
+    setAdjuntoPendiente(null);
+    setAdjuntoError("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   async function handleEnviar() {
     const texto = borrador.trim();
-    if (!texto || !activeConvoId || sending) return;
+    if ((!texto && !adjuntoPendiente) || !activeConvoId || sending) return;
     setSending(true);
     const destinatarioNombre = activeConvoNombre || activeConvo?.nombre || directorio.find((d) => Number(d.persona_id) === Number(activeConvoId))?.nombre || "";
+
+    let adjuntoUrl = null;
+    let adjuntoNombre = null;
+    let adjuntoTipo = null;
+    if (adjuntoPendiente) {
+      const subida = await subirAdjuntoMensaje(adjuntoPendiente.file, personaId);
+      if (!subida?.ok) {
+        setSending(false);
+        setAdjuntoError(typeof subida?.error === "string" ? subida.error : "No fue posible subir el adjunto.");
+        return;
+      }
+      adjuntoUrl = subida.url;
+      adjuntoNombre = adjuntoPendiente.file.name;
+      adjuntoTipo = adjuntoPendiente.file.type || null;
+    }
+
     const result = await enviarMensaje({
       remitentePersonaId: personaId,
       remitenteNombre: currentUser?.nombre || currentUser?.usuario || "",
       destinatarioPersonaId: activeConvoId,
       destinatarioNombre,
       mensaje: texto,
+      adjuntoUrl,
+      adjuntoNombre,
+      adjuntoTipo,
     });
     setSending(false);
     if (!result?.ok) return;
     setBorrador("");
+    quitarAdjuntoPendiente();
     setMensajes((current) => [...current, result.data]);
   }
 
@@ -268,10 +318,26 @@ export default function MessagesPanel({ currentUser }) {
               <div className="max-h-72 overflow-y-auto px-3 py-2">
                 {(activeConvo?.mensajes || []).map((m) => {
                   const esMio = Number(m.remitente_persona_id) === Number(personaId);
+                  const esImagen = m.adjunto_tipo?.startsWith("image/");
                   return (
                     <div key={m.id} className={`mb-1.5 flex ${esMio ? "justify-end" : "justify-start"}`}>
                       <div className={`max-w-[80%] rounded-2xl px-3 py-1.5 shadow-sm ${esMio ? "bg-[#001225] text-white" : "bg-slate-100 text-slate-700"}`}>
-                        <p className="text-[11px] font-semibold leading-snug">{m.mensaje}</p>
+                        {m.adjunto_url && esImagen && (
+                          <a href={m.adjunto_url} target="_blank" rel="noreferrer" className="mb-1 block overflow-hidden rounded-lg">
+                            <img src={m.adjunto_url} alt={m.adjunto_nombre || "Imagen adjunta"} className="max-h-40 w-full object-cover" />
+                          </a>
+                        )}
+                        {m.adjunto_url && !esImagen && (
+                          <a
+                            href={m.adjunto_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`mb-1 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px] font-bold ${esMio ? "bg-white/10 text-white" : "bg-white text-sky-700"}`}
+                          >
+                            📎 <span className="truncate">{m.adjunto_nombre || "Archivo adjunto"}</span>
+                          </a>
+                        )}
+                        {m.mensaje && <p className="text-[11px] font-semibold leading-snug">{m.mensaje}</p>}
                         <div className={`mt-0.5 flex items-center justify-end gap-1 text-[9px] font-bold ${esMio ? "text-white/50" : "text-slate-400"}`}>
                           <span>{formatWhen(m.created_at)}</span>
                           {esMio && <ReadTicks leido={m.leido} />}
@@ -282,21 +348,48 @@ export default function MessagesPanel({ currentUser }) {
                 })}
                 <div ref={threadEndRef} />
               </div>
+              {adjuntoError && <p className="px-3 text-[9px] font-bold text-red-500">{adjuntoError}</p>}
+              {adjuntoPendiente && (
+                <div className="flex items-center gap-2 border-t border-slate-100 px-3 py-1.5">
+                  {adjuntoPendiente.previewUrl ? (
+                    <img src={adjuntoPendiente.previewUrl} alt="Vista previa" className="h-9 w-9 rounded-lg object-cover" />
+                  ) : (
+                    <span className="text-lg">📎</span>
+                  )}
+                  <span className="flex-1 truncate text-[10px] font-bold text-slate-500">{adjuntoPendiente.file.name}</span>
+                  <button type="button" onClick={quitarAdjuntoPendiente} className="text-[12px] text-slate-300 hover:text-red-500">×</button>
+                </div>
+              )}
               <div className="flex items-center gap-1.5 border-t border-slate-100 p-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={(e) => { seleccionarAdjunto(e.target.files?.[0]); }}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Adjuntar imagen o archivo"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm hover:bg-slate-50"
+                >
+                  📎
+                </button>
                 <input
                   value={borrador}
                   onChange={(e) => setBorrador(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") handleEnviar(); }}
-                  placeholder="Escribe un mensaje..."
+                  onPaste={handlePasteBorrador}
+                  placeholder="Escribe un mensaje o pega una captura..."
                   className="h-9 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-semibold text-slate-700 outline-none"
                 />
                 <button
                   type="button"
                   onClick={handleEnviar}
-                  disabled={sending || !borrador.trim()}
+                  disabled={sending || (!borrador.trim() && !adjuntoPendiente)}
                   className="h-9 shrink-0 rounded-xl bg-[#001225] px-3 text-[11px] font-black text-white transition active:scale-95 disabled:opacity-40 disabled:active:scale-100"
                 >
-                  Enviar
+                  {sending ? "..." : "Enviar"}
                 </button>
               </div>
             </>

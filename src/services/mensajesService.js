@@ -46,10 +46,10 @@ export async function getMensajesDePersona(personaId) {
   }
 }
 
-export async function enviarMensaje({ remitentePersonaId, remitenteNombre, destinatarioPersonaId, destinatarioNombre, mensaje }) {
+export async function enviarMensaje({ remitentePersonaId, remitenteNombre, destinatarioPersonaId, destinatarioNombre, mensaje, adjuntoUrl, adjuntoNombre, adjuntoTipo }) {
   try {
     const texto = String(mensaje || "").trim();
-    if (!texto) return { ok: false, error: "Mensaje vacío", data: null };
+    if (!texto && !adjuntoUrl) return { ok: false, error: "Mensaje vacío", data: null };
     const { data, error } = await supabase
       .from("mensajes_internos")
       .insert({
@@ -58,6 +58,9 @@ export async function enviarMensaje({ remitentePersonaId, remitenteNombre, desti
         destinatario_persona_id: destinatarioPersonaId,
         destinatario_nombre: destinatarioNombre || null,
         mensaje: texto,
+        adjunto_url: adjuntoUrl || null,
+        adjunto_nombre: adjuntoNombre || null,
+        adjunto_tipo: adjuntoTipo || null,
       })
       .select("*")
       .single();
@@ -66,6 +69,36 @@ export async function enviarMensaje({ remitentePersonaId, remitenteNombre, desti
   } catch (err) {
     console.error("Error inesperado al enviar mensaje interno:", err);
     return { ok: false, error: err, data: null };
+  }
+}
+
+// Imágenes, capturas de pantalla y archivos adjuntos al chat interno — mismo
+// criterio de bucket público ya usado por las minutas (buildPdfDoc) en
+// minutasService.js. Límite de 8MB en el cliente: la llave anon del proyecto
+// es permisiva (mismo patrón que el resto de las tablas), así que se acota
+// el tamaño de subida en vez de dejarlo abierto.
+const MAX_ADJUNTO_BYTES = 8 * 1024 * 1024;
+
+export async function subirAdjuntoMensaje(file, personaId) {
+  try {
+    if (!file) return { ok: false, error: "Sin archivo", url: null };
+    if (file.size > MAX_ADJUNTO_BYTES) {
+      return { ok: false, error: "El archivo supera el límite de 8MB.", url: null };
+    }
+    const nombreLimpio = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
+    const path = `${personaId}-${Date.now()}-${nombreLimpio}`;
+    const { error: uploadErr } = await supabase.storage
+      .from("mensajes-adjuntos")
+      .upload(path, file, { contentType: file.type || "application/octet-stream" });
+    if (uploadErr) {
+      console.error("Error al subir adjunto de mensaje:", uploadErr);
+      return { ok: false, error: uploadErr, url: null };
+    }
+    const { data } = supabase.storage.from("mensajes-adjuntos").getPublicUrl(path);
+    return { ok: true, error: null, url: data?.publicUrl || null };
+  } catch (err) {
+    console.error("Error inesperado al subir adjunto de mensaje:", err);
+    return { ok: false, error: err, url: null };
   }
 }
 
