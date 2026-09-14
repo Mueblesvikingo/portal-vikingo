@@ -44,6 +44,51 @@ function Avatar({ name, size = "h-8 w-8 text-[10px]", online }) {
   );
 }
 
+// Reemplaza el <select> nativo de "+ Nuevo mensaje a..." — un <option> no
+// puede pintar el punto de conexión, así que se arma como el resto de los
+// desplegables compactos del proyecto (botón + lista con click-fuera-cierra).
+function NuevoMensajeDropdown({ directorio, estaEnLinea, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function handleClickOutside(event) {
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-8 w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-2 text-left text-[11px] font-bold text-slate-600 outline-none"
+      >
+        <span>+ Nuevo mensaje a...</span>
+        <span className="text-slate-400">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
+          {directorio.map((d) => (
+            <button
+              key={d.persona_id}
+              type="button"
+              onClick={() => { onSelect(d); setOpen(false); }}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-bold text-slate-700 hover:bg-slate-50"
+            >
+              <span className={`h-2 w-2 shrink-0 rounded-full ${estaEnLinea(d.persona_id) ? "bg-emerald-500" : "bg-slate-300"}`} />
+              {d.nombre}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Palomitas estilo WhatsApp: una gris (enviado), dos azules (leído).
 function ReadTicks({ leido }) {
   return (
@@ -74,7 +119,6 @@ export default function MessagesPanel({ currentUser }) {
   const [open, setOpen] = useState(false);
   const [activeConvoId, setActiveConvoId] = useState(null);
   const [activeConvoNombre, setActiveConvoNombre] = useState("");
-  const [nuevoDestinatarioId, setNuevoDestinatarioId] = useState("");
   const [borrador, setBorrador] = useState("");
   const [sending, setSending] = useState(false);
   const [panelVisible, setPanelVisible] = useState(false);
@@ -165,7 +209,6 @@ export default function MessagesPanel({ currentUser }) {
   function abrirConversacionNueva(id, nombre) {
     setActiveConvoId(Number(id));
     setActiveConvoNombre(nombre || "");
-    setNuevoDestinatarioId("");
   }
 
   async function marcarConversacionComoLeida(otraPersonaId) {
@@ -299,21 +342,11 @@ export default function MessagesPanel({ currentUser }) {
           {activeConvoId == null ? (
             <>
               <div className="border-b border-slate-100 px-3 py-2">
-                <select
-                  value={nuevoDestinatarioId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    if (!id) return;
-                    const persona = directorio.find((d) => String(d.persona_id) === id);
-                    abrirConversacionNueva(id, persona?.nombre);
-                  }}
-                  className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-600 outline-none"
-                >
-                  <option value="">+ Nuevo mensaje a...</option>
-                  {directorio.map((d) => (
-                    <option key={d.persona_id} value={d.persona_id}>{d.nombre}</option>
-                  ))}
-                </select>
+                <NuevoMensajeDropdown
+                  directorio={directorio}
+                  estaEnLinea={estaEnLinea}
+                  onSelect={(persona) => abrirConversacionNueva(persona.persona_id, persona.nombre)}
+                />
               </div>
               <div className="max-h-80 overflow-y-auto">
                 {conversaciones.length === 0 ? (
