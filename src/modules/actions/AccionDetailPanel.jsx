@@ -897,9 +897,9 @@ export default function AccionDetailPanel({
                         </button>
                       ))}
                     </div>
-                    {herramienta === "5 Porqués" && <CincoPorques analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} />}
-                    {herramienta === "Ishikawa" && <Ishikawa analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} />}
-                    {herramienta === "5W2H" && <CincoW2H analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} />}
+                    {herramienta === "5 Porqués" && <CincoPorques analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} currentUser={currentUser} />}
+                    {herramienta === "Ishikawa" && <Ishikawa analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} currentUser={currentUser} />}
+                    {herramienta === "5W2H" && <CincoW2H analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} currentUser={currentUser} />}
                   </div>
                 ) : subTab === "plan" ? (
                   <div className="space-y-3">

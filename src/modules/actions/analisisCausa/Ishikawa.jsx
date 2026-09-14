@@ -1,4 +1,13 @@
 import { useEffect, useState } from "react";
+import { formatDate } from "../actionsHelpers";
+
+// Mismo criterio de trazabilidad que CincoPorques.jsx: cada causa capturada
+// guarda quién la escribió (varias personas pueden editar el mismo
+// análisis), normalizando strings sueltos ya guardados antes de este cambio.
+function normalizeCausa(c) {
+  if (typeof c === "string") return { texto: c, personaId: null, nombre: null, fecha: null };
+  return { texto: c?.texto || "", personaId: c?.personaId ?? null, nombre: c?.nombre || null, fecha: c?.fecha || null };
+}
 
 const CATEGORIAS = [
   { key: "Método", color: "#2a78d6", icono: "📋" },
@@ -19,22 +28,27 @@ const SPINE_X_START = 30;
 const SPINE_X_END = 610;
 const HEAD_X = [110, 260, 410];
 
-export default function Ishikawa({ analisis, onSave, canEdit }) {
+function normalizeCausasMap(causas) {
+  return Object.fromEntries(Object.entries(causas || {}).map(([categoria, lista]) => [categoria, (lista || []).map(normalizeCausa)]));
+}
+
+export default function Ishikawa({ analisis, onSave, canEdit, currentUser }) {
   const [problema, setProblema] = useState(analisis?.contenido?.problema || "");
-  const [causas, setCausas] = useState(analisis?.contenido?.causas || {});
+  const [causas, setCausas] = useState(normalizeCausasMap(analisis?.contenido?.causas));
   const [draftInputs, setDraftInputs] = useState({});
   const [causaRaiz, setCausaRaiz] = useState(analisis?.conclusion_causa_raiz || "");
 
   useEffect(() => {
     setProblema(analisis?.contenido?.problema || "");
-    setCausas(analisis?.contenido?.causas || {});
+    setCausas(normalizeCausasMap(analisis?.contenido?.causas));
     setCausaRaiz(analisis?.conclusion_causa_raiz || "");
   }, [analisis]);
 
   function addCausa(categoria) {
     const texto = (draftInputs[categoria] || "").trim();
     if (!texto) return;
-    setCausas((current) => ({ ...current, [categoria]: [...(current[categoria] || []), texto] }));
+    const entrada = { texto, personaId: currentUser?.persona_id ?? null, nombre: currentUser?.nombre || currentUser?.usuario || "", fecha: new Date().toISOString() };
+    setCausas((current) => ({ ...current, [categoria]: [...(current[categoria] || []), entrada] }));
     setDraftInputs((current) => ({ ...current, [categoria]: "" }));
   }
   function removeCausa(categoria, index) {
@@ -48,6 +62,9 @@ export default function Ishikawa({ analisis, onSave, canEdit }) {
 
   return (
     <div className="space-y-3">
+      {analisis?.updated_by_nombre && (
+        <p className="text-[9px] font-semibold text-slate-400">Última edición: {analisis.updated_by_nombre} · {formatDate(analisis.updated_at)}</p>
+      )}
       <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">
         Efecto / Problema
         <input
@@ -110,8 +127,13 @@ export default function Ishikawa({ analisis, onSave, canEdit }) {
             <div className="p-2">
               <div className="flex flex-wrap gap-1">
                 {(causas[cat.key] || []).map((causa, index) => (
-                  <span key={index} className="inline-flex items-center gap-1 rounded-full border bg-white px-2 py-0.5 text-[9px] font-bold text-slate-600" style={{ borderColor: `${cat.color}50` }}>
-                    {causa}
+                  <span
+                    key={index}
+                    title={causa.nombre ? `Agregada por ${causa.nombre}${causa.fecha ? ` · ${formatDate(causa.fecha)}` : ""}` : undefined}
+                    className="inline-flex items-center gap-1 rounded-full border bg-white px-2 py-0.5 text-[9px] font-bold text-slate-600"
+                    style={{ borderColor: `${cat.color}50` }}
+                  >
+                    {causa.texto}
                     {canEdit && <button type="button" onClick={() => removeCausa(cat.key, index)} className="text-slate-300 hover:text-red-500">×</button>}
                   </span>
                 ))}

@@ -184,9 +184,23 @@ export async function getAnalisisCausa(accionId) {
   }
 }
 
+// Trazabilidad: `created_by_*` debe seguir apuntando a quién levantó este
+// análisis la primera vez (no a quien lo tocó después), así que se consulta
+// antes de sobrescribir con el upsert. `updated_by_*` sí refleja siempre al
+// último que guardó. La autoría dentro de cada nivel/causa/respuesta
+// individual (quién escribió ESE renglón puntual) vive en el propio
+// `contenido` — la estampan CincoPorques/Ishikawa/CincoW2H antes de llamar
+// a esta función, comparando contra lo ya guardado para no perder la firma
+// de renglones que nadie tocó en este guardado.
 export async function upsertAnalisisCausa({ accionId, herramienta, contenido, conclusionCausaRaiz }, actor) {
   try {
     const { personaId, nombre } = actorFields(actor);
+    const { data: existing } = await supabase
+      .from("accion_analisis_causa")
+      .select("created_by_persona_id, created_by_nombre")
+      .eq("accion_id", accionId)
+      .eq("herramienta", herramienta)
+      .maybeSingle();
     const { data, error } = await supabase
       .from("accion_analisis_causa")
       .upsert(
@@ -195,8 +209,10 @@ export async function upsertAnalisisCausa({ accionId, herramienta, contenido, co
           herramienta,
           contenido: contenido || {},
           conclusion_causa_raiz: conclusionCausaRaiz || null,
-          created_by_persona_id: personaId,
-          created_by_nombre: nombre,
+          created_by_persona_id: existing?.created_by_persona_id ?? personaId,
+          created_by_nombre: existing?.created_by_nombre ?? nombre,
+          updated_by_persona_id: personaId,
+          updated_by_nombre: nombre,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "accion_id,herramienta" }
