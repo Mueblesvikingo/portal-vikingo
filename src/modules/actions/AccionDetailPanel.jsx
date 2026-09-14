@@ -20,6 +20,7 @@ import {
   NIVELES_ACCION,
   PRIORIDADES_ACCION,
   ESTADO_BADGE,
+  ESTADO_COLOR,
   NIVEL_BADGE,
   TIPO_COLOR,
   HERRAMIENTAS_MVP,
@@ -1092,23 +1093,42 @@ export default function AccionDetailPanel({
                   </div>
                 ) : subTab === "linea_tiempo" ? (
                   <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-1">
-                      {etapas.map((etapa, index) => {
-                        const isCurrent = accion.estado === etapa;
-                        const isPast = etapas.indexOf(accion.estado) > index;
-                        return (
-                          <div key={etapa} className="flex items-center">
-                            <span
-                              className={`rounded-full border px-2.5 py-1 text-[9px] font-black ${
-                                isCurrent ? ESTADO_BADGE[etapa] : isPast ? "border-emerald-100 bg-emerald-50/60 text-emerald-600" : "border-slate-200 bg-slate-50 text-slate-400"
-                              }`}
-                            >
-                              {etapa}
-                            </span>
-                            {index < etapas.length - 1 && <span className="mx-1 text-slate-300">→</span>}
-                          </div>
-                        );
-                      })}
+                    <div className="overflow-x-auto pb-1">
+                      <div className="flex items-stretch" style={{ minWidth: `${etapas.length * 148}px` }}>
+                        {etapas.map((etapa, index) => {
+                          const isCurrent = accion.estado === etapa;
+                          const isPast = etapas.indexOf(accion.estado) > index;
+                          const alcanzada = isCurrent || isPast;
+                          const color = ESTADO_COLOR[etapa] || "#94a3b8";
+                          const fechaEtapa = index === 0
+                            ? historial.find((h) => h.campo === "creado")?.created_at
+                            : [...historial].reverse().find((h) => h.campo === "estado" && h.valor_nuevo === etapa)?.created_at;
+                          return (
+                            <div key={etapa} className="flex items-center">
+                              <div
+                                className="flex w-[132px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border-2 px-2.5 py-3 text-center transition"
+                                style={{ borderColor: alcanzada ? color : `${color}30`, background: alcanzada ? `${color}16` : "#fff" }}
+                              >
+                                <span
+                                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-black text-white shadow-sm"
+                                  style={{ background: alcanzada ? color : `${color}45` }}
+                                >
+                                  {isPast ? "✓" : index + 1}
+                                </span>
+                                <p className="text-[10px] font-black leading-tight" style={{ color: alcanzada ? color : "#cbd5e1" }}>{etapa}</p>
+                                {isCurrent ? (
+                                  <span className="rounded-full px-2 py-0.5 text-[7px] font-black uppercase tracking-widest text-white" style={{ background: color }}>Aquí vas</span>
+                                ) : fechaEtapa ? (
+                                  <span className="text-[8px] font-bold text-slate-400">{formatDate(fechaEtapa)}</span>
+                                ) : null}
+                              </div>
+                              {index < etapas.length - 1 && (
+                                <span className="mx-1 shrink-0 text-[18px] font-black" style={{ color: isPast ? color : "#e2e8f0" }}>→</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                     <div className="space-y-1.5 border-t border-slate-100 pt-2">
                       {historial.filter((h) => h.campo === "estado" || h.campo === "creado").length === 0 ? (
