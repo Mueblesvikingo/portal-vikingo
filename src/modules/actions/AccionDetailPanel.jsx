@@ -471,16 +471,6 @@ function PlanResponsablesTable({
   );
 }
 
-// Análisis de causa / Plan de acción / Línea de tiempo ya no son botones
-// aparte: se abren haciendo clic en el bloque de etapa que les corresponde
-// en la línea de tiempo siempre visible (ver subTabParaEtapa). Solo lo que
-// no es una etapa del flujo se queda como pestaña.
-const SUB_TABS = [
-  { key: "historial", label: "Historial" },
-  { key: "comentarios", label: "Comentarios" },
-  { key: "adjuntos", label: "Adjuntos" },
-];
-
 export default function AccionDetailPanel({
   accion, acciones, tiposFlujo, procesos, subprocesos, personas, objetivos, procesosById, subprocesosById, personasById, objetivosById,
   currentUser, initialSubTab, onUpdate, onDeactivate, onClose, onCreateProyecto, onEnviarPlanResponsables, onProgramarJunta, onNavigateToAccion,
@@ -886,6 +876,86 @@ export default function AccionDetailPanel({
                     </div>
                   </div>
                 )}
+
+                <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-2.5">
+                  <details className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
+                    <summary className="cursor-pointer select-none text-[9px] font-black uppercase tracking-widest text-slate-400">Historial ({historial.length})</summary>
+                    <div className="mt-2 space-y-1.5">
+                      {historial.length === 0 && <p className="py-4 text-center text-[11px] font-bold text-slate-300">Sin cambios registrados.</p>}
+                      {historial.map((entry) => (
+                        <div key={entry.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black text-slate-700">{entry.campo}</span>
+                            <span className="text-[9px] font-bold text-slate-400">{formatDateTime(entry.created_at)}</span>
+                          </div>
+                          <p className="text-[9px] font-bold text-slate-500">{entry.usuario_nombre || "Usuario desconocido"}</p>
+                          {(entry.valor_anterior || entry.valor_nuevo) && (
+                            <p className="mt-0.5 text-[10px]">
+                              <span className="text-slate-400 line-through">{entry.valor_anterior || "—"}</span>{" → "}
+                              <span className="font-bold text-slate-700">{entry.valor_nuevo || "—"}</span>
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+
+                  <details className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
+                    <summary className="cursor-pointer select-none text-[9px] font-black uppercase tracking-widest text-slate-400">Comentarios ({comentarios.length})</summary>
+                    <div className="mt-2 space-y-2">
+                      {comentarios.length === 0 && <p className="py-3 text-center text-[11px] font-bold text-slate-300">Sin comentarios aún.</p>}
+                      {comentarios.map((c) => (
+                        <div key={c.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                          <div className="flex items-center justify-between text-[9px] font-bold text-slate-400">
+                            <span>{c.usuario_nombre || "Usuario"}</span>
+                            <span>{formatDateTime(c.created_at)}</span>
+                          </div>
+                          <p className="mt-0.5 text-[11px] text-slate-700">{c.comentario}</p>
+                        </div>
+                      ))}
+                      <div className="flex gap-1 border-t border-slate-100 pt-2">
+                        <input
+                          value={nuevoComentario}
+                          onChange={(e) => setNuevoComentario(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") handleAddComentario(); }}
+                          placeholder="Escribe un comentario…"
+                          className="h-9 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none"
+                        />
+                        <button type="button" onClick={handleAddComentario} className="rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white">Enviar</button>
+                      </div>
+                    </div>
+                  </details>
+
+                  <details className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
+                    <summary className="cursor-pointer select-none text-[9px] font-black uppercase tracking-widest text-slate-400">Adjuntos ({adjuntos.length})</summary>
+                    <div className="mt-2 space-y-2">
+                      {adjuntos.length === 0 && <p className="py-3 text-center text-[11px] font-bold text-slate-300">Sin adjuntos aún.</p>}
+                      {adjuntos.map((a) => (
+                        <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 font-bold text-sky-700 hover:bg-sky-50">
+                          <span className="truncate">{a.nombre_archivo}</span>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{a.tipo}</span>
+                        </a>
+                      ))}
+                      <div className="space-y-1 border-t border-slate-100 pt-2">
+                        <input
+                          value={nuevoAdjunto.nombre}
+                          onChange={(e) => setNuevoAdjunto((c) => ({ ...c, nombre: e.target.value }))}
+                          placeholder="Nombre del documento/evidencia"
+                          className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none"
+                        />
+                        <div className="flex gap-1">
+                          <input
+                            value={nuevoAdjunto.url}
+                            onChange={(e) => setNuevoAdjunto((c) => ({ ...c, url: e.target.value }))}
+                            placeholder="https://…"
+                            className="h-9 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none"
+                          />
+                          <button type="button" onClick={handleAddAdjunto} className="rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white">Agregar</button>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+                </div>
               </div>
 
               {/* Flujo de estados */}
@@ -1003,22 +1073,10 @@ export default function AccionDetailPanel({
               </div>
             </div>
 
-            {/* Pestañas secundarias: lo que no es una etapa del flujo
-                (Historial completo, Comentarios, Adjuntos). */}
+            {/* El contenido de aquí abajo lo elige el bloque de la línea de
+                tiempo que se haya clicado arriba — Historial/Comentarios/
+                Adjuntos se movieron a "Ver detalle", ya no compiten aquí. */}
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex flex-wrap gap-1 border-b border-slate-100 bg-slate-50 p-1.5">
-                {SUB_TABS.map((tab) => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setSubTab(tab.key)}
-                    className={`rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-widest transition ${subTab === tab.key ? "bg-[#001225] text-white" : "text-slate-500 hover:bg-slate-100"}`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
               <div className={`overflow-auto p-3 ${detalleAbierto ? "max-h-[45vh]" : "max-h-[65vh]"}`}>
                 {loadingSub ? (
                   <div className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
@@ -1231,76 +1289,7 @@ export default function AccionDetailPanel({
                       )}
                     </div>
                   </div>
-                ) : subTab === "historial" ? (
-                  <div className="space-y-1.5">
-                    {historial.length === 0 && <p className="py-6 text-center text-[11px] font-bold text-slate-300">Sin cambios registrados.</p>}
-                    {historial.map((entry) => (
-                      <div key={entry.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-[10px]">
-                        <div className="flex items-center justify-between">
-                          <span className="font-black text-slate-700">{entry.campo}</span>
-                          <span className="text-[9px] font-bold text-slate-400">{formatDateTime(entry.created_at)}</span>
-                        </div>
-                        <p className="text-[9px] font-bold text-slate-500">{entry.usuario_nombre || "Usuario desconocido"}</p>
-                        {(entry.valor_anterior || entry.valor_nuevo) && (
-                          <p className="mt-0.5 text-[10px]">
-                            <span className="text-slate-400 line-through">{entry.valor_anterior || "—"}</span>{" → "}
-                            <span className="font-bold text-slate-700">{entry.valor_nuevo || "—"}</span>
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : subTab === "comentarios" ? (
-                  <div className="space-y-2">
-                    {comentarios.length === 0 && <p className="py-4 text-center text-[11px] font-bold text-slate-300">Sin comentarios aún.</p>}
-                    {comentarios.map((c) => (
-                      <div key={c.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
-                        <div className="flex items-center justify-between text-[9px] font-bold text-slate-400">
-                          <span>{c.usuario_nombre || "Usuario"}</span>
-                          <span>{formatDateTime(c.created_at)}</span>
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-slate-700">{c.comentario}</p>
-                      </div>
-                    ))}
-                    <div className="flex gap-1 border-t border-slate-100 pt-2">
-                      <input
-                        value={nuevoComentario}
-                        onChange={(e) => setNuevoComentario(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") handleAddComentario(); }}
-                        placeholder="Escribe un comentario…"
-                        className="h-9 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none"
-                      />
-                      <button type="button" onClick={handleAddComentario} className="rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white">Enviar</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {adjuntos.length === 0 && <p className="py-4 text-center text-[11px] font-bold text-slate-300">Sin adjuntos aún.</p>}
-                    {adjuntos.map((a) => (
-                      <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-[11px] font-bold text-sky-700 hover:bg-sky-50">
-                        <span className="truncate">{a.nombre_archivo}</span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{a.tipo}</span>
-                      </a>
-                    ))}
-                    <div className="space-y-1 border-t border-slate-100 pt-2">
-                      <input
-                        value={nuevoAdjunto.nombre}
-                        onChange={(e) => setNuevoAdjunto((c) => ({ ...c, nombre: e.target.value }))}
-                        placeholder="Nombre del documento/evidencia"
-                        className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none"
-                      />
-                      <div className="flex gap-1">
-                        <input
-                          value={nuevoAdjunto.url}
-                          onChange={(e) => setNuevoAdjunto((c) => ({ ...c, url: e.target.value }))}
-                          placeholder="https://…"
-                          className="h-9 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none"
-                        />
-                        <button type="button" onClick={handleAddAdjunto} className="rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white">Agregar</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
