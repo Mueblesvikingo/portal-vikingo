@@ -195,13 +195,13 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
                             {accion.con_riesgo && <span className="ml-2 rounded-full border border-red-100 bg-red-50 px-1.5 py-0.5 text-[8px] font-black text-red-600">Con riesgo</span>}
                           </button>
                         </td>
-                        <td className="px-3 py-1.5 text-slate-600">{accion.tipo}</td>
-                        <td className="px-3 py-1.5 text-slate-500">{proceso?.nombre || "—"}</td>
-                        <td className="px-3 py-1.5 text-slate-500">{responsable || "Sin asignar"}</td>
-                        <td className="px-3 py-1.5 text-right">
+                        <td className="whitespace-nowrap px-3 py-1.5 text-slate-600">{accion.tipo}</td>
+                        <td className="whitespace-nowrap px-3 py-1.5 text-slate-500">{proceso?.nombre || "—"}</td>
+                        <td className="whitespace-nowrap px-3 py-1.5 text-slate-500">{responsable || "Sin asignar"}</td>
+                        <td className="whitespace-nowrap px-3 py-1.5 text-right">
                           <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${PRIORIDAD_BADGE[accion.prioridad] || ""}`}>{accion.prioridad}</span>
                         </td>
-                        <td className="px-3 py-1.5 text-right">
+                        <td className="whitespace-nowrap px-3 py-1.5 text-right">
                           <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${ESTADO_BADGE[accion.estado] || ""}`}>{accion.estado}</span>
                         </td>
                         <td className={`px-3 py-1.5 text-right font-bold ${vencida ? "text-red-500" : "text-slate-500"}`}>{formatDate(accion.fecha_compromiso) || "—"}</td>

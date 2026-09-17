@@ -743,169 +743,6 @@ export default function AccionDetailPanel({
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                {canEdit && (
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      disabled={escalando}
-                      onClick={handleEscalarDireccion}
-                      title={esCritica && vencida ? "Acción crítica vencida — escalar a Dirección" : "Escalar a Dirección"}
-                      className={`rounded-lg border px-3 py-1 text-[10px] font-black transition disabled:opacity-50 ${
-                        esCritica && vencida ? "border-red-300 bg-red-50 text-red-600 hover:bg-red-100" : "border-slate-200 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                      }`}
-                    >
-                      {escalando ? "Enviando…" : "→ Dirección"}
-                    </button>
-                    <button type="button" onClick={onDeactivate} className="rounded-lg border border-red-200 px-3 py-1 text-[10px] font-black text-red-500 transition hover:bg-red-50">
-                      Eliminar acción
-                    </button>
-                  </div>
-                )}
-
-                <div className={`space-y-1.5 ${canEdit ? "mt-3 border-t border-slate-100 pt-2.5" : ""}`}>
-                  <details className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
-                    <summary className="cursor-pointer select-none text-[9px] font-black uppercase tracking-widest text-slate-400">Historial ({historial.length})</summary>
-                    <div className="mt-2 space-y-1.5">
-                      {historial.length === 0 && <p className="py-4 text-center text-[11px] font-bold text-slate-300">Sin cambios registrados.</p>}
-                      {historial.map((entry) => (
-                        <div key={entry.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="font-black text-slate-700">{entry.campo}</span>
-                            <span className="text-[9px] font-bold text-slate-400">{formatDateTime(entry.created_at)}</span>
-                          </div>
-                          <p className="text-[9px] font-bold text-slate-500">{entry.usuario_nombre || "Usuario desconocido"}</p>
-                          {(entry.valor_anterior || entry.valor_nuevo) && (
-                            <p className="mt-0.5 text-[10px]">
-                              <span className="text-slate-400 line-through">{entry.valor_anterior || "—"}</span>{" → "}
-                              <span className="font-bold text-slate-700">{entry.valor_nuevo || "—"}</span>
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-
-                  <details className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
-                    <summary className="cursor-pointer select-none text-[9px] font-black uppercase tracking-widest text-slate-400">Comentarios ({comentarios.length})</summary>
-                    <div className="mt-2 space-y-2">
-                      {comentarios.length === 0 && <p className="py-3 text-center text-[11px] font-bold text-slate-300">Sin comentarios aún.</p>}
-                      {comentarios.map((c) => (
-                        <div key={c.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
-                          <div className="flex items-center justify-between text-[9px] font-bold text-slate-400">
-                            <span>{c.usuario_nombre || "Usuario"}</span>
-                            <span>{formatDateTime(c.created_at)}</span>
-                          </div>
-                          <p className="mt-0.5 text-[11px] text-slate-700">{c.comentario}</p>
-                        </div>
-                      ))}
-                      <div className="flex gap-1 border-t border-slate-100 pt-2">
-                        <input
-                          value={nuevoComentario}
-                          onChange={(e) => setNuevoComentario(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") handleAddComentario(); }}
-                          placeholder="Escribe un comentario…"
-                          className="h-9 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none"
-                        />
-                        <button type="button" onClick={handleAddComentario} className="rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white">Enviar</button>
-                      </div>
-                    </div>
-                  </details>
-
-                  <details className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
-                    <summary className="cursor-pointer select-none text-[9px] font-black uppercase tracking-widest text-slate-400">Adjuntos ({adjuntos.length})</summary>
-                    <div className="mt-2 space-y-2">
-                      {adjuntos.length === 0 && <p className="py-3 text-center text-[11px] font-bold text-slate-300">Sin adjuntos aún.</p>}
-                      {adjuntos.map((a) => (
-                        <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 font-bold text-sky-700 hover:bg-sky-50">
-                          <span className="truncate">{a.nombre_archivo}</span>
-                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{a.tipo}</span>
-                        </a>
-                      ))}
-                      <div className="space-y-1 border-t border-slate-100 pt-2">
-                        <input
-                          value={nuevoAdjunto.nombre}
-                          onChange={(e) => setNuevoAdjunto((c) => ({ ...c, nombre: e.target.value }))}
-                          placeholder="Nombre del documento/evidencia"
-                          className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none"
-                        />
-                        <div className="flex gap-1">
-                          <input
-                            value={nuevoAdjunto.url}
-                            onChange={(e) => setNuevoAdjunto((c) => ({ ...c, url: e.target.value }))}
-                            placeholder="https://…"
-                            className="h-9 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none"
-                          />
-                          <button type="button" onClick={handleAddAdjunto} className="rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white">Agregar</button>
-                        </div>
-                      </div>
-                    </div>
-                  </details>
-                </div>
-              </div>
-
-              {/* Flujo de estados */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                <p className="mb-2 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className="text-[12px]">🔄</span> Flujo</p>
-                <div className="flex flex-wrap items-center gap-1">
-                  {etapas.map((etapa, index) => {
-                    const isCurrent = accion.estado === etapa;
-                    const isPast = etapas.indexOf(accion.estado) > index;
-                    // "Aprobada" es la única etapa que no basta con canEdit —
-                    // es la firma del Director, no un paso más del flujo.
-                    const bloqueadaPorAprobacion = etapa === "Aprobada" && !isCurrent && !isPast && !canApprove;
-                    // "Verificación de eficacia" la valida el auditor SIG /
-                    // equipo estratégico, no cualquiera con canEdit.
-                    const bloqueadaPorVerificacion = etapa === "Verificación de eficacia" && !isCurrent && !isPast && !canVerify;
-                    const bloqueada = bloqueadaPorAprobacion || bloqueadaPorVerificacion;
-                    const alcanzada = isCurrent || isPast;
-                    const color = ESTADO_COLOR[etapa] || "#94a3b8";
-                    return (
-                      <button
-                        key={etapa}
-                        type="button"
-                        disabled={!canEdit || bloqueada}
-                        onClick={() => onUpdate({ estado: etapa })}
-                        title={bloqueadaPorAprobacion ? "Solo el Director General puede aprobar" : bloqueadaPorVerificacion ? "Solo el Coordinador SIG o el equipo estratégico puede verificar la eficacia" : undefined}
-                        style={{
-                          borderColor: alcanzada ? color : `${color}30`,
-                          background: alcanzada ? `${color}18` : "#fff",
-                          color: alcanzada ? color : "#94a3b8",
-                        }}
-                        className={`rounded-full border px-2.5 py-1 text-[9px] font-black transition ${canEdit && !bloqueada ? "hover:opacity-80" : ""} ${bloqueada ? "cursor-not-allowed opacity-50" : ""}`}
-                      >
-                        {isPast ? "✓ " : ""}{etapa}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {involucrados.length > 0 && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                  <p className="mb-2 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className="text-[12px]">👥</span> Involucrados — notificados de esta acción</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {involucrados.map((i) => (
-                      <span
-                        key={i.id}
-                        title={i.visto_en ? `Abrió el registro (${formatDateTime(i.visto_en)})` : "Todavía no abre el registro"}
-                        className={`rounded-full border px-2.5 py-1 text-[9px] font-black ${i.visto_en ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}
-                      >
-                        {i.visto_en ? "✓ " : "○ "}{i.persona_nombre}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {accion.workload_asignacion_id && (
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3 text-[10px] font-black text-emerald-700">
-                  ✓ Ya baja a Balance de Carga como asignación real — la PM le da seguimiento desde ahí.
-                </div>
-              )}
-            </div>
-
             {/* Línea de tiempo: siempre visible, es lo primero que se debe
                 leer al abrir cualquier acción. Cada bloque es la forma de
                 navegar a su sección (Análisis de causa / Plan de acción /
@@ -1068,6 +905,164 @@ export default function AccionDetailPanel({
                         </button>
                       </div>
                     </div>
+
+                    <div className="border-t border-slate-100 pt-2.5">
+                      <p className="mb-2 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className="text-[12px]">🔄</span> Flujo</p>
+                      <div className="flex flex-wrap items-center gap-1">
+                        {etapas.map((etapa, index) => {
+                          const isCurrent = accion.estado === etapa;
+                          const isPast = etapas.indexOf(accion.estado) > index;
+                          // "Aprobada" es la única etapa que no basta con canEdit —
+                          // es la firma del Director, no un paso más del flujo.
+                          const bloqueadaPorAprobacion = etapa === "Aprobada" && !isCurrent && !isPast && !canApprove;
+                          // "Verificación de eficacia" la valida el auditor SIG /
+                          // equipo estratégico, no cualquiera con canEdit.
+                          const bloqueadaPorVerificacion = etapa === "Verificación de eficacia" && !isCurrent && !isPast && !canVerify;
+                          const bloqueada = bloqueadaPorAprobacion || bloqueadaPorVerificacion;
+                          const alcanzada = isCurrent || isPast;
+                          const color = ESTADO_COLOR[etapa] || "#94a3b8";
+                          return (
+                            <button
+                              key={etapa}
+                              type="button"
+                              disabled={!canEdit || bloqueada}
+                              onClick={() => onUpdate({ estado: etapa })}
+                              title={bloqueadaPorAprobacion ? "Solo el Director General puede aprobar" : bloqueadaPorVerificacion ? "Solo el Coordinador SIG o el equipo estratégico puede verificar la eficacia" : undefined}
+                              style={{
+                                borderColor: alcanzada ? color : `${color}30`,
+                                background: alcanzada ? `${color}18` : "#fff",
+                                color: alcanzada ? color : "#94a3b8",
+                              }}
+                              className={`rounded-full border px-2.5 py-1 text-[9px] font-black transition ${canEdit && !bloqueada ? "hover:opacity-80" : ""} ${bloqueada ? "cursor-not-allowed opacity-50" : ""}`}
+                            >
+                              {isPast ? "✓ " : ""}{etapa}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {involucrados.length > 0 && (
+                      <div className="border-t border-slate-100 pt-2.5">
+                        <p className="mb-2 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className="text-[12px]">👥</span> Involucrados — notificados de esta acción</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {involucrados.map((i) => (
+                            <span
+                              key={i.id}
+                              title={i.visto_en ? `Abrió el registro (${formatDateTime(i.visto_en)})` : "Todavía no abre el registro"}
+                              className={`rounded-full border px-2.5 py-1 text-[9px] font-black ${i.visto_en ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}
+                            >
+                              {i.visto_en ? "✓ " : "○ "}{i.persona_nombre}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {accion.workload_asignacion_id && (
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-2.5 text-[10px] font-black text-emerald-700">
+                        ✓ Ya baja a Balance de Carga como asignación real — la PM le da seguimiento desde ahí.
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5 border-t border-slate-100 pt-2.5">
+                      <details className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
+                        <summary className="cursor-pointer select-none text-[9px] font-black uppercase tracking-widest text-slate-400">Historial ({historial.length})</summary>
+                        <div className="mt-2 space-y-1.5">
+                          {historial.length === 0 && <p className="py-4 text-center text-[11px] font-bold text-slate-300">Sin cambios registrados.</p>}
+                          {historial.map((entry) => (
+                            <div key={entry.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="font-black text-slate-700">{entry.campo}</span>
+                                <span className="text-[9px] font-bold text-slate-400">{formatDateTime(entry.created_at)}</span>
+                              </div>
+                              <p className="text-[9px] font-bold text-slate-500">{entry.usuario_nombre || "Usuario desconocido"}</p>
+                              {(entry.valor_anterior || entry.valor_nuevo) && (
+                                <p className="mt-0.5 text-[10px]">
+                                  <span className="text-slate-400 line-through">{entry.valor_anterior || "—"}</span>{" → "}
+                                  <span className="font-bold text-slate-700">{entry.valor_nuevo || "—"}</span>
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+
+                      <details className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
+                        <summary className="cursor-pointer select-none text-[9px] font-black uppercase tracking-widest text-slate-400">Comentarios ({comentarios.length})</summary>
+                        <div className="mt-2 space-y-2">
+                          {comentarios.length === 0 && <p className="py-3 text-center text-[11px] font-bold text-slate-300">Sin comentarios aún.</p>}
+                          {comentarios.map((c) => (
+                            <div key={c.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                              <div className="flex items-center justify-between text-[9px] font-bold text-slate-400">
+                                <span>{c.usuario_nombre || "Usuario"}</span>
+                                <span>{formatDateTime(c.created_at)}</span>
+                              </div>
+                              <p className="mt-0.5 text-[11px] text-slate-700">{c.comentario}</p>
+                            </div>
+                          ))}
+                          <div className="flex gap-1 border-t border-slate-100 pt-2">
+                            <input
+                              value={nuevoComentario}
+                              onChange={(e) => setNuevoComentario(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") handleAddComentario(); }}
+                              placeholder="Escribe un comentario…"
+                              className="h-9 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none"
+                            />
+                            <button type="button" onClick={handleAddComentario} className="rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white">Enviar</button>
+                          </div>
+                        </div>
+                      </details>
+
+                      <details className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
+                        <summary className="cursor-pointer select-none text-[9px] font-black uppercase tracking-widest text-slate-400">Adjuntos ({adjuntos.length})</summary>
+                        <div className="mt-2 space-y-2">
+                          {adjuntos.length === 0 && <p className="py-3 text-center text-[11px] font-bold text-slate-300">Sin adjuntos aún.</p>}
+                          {adjuntos.map((a) => (
+                            <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 font-bold text-sky-700 hover:bg-sky-50">
+                              <span className="truncate">{a.nombre_archivo}</span>
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{a.tipo}</span>
+                            </a>
+                          ))}
+                          <div className="space-y-1 border-t border-slate-100 pt-2">
+                            <input
+                              value={nuevoAdjunto.nombre}
+                              onChange={(e) => setNuevoAdjunto((c) => ({ ...c, nombre: e.target.value }))}
+                              placeholder="Nombre del documento/evidencia"
+                              className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none"
+                            />
+                            <div className="flex gap-1">
+                              <input
+                                value={nuevoAdjunto.url}
+                                onChange={(e) => setNuevoAdjunto((c) => ({ ...c, url: e.target.value }))}
+                                placeholder="https://…"
+                                className="h-9 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none"
+                              />
+                              <button type="button" onClick={handleAddAdjunto} className="rounded-lg bg-[#001225] px-3 text-[10px] font-black text-white">Agregar</button>
+                            </div>
+                          </div>
+                        </div>
+                      </details>
+                    </div>
+
+                    {canEdit && (
+                      <div className="flex justify-end gap-2 border-t border-slate-100 pt-2.5">
+                        <button
+                          type="button"
+                          disabled={escalando}
+                          onClick={handleEscalarDireccion}
+                          title={esCritica && vencida ? "Acción crítica vencida — escalar a Dirección" : "Escalar a Dirección"}
+                          className={`rounded-lg border px-3 py-1 text-[10px] font-black transition disabled:opacity-50 ${
+                            esCritica && vencida ? "border-red-300 bg-red-50 text-red-600 hover:bg-red-100" : "border-slate-200 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                          }`}
+                        >
+                          {escalando ? "Enviando…" : "→ Dirección"}
+                        </button>
+                        <button type="button" onClick={onDeactivate} className="rounded-lg border border-red-200 px-3 py-1 text-[10px] font-black text-red-500 transition hover:bg-red-50">
+                          Eliminar acción
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : subTab === "causa" ? (
                   <div className="space-y-3">
