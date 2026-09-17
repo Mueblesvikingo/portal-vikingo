@@ -815,6 +815,51 @@ export default function AccionDetailPanel({
             </div>
             )}
 
+            {/* Línea de tiempo: fuera de las sub-tabs a propósito — es lo
+                primero que se debe leer al abrir cualquier acción, no algo
+                que haya que ir a buscar con un clic. La pestaña "Línea de
+                tiempo" de abajo se queda solo con el detalle fino (quién y
+                cuándo movió cada etapa). */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="overflow-x-auto pb-1">
+                <div className="flex items-stretch" style={{ minWidth: `${etapas.length * 148}px` }}>
+                  {etapas.map((etapa, index) => {
+                    const isCurrent = accion.estado === etapa;
+                    const isPast = etapas.indexOf(accion.estado) > index;
+                    const alcanzada = isCurrent || isPast;
+                    const color = ESTADO_COLOR[etapa] || "#94a3b8";
+                    const fechaEtapa = index === 0
+                      ? historial.find((h) => h.campo === "creado")?.created_at
+                      : [...historial].reverse().find((h) => h.campo === "estado" && h.valor_nuevo === etapa)?.created_at;
+                    return (
+                      <div key={etapa} className="flex items-center">
+                        <div
+                          className="flex w-[132px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border-2 px-2.5 py-3 text-center transition"
+                          style={{ borderColor: alcanzada ? color : `${color}30`, background: alcanzada ? `${color}16` : "#fff" }}
+                        >
+                          <span
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-black text-white shadow-sm"
+                            style={{ background: alcanzada ? color : `${color}45` }}
+                          >
+                            {isPast ? "✓" : index + 1}
+                          </span>
+                          <p className="text-[10px] font-black leading-tight" style={{ color: alcanzada ? color : "#cbd5e1" }}>{etapa}</p>
+                          {isCurrent ? (
+                            <span className="rounded-full px-2 py-0.5 text-[7px] font-black uppercase tracking-widest text-white" style={{ background: color }}>Aquí vas</span>
+                          ) : fechaEtapa ? (
+                            <span className="text-[8px] font-bold text-slate-400">{formatDate(fechaEtapa)}</span>
+                          ) : null}
+                        </div>
+                        {index < etapas.length - 1 && (
+                          <span className="mx-1 shrink-0 text-[18px] font-black" style={{ color: isPast ? color : "#e2e8f0" }}>→</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             {/* Sub-tabs: Análisis de causa / Plan de acción / etc — a todo lo
                 ancho, sin competir por espacio con el detalle. */}
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -1103,44 +1148,8 @@ export default function AccionDetailPanel({
                   </div>
                 ) : subTab === "linea_tiempo" ? (
                   <div className="space-y-3">
-                    <div className="overflow-x-auto pb-1">
-                      <div className="flex items-stretch" style={{ minWidth: `${etapas.length * 148}px` }}>
-                        {etapas.map((etapa, index) => {
-                          const isCurrent = accion.estado === etapa;
-                          const isPast = etapas.indexOf(accion.estado) > index;
-                          const alcanzada = isCurrent || isPast;
-                          const color = ESTADO_COLOR[etapa] || "#94a3b8";
-                          const fechaEtapa = index === 0
-                            ? historial.find((h) => h.campo === "creado")?.created_at
-                            : [...historial].reverse().find((h) => h.campo === "estado" && h.valor_nuevo === etapa)?.created_at;
-                          return (
-                            <div key={etapa} className="flex items-center">
-                              <div
-                                className="flex w-[132px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border-2 px-2.5 py-3 text-center transition"
-                                style={{ borderColor: alcanzada ? color : `${color}30`, background: alcanzada ? `${color}16` : "#fff" }}
-                              >
-                                <span
-                                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-black text-white shadow-sm"
-                                  style={{ background: alcanzada ? color : `${color}45` }}
-                                >
-                                  {isPast ? "✓" : index + 1}
-                                </span>
-                                <p className="text-[10px] font-black leading-tight" style={{ color: alcanzada ? color : "#cbd5e1" }}>{etapa}</p>
-                                {isCurrent ? (
-                                  <span className="rounded-full px-2 py-0.5 text-[7px] font-black uppercase tracking-widest text-white" style={{ background: color }}>Aquí vas</span>
-                                ) : fechaEtapa ? (
-                                  <span className="text-[8px] font-bold text-slate-400">{formatDate(fechaEtapa)}</span>
-                                ) : null}
-                              </div>
-                              {index < etapas.length - 1 && (
-                                <span className="mx-1 shrink-0 text-[18px] font-black" style={{ color: isPast ? color : "#e2e8f0" }}>→</span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="space-y-1.5 border-t border-slate-100 pt-2">
+                    <p className="text-[9px] font-semibold text-slate-400">El avance por etapas ya se ve arriba, siempre visible. Aquí queda el detalle de quién y cuándo movió cada una.</p>
+                    <div className="space-y-1.5">
                       {historial.filter((h) => h.campo === "estado" || h.campo === "creado").length === 0 ? (
                         <p className="py-6 text-center text-[11px] font-bold text-slate-300">Sin recorrido registrado todavía.</p>
                       ) : (
