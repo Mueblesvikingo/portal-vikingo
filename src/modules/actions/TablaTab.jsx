@@ -130,7 +130,6 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
         <table className="w-full min-w-[980px] border-collapse text-[11px]">
           <thead>
             <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
-              <th className="px-2 py-2 text-center">Ver</th>
               <th className="px-3 py-2 text-white">Acción</th>
               <th className="px-3 py-2">Tipo</th>
               <th className="px-3 py-2">Proceso</th>
@@ -139,6 +138,7 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
               <th className="px-3 py-2 text-right">Estado</th>
               <th className="px-3 py-2 text-right">Compromiso</th>
               <th className="px-3 py-2 text-center">Asignación</th>
+              <th className="px-2 py-2 text-center">Ver</th>
             </tr>
           </thead>
           <tbody>
@@ -166,16 +166,6 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
                         className="border-b border-slate-50 transition hover:bg-sky-50/60"
                         style={{ background: rowIndex % 2 === 1 ? `${group.color}0d` : "#fff" }}
                       >
-                        <td className="px-2 py-1.5 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedId((current) => (current === accion.id ? null : accion.id))}
-                            title="Ver línea de tiempo"
-                            className={`flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-black transition ${isExpanded ? "border-sky-200 bg-sky-100 text-sky-700" : "border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
-                          >
-                            {isExpanded ? "▲" : "▾"}
-                          </button>
-                        </td>
                         <td className="px-3 py-1.5" style={{ boxShadow: `inset 3px 0 0 ${group.color}` }}>
                           <button type="button" onClick={() => onSelectAccion(accion.id)} className="text-left hover:text-sky-700">
                             <span className="block text-[9px] font-bold text-slate-400">{accion.codigo}</span>
@@ -204,6 +194,15 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
                               →
                             </button>
                           )}
+                        </td>
+                        <td className="px-2 py-1.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId((current) => (current === accion.id ? null : accion.id))}
+                            className={`rounded-lg border px-2.5 py-1 text-[9px] font-black uppercase tracking-widest transition ${isExpanded ? "border-sky-200 bg-sky-100 text-sky-700" : "border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700"}`}
+                          >
+                            {isExpanded ? "Ocultar ▲" : "Ver ▾"}
+                          </button>
                         </td>
                       </tr>
                       {isExpanded && (

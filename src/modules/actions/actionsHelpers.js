@@ -133,6 +133,8 @@ export function getFlujoEtapas(tiposFlujo, tipo) {
 // que le aplica, sin scroll de contenido de otras etapas (mismo criterio en
 // la Tabla y en el detalle completo de la acción).
 export function subTabParaEtapa(etapa) {
+  if (etapa === "Registrada") return "detalle";
+  if (etapa === "En análisis") return "causa";
   if (etapa === "Cerrada") return "linea_tiempo";
   if (etapa === "Aprobada") return "aprobada";
   if (etapa === "En ejecución") return "ejecucion";
