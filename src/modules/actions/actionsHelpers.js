@@ -128,12 +128,16 @@ export function getFlujoEtapas(tiposFlujo, tipo) {
 }
 
 // A qué sección del detalle manda cada etapa del flujo al hacer clic en su
-// bloque de la línea de tiempo — así el bloque reemplaza a una pestaña
-// dedicada, en vez de duplicar la navegación (mismo criterio en la Tabla y
-// en el detalle completo de la acción).
+// bloque de la línea de tiempo — cada etapa tiene su propia sección (no un
+// "Plan de acción" genérico compartido) para que el bloque muestre solo lo
+// que le aplica, sin scroll de contenido de otras etapas (mismo criterio en
+// la Tabla y en el detalle completo de la acción).
 export function subTabParaEtapa(etapa) {
   if (etapa === "Cerrada") return "linea_tiempo";
-  if (["Aprobada", "En ejecución", "En validación", "Verificación de eficacia"].includes(etapa)) return "plan";
+  if (etapa === "Aprobada") return "aprobada";
+  if (etapa === "En ejecución") return "ejecucion";
+  if (etapa === "En validación") return "validacion";
+  if (etapa === "Verificación de eficacia") return "eficacia";
   return "causa";
 }
 

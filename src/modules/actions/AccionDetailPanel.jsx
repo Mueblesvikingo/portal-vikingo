@@ -360,6 +360,117 @@ function JuntaForm({ personas, defaultAsistenteIds, onConfirm, onCancel }) {
   );
 }
 
+// Tabla "Reparte el trabajo" — se reutiliza en Aprobada/En ejecución/En
+// validación (mismos datos, cada etapa la necesita para algo distinto:
+// armar el plan, ejecutarlo, o confirmar qué se hizo). `soloLectura` quita
+// la fila de alta y el botón de quitar, para las etapas donde ya no se
+// debería seguir editando el reparto.
+function PlanResponsablesTable({
+  planResponsables, personasById, personas, canEdit, soloLectura,
+  nuevoPlanPersonaId, setNuevoPlanPersonaId, nuevoPlanDetalle, setNuevoPlanDetalle,
+  nuevoPlanFecha, setNuevoPlanFecha, nuevoPlanHoras, setNuevoPlanHoras,
+  onAdd, onUpdateField, onRemove,
+}) {
+  const permiteEditar = canEdit && !soloLectura;
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] border-collapse text-[10px]">
+          <thead>
+            <tr className="bg-[#001225] text-left text-[8px] font-black uppercase tracking-widest text-white/60">
+              <th className="px-2.5 py-2 text-white">Responsable</th>
+              <th className="px-2.5 py-2 text-white">Acción</th>
+              <th className="px-2.5 py-2 text-white">Fecha</th>
+              <th className="px-2.5 py-2 text-white">Horas</th>
+              <th className="px-2.5 py-2 text-right text-white">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {planResponsables.map((fila) => {
+              const enviado = !!fila.workload_asignacion_id;
+              return (
+                <tr key={fila.id} className={`border-b border-slate-100 ${enviado ? "bg-emerald-50/40" : ""}`}>
+                  <td className="px-2.5 py-1.5 font-black text-slate-700">{personasById[fila.persona_id]?.nombre || "—"}</td>
+                  <td className="min-w-[160px] px-2.5 py-1.5">
+                    <EditableSmallField
+                      value={fila.detalle}
+                      canEdit={permiteEditar && !enviado}
+                      placeholder="Qué debe hacer..."
+                      onSave={(v) => onUpdateField(fila.id, "detalle", v)}
+                    />
+                  </td>
+                  <td className="px-2.5 py-1.5">
+                    <EditableSmallField
+                      type="date"
+                      value={fila.fecha_limite}
+                      canEdit={permiteEditar && !enviado}
+                      onSave={(v) => onUpdateField(fila.id, "fecha_limite", v)}
+                    />
+                  </td>
+                  <td className="w-16 px-2.5 py-1.5">
+                    <EditableSmallField
+                      type="number"
+                      value={fila.horas}
+                      canEdit={permiteEditar && !enviado}
+                      placeholder="Hrs"
+                      onSave={(v) => onUpdateField(fila.id, "horas", v ? Number(v) : null)}
+                    />
+                  </td>
+                  <td className="px-2.5 py-1.5 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span className={`rounded-full border px-2 py-0.5 text-[8px] font-black ${enviado ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                        {enviado ? "✓ Enviado" : "Pendiente"}
+                      </span>
+                      {!enviado && permiteEditar && (
+                        <button type="button" onClick={() => onRemove(fila.id)} className="text-[12px] text-slate-300 hover:text-red-500">×</button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {!planResponsables.length && (
+              <tr>
+                <td colSpan={5} className="px-2.5 py-4 text-center text-[10px] font-semibold text-slate-300">
+                  Aún no hay acciones capturadas — agrega la primera abajo: quién, qué debe hacer y para cuándo.
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {permiteEditar && (
+            <tfoot>
+              <tr className="border-t-2 border-dashed border-slate-200 bg-slate-50/70">
+                <td className="px-2 py-2">
+                  <select value={nuevoPlanPersonaId} onChange={(e) => setNuevoPlanPersonaId(e.target.value)} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none">
+                    <option value="">Responsable...</option>
+                    {personas.filter((p) => !planResponsables.some((r) => r.persona_id === p.id)).map((p) => (
+                      <option key={p.id} value={p.id}>{p.nombre}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="min-w-[160px] px-2 py-2">
+                  <input value={nuevoPlanDetalle} onChange={(e) => setNuevoPlanDetalle(e.target.value)} placeholder="Qué debe hacer..." className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
+                </td>
+                <td className="px-2 py-2">
+                  <input type="date" value={nuevoPlanFecha} onChange={(e) => setNuevoPlanFecha(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
+                </td>
+                <td className="w-16 px-2 py-2">
+                  <input type="number" value={nuevoPlanHoras} onChange={(e) => setNuevoPlanHoras(e.target.value)} placeholder="Hrs" className="h-8 w-14 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
+                </td>
+                <td className="px-2 py-2 text-right">
+                  <button type="button" disabled={!nuevoPlanPersonaId} onClick={onAdd} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
+                    + Agregar
+                  </button>
+                </td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // Análisis de causa / Plan de acción / Línea de tiempo ya no son botones
 // aparte: se abren haciendo clic en el bloque de etapa que les corresponde
 // en la línea de tiempo siempre visible (ver subTabParaEtapa). Solo lo que
@@ -556,6 +667,38 @@ export default function AccionDetailPanel({
     .filter((a) => a.conclusion_causa_raiz && a.conclusion_causa_raiz.trim())
     .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))[0] || null;
 
+  // Piezas compartidas por las secciones de Aprobada/En ejecución/En
+  // validación/Verificación de eficacia — cada una arma solo el bloque que
+  // le corresponde con estas piezas, en vez de mostrar todo junto.
+  const causaRaizBlock = causaRaizReferencia ? (
+    <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-2.5">
+      <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700">Causa raíz identificada ({causaRaizReferencia.herramienta})</p>
+      <p className="mt-1 text-[11px] font-bold text-slate-700">{causaRaizReferencia.conclusion_causa_raiz}</p>
+    </div>
+  ) : (
+    <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-2.5 text-[11px] font-bold text-amber-700">
+      Aún no hay una causa raíz registrada en Análisis de causa — se recomienda completarlo antes de definir la acción.
+    </div>
+  );
+  const prioridadFechaBlock = (
+    <div className="grid grid-cols-2 gap-2 text-[10px]">
+      <div>
+        <p className="font-black uppercase tracking-widest text-slate-400">Prioridad</p>
+        <EditableSelect value={accion.prioridad} options={PRIORIDADES_ACCION} canEdit={canEdit} onSave={(v) => onUpdate({ prioridad: v })} />
+      </div>
+      <div>
+        <p className="font-black uppercase tracking-widest text-slate-400">Fecha compromiso</p>
+        <EditableDate value={accion.fecha_compromiso} canEdit={canEdit} onSave={(v) => onUpdate({ fecha_compromiso: v || null })} />
+      </div>
+    </div>
+  );
+  const planTableProps = {
+    planResponsables, personasById, personas, canEdit,
+    nuevoPlanPersonaId, setNuevoPlanPersonaId, nuevoPlanDetalle, setNuevoPlanDetalle,
+    nuevoPlanFecha, setNuevoPlanFecha, nuevoPlanHoras, setNuevoPlanHoras,
+    onAdd: handleAddPlanResponsable, onUpdateField: handleUpdatePlanResponsableField, onRemove: handleRemovePlanResponsable,
+  };
+
   async function handleSaveAnalisis(payload) {
     const result = await upsertAnalisisCausa({ accionId: accion.id, herramienta, ...payload }, currentUser);
     if (!result?.ok) { console.error(result?.error); return; }
@@ -722,24 +865,6 @@ export default function AccionDetailPanel({
                     </button>
                   </div>
                 </div>
-
-                {accion.requiere_verificacion_eficacia && (
-                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-cyan-100 bg-cyan-50/60 p-2">
-                    <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-cyan-700">Verificación de eficacia</p>
-                      <EditableSelect
-                        value={accion.eficacia_resultado || ""}
-                        options={[{ value: "", label: "Sin evaluar" }, "Eficaz", "Parcialmente eficaz", "No eficaz"]}
-                        canEdit={canVerify}
-                        onSave={(v) => onUpdate({ eficacia_resultado: v || null, eficacia_evaluada_en: new Date().toISOString() })}
-                      />
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-cyan-700">Fecha para verificar</p>
-                      <EditableDate value={accion.fecha_verificacion_eficacia} canEdit={canVerify} onSave={(v) => onUpdate({ fecha_verificacion_eficacia: v || null })} />
-                    </div>
-                  </div>
-                )}
 
                 {canEdit && (
                   <div className="mt-3 border-t border-slate-100 pt-2">
@@ -975,178 +1100,61 @@ export default function AccionDetailPanel({
                     {herramienta === "Ishikawa" && <Ishikawa analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} currentUser={currentUser} />}
                     {herramienta === "5W2H" && <CincoW2H analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} currentUser={currentUser} />}
                   </div>
-                ) : subTab === "plan" ? (
+                ) : subTab === "aprobada" ? (
                   <div className="space-y-3">
-                    {causaRaizReferencia ? (
-                      <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-2.5">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700">Causa raíz identificada ({causaRaizReferencia.herramienta})</p>
-                        <p className="mt-1 text-[11px] font-bold text-slate-700">{causaRaizReferencia.conclusion_causa_raiz}</p>
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-2.5 text-[11px] font-bold text-amber-700">
-                        Aún no hay una causa raíz registrada en Análisis de causa — se recomienda completarlo antes de definir la acción.
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-2 text-[10px]">
-                      <div>
-                        <p className="font-black uppercase tracking-widest text-slate-400">Prioridad</p>
-                        <EditableSelect value={accion.prioridad} options={PRIORIDADES_ACCION} canEdit={canEdit} onSave={(v) => onUpdate({ prioridad: v })} />
-                      </div>
-                      <div>
-                        <p className="font-black uppercase tracking-widest text-slate-400">Fecha compromiso</p>
-                        <EditableDate value={accion.fecha_compromiso} canEdit={canEdit} onSave={(v) => onUpdate({ fecha_compromiso: v || null })} />
-                      </div>
-                    </div>
-
+                    {causaRaizBlock}
+                    {prioridadFechaBlock}
                     <div className="border-t border-slate-100 pt-2.5">
-                      <div className="flex items-start gap-2">
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#001225] text-[10px] font-black text-white">1</span>
-                        <div>
-                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo: una fila por persona</p>
-                          <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">Cada renglón es una acción concreta con su propio responsable, fecha y horas estimadas. Pueden ser varias personas — al aprobarse, todas bajan juntas a Balance de Carga con un clic.</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 overflow-hidden rounded-xl border border-slate-200">
-                        <div className="overflow-x-auto">
-                          <table className="w-full min-w-[560px] border-collapse text-[10px]">
-                            <thead>
-                              <tr className="bg-[#001225] text-left text-[8px] font-black uppercase tracking-widest text-white/60">
-                                <th className="px-2.5 py-2 text-white">Responsable</th>
-                                <th className="px-2.5 py-2 text-white">Acción</th>
-                                <th className="px-2.5 py-2 text-white">Fecha</th>
-                                <th className="px-2.5 py-2 text-white">Horas</th>
-                                <th className="px-2.5 py-2 text-right text-white">Estado</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {planResponsables.map((fila) => {
-                                const enviado = !!fila.workload_asignacion_id;
-                                return (
-                                  <tr key={fila.id} className={`border-b border-slate-100 ${enviado ? "bg-emerald-50/40" : ""}`}>
-                                    <td className="px-2.5 py-1.5 font-black text-slate-700">{personasById[fila.persona_id]?.nombre || "—"}</td>
-                                    <td className="min-w-[160px] px-2.5 py-1.5">
-                                      <EditableSmallField
-                                        value={fila.detalle}
-                                        canEdit={canEdit && !enviado}
-                                        placeholder="Qué debe hacer..."
-                                        onSave={(v) => handleUpdatePlanResponsableField(fila.id, "detalle", v)}
-                                      />
-                                    </td>
-                                    <td className="px-2.5 py-1.5">
-                                      <EditableSmallField
-                                        type="date"
-                                        value={fila.fecha_limite}
-                                        canEdit={canEdit && !enviado}
-                                        onSave={(v) => handleUpdatePlanResponsableField(fila.id, "fecha_limite", v)}
-                                      />
-                                    </td>
-                                    <td className="w-16 px-2.5 py-1.5">
-                                      <EditableSmallField
-                                        type="number"
-                                        value={fila.horas}
-                                        canEdit={canEdit && !enviado}
-                                        placeholder="Hrs"
-                                        onSave={(v) => handleUpdatePlanResponsableField(fila.id, "horas", v ? Number(v) : null)}
-                                      />
-                                    </td>
-                                    <td className="px-2.5 py-1.5 text-right">
-                                      <div className="flex items-center justify-end gap-1.5">
-                                        <span className={`rounded-full border px-2 py-0.5 text-[8px] font-black ${enviado ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
-                                          {enviado ? "✓ Enviado" : "Pendiente"}
-                                        </span>
-                                        {!enviado && canEdit && (
-                                          <button type="button" onClick={() => handleRemovePlanResponsable(fila.id)} className="text-[12px] text-slate-300 hover:text-red-500">×</button>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                              {!planResponsables.length && (
-                                <tr>
-                                  <td colSpan={5} className="px-2.5 py-4 text-center text-[10px] font-semibold text-slate-300">
-                                    Aún no hay acciones capturadas — agrega la primera abajo: quién, qué debe hacer y para cuándo.
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                            {canEdit && (
-                              <tfoot>
-                                <tr className="border-t-2 border-dashed border-slate-200 bg-slate-50/70">
-                                  <td className="px-2 py-2">
-                                    <select value={nuevoPlanPersonaId} onChange={(e) => setNuevoPlanPersonaId(e.target.value)} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none">
-                                      <option value="">Responsable...</option>
-                                      {personas.filter((p) => !planResponsables.some((r) => r.persona_id === p.id)).map((p) => (
-                                        <option key={p.id} value={p.id}>{p.nombre}</option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td className="min-w-[160px] px-2 py-2">
-                                    <input value={nuevoPlanDetalle} onChange={(e) => setNuevoPlanDetalle(e.target.value)} placeholder="Qué debe hacer..." className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
-                                  </td>
-                                  <td className="px-2 py-2">
-                                    <input type="date" value={nuevoPlanFecha} onChange={(e) => setNuevoPlanFecha(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
-                                  </td>
-                                  <td className="w-16 px-2 py-2">
-                                    <input type="number" value={nuevoPlanHoras} onChange={(e) => setNuevoPlanHoras(e.target.value)} placeholder="Hrs" className="h-8 w-14 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none" />
-                                  </td>
-                                  <td className="px-2 py-2 text-right">
-                                    <button type="button" disabled={!nuevoPlanPersonaId} onClick={handleAddPlanResponsable} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
-                                      + Agregar
-                                    </button>
-                                  </td>
-                                </tr>
-                              </tfoot>
-                            )}
-                          </table>
-                        </div>
-                      </div>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo: una fila por persona</p>
+                      <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">Cada renglón es una acción concreta con su propio responsable, fecha y horas estimadas — arma el plan aquí antes de que Dirección apruebe (etapa "Aprobada" en Flujo, en "Ver detalle").</p>
+                      <div className="mt-2"><PlanResponsablesTable {...planTableProps} /></div>
+                    </div>
+                  </div>
+                ) : subTab === "ejecucion" ? (
+                  <div className="space-y-3">
+                    <div className="border-t-0 pt-0">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo: una fila por persona</p>
+                      <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">Pueden ser varias personas — al enviarlas, todas bajan juntas a Balance de Carga con un clic.</p>
+                      <div className="mt-2"><PlanResponsablesTable {...planTableProps} /></div>
                     </div>
 
                     {canEdit && (
                       <div className="border-t border-slate-100 pt-2.5">
-                        <div className="flex items-start gap-2">
-                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#001225] text-[10px] font-black text-white">2</span>
-                          <div className="flex-1">
-                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Envía a ejecución real</p>
-                            <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">
-                              {yaAprobada
-                                ? "Dirección ya aprobó — manda todas las filas pendientes a Balance de Carga, o arma un proyecto en el Tablero PMO."
-                                : "Disponible en cuanto Dirección apruebe la acción (etapa \"Aprobada\" en Flujo)."}
-                            </p>
-                            <div className="mt-1.5 flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                disabled={!yaAprobada || enviandoPlan || !planResponsables.some((r) => !r.workload_asignacion_id)}
-                                title={yaAprobada ? "Enviar todas las acciones a Balance de Carga" : "Requiere aprobación del Director General primero"}
-                                onClick={handleEnviarPlanAAsignacion}
-                                className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white transition hover:bg-[#0a1c3a] disabled:cursor-not-allowed disabled:bg-slate-300"
-                              >
-                                {enviandoPlan ? "Enviando..." : "→ Enviar todo a Asignación"}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!yaAprobada}
-                                title={yaAprobada ? "Crear proyecto en el Tablero PMO" : "Requiere aprobación del Director General primero"}
-                                onClick={() => setConvertingToProyecto((current) => !current)}
-                                className={`rounded-lg border px-3 py-1.5 text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${convertingToProyecto ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"}`}
-                              >
-                                → Proyecto
-                              </button>
-                            </div>
-                            {convertingToProyecto && (
-                              <ProyectoForm
-                                personas={personas}
-                                defaultNombre={accion.titulo}
-                                defaultLiderPersonaId={accion.responsable_persona_id || ""}
-                                onCancel={() => setConvertingToProyecto(false)}
-                                onConfirm={(payload) => onCreateProyecto(accion, payload)}
-                              />
-                            )}
-                          </div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Envía a ejecución real</p>
+                        <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">
+                          {yaAprobada
+                            ? "Dirección ya aprobó — manda todas las filas pendientes a Balance de Carga, o arma un proyecto en el Tablero PMO."
+                            : "Disponible en cuanto Dirección apruebe la acción (etapa \"Aprobada\" en Flujo, en \"Ver detalle\")."}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={!yaAprobada || enviandoPlan || !planResponsables.some((r) => !r.workload_asignacion_id)}
+                            title={yaAprobada ? "Enviar todas las acciones a Balance de Carga" : "Requiere aprobación del Director General primero"}
+                            onClick={handleEnviarPlanAAsignacion}
+                            className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white transition hover:bg-[#0a1c3a] disabled:cursor-not-allowed disabled:bg-slate-300"
+                          >
+                            {enviandoPlan ? "Enviando..." : "→ Enviar todo a Asignación"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!yaAprobada}
+                            title={yaAprobada ? "Crear proyecto en el Tablero PMO" : "Requiere aprobación del Director General primero"}
+                            onClick={() => setConvertingToProyecto((current) => !current)}
+                            className={`rounded-lg border px-3 py-1.5 text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${convertingToProyecto ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"}`}
+                          >
+                            → Proyecto
+                          </button>
                         </div>
+                        {convertingToProyecto && (
+                          <ProyectoForm
+                            personas={personas}
+                            defaultNombre={accion.titulo}
+                            defaultLiderPersonaId={accion.responsable_persona_id || ""}
+                            onCancel={() => setConvertingToProyecto(false)}
+                            onConfirm={(payload) => onCreateProyecto(accion, payload)}
+                          />
+                        )}
                       </div>
                     )}
 
@@ -1163,6 +1171,45 @@ export default function AccionDetailPanel({
                         </div>
                       </div>
                     </details>
+                  </div>
+                ) : subTab === "validacion" ? (
+                  <div className="space-y-3">
+                    <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-2.5 text-[11px] font-bold text-violet-700">
+                      En validación: confirma que la corrección resolvió el problema y no se repite antes de cerrar la acción.
+                    </div>
+                    <PlanResponsablesTable {...planTableProps} soloLectura />
+                    {(accion.enlace_ejecucion_texto || accion.enlace_ejecucion_url) && (
+                      <div className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Enlace de ejecución</p>
+                        <p className="mt-1 font-bold text-slate-700">{accion.enlace_ejecucion_texto || accion.enlace_ejecucion_url}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : subTab === "eficacia" ? (
+                  <div className="space-y-3">
+                    {causaRaizBlock}
+                    {accion.requiere_verificacion_eficacia ? (
+                      <div className="grid grid-cols-2 gap-2 rounded-xl border border-cyan-100 bg-cyan-50/60 p-2.5">
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-cyan-700">Resultado</p>
+                          <EditableSelect
+                            value={accion.eficacia_resultado || ""}
+                            options={[{ value: "", label: "Sin evaluar" }, "Eficaz", "Parcialmente eficaz", "No eficaz"]}
+                            canEdit={canVerify}
+                            onSave={(v) => onUpdate({ eficacia_resultado: v || null, eficacia_evaluada_en: new Date().toISOString() })}
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-cyan-700">Fecha para verificar</p>
+                          <EditableDate value={accion.fecha_verificacion_eficacia} canEdit={canVerify} onSave={(v) => onUpdate({ fecha_verificacion_eficacia: v || null })} />
+                        </div>
+                        {!canVerify && (
+                          <p className="col-span-2 text-[9px] font-semibold text-cyan-700/70">Solo el Coordinador SIG o el equipo estratégico puede capturar este resultado.</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] font-bold text-slate-300">Este tipo de acción no requiere verificación de eficacia formal.</p>
+                    )}
                   </div>
                 ) : subTab === "linea_tiempo" ? (
                   <div className="space-y-3">
