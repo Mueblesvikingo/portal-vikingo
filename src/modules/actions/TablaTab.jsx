@@ -2,10 +2,10 @@ import { Fragment, useState } from "react";
 import { NIVELES_ACCION, NIVEL_COLOR, NIVEL_BADGE, PRIORIDAD_BADGE, ESTADO_BADGE, ESTADO_COLOR, isVencida, formatDate, getFlujoEtapas, subTabParaEtapa } from "./actionsHelpers";
 import { canEditAccion } from "../../services/permissionsService";
 
-// Vista compacta de la línea de tiempo, para expandir sin salir de la
-// tabla — mismo código de color e iluminado/tenue que la del detalle
-// completo, sin la fecha por etapa (esa sí requiere cargar el historial,
-// que aquí no vale la pena traer solo para una vista previa).
+// Vista compacta de la línea de tiempo — mismo código de color e
+// iluminado/tenue que la del detalle completo, sin la fecha por etapa (esa
+// sí requiere cargar el historial, que aquí no vale la pena traer solo
+// para una vista previa).
 function InlineTimeline({ accion, etapas, onOpenEtapa }) {
   if (!etapas.length) {
     return <p className="text-[10px] font-bold text-slate-300">Sin flujo configurado para este tipo de acción.</p>;
@@ -39,6 +39,28 @@ function InlineTimeline({ accion, etapas, onOpenEtapa }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// Ventana emergente con la línea de tiempo de una acción — se abre con el
+// botón "Ver" de la tabla, sin desplegar la fila ni salir de la pantalla.
+function TimelineModal({ accion, etapas, onOpenEtapa, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[9px] font-bold text-slate-400">{accion.codigo}</p>
+            <p className="truncate text-sm font-black text-slate-900">{accion.titulo}</p>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-slate-500 hover:bg-slate-200">×</button>
+        </div>
+        <p className="mt-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Línea de tiempo — clic en un bloque para abrir esa parte del detalle</p>
+        <div className="mt-2">
+          <InlineTimeline accion={accion} etapas={etapas} onOpenEtapa={onOpenEtapa} />
+        </div>
       </div>
     </div>
   );
@@ -117,7 +139,8 @@ function AsignacionRowForm({ colSpan, personas, defaultPersonaId, defaultTitulo,
 
 export default function TablaTab({ acciones, personas, personasById, procesosById, currentUser, tiposFlujo, onSelectAccion, onCreateAssignment }) {
   const [convertingId, setConvertingId] = useState(null);
-  const [expandedId, setExpandedId] = useState(null);
+  const [verAccionId, setVerAccionId] = useState(null);
+  const accionEnVer = verAccionId ? acciones.find((a) => a.id === verAccionId) : null;
   const groups = NIVELES_ACCION.map((nivel) => ({
     nivel,
     color: NIVEL_COLOR[nivel],
@@ -158,7 +181,6 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
                   const vencida = isVencida(accion);
                   const canEdit = canEditAccion(currentUser, accion, proceso);
                   const isConverting = convertingId === accion.id;
-                  const isExpanded = expandedId === accion.id;
                   const etapas = getFlujoEtapas(tiposFlujo, accion.tipo);
                   return (
                     <Fragment key={accion.id}>
@@ -198,25 +220,13 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
                         <td className="px-2 py-1.5 text-center">
                           <button
                             type="button"
-                            onClick={() => setExpandedId((current) => (current === accion.id ? null : accion.id))}
-                            className={`rounded-lg border px-2.5 py-1 text-[9px] font-black uppercase tracking-widest transition ${isExpanded ? "border-sky-200 bg-sky-100 text-sky-700" : "border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700"}`}
+                            onClick={() => setVerAccionId(accion.id)}
+                            className="whitespace-nowrap rounded-lg border border-slate-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
                           >
-                            {isExpanded ? "Ocultar ▲" : "Ver ▾"}
+                            Ver
                           </button>
                         </td>
                       </tr>
-                      {isExpanded && (
-                        <tr className="border-b border-slate-100 bg-slate-50/60">
-                          <td colSpan={9} className="px-4 py-3">
-                            <p className="mb-2 text-[9px] font-black uppercase tracking-widest text-slate-400">Línea de tiempo — clic en un bloque para abrir esa parte del detalle</p>
-                            <InlineTimeline
-                              accion={accion}
-                              etapas={etapas}
-                              onOpenEtapa={(subTab) => onSelectAccion(accion.id, subTab)}
-                            />
-                          </td>
-                        </tr>
-                      )}
                       {isConverting && (
                         <AsignacionRowForm
                           colSpan={9}
@@ -238,6 +248,15 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
           </tbody>
         </table>
       </div>
+
+      {accionEnVer && (
+        <TimelineModal
+          accion={accionEnVer}
+          etapas={getFlujoEtapas(tiposFlujo, accionEnVer.tipo)}
+          onOpenEtapa={(subTab) => { onSelectAccion(accionEnVer.id, subTab); setVerAccionId(null); }}
+          onClose={() => setVerAccionId(null)}
+        />
+      )}
     </div>
   );
 }

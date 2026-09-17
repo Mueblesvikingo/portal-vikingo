@@ -501,11 +501,6 @@ export default function AccionDetailPanel({
   const [nuevoAdjunto, setNuevoAdjunto] = useState({ nombre: "", url: "" });
   const [loadingSub, setLoadingSub] = useState(true);
   const [convertingToProyecto, setConvertingToProyecto] = useState(false);
-  // El detalle (nivel/tipo/proceso/objetivo/flujo/involucrados) no aporta al
-  // siguiente paso del registro (analizar la causa) — se oculta por default
-  // para que Análisis de causa/Plan de acción tengan toda la pantalla, y
-  // queda a un clic de distancia con "Ver detalle" para cuando sí haga falta.
-  const [detalleAbierto, setDetalleAbierto] = useState(false);
   const [programandoJunta, setProgramandoJunta] = useState(false);
   const [escalando, setEscalando] = useState(false);
 
@@ -728,9 +723,7 @@ export default function AccionDetailPanel({
 
         <div className="flex-1 overflow-auto p-4">
           <div className="space-y-3">
-            {/* Encabezado compacto, siempre visible — lo administrativo
-                (flujo para avanzar de etapa, involucrados, escalar/eliminar)
-                se oculta detrás de "Ver detalle"; los campos descriptivos
+            {/* Encabezado compacto, siempre visible. Los campos descriptivos
                 (título, nivel, tipo, proceso...) viven en el bloque
                 "Registrada" de la línea de tiempo, no aquí. */}
             <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" style={{ borderLeft: `4px solid ${TIPO_COLOR[accion.tipo] || "#94a3b8"}` }}>
@@ -748,16 +741,8 @@ export default function AccionDetailPanel({
                 </div>
                 <h2 className="mt-1 truncate text-base font-black text-slate-900">{accion.titulo}</h2>
               </div>
-              <button
-                type="button"
-                onClick={() => setDetalleAbierto((v) => !v)}
-                className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-[10px] font-black text-slate-500 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600"
-              >
-                {detalleAbierto ? "Ocultar detalle ▲" : "Ver detalle ▾"}
-              </button>
             </div>
 
-            {detalleAbierto && (
             <div className="space-y-3">
               <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
                 {canEdit && (
@@ -920,7 +905,6 @@ export default function AccionDetailPanel({
                 </div>
               )}
             </div>
-            )}
 
             {/* Línea de tiempo: siempre visible, es lo primero que se debe
                 leer al abrir cualquier acción. Cada bloque es la forma de
@@ -979,7 +963,7 @@ export default function AccionDetailPanel({
                 tiempo que se haya clicado arriba — Historial/Comentarios/
                 Adjuntos se movieron a "Ver detalle", ya no compiten aquí. */}
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className={`overflow-auto p-3 ${detalleAbierto ? "max-h-[45vh]" : "max-h-[65vh]"}`}>
+              <div className="max-h-[45vh] overflow-auto p-3">
                 {loadingSub ? (
                   <div className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
                 ) : subTab === "detalle" ? (
