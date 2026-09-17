@@ -80,8 +80,9 @@ function WeeklyRealCells({ kpi, mesIndex, resultados, anio, canEdit, onSave }) {
         ))}
       </div>
       {pct !== null && (
-        <div title={`Real ${real.toFixed(1)} vs Meta ${meta} · ${status.label}`} className="mt-0.5 rounded px-1 py-0 text-center text-[8px] font-black" style={{ color: status.color, background: `${status.color}18` }}>
-          {pct}%
+        <div title={`Promedio mensual: ${formatKpiValue(real, kpi.unidad_medida)} · Meta: ${formatKpiValue(meta, kpi.unidad_medida)} · Cumplimiento: ${status.label}`} className="mt-0.5 rounded px-1 py-0.5 text-center" style={{ background: `${status.color}18` }}>
+          <p className="text-[7px] font-bold leading-tight text-slate-500">Prom. {formatKpiValue(real, kpi.unidad_medida)}</p>
+          <p className="text-[8px] font-black leading-tight" style={{ color: status.color }}>Cumpl. {pct}%</p>
         </div>
       )}
     </div>
