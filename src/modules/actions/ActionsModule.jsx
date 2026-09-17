@@ -345,7 +345,7 @@ export default function ActionsModule({ currentUser }) {
   // el flujo real (ver AccionDetailPanel.jsx: Análisis de causa → Plan de
   // acción → aprobación del Director → conversión).
   const PASOS_GUIA = [
-    { n: "1", icono: "📝", titulo: "Reporta el problema", detalle: "Cualquiera puede registrar una situación con \"+ Nueva Acción\"." },
+    { n: "1", icono: "📝", titulo: "Reporta el problema", detalle: "Cualquiera puede registrar una situación con \"+ Registrar situación / Acción\"." },
     { n: "2", icono: "🔍", titulo: "Analiza la causa", detalle: "Tú, como líder, usas 5 Porqués / Ishikawa / 5W2H." },
     { n: "3", icono: "✅", titulo: "Dirección aprueba", detalle: "Con la causa raíz clara, el Director autoriza la acción." },
     { n: "4", icono: "🚀", titulo: "Se ejecuta", detalle: "Se convierte en asignación o proyecto, y se le da seguimiento." },
@@ -412,7 +412,7 @@ export default function ActionsModule({ currentUser }) {
             onClick={() => setCreating(true)}
             className="h-9 rounded-lg bg-[#001225] px-4 text-[10px] font-black text-white transition hover:bg-[#0a1c3a]"
           >
-            + Reportar problema / Nueva acción
+            + Registrar situación / Acción
           </button>
           <button
             type="button"
