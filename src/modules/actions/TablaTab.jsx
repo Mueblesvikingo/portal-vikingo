@@ -221,7 +221,7 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
                           <button
                             type="button"
                             onClick={() => setVerAccionId(accion.id)}
-                            className="whitespace-nowrap rounded-lg border border-slate-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+                            className="whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-sky-700 transition hover:bg-sky-100"
                           >
                             Ver
                           </button>
