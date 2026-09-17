@@ -33,7 +33,7 @@ export default function ActionsModule({ currentUser }) {
   const [personas, setPersonas] = useState([]);
   const [objetivos, setObjetivos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState("tabla");
   // Un líder de proceso debe sentir este módulo como su propio gestor: entra
   // viendo SUS acciones (las que creó, en las que es responsable, o de un
   // proceso suyo aunque otro la haya levantado), no el tablero completo de
@@ -48,6 +48,8 @@ export default function ActionsModule({ currentUser }) {
   const [filtroNivel, setFiltroNivel] = useState("all");
   const [filtroTipo, setFiltroTipo] = useState("all");
   const [filtroEstado, setFiltroEstado] = useState("all");
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+  const filtrosActivos = [filtroNivel, filtroTipo, filtroEstado].filter((f) => f !== "all").length;
   const [selectedAccionId, setSelectedAccionId] = useState(null);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
@@ -332,9 +334,9 @@ export default function ActionsModule({ currentUser }) {
   const selectedAccion = acciones.find((a) => a.id === selectedAccionId) || null;
 
   const tabs = [
-    { key: "dashboard", label: "Dashboard" },
     { key: "tabla", label: "Tabla" },
     { key: "kanban", label: "Kanban" },
+    { key: "dashboard", label: "Dashboard" },
   ];
 
   // Guía de 4 pasos, siempre visible arriba del módulo — pensada para que
@@ -412,6 +414,21 @@ export default function ActionsModule({ currentUser }) {
           >
             + Reportar problema / Nueva acción
           </button>
+          <button
+            type="button"
+            onClick={() => setFiltrosAbiertos((v) => !v)}
+            className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-[10px] font-black uppercase tracking-widest transition ${filtrosAbiertos || filtrosActivos > 0 ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+          >
+            Filtros{filtrosActivos > 0 ? ` (${filtrosActivos})` : ""} {filtrosAbiertos ? "▲" : "▼"}
+          </button>
+        </div>
+        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black text-slate-500">
+          {filteredAcciones.length} {scope === "mias" ? "acciones mías" : "acciones en total"}
+        </span>
+      </div>
+
+      {filtrosAbiertos && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
           <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
             Nivel:
             <select value={filtroNivel} onChange={(e) => setFiltroNivel(e.target.value)} className="ml-2 h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
@@ -433,11 +450,17 @@ export default function ActionsModule({ currentUser }) {
               {ESTADOS_ACCION.map((e) => <option key={e} value={e}>{e}</option>)}
             </select>
           </label>
+          {filtrosActivos > 0 && (
+            <button
+              type="button"
+              onClick={() => { setFiltroNivel("all"); setFiltroTipo("all"); setFiltroEstado("all"); }}
+              className="text-[10px] font-black text-slate-400 underline hover:text-red-500"
+            >
+              Limpiar filtros
+            </button>
+          )}
         </div>
-        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black text-slate-500">
-          {filteredAcciones.length} {scope === "mias" ? "acciones mías" : "acciones en total"}
-        </span>
-      </div>
+      )}
 
       <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between gap-3 bg-[#001225] px-4 py-1.5 text-white">
