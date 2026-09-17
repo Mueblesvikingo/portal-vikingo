@@ -35,14 +35,18 @@ const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
   "acciones",
 ];
 
-// Supervisores y auxiliares (cualquier rol que empiece con estas palabras,
-// de cualquier proceso) ven Organigrama, Balance de Carga y Acciones de
-// Mejora — este último se abrió después a pedido explícito del usuario para
-// que cualquiera pueda ver/reportar acciones correctivas; quién puede
-// EDITAR cada acción lo sigue decidiendo canEditAccion/esParticipanteAccion
-// (creador, responsable, dueño del proceso o equipo estratégico), no la
-// visibilidad del módulo.
-const OPERATIVE_ROLE_PREFIXES = ["Supervisor", "Auxiliar"];
+// Supervisores, auxiliares e inspectores de calidad (cualquier rol que
+// empiece con estas palabras, de cualquier proceso) ven Organigrama, Balance
+// de Carga y Acciones de Mejora — este último se abrió después a pedido
+// explícito del usuario para que cualquiera pueda ver/reportar acciones
+// correctivas; quién puede EDITAR cada acción lo sigue decidiendo
+// canEditAccion/esParticipanteAccion (creador, responsable, dueño del
+// proceso o equipo estratégico), no la visibilidad del módulo.
+// "Inspector de Calidad" se agregó a pedido explícito para restringir a
+// Laura/Sulidey/Ofelia (únicos 3 usuarios con ese rol) antes de repartirles
+// sus claves de acceso — antes solo Supervisor/Auxiliar quedaban acotados,
+// por eso seguían viendo el tablero completo.
+const OPERATIVE_ROLE_PREFIXES = ["Supervisor", "Auxiliar", "Inspector de Calidad"];
 const MODULES_VISIBLE_FOR_OPERATIVE_ROLES = ["organigrama", "workload-balance", "acciones"];
 
 export function isOperativeRole(user) {
