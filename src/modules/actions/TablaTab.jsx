@@ -1,6 +1,58 @@
 import { Fragment, useState } from "react";
-import { NIVELES_ACCION, NIVEL_COLOR, NIVEL_BADGE, PRIORIDAD_BADGE, ESTADO_BADGE, isVencida, formatDate } from "./actionsHelpers";
+import { NIVELES_ACCION, NIVEL_COLOR, NIVEL_BADGE, PRIORIDAD_BADGE, ESTADO_BADGE, ESTADO_COLOR, isVencida, formatDate, getFlujoEtapas } from "./actionsHelpers";
 import { canEditAccion } from "../../services/permissionsService";
+
+// A qué pestaña del detalle manda cada etapa del flujo al hacer clic en su
+// bloque — así "Ver" no solo enseña el avance, también lleva directo a
+// donde se trabaja esa etapa (mismo criterio en toda la tabla, sin importar
+// el tipo de acción).
+function subTabParaEtapa(etapa) {
+  if (etapa === "Cerrada") return "linea_tiempo";
+  if (["Aprobada", "En ejecución", "En validación", "Verificación de eficacia"].includes(etapa)) return "plan";
+  return "causa";
+}
+
+// Vista compacta de la línea de tiempo, para expandir sin salir de la
+// tabla — mismo código de color e iluminado/tenue que la del detalle
+// completo, sin la fecha por etapa (esa sí requiere cargar el historial,
+// que aquí no vale la pena traer solo para una vista previa).
+function InlineTimeline({ accion, etapas, onOpenEtapa }) {
+  if (!etapas.length) {
+    return <p className="text-[10px] font-bold text-slate-300">Sin flujo configurado para este tipo de acción.</p>;
+  }
+  return (
+    <div className="overflow-x-auto pb-1">
+      <div className="flex items-stretch" style={{ minWidth: `${etapas.length * 116}px` }}>
+        {etapas.map((etapa, index) => {
+          const isCurrent = accion.estado === etapa;
+          const isPast = etapas.indexOf(accion.estado) > index;
+          const alcanzada = isCurrent || isPast;
+          const color = ESTADO_COLOR[etapa] || "#94a3b8";
+          return (
+            <div key={etapa} className="flex items-center">
+              <button
+                type="button"
+                onClick={() => onOpenEtapa(subTabParaEtapa(etapa))}
+                title={`Abrir "${etapa}"`}
+                className="flex w-[102px] shrink-0 flex-col items-center gap-1 rounded-xl border-2 px-2 py-2 text-center transition hover:opacity-80"
+                style={{ borderColor: alcanzada ? color : `${color}30`, background: alcanzada ? `${color}16` : "#fff" }}
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white" style={{ background: alcanzada ? color : `${color}45` }}>
+                  {isPast ? "✓" : index + 1}
+                </span>
+                <span className="text-[9px] font-black leading-tight" style={{ color: alcanzada ? color : "#cbd5e1" }}>{etapa}</span>
+                {isCurrent && <span className="rounded-full px-1.5 py-0.5 text-[6px] font-black uppercase tracking-widest text-white" style={{ background: color }}>Aquí vas</span>}
+              </button>
+              {index < etapas.length - 1 && (
+                <span className="mx-0.5 shrink-0 text-[14px] font-black" style={{ color: isPast ? color : "#e2e8f0" }}>→</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // Formulario compacto para crear la asignación en Balance de Carga — misma
 // forma que AsignacionForm en AccionDetailPanel.jsx, pero como fila de
@@ -73,8 +125,9 @@ function AsignacionRowForm({ colSpan, personas, defaultPersonaId, defaultTitulo,
   );
 }
 
-export default function TablaTab({ acciones, personas, personasById, procesosById, currentUser, onSelectAccion, onCreateAssignment }) {
+export default function TablaTab({ acciones, personas, personasById, procesosById, currentUser, tiposFlujo, onSelectAccion, onCreateAssignment }) {
   const [convertingId, setConvertingId] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
   const groups = NIVELES_ACCION.map((nivel) => ({
     nivel,
     color: NIVEL_COLOR[nivel],
@@ -87,6 +140,7 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
         <table className="w-full min-w-[980px] border-collapse text-[11px]">
           <thead>
             <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
+              <th className="px-2 py-2 text-center">Ver</th>
               <th className="px-3 py-2 text-white">Acción</th>
               <th className="px-3 py-2">Tipo</th>
               <th className="px-3 py-2">Proceso</th>
@@ -101,22 +155,37 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
             {groups.map((group) => (
               <Fragment key={group.nivel}>
                 <tr>
-                  <td colSpan={8} className="px-3 py-1.5" style={{ background: `${group.color}14` }}>
+                  <td colSpan={9} className="px-3 py-1.5" style={{ background: `${group.color}14` }}>
                     <span className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest" style={{ color: group.color }}>
                       <span className="h-2 w-2 rounded-full" style={{ background: group.color }} />
                       {group.nivel}
                     </span>
                   </td>
                 </tr>
-                {group.items.map((accion) => {
+                {group.items.map((accion, rowIndex) => {
                   const responsable = accion.responsable_persona_id ? personasById[accion.responsable_persona_id]?.nombre : null;
                   const proceso = accion.proceso_id ? procesosById[accion.proceso_id] : null;
                   const vencida = isVencida(accion);
                   const canEdit = canEditAccion(currentUser, accion, proceso);
                   const isConverting = convertingId === accion.id;
+                  const isExpanded = expandedId === accion.id;
+                  const etapas = getFlujoEtapas(tiposFlujo, accion.tipo);
                   return (
                     <Fragment key={accion.id}>
-                      <tr className="border-b border-slate-50 transition hover:bg-slate-50/70">
+                      <tr
+                        className="border-b border-slate-50 transition hover:bg-sky-50/60"
+                        style={{ background: rowIndex % 2 === 1 ? `${group.color}0d` : "#fff" }}
+                      >
+                        <td className="px-2 py-1.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId((current) => (current === accion.id ? null : accion.id))}
+                            title="Ver línea de tiempo"
+                            className={`flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-black transition ${isExpanded ? "border-sky-200 bg-sky-100 text-sky-700" : "border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600"}`}
+                          >
+                            {isExpanded ? "▲" : "▾"}
+                          </button>
+                        </td>
                         <td className="px-3 py-1.5" style={{ boxShadow: `inset 3px 0 0 ${group.color}` }}>
                           <button type="button" onClick={() => onSelectAccion(accion.id)} className="text-left hover:text-sky-700">
                             <span className="block text-[9px] font-bold text-slate-400">{accion.codigo}</span>
@@ -147,9 +216,21 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
                           )}
                         </td>
                       </tr>
+                      {isExpanded && (
+                        <tr className="border-b border-slate-100 bg-slate-50/60">
+                          <td colSpan={9} className="px-4 py-3">
+                            <p className="mb-2 text-[9px] font-black uppercase tracking-widest text-slate-400">Línea de tiempo — clic en un bloque para abrir esa parte del detalle</p>
+                            <InlineTimeline
+                              accion={accion}
+                              etapas={etapas}
+                              onOpenEtapa={(subTab) => onSelectAccion(accion.id, subTab)}
+                            />
+                          </td>
+                        </tr>
+                      )}
                       {isConverting && (
                         <AsignacionRowForm
-                          colSpan={8}
+                          colSpan={9}
                           personas={personas}
                           defaultPersonaId={accion.responsable_persona_id || ""}
                           defaultTitulo={accion.titulo}
@@ -163,7 +244,7 @@ export default function TablaTab({ acciones, personas, personasById, procesosByI
               </Fragment>
             ))}
             {acciones.length === 0 && (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay acciones para estos filtros.</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay acciones para estos filtros.</td></tr>
             )}
           </tbody>
         </table>

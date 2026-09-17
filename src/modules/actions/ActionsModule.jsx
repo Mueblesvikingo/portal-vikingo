@@ -51,6 +51,7 @@ export default function ActionsModule({ currentUser }) {
   const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
   const filtrosActivos = [filtroNivel, filtroTipo, filtroEstado].filter((f) => f !== "all").length;
   const [selectedAccionId, setSelectedAccionId] = useState(null);
+  const [initialSubTab, setInitialSubTab] = useState(null);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
   // La guía de 4 pasos ayuda mucho la primera vez, pero satura la vista en
@@ -171,6 +172,14 @@ export default function ActionsModule({ currentUser }) {
     if (!result?.ok) { console.error(result?.error); setMessage("No fue posible quitar la acción."); return; }
     setAcciones((current) => current.filter((a) => a.id !== id));
     setSelectedAccionId((current) => (current === id ? null : current));
+  }
+
+  // Abre el detalle de una acción, opcionalmente enfocado en una pestaña
+  // específica (usado por el botón "Ver" de la Tabla al hacer clic en un
+  // bloque de la línea de tiempo).
+  function handleSelectAccion(id, subTab = null) {
+    setInitialSubTab(subTab);
+    setSelectedAccionId(id);
   }
 
   // Avisa a la PM (persona fija, PM_PERSONA_ID) cuando una acción ya
@@ -429,23 +438,23 @@ export default function ActionsModule({ currentUser }) {
 
       {filtrosAbiertos && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <label className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-indigo-600">
             Nivel:
-            <select value={filtroNivel} onChange={(e) => setFiltroNivel(e.target.value)} className="ml-2 h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            <select value={filtroNivel} onChange={(e) => setFiltroNivel(e.target.value)} className="h-7 rounded-md border border-indigo-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-indigo-700 outline-none">
               <option value="all">Todos</option>
               {NIVELES_ACCION.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
-          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <label className="flex items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-teal-600">
             Tipo:
-            <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="ml-2 h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="h-7 rounded-md border border-teal-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-teal-700 outline-none">
               <option value="all">Todos</option>
               {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
-          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <label className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-amber-700">
             Estado:
-            <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="ml-2 h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+            <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="h-7 rounded-md border border-amber-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-amber-700 outline-none">
               <option value="all">Todos</option>
               {ESTADOS_ACCION.map((e) => <option key={e} value={e}>{e}</option>)}
             </select>
@@ -508,7 +517,8 @@ export default function ActionsModule({ currentUser }) {
                 personasById={personasById}
                 procesosById={procesosById}
                 currentUser={currentUser}
-                onSelectAccion={setSelectedAccionId}
+                tiposFlujo={tiposFlujo}
+                onSelectAccion={handleSelectAccion}
                 onCreateAssignment={handleCrearAsignacion}
               />
             )}
@@ -540,6 +550,7 @@ export default function ActionsModule({ currentUser }) {
           personasById={personasById}
           objetivosById={objetivosById}
           currentUser={currentUser}
+          initialSubTab={initialSubTab}
           onUpdate={(updates) => handleUpdateAccion(selectedAccion.id, updates)}
           onDeactivate={() => handleDeactivateAccion(selectedAccion.id)}
           onClose={() => setSelectedAccionId(null)}

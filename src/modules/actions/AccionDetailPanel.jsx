@@ -370,9 +370,17 @@ const SUB_TABS = [
 
 export default function AccionDetailPanel({
   accion, acciones, tiposFlujo, procesos, subprocesos, personas, objetivos, procesosById, subprocesosById, personasById, objetivosById,
-  currentUser, onUpdate, onDeactivate, onClose, onCreateProyecto, onEnviarPlanResponsables, onProgramarJunta, onNavigateToAccion,
+  currentUser, initialSubTab, onUpdate, onDeactivate, onClose, onCreateProyecto, onEnviarPlanResponsables, onProgramarJunta, onNavigateToAccion,
 }) {
-  const [subTab, setSubTab] = useState("causa");
+  const [subTab, setSubTab] = useState(initialSubTab || "causa");
+
+  // Si se abre el detalle pidiendo una pestaña concreta (ej. desde el botón
+  // "Ver" de la Tabla, al hacer clic en un bloque de la línea de tiempo),
+  // saltar directo ahí — tanto al abrir como si se pide otra pestaña sin
+  // cerrar el panel (cambiar de acción con la misma solicitud).
+  useEffect(() => {
+    if (initialSubTab) setSubTab(initialSubTab);
+  }, [accion.id, initialSubTab]);
   const [analisisList, setAnalisisList] = useState([]);
   const [herramienta, setHerramienta] = useState(HERRAMIENTAS_MVP[0]);
   const [historial, setHistorial] = useState([]);
