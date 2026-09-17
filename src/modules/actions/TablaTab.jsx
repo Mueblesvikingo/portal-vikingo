@@ -1,16 +1,6 @@
 import { Fragment, useState } from "react";
-import { NIVELES_ACCION, NIVEL_COLOR, NIVEL_BADGE, PRIORIDAD_BADGE, ESTADO_BADGE, ESTADO_COLOR, isVencida, formatDate, getFlujoEtapas } from "./actionsHelpers";
+import { NIVELES_ACCION, NIVEL_COLOR, NIVEL_BADGE, PRIORIDAD_BADGE, ESTADO_BADGE, ESTADO_COLOR, isVencida, formatDate, getFlujoEtapas, subTabParaEtapa } from "./actionsHelpers";
 import { canEditAccion } from "../../services/permissionsService";
-
-// A qué pestaña del detalle manda cada etapa del flujo al hacer clic en su
-// bloque — así "Ver" no solo enseña el avance, también lleva directo a
-// donde se trabaja esa etapa (mismo criterio en toda la tabla, sin importar
-// el tipo de acción).
-function subTabParaEtapa(etapa) {
-  if (etapa === "Cerrada") return "linea_tiempo";
-  if (["Aprobada", "En ejecución", "En validación", "Verificación de eficacia"].includes(etapa)) return "plan";
-  return "causa";
-}
 
 // Vista compacta de la línea de tiempo, para expandir sin salir de la
 // tabla — mismo código de color e iluminado/tenue que la del detalle

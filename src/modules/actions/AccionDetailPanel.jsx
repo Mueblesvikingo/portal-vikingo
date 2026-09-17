@@ -25,6 +25,7 @@ import {
   TIPO_COLOR,
   HERRAMIENTAS_MVP,
   getFlujoEtapas,
+  subTabParaEtapa,
   isVencida,
   formatDate,
   formatDateTime,
@@ -359,10 +360,11 @@ function JuntaForm({ personas, defaultAsistenteIds, onConfirm, onCancel }) {
   );
 }
 
+// Análisis de causa / Plan de acción / Línea de tiempo ya no son botones
+// aparte: se abren haciendo clic en el bloque de etapa que les corresponde
+// en la línea de tiempo siempre visible (ver subTabParaEtapa). Solo lo que
+// no es una etapa del flujo se queda como pestaña.
 const SUB_TABS = [
-  { key: "causa", label: "Análisis de causa" },
-  { key: "plan", label: "Plan de acción" },
-  { key: "linea_tiempo", label: "Línea de tiempo" },
   { key: "historial", label: "Historial" },
   { key: "comentarios", label: "Comentarios" },
   { key: "adjuntos", label: "Adjuntos" },
@@ -823,11 +825,11 @@ export default function AccionDetailPanel({
             </div>
             )}
 
-            {/* Línea de tiempo: fuera de las sub-tabs a propósito — es lo
-                primero que se debe leer al abrir cualquier acción, no algo
-                que haya que ir a buscar con un clic. La pestaña "Línea de
-                tiempo" de abajo se queda solo con el detalle fino (quién y
-                cuándo movió cada etapa). */}
+            {/* Línea de tiempo: siempre visible, es lo primero que se debe
+                leer al abrir cualquier acción. Cada bloque es la forma de
+                navegar a su sección (Análisis de causa / Plan de acción /
+                Línea de tiempo con el detalle fino) — reemplaza a tener esas
+                tres como pestañas aparte, que quedaban redundantes. */}
             <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
               <div className="overflow-x-auto pb-1">
                 <div className="flex items-stretch" style={{ minWidth: `${etapas.length * 148}px` }}>
@@ -839,11 +841,19 @@ export default function AccionDetailPanel({
                     const fechaEtapa = index === 0
                       ? historial.find((h) => h.campo === "creado")?.created_at
                       : [...historial].reverse().find((h) => h.campo === "estado" && h.valor_nuevo === etapa)?.created_at;
+                    const etapaSubTab = subTabParaEtapa(etapa);
                     return (
                       <div key={etapa} className="flex items-center">
-                        <div
-                          className="flex w-[132px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border-2 px-2.5 py-3 text-center transition"
-                          style={{ borderColor: alcanzada ? color : `${color}30`, background: alcanzada ? `${color}16` : "#fff" }}
+                        <button
+                          type="button"
+                          onClick={() => setSubTab(etapaSubTab)}
+                          title={`Abrir "${etapa}"`}
+                          className="flex w-[132px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border-2 px-2.5 py-3 text-center transition hover:opacity-80"
+                          style={{
+                            borderColor: subTab === etapaSubTab ? color : alcanzada ? color : `${color}30`,
+                            background: alcanzada ? `${color}16` : "#fff",
+                            boxShadow: subTab === etapaSubTab ? `0 0 0 2px ${color}40` : "none",
+                          }}
                         >
                           <span
                             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-black text-white shadow-sm"
@@ -857,7 +867,7 @@ export default function AccionDetailPanel({
                           ) : fechaEtapa ? (
                             <span className="text-[8px] font-bold text-slate-400">{formatDate(fechaEtapa)}</span>
                           ) : null}
-                        </div>
+                        </button>
                         {index < etapas.length - 1 && (
                           <span className="mx-1 shrink-0 text-[18px] font-black" style={{ color: isPast ? color : "#e2e8f0" }}>→</span>
                         )}
@@ -868,8 +878,8 @@ export default function AccionDetailPanel({
               </div>
             </div>
 
-            {/* Sub-tabs: Análisis de causa / Plan de acción / etc — a todo lo
-                ancho, sin competir por espacio con el detalle. */}
+            {/* Pestañas secundarias: lo que no es una etapa del flujo
+                (Historial completo, Comentarios, Adjuntos). */}
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="flex flex-wrap gap-1 border-b border-slate-100 bg-slate-50 p-1.5">
                 {SUB_TABS.map((tab) => (

@@ -127,6 +127,16 @@ export function getFlujoEtapas(tiposFlujo, tipo) {
   return row?.etapas || [];
 }
 
+// A qué sección del detalle manda cada etapa del flujo al hacer clic en su
+// bloque de la línea de tiempo — así el bloque reemplaza a una pestaña
+// dedicada, en vez de duplicar la navegación (mismo criterio en la Tabla y
+// en el detalle completo de la acción).
+export function subTabParaEtapa(etapa) {
+  if (etapa === "Cerrada") return "linea_tiempo";
+  if (["Aprobada", "En ejecución", "En validación", "Verificación de eficacia"].includes(etapa)) return "plan";
+  return "causa";
+}
+
 export function getFlujoConfig(tiposFlujo, tipo) {
   return (
     tiposFlujo.find((t) => t.tipo === tipo) || {
