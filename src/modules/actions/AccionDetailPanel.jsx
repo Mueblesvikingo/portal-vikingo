@@ -744,11 +744,11 @@ export default function AccionDetailPanel({
             </div>
 
             {/* Línea de tiempo: siempre visible, es lo primero que se debe
-                leer al abrir cualquier acción. Cada bloque navega a su
-                sección de contenido, y si se hace clic en una etapa distinta
-                a la actual (y hay permiso), también ofrece avanzar/mover la
-                acción a esa etapa real — un solo control, sin duplicar la
-                fila de pastillas "Flujo" que existía aparte. */}
+                leer al abrir cualquier acción. Un clic en el bloque solo
+                muestra su contenido (sin efectos secundarios, ni siquiera en
+                etapas pasadas o futuras) — para mover la acción a otra etapa
+                real hay que usar la palomita ✓ de la esquina, explícita y
+                separada del clic de navegar. */}
             <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
               <div className="overflow-x-auto pb-1">
                 <div className="flex items-stretch" style={{ minWidth: `${etapas.length * 148}px` }}>
@@ -763,48 +763,57 @@ export default function AccionDetailPanel({
                     const etapaSubTab = subTabParaEtapa(etapa);
                     // "Aprobada" es la firma del Director, y "Verificación de
                     // eficacia" la valida el auditor SIG/equipo estratégico —
-                    // ninguna de las dos basta con canEdit para avanzar ahí
+                    // ninguna de las dos basta con canEdit para marcarla
                     // (mismo criterio que tenía la fila de pastillas "Flujo").
                     const bloqueadaPorAprobacion = etapa === "Aprobada" && !isCurrent && !isPast && !canApprove;
                     const bloqueadaPorVerificacion = etapa === "Verificación de eficacia" && !isCurrent && !isPast && !canVerify;
                     const bloqueada = bloqueadaPorAprobacion || bloqueadaPorVerificacion;
-                    const puedeAvanzarAqui = canEdit && !bloqueada && !isCurrent;
+                    const puedeMarcarAqui = canEdit && !bloqueada && !isCurrent;
                     return (
                       <div key={etapa} className="flex items-center">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (puedeAvanzarAqui && window.confirm(`¿Marcar "${accion.titulo}" como "${etapa}"?`)) {
-                              onUpdate({ estado: etapa });
+                        <div className="relative">
+                          {puedeMarcarAqui && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`¿Marcar "${accion.titulo}" como "${etapa}"?`)) onUpdate({ estado: etapa });
+                              }}
+                              title={`Marcar como "${etapa}"`}
+                              className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-[10px] font-black text-slate-500 shadow transition hover:bg-emerald-100 hover:text-emerald-700"
+                            >
+                              ✓
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setSubTab(etapaSubTab)}
+                            title={
+                              bloqueadaPorAprobacion ? "Solo el Director General puede aprobar — clic para ver el contenido"
+                                : bloqueadaPorVerificacion ? "Solo el Coordinador SIG o el equipo estratégico puede verificar la eficacia — clic para ver el contenido"
+                                : `Abrir "${etapa}"`
                             }
-                            setSubTab(etapaSubTab);
-                          }}
-                          title={
-                            bloqueadaPorAprobacion ? "Solo el Director General puede aprobar — clic para ver el contenido"
-                              : bloqueadaPorVerificacion ? "Solo el Coordinador SIG o el equipo estratégico puede verificar la eficacia — clic para ver el contenido"
-                              : puedeAvanzarAqui ? `Ver, o marcar la acción como "${etapa}"`
-                              : `Abrir "${etapa}"`
-                          }
-                          className="flex w-[132px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border-2 px-2.5 py-3 text-center transition hover:opacity-80"
-                          style={{
-                            borderColor: subTab === etapaSubTab ? color : alcanzada ? color : `${color}30`,
-                            background: alcanzada ? `${color}16` : "#fff",
-                            boxShadow: subTab === etapaSubTab ? `0 0 0 2px ${color}40` : "none",
-                          }}
-                        >
-                          <span
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-black text-white shadow-sm"
-                            style={{ background: alcanzada ? color : `${color}45` }}
+                            className="flex w-[132px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border-2 px-2.5 py-3 text-center transition hover:opacity-80"
+                            style={{
+                              borderColor: subTab === etapaSubTab ? color : alcanzada ? color : `${color}30`,
+                              background: alcanzada ? `${color}16` : "#fff",
+                              boxShadow: subTab === etapaSubTab ? `0 0 0 2px ${color}40` : "none",
+                            }}
                           >
-                            {isPast ? "✓" : index + 1}
-                          </span>
-                          <p className="text-[10px] font-black leading-tight" style={{ color: alcanzada ? color : "#cbd5e1" }}>{etapa}</p>
-                          {isCurrent ? (
-                            <span className="rounded-full px-2 py-0.5 text-[7px] font-black uppercase tracking-widest text-white" style={{ background: color }}>Aquí vas</span>
-                          ) : fechaEtapa ? (
-                            <span className="text-[8px] font-bold text-slate-400">{formatDate(fechaEtapa)}</span>
-                          ) : null}
-                        </button>
+                            <span
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-black text-white shadow-sm"
+                              style={{ background: alcanzada ? color : `${color}45` }}
+                            >
+                              {isPast ? "✓" : index + 1}
+                            </span>
+                            <p className="text-[10px] font-black leading-tight" style={{ color: alcanzada ? color : "#cbd5e1" }}>{etapa}</p>
+                            {isCurrent ? (
+                              <span className="rounded-full px-2 py-0.5 text-[7px] font-black uppercase tracking-widest text-white" style={{ background: color }}>Aquí vas</span>
+                            ) : fechaEtapa ? (
+                              <span className="text-[8px] font-bold text-slate-400">{formatDate(fechaEtapa)}</span>
+                            ) : null}
+                          </button>
+                        </div>
                         {index < etapas.length - 1 && (
                           <span className="mx-1 shrink-0 text-[18px] font-black" style={{ color: isPast ? color : "#e2e8f0" }}>→</span>
                         )}
