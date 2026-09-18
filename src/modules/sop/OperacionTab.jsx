@@ -56,6 +56,13 @@ function ComoFuncionaOperacionModal({ onClose }) {
           </div>
 
           <div>
+            <p className="font-black uppercase tracking-widest text-slate-400">2a. Piezas sin familia clasificada</p>
+            <p className="mt-1">
+              Si abajo de la tabla aparece un aviso de "piezas no se contaron en esta tabla", significa que esos productos todavía no tienen "Familia" asignada en el catálogo (se asigna en Plan de venta → vista mensual → columna Familia). Sin esa clasificación no hay forma de saber qué tiempo estándar usar, así que esas piezas quedan fuera del cálculo hasta que se clasifiquen.
+            </p>
+          </div>
+
+          <div>
             <p className="font-black uppercase tracking-widest text-slate-400">2b. Demanda de la semana (Vista semanal)</p>
             <p className="mt-1">
               En Vista semanal, si un producto todavía no se captura en Plan de venta para esa semana en particular, se usa como estimado su parte proporcional del plan mensual (piezas del mes ÷ semanas del mes) — así no se ve demanda en cero solo por falta de captura. En cuanto se captura la semana real en Plan de venta, ese dato manda sobre el estimado.
@@ -243,8 +250,7 @@ function TablaCargaCapacidad({ columnas }) {
           {columnas.some((c) => c.piezasSinClasificar > 0) && (
             <tr>
               <td colSpan={columnas.length + 1} className="px-3 py-1.5 text-[9px] font-semibold normal-case tracking-normal text-amber-600">
-                {columnas.some((c) => c.piezasSinClasificar > 0) &&
-                  `Piezas de productos sin familia clasificada (no participan en este cálculo): ${columnas.map((c) => formatNumber(c.piezasSinClasificar)).join(" / ")} por columna.`}
+                ⚠ {columnas.map((c) => formatNumber(c.piezasSinClasificar)).join(" / ")} pieza(s) planeada(s) no se contaron en esta tabla — son de productos que todavía no tienen "Familia" asignada en el catálogo (Plan de venta → vista mensual → columna Familia). Sin familia no se sabe qué tiempo estándar usar en cada estación, así que no suman carga hasta que se clasifiquen.
               </td>
             </tr>
           )}
