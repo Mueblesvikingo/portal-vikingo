@@ -58,7 +58,7 @@ function ComoFuncionaOperacionModal({ onClose }) {
           <div>
             <p className="font-black uppercase tracking-widest text-slate-400">2a. Piezas sin tiempo estándar real</p>
             <p className="mt-1">
-              Si abajo de la tabla aparece un aviso de "piezas no se contaron en esta tabla", significa que esos productos tienen una familia asignada pero esa familia no tiene ningún tiempo estándar medido en las 8 estaciones (ej. muebles de madera como burós, tocadores y pijameros, clasificados solo por línea porque no pasan por tapicería). No se inventa un tiempo — esas piezas quedan fuera del cálculo hasta que exista un dato real que capturar.
+              Si abajo de la tabla aparece un aviso de "piezas no se contaron en esta tabla", significa que esos productos tienen una familia asignada pero esa familia no tiene ningún tiempo estándar medido en las 8 estaciones (ej. muebles de MDF como burós, tocadores y pijameros, clasificados solo por línea porque no pasan por tapicería). No se inventa un tiempo — esas piezas quedan fuera del cálculo hasta que exista un dato real que capturar.
             </p>
           </div>
 
@@ -175,7 +175,7 @@ function piezasPorProductoDelMes(planVenta, escenario, anio, mes) {
 // operarios × horas turno × turnos × eficiencia × días da la capacidad.
 // Un producto participa solo si su familia tiene AL MENOS un tiempo
 // estándar real capturado (aunque sea 0 en alguna estación) — una familia
-// "de relleno" (ej. muebles de madera clasificados solo por línea, sin
+// "de relleno" (ej. muebles de MDF clasificados solo por línea, sin
 // tiempo estándar medido en ninguna de las 8 estaciones de tapicería) no
 // participa, para no inventar un dato que no existe, y se reporta aparte.
 function calcularCargaEstaciones(piezasPorProducto, { productoFamilia, tiempoMap, capacidadProcesos, eficiencia, dias }) {
@@ -260,7 +260,7 @@ function TablaCargaCapacidad({ columnas }) {
           {columnas.some((c) => c.piezasSinClasificar > 0) && (
             <tr>
               <td colSpan={columnas.length + 1} className="px-3 py-1.5 text-[9px] font-semibold normal-case tracking-normal text-amber-600">
-                ⚠ {columnas.map((c) => formatNumber(c.piezasSinClasificar)).join(" / ")} pieza(s) planeada(s) no se contaron en esta tabla — son de productos cuya familia no tiene tiempo estándar real capturado en ninguna estación (ej. muebles de madera clasificados solo por línea, sin medición de tapicería). No se les inventa un tiempo, así que no suman carga hasta que haya un dato real que capturar.
+                ⚠ {columnas.map((c) => formatNumber(c.piezasSinClasificar)).join(" / ")} pieza(s) planeada(s) no se contaron en esta tabla — son de productos cuya familia no tiene tiempo estándar real capturado en ninguna estación (ej. muebles de MDF clasificados solo por línea, sin medición de tapicería). No se les inventa un tiempo, así que no suman carga hasta que haya un dato real que capturar.
               </td>
             </tr>
           )}
