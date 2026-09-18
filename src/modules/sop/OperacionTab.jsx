@@ -24,6 +24,63 @@ const VACANTES_PERSONAL = [
   { puesto: "Costureras", faltan: 1 },
 ];
 
+// Explicación de uso de la pestaña, en una ventana aparte para no saturar
+// el encabezado — mismo patrón de modal simple (overlay + tarjeta blanca
+// con scroll interno) que el resto del módulo.
+function ComoFuncionaOperacionModal({ onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-xs font-black uppercase tracking-widest text-slate-700">Cómo funciona Plan de operación</p>
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-500 hover:bg-slate-50">✕</button>
+        </div>
+
+        <div className="mt-3 space-y-3 text-[10px] font-semibold leading-relaxed text-slate-600">
+          <p>
+            Esta pestaña compara lo que <b>Plan de venta</b> proyecta vender (en piezas) contra la <b>capacidad real de las 8 estaciones</b> de producción, para detectar a tiempo dónde se va a saturar la planta.
+          </p>
+
+          <div>
+            <p className="font-black uppercase tracking-widest text-slate-400">1. Carga vs. capacidad por estación (% Utilización)</p>
+            <p className="mt-1">
+              Carga = piezas planeadas × minutos estándar reales de la familia del producto en esa estación. Capacidad = personas × horas de turno × turnos × eficiencia operativa × días. El % es carga ÷ capacidad; debajo de cada badge se muestra el detalle en minutos. La estación con mayor % se marca 🔻 como <b>cuello de botella</b> — es la que realmente limita cuánto se puede producir.
+            </p>
+          </div>
+
+          <div>
+            <p className="font-black uppercase tracking-widest text-slate-400">2. Por qué una estación puede salir en 0%</p>
+            <p className="mt-1">
+              No todas las familias de producto pasan por todas las estaciones (ej. una base en vinil no pasa por Costura ni Hab. Esponja). 0% significa que esa estación no participa de lo planeado, no que falte capturar algo.
+            </p>
+          </div>
+
+          <div>
+            <p className="font-black uppercase tracking-widest text-slate-400">3. Simulador de mejora</p>
+            <p className="mt-1">
+              Permite probar, sin guardar nada, qué pasaría si se agregan personas o turnos a una estación. Sirve para confirmar que invertir en el cuello de botella real sube la capacidad de la planta — invertir en una estación que no es el cuello de botella no ayuda (es la lógica de Teoría de Restricciones).
+            </p>
+          </div>
+
+          <div>
+            <p className="font-black uppercase tracking-widest text-slate-400">4. Capacidad real, tiempos estándar e infraestructura</p>
+            <p className="mt-1">
+              Las secciones de abajo son donde se captura y mantiene la información que alimenta el cálculo: dotación de personas por estación, minutos estándar por familia/estación, y catálogo de equipos (marcando cuáles están fuera de servicio).
+            </p>
+          </div>
+
+          <div>
+            <p className="font-black uppercase tracking-widest text-slate-400">5. Brechas reales y solicitudes</p>
+            <p className="mt-1">
+              Muestra vacantes de personal y equipo fuera de servicio detectados. Desde ahí, o desde el botón <b>"Solicitar a Dirección"</b>, se puede enviar una solicitud de recurso/capacidad — cae directo en la Bandeja del Centro de Decisiones para que el Director la apruebe, detenga o rechace.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function getEstado(utilizacion) {
   if (utilizacion > 1) return { label: "Saturado", tone: "border-red-200 bg-red-50 text-red-700", bar: "bg-red-500" };
   if (utilizacion >= 0.8) return { label: "Atención", tone: "border-amber-200 bg-amber-50 text-amber-700", bar: "bg-amber-400" };
@@ -720,6 +777,7 @@ export default function OperacionTab({
   semanaLunes,
 }) {
   const [showSolicitud, setShowSolicitud] = useState(false);
+  const [showComoFunciona, setShowComoFunciona] = useState(false);
 
   const horizonte = useMemo(() => buildHorizonte(control?.mes_activo, control?.horizonte_meses || 6), [control]);
   const escenarioActivo = parametros?.escenario_venta || "Base";
@@ -825,16 +883,27 @@ export default function OperacionTab({
         <span>
           Escenario de venta activo: <b>{escenarioActivo}</b> · Capacidad real de 8 estaciones (Planeación de Producción) · Eficiencia operativa: <b>{(eficiencia * 100).toFixed(0)}%</b>
         </span>
-        {canEdit && (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setShowSolicitud(true)}
-            className="rounded-lg bg-[#001225] px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-white hover:bg-[#001a38]"
+            onClick={() => setShowComoFunciona(true)}
+            className="rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-sky-700 hover:bg-sky-100"
           >
-            Solicitar a Dirección
+            Cómo funciona
           </button>
-        )}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setShowSolicitud(true)}
+              className="rounded-lg bg-[#001225] px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-white hover:bg-[#001a38]"
+            >
+              Solicitar a Dirección
+            </button>
+          )}
+        </div>
       </div>
+
+      {showComoFunciona && <ComoFuncionaOperacionModal onClose={() => setShowComoFunciona(false)} />}
 
       {showSolicitud && (
         <SolicitudModal initialDraft={solicitudInicial} onSubmit={handleEnviarSolicitud} onClose={() => setShowSolicitud(false)} />
