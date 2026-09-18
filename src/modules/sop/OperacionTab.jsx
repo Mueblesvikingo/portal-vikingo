@@ -11,19 +11,6 @@ const ESTACIONES_ORDEN = ["Corte Madera", "Armado Casco", "Hab. Resorte", "Hab. 
 const FAMILIAS_ORDEN = ["Base Vinil", "Base Tela", "Cabecera Vinil", "Cabecera Tela", "Converticama", "Sala/Sofa", "Reposet", "Sillon", "Recámaras"];
 const DIAS_SEMANA = 5;
 
-// Vacantes reales de personal (PCP-MA-02-Infraestructura, auditoría de
-// mantenimiento) — a diferencia del equipo fuera de servicio, no hay una
-// fila por vacante en sop_capacidad_procesos (esa tabla ya guarda la
-// dotación objetivo, vacante incluida), así que se deja como referencia
-// fija en vez de inventarle una tabla aparte a un solo dato estático.
-const VACANTES_PERSONAL = [
-  { puesto: "Armadores de Casco", faltan: 1 },
-  { puesto: "Operador de radial", faltan: 1 },
-  { puesto: "Operador de banco", faltan: 1 },
-  { puesto: "Operadores de Máquinas", faltan: 2 },
-  { puesto: "Costureras", faltan: 1 },
-];
-
 // Explicación de uso de la pestaña, en una ventana aparte para no saturar
 // el encabezado — mismo patrón de modal simple (overlay + tarjeta blanca
 // con scroll interno) que el resto del módulo.
@@ -160,6 +147,53 @@ function EditableNum({ value, canEdit, onSave, step = 1 }) {
   );
 }
 
+// Texto clicable -> input, mismo patrón que EditableNum pero para nombres
+// (equipo, estación). No guarda si el texto queda vacío o sin cambios.
+function EditableText({ value, canEdit, onSave, width = "w-32" }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value || "");
+
+  if (!canEdit) return <span className="text-slate-700">{value || "—"}</span>;
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(value || "");
+          setEditing(true);
+        }}
+        className={`rounded px-1 text-left text-slate-700 transition hover:bg-sky-50`}
+      >
+        {value || "—"}
+      </button>
+    );
+  }
+
+  function commit() {
+    setEditing(false);
+    const v = draft.trim();
+    if (v && v !== value) onSave(v);
+  }
+
+  return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        }
+        if (e.key === "Escape") setEditing(false);
+      }}
+      className={`h-7 ${width} rounded border border-sky-300 bg-white px-1 text-[10px] font-bold text-slate-800 outline-none`}
+    />
+  );
+}
+
 // Piezas por producto de un mes concreto (para un escenario) — mismo
 // insumo que ya usa el resto del módulo, aquí agrupado por producto para
 // alimentar el cálculo de carga real por estación.
@@ -277,9 +311,38 @@ function TablaCargaCapacidad({ columnas }) {
 // que alimenta la carga de la tabla de arriba. Se cargó inicial con datos
 // reales de PCP-IF-01, pero el proceso cambia con el tiempo (mejoras,
 // productos nuevos), así que queda editable aquí en vez de fijo.
-function TiemposEstandarSection({ tiemposEstandar, canEdit, onUpdateTiempoEstandar, currentUser }) {
+// Ordena una lista de nombres (estación o familia) poniendo primero los ya
+// conocidos (en su orden de referencia) y al final cualquiera nuevo — así
+// una fila/columna recién agregada o renombrada no desaparece de la vista,
+// solo se acomoda al final en vez de quedar en un orden fijo hardcodeado.
+function ordenarConocidosPrimero(nombres, orden) {
+  return [...nombres].sort((a, b) => {
+    const ia = orden.indexOf(a);
+    const ib = orden.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
+
+function TiemposEstandarSection({ tiemposEstandar, canEdit, onUpdateTiempoEstandar, onCreateFamiliaTiempos, onDeleteFamiliaTiempos, currentUser }) {
+  const [nuevaFamilia, setNuevaFamilia] = useState("");
+  const [saving, setSaving] = useState(false);
   const porFamiliaEstacion = useMemo(() => new Map(tiemposEstandar.map((t) => [`${t.familia}|${t.estacion}`, t])), [tiemposEstandar]);
-  const familias = FAMILIAS_ORDEN.filter((f) => tiemposEstandar.some((t) => t.familia === f));
+  // Derivadas de los datos reales (no de una lista fija) para que una
+  // estación renombrada o una familia nueva siempre aparezcan.
+  const familias = ordenarConocidosPrimero([...new Set(tiemposEstandar.map((t) => t.familia))], FAMILIAS_ORDEN);
+  const estacionesCols = ordenarConocidosPrimero([...new Set(tiemposEstandar.map((t) => t.estacion))], ESTACIONES_ORDEN);
+
+  async function handleAgregarFamilia() {
+    const familia = nuevaFamilia.trim();
+    if (!familia || familias.includes(familia)) return;
+    setSaving(true);
+    const ok = await onCreateFamiliaTiempos(familia, currentUser);
+    setSaving(false);
+    if (ok) setNuevaFamilia("");
+  }
 
   if (tiemposEstandar.length === 0) return null;
 
@@ -298,16 +361,17 @@ function TiemposEstandarSection({ tiemposEstandar, canEdit, onUpdateTiempoEstand
             <thead>
               <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-widest text-slate-400">
                 <th className="px-2 py-1.5">Familia</th>
-                {ESTACIONES_ORDEN.map((e) => (
+                {estacionesCols.map((e) => (
                   <th key={e} className="px-2 py-1.5 text-center">{e}</th>
                 ))}
+                {canEdit && <th className="px-2 py-1.5" />}
               </tr>
             </thead>
             <tbody>
               {familias.map((familia) => (
                 <tr key={familia} className="border-t border-slate-50">
                   <td className="px-2 py-1 font-bold text-slate-700">{familia}</td>
-                  {ESTACIONES_ORDEN.map((estacion) => {
+                  {estacionesCols.map((estacion) => {
                     const t = porFamiliaEstacion.get(`${familia}|${estacion}`);
                     return (
                       <td key={estacion} className="px-1 py-1 text-center">
@@ -319,11 +383,38 @@ function TiemposEstandarSection({ tiemposEstandar, canEdit, onUpdateTiempoEstand
                       </td>
                     );
                   })}
+                  {canEdit && (
+                    <td className="px-2 py-1 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`¿Quitar la familia "${familia}" de Tiempos estándar? Se borran sus ${estacionesCols.length} minutos capturados.`)) {
+                            onDeleteFamiliaTiempos(familia);
+                          }
+                        }}
+                        className="text-[9px] font-black text-red-500 hover:underline"
+                      >
+                        Quitar
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        {canEdit && (
+          <div className="mt-2 flex flex-wrap items-end gap-2">
+            <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+              Familia nueva
+              <input value={nuevaFamilia} onChange={(e) => setNuevaFamilia(e.target.value)} placeholder="Ej. Colchón" className="mt-1 h-8 w-40 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-700 outline-none" />
+            </label>
+            <button type="button" disabled={saving} onClick={handleAgregarFamilia} className="h-8 rounded-lg bg-[#001225] px-3 text-[9px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+              {saving ? "Guardando..." : "+ Agregar familia"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -408,7 +499,7 @@ function SimuladorMejora({ capacidadProcesos, canEdit, calcularColumnas }) {
   );
 }
 
-function CapacidadRealSection({ capacidadProcesos, canEdit, onCreateProceso, onUpdateProceso, onDeactivateProceso, currentUser }) {
+function CapacidadRealSection({ capacidadProcesos, canEdit, onCreateProceso, onUpdateProceso, onDeactivateProceso, onRenameEstacion, currentUser }) {
   const [nuevo, setNuevo] = useState({ proceso: "", operarios: 1, horas_turno: 10, turnos_activos: 1 });
   const [saving, setSaving] = useState(false);
 
@@ -428,7 +519,7 @@ function CapacidadRealSection({ capacidadProcesos, canEdit, onCreateProceso, onU
       </div>
       <div className="p-4">
         <p className="text-[9px] font-bold normal-case tracking-normal text-slate-400">
-          Capacidad (min) = operarios × horas/turno × turnos × 60 × eficiencia operativa × días — misma fórmula que usa Planeación de Producción en su análisis de carga vs. capacidad. La eficiencia y los días hábiles se capturan en Parámetros.
+          Capacidad (min) = operarios × horas/turno × turnos × 60 × eficiencia operativa × días — misma fórmula que usa Planeación de Producción en su análisis de carga vs. capacidad. La eficiencia y los días hábiles se capturan en Parámetros. El nombre de la estación es clicable: renombrarla actualiza también Infraestructura y Tiempos estándar para que no se pierda la relación.
         </p>
         <div className="mt-3 overflow-hidden rounded-xl border border-slate-100">
           <div className="overflow-x-auto">
@@ -448,7 +539,14 @@ function CapacidadRealSection({ capacidadProcesos, canEdit, onCreateProceso, onU
                 )}
                 {ordenarEstaciones(capacidadProcesos.map((p) => ({ estacion: p.proceso, ...p }))).map((p) => (
                   <tr key={p.id} className="border-t border-slate-50">
-                    <td className="px-2 py-1 font-bold text-slate-700">{p.proceso}</td>
+                    <td className="px-2 py-1 font-bold text-slate-700">
+                      <EditableText
+                        value={p.proceso}
+                        canEdit={canEdit}
+                        width="w-32"
+                        onSave={(nuevoNombre) => onRenameEstacion(p.id, p.proceso, nuevoNombre, currentUser)}
+                      />
+                    </td>
                     <td className="px-2 py-1 text-center">
                       <EditableNum value={p.operarios} canEdit={canEdit} onSave={(n) => onUpdateProceso(p.id, { operarios: n }, currentUser)} />
                     </td>
@@ -498,7 +596,8 @@ function CapacidadRealSection({ capacidadProcesos, canEdit, onCreateProceso, onU
   );
 }
 
-function InfraestructuraSection({ infraestructura, canEdit, onCreateInfra, onUpdateInfra, onDeactivateInfra, currentUser }) {
+function InfraestructuraSection({ infraestructura, capacidadProcesos, canEdit, onCreateInfra, onUpdateInfra, onDeactivateInfra, currentUser }) {
+  const estacionesReales = ordenarEstaciones(capacidadProcesos.map((p) => ({ estacion: p.proceso }))).map((p) => p.estacion);
   const [nuevo, setNuevo] = useState({ nombre_equipo: "", proceso: "", cantidad: 1, horas_disponibles_turno: 10, turnos_activos: 1 });
   const [saving, setSaving] = useState(false);
 
@@ -543,10 +642,25 @@ function InfraestructuraSection({ infraestructura, canEdit, onCreateInfra, onUpd
                   return (
                     <tr key={e.id} className={`border-t border-slate-50 ${fueraDeServicio ? "bg-red-50/40" : ""}`}>
                       <td className="px-2 py-1 font-bold text-slate-700">
-                        {e.nombre_equipo}
+                        <EditableText value={e.nombre_equipo} canEdit={canEdit} width="w-36" onSave={(v) => onUpdateInfra(e.id, { nombre_equipo: v }, currentUser)} />
                         {fueraDeServicio && <span className="ml-1.5 rounded-full border border-red-200 bg-red-50 px-1.5 py-0.5 text-[8px] font-black uppercase text-red-600">Fuera de servicio</span>}
                       </td>
-                      <td className="px-2 py-1 text-slate-600">{e.proceso || "—"}</td>
+                      <td className="px-2 py-1 text-slate-600">
+                        {canEdit ? (
+                          <select
+                            value={e.proceso || ""}
+                            onChange={(ev) => onUpdateInfra(e.id, { proceso: ev.target.value || null }, currentUser)}
+                            className="h-6 w-28 rounded border border-slate-200 bg-white px-1 text-[9px] font-bold text-slate-700 outline-none"
+                          >
+                            <option value="">Sin asignar</option>
+                            {estacionesReales.map((est) => (
+                              <option key={est} value={est}>{est}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          e.proceso || "—"
+                        )}
+                      </td>
                       <td className="px-2 py-1 text-center">
                         <EditableNum value={e.cantidad} canEdit={canEdit} onSave={(n) => onUpdateInfra(e.id, { cantidad: n }, currentUser)} />
                       </td>
@@ -577,7 +691,12 @@ function InfraestructuraSection({ infraestructura, canEdit, onCreateInfra, onUpd
             </label>
             <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">
               Estación
-              <input value={nuevo.proceso} onChange={(e) => setNuevo((c) => ({ ...c, proceso: e.target.value }))} placeholder="Opcional" className="mt-1 h-8 w-32 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-700 outline-none" />
+              <select value={nuevo.proceso} onChange={(e) => setNuevo((c) => ({ ...c, proceso: e.target.value }))} className="mt-1 h-8 w-32 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-700 outline-none">
+                <option value="">Sin asignar</option>
+                {estacionesReales.map((est) => (
+                  <option key={est} value={est}>{est}</option>
+                ))}
+              </select>
             </label>
             <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">
               Cantidad
@@ -601,16 +720,26 @@ function InfraestructuraSection({ infraestructura, canEdit, onCreateInfra, onUpd
   );
 }
 
-// Brechas reales conocidas (auditoría de mantenimiento PCP-MA-02): vacantes
-// de personal (referencia fija, ver comentario de VACANTES_PERSONAL) y
-// equipo fuera de servicio (calculado de infraestructura, horas/turno=0).
-// Cada una con acceso directo a "Solicitar recurso" para mandarla a
-// Dirección sin tener que redactar la solicitud desde cero.
-function BrechasRealesSection({ infraestructura, canEdit, currentUser, onSolicitarRecurso }) {
+// Brechas reales conocidas: vacantes de personal (capturables, sembradas
+// originalmente de la auditoría PCP-MA-02) y equipo fuera de servicio
+// (calculado de infraestructura, horas/turno=0). Cada una con acceso
+// directo a "Solicitar recurso" para mandarla a Dirección sin tener que
+// redactar la solicitud desde cero.
+function BrechasRealesSection({ infraestructura, vacantesPersonal, canEdit, currentUser, onSolicitarRecurso, onCreateVacante, onUpdateVacante, onDeactivateVacante }) {
   const [solicitando, setSolicitando] = useState(null);
+  const [nuevaVacante, setNuevaVacante] = useState({ puesto: "", faltan: 1 });
+  const [saving, setSaving] = useState(false);
   const equipoFuera = infraestructura.filter((e) => Number(e.horas_disponibles_turno) === 0);
 
-  if (VACANTES_PERSONAL.length === 0 && equipoFuera.length === 0) return null;
+  async function handleAgregarVacante() {
+    if (!nuevaVacante.puesto.trim()) return;
+    setSaving(true);
+    const ok = await onCreateVacante(nuevaVacante, currentUser);
+    setSaving(false);
+    if (ok) setNuevaVacante({ puesto: "", faltan: 1 });
+  }
+
+  if (vacantesPersonal.length === 0 && equipoFuera.length === 0 && !canEdit) return null;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
@@ -619,21 +748,43 @@ function BrechasRealesSection({ infraestructura, canEdit, currentUser, onSolicit
         <p className="text-[10px] font-black uppercase tracking-widest text-red-700">Brechas reales de infraestructura</p>
       </div>
       <div className="space-y-3 p-4">
-        {VACANTES_PERSONAL.length > 0 && (
-          <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vacantes de personal</p>
-            <div className="mt-1.5 space-y-1">
-              {VACANTES_PERSONAL.map((v) => (
-                <div key={v.puesto} className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5">
-                  <span className="text-[10px] font-bold text-slate-600">{v.puesto} — faltan {v.faltan}</span>
+        <div>
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vacantes de personal</p>
+          <div className="mt-1.5 space-y-1">
+            {vacantesPersonal.length === 0 && <p className="text-[10px] font-bold text-slate-300">Sin vacantes capturadas.</p>}
+            {vacantesPersonal.map((v) => (
+              <div key={v.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5">
+                <span className="flex items-center gap-1 text-[10px] font-bold text-slate-600">
+                  <EditableText value={v.puesto} canEdit={canEdit} width="w-40" onSave={(val) => onUpdateVacante(v.id, { puesto: val }, currentUser)} />
+                  — faltan <EditableNum value={v.faltan} canEdit={canEdit} onSave={(n) => onUpdateVacante(v.id, { faltan: n }, currentUser)} />
+                </span>
+                <span className="flex items-center gap-2">
                   {canEdit && (
                     <button type="button" onClick={() => setSolicitando(`Contratación: ${v.puesto} (${v.faltan})`)} className="text-[9px] font-black text-violet-600 hover:underline">🛠 Solicitar recurso</button>
                   )}
-                </div>
-              ))}
-            </div>
+                  {canEdit && (
+                    <button type="button" onClick={() => onDeactivateVacante(v.id, currentUser)} className="text-[9px] font-black text-red-500 hover:underline">Quitar</button>
+                  )}
+                </span>
+              </div>
+            ))}
           </div>
-        )}
+          {canEdit && (
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                Puesto
+                <input value={nuevaVacante.puesto} onChange={(e) => setNuevaVacante((c) => ({ ...c, puesto: e.target.value }))} placeholder="Ej. Operador de radial" className="mt-1 h-8 w-48 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-700 outline-none" />
+              </label>
+              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                Faltan
+                <input type="number" min="1" value={nuevaVacante.faltan} onChange={(e) => setNuevaVacante((c) => ({ ...c, faltan: Number(e.target.value) }))} className="mt-1 h-8 w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-700 outline-none" />
+              </label>
+              <button type="button" disabled={saving} onClick={handleAgregarVacante} className="h-8 rounded-lg bg-[#001225] px-3 text-[9px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+                {saving ? "Guardando..." : "+ Agregar vacante"}
+              </button>
+            </div>
+          )}
+        </div>
         {equipoFuera.length > 0 && (
           <div>
             <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Equipo fuera de servicio</p>
@@ -821,14 +972,21 @@ export default function OperacionTab({
   capacidadProcesos = [],
   infraestructura = [],
   tiemposEstandar = [],
+  vacantesPersonal = [],
   canEdit = false,
   currentUser,
   onCreateProceso,
   onUpdateProceso,
   onDeactivateProceso,
+  onRenameEstacion,
   onCreateInfra,
   onUpdateInfra,
   onDeactivateInfra,
+  onCreateFamiliaTiempos,
+  onDeleteFamiliaTiempos,
+  onCreateVacante,
+  onUpdateVacante,
+  onDeactivateVacante,
   onSolicitarCapacidad,
   onSolicitarRecurso,
   onUpdateTiempoEstandar,
@@ -921,18 +1079,36 @@ export default function OperacionTab({
             onCreateProceso={onCreateProceso}
             onUpdateProceso={onUpdateProceso}
             onDeactivateProceso={onDeactivateProceso}
+            onRenameEstacion={onRenameEstacion}
             currentUser={currentUser}
           />
           <InfraestructuraSection
             infraestructura={infraestructura}
+            capacidadProcesos={capacidadProcesos}
             canEdit={canEdit}
             onCreateInfra={onCreateInfra}
             onUpdateInfra={onUpdateInfra}
             onDeactivateInfra={onDeactivateInfra}
             currentUser={currentUser}
           />
-          <TiemposEstandarSection tiemposEstandar={tiemposEstandar} canEdit={canEdit} onUpdateTiempoEstandar={onUpdateTiempoEstandar} currentUser={currentUser} />
-          <BrechasRealesSection infraestructura={infraestructura} canEdit={canEdit} currentUser={currentUser} onSolicitarRecurso={onSolicitarRecurso} />
+          <TiemposEstandarSection
+            tiemposEstandar={tiemposEstandar}
+            canEdit={canEdit}
+            onUpdateTiempoEstandar={onUpdateTiempoEstandar}
+            onCreateFamiliaTiempos={onCreateFamiliaTiempos}
+            onDeleteFamiliaTiempos={onDeleteFamiliaTiempos}
+            currentUser={currentUser}
+          />
+          <BrechasRealesSection
+            infraestructura={infraestructura}
+            vacantesPersonal={vacantesPersonal}
+            canEdit={canEdit}
+            currentUser={currentUser}
+            onSolicitarRecurso={onSolicitarRecurso}
+            onCreateVacante={onCreateVacante}
+            onUpdateVacante={onUpdateVacante}
+            onDeactivateVacante={onDeactivateVacante}
+          />
         </div>
       </>
     );
@@ -1041,11 +1217,13 @@ export default function OperacionTab({
         onCreateProceso={onCreateProceso}
         onUpdateProceso={onUpdateProceso}
         onDeactivateProceso={onDeactivateProceso}
+        onRenameEstacion={onRenameEstacion}
         currentUser={currentUser}
       />
 
       <InfraestructuraSection
         infraestructura={infraestructura}
+        capacidadProcesos={capacidadProcesos}
         canEdit={canEdit}
         onCreateInfra={onCreateInfra}
         onUpdateInfra={onUpdateInfra}
@@ -1053,9 +1231,25 @@ export default function OperacionTab({
         currentUser={currentUser}
       />
 
-      <TiemposEstandarSection tiemposEstandar={tiemposEstandar} canEdit={canEdit} onUpdateTiempoEstandar={onUpdateTiempoEstandar} currentUser={currentUser} />
+      <TiemposEstandarSection
+        tiemposEstandar={tiemposEstandar}
+        canEdit={canEdit}
+        onUpdateTiempoEstandar={onUpdateTiempoEstandar}
+        onCreateFamiliaTiempos={onCreateFamiliaTiempos}
+        onDeleteFamiliaTiempos={onDeleteFamiliaTiempos}
+        currentUser={currentUser}
+      />
 
-      <BrechasRealesSection infraestructura={infraestructura} canEdit={canEdit} currentUser={currentUser} onSolicitarRecurso={onSolicitarRecurso} />
+      <BrechasRealesSection
+        infraestructura={infraestructura}
+        vacantesPersonal={vacantesPersonal}
+        canEdit={canEdit}
+        currentUser={currentUser}
+        onSolicitarRecurso={onSolicitarRecurso}
+        onCreateVacante={onCreateVacante}
+        onUpdateVacante={onUpdateVacante}
+        onDeactivateVacante={onDeactivateVacante}
+      />
     </div>
   );
 }

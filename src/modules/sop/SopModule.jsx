@@ -34,6 +34,10 @@ import {
   getCapacidadProcesos,
   getTiemposEstandar,
   updateTiempoEstandar,
+  createFamiliaTiemposEstandar,
+  deleteFamiliaTiemposEstandar,
+  createEstacionTiemposEstandar,
+  renameEstacion,
   createCapacidadProceso,
   updateCapacidadProceso,
   deactivateCapacidadProceso,
@@ -41,6 +45,10 @@ import {
   createInfraestructura,
   updateInfraestructura,
   deactivateInfraestructura,
+  getVacantesPersonal,
+  createVacantePersonal,
+  updateVacantePersonal,
+  deactivateVacantePersonal,
   getFinancieroFilas,
   createFinancieroFila,
   updateFinancieroFila,
@@ -192,6 +200,7 @@ export default function SopModule({ currentUser }) {
   const [capacidadProcesos, setCapacidadProcesos] = useState([]);
   const [tiemposEstandar, setTiemposEstandar] = useState([]);
   const [infraestructura, setInfraestructura] = useState([]);
+  const [vacantesPersonal, setVacantesPersonal] = useState([]);
   const [financieroFilas, setFinancieroFilas] = useState([]);
   const [financieroMontos, setFinancieroMontos] = useState([]);
   const [financieroAjustes, setFinancieroAjustes] = useState([]);
@@ -208,7 +217,7 @@ export default function SopModule({ currentUser }) {
 
   async function loadAll() {
     setLoading(true);
-    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, sopSemanasData, historicoData, prioridadesData, capacidadProcesosData, infraestructuraData, financieroFilasData, financieroMontosData, financieroAjustesData, personasData, solicitudesSopData, tiemposEstandarData] = await Promise.all([
+    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, sopSemanasData, historicoData, prioridadesData, capacidadProcesosData, infraestructuraData, financieroFilasData, financieroMontosData, financieroAjustesData, personasData, solicitudesSopData, tiemposEstandarData, vacantesPersonalData] = await Promise.all([
       getProductos(),
       getControl(),
       getParametros(),
@@ -226,6 +235,7 @@ export default function SopModule({ currentUser }) {
       getPersonas().catch(() => []),
       getStrategicDecisions().catch(() => []),
       getTiemposEstandar(),
+      getVacantesPersonal(),
     ]);
     setProductos(productosData);
     setControl(controlData);
@@ -239,6 +249,7 @@ export default function SopModule({ currentUser }) {
     setCapacidadProcesos(capacidadProcesosData);
     setInfraestructura(infraestructuraData);
     setTiemposEstandar(tiemposEstandarData);
+    setVacantesPersonal(vacantesPersonalData);
     setFinancieroFilas(financieroFilasData);
     setFinancieroMontos(financieroMontosData);
     setFinancieroAjustes(financieroAjustesData);
@@ -796,6 +807,14 @@ export default function SopModule({ currentUser }) {
       return false;
     }
     setCapacidadProcesos((current) => [...current, result.data]);
+    // La estación nueva también necesita su fila (en 0) en Tiempos estándar
+    // por cada familia ya existente, para que la matriz no quede con
+    // columnas huecas al agregar una estación desde aquí.
+    const familiasExistentes = [...new Set(tiemposEstandar.map((t) => t.familia))];
+    if (familiasExistentes.length > 0) {
+      const tiemposResult = await createEstacionTiemposEstandar(payload.proceso, familiasExistentes, actor);
+      if (tiemposResult.ok) setTiemposEstandar((current) => [...current, ...tiemposResult.data]);
+    }
     setMessage("Proceso agregado.");
     return true;
   }
@@ -859,6 +878,79 @@ export default function SopModule({ currentUser }) {
       return;
     }
     setInfraestructura((current) => current.filter((e) => e.id !== id));
+  }
+
+  // Renombrar una estación existente — actualiza en cascada
+  // capacidad_procesos/infraestructura/tiempos_estandar (ver comentario en
+  // el servicio) y refresca las 3 listas locales para que quede consistente
+  // sin recargar toda la pestaña.
+  async function handleRenameEstacion(procesoId, oldName, newName, actor) {
+    const result = await renameEstacion(procesoId, oldName, newName, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible renombrar la estación.");
+      return false;
+    }
+    setCapacidadProcesos((current) => current.map((p) => (p.id === procesoId ? { ...p, proceso: newName } : p)));
+    setInfraestructura((current) => current.map((e) => (e.proceso === oldName ? { ...e, proceso: newName } : e)));
+    setTiemposEstandar((current) => current.map((t) => (t.estacion === oldName ? { ...t, estacion: newName } : t)));
+    setMessage("Estación renombrada.");
+    return true;
+  }
+
+  async function handleCreateFamiliaTiempos(familia, actor) {
+    const estacionesReales = [...new Set(tiemposEstandar.map((t) => t.estacion))];
+    const estaciones = estacionesReales.length > 0 ? estacionesReales : capacidadProcesos.map((p) => p.proceso);
+    const result = await createFamiliaTiemposEstandar(familia, estaciones, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible agregar la familia.");
+      return false;
+    }
+    setTiemposEstandar((current) => [...current, ...result.data]);
+    setMessage("Familia agregada a Tiempos estándar.");
+    return true;
+  }
+
+  async function handleDeleteFamiliaTiempos(familia) {
+    const result = await deleteFamiliaTiemposEstandar(familia);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible quitar la familia.");
+      return;
+    }
+    setTiemposEstandar((current) => current.filter((t) => t.familia !== familia));
+  }
+
+  async function handleCreateVacante(payload, actor) {
+    const result = await createVacantePersonal(payload, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar la vacante.");
+      return false;
+    }
+    setVacantesPersonal((current) => [...current, result.data]);
+    return true;
+  }
+
+  async function handleUpdateVacante(id, payload, actor) {
+    const result = await updateVacantePersonal(id, payload, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible actualizar la vacante.");
+      return;
+    }
+    setVacantesPersonal((current) => current.map((v) => (v.id === id ? result.data : v)));
+  }
+
+  async function handleDeactivateVacante(id, actor) {
+    const result = await deactivateVacantePersonal(id, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible quitar la vacante.");
+      return;
+    }
+    setVacantesPersonal((current) => current.filter((v) => v.id !== id));
   }
 
   async function handleCloseMonth({ control: controlArg, resumenMes, ventaReal, actor }) {
@@ -1008,6 +1100,13 @@ export default function SopModule({ currentUser }) {
                 onCreateInfra={handleCreateInfra}
                 onUpdateInfra={handleUpdateInfra}
                 onDeactivateInfra={handleDeactivateInfra}
+                onRenameEstacion={handleRenameEstacion}
+                onCreateFamiliaTiempos={handleCreateFamiliaTiempos}
+                onDeleteFamiliaTiempos={handleDeleteFamiliaTiempos}
+                vacantesPersonal={vacantesPersonal}
+                onCreateVacante={handleCreateVacante}
+                onUpdateVacante={handleUpdateVacante}
+                onDeactivateVacante={handleDeactivateVacante}
                 onSolicitarCapacidad={handleSolicitarCapacidad}
                 onSolicitarRecurso={handleSolicitarRecurso}
                 vistaSemanal={vistaSemanal}

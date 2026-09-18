@@ -690,6 +690,175 @@ export async function updateTiempoEstandar(id, minutosPorPieza, actor) {
   }
 }
 
+// Alta de una familia nueva en Tiempos estándar: crea una fila en 0
+// minutos por cada estación real ya capturada (para que aparezca completa
+// en la matriz y quede lista para editarse), en vez de inventar un tiempo.
+export async function createFamiliaTiemposEstandar(familia, estaciones, actor) {
+  try {
+    const rows = estaciones.map((estacion) => ({
+      familia,
+      estacion,
+      minutos_por_pieza: 0,
+      updated_at: new Date().toISOString(),
+      updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+      updated_by_nombre: actor?.nombre || actor?.usuario || null,
+    }));
+    const { data, error } = await supabase.from("sop_tiempos_estandar").insert(rows).select("*");
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+// Alta de una estación nueva en Tiempos estándar: simétrico a
+// createFamiliaTiemposEstandar pero para una estación nueva — crea su fila
+// en 0 minutos cruzada con cada familia ya existente, para que la matriz
+// no quede con columnas huecas cuando se agrega una estación en Capacidad.
+export async function createEstacionTiemposEstandar(estacion, familias, actor) {
+  try {
+    const rows = familias.map((familia) => ({
+      familia,
+      estacion,
+      minutos_por_pieza: 0,
+      updated_at: new Date().toISOString(),
+      updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+      updated_by_nombre: actor?.nombre || actor?.usuario || null,
+    }));
+    const { data, error } = await supabase.from("sop_tiempos_estandar").insert(rows).select("*");
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+// Baja de una familia completa en Tiempos estándar — sin columna "activo"
+// en esta tabla (es solo un catálogo de referencia, no un histórico), así
+// que quitar una familia borra sus filas de verdad. Se confirma en la UI
+// antes de llamar esto.
+export async function deleteFamiliaTiemposEstandar(familia) {
+  try {
+    const { error } = await supabase.from("sop_tiempos_estandar").delete().eq("familia", familia);
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+
+// Renombrar una estación real: el nombre se repite como texto libre en 3
+// lugares (sop_capacidad_procesos.proceso, sop_infraestructura.proceso,
+// sop_tiempos_estandar.estacion) sin llave foránea entre ellos, así que
+// renombrar solo en uno rompería el cálculo de carga (deja de encontrar el
+// tiempo estándar de esa estación). Esta función actualiza los 3 a la vez.
+export async function renameEstacion(procesoId, oldName, newName, actor) {
+  try {
+    const { error: e1 } = await supabase
+      .from("sop_capacidad_procesos")
+      .update({
+        proceso: newName,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", procesoId);
+    if (e1) throw e1;
+
+    const { error: e2 } = await supabase
+      .from("sop_infraestructura")
+      .update({ proceso: newName, updated_at: new Date().toISOString() })
+      .eq("proceso", oldName);
+    if (e2) throw e2;
+
+    const { error: e3 } = await supabase
+      .from("sop_tiempos_estandar")
+      .update({ estacion: newName, updated_at: new Date().toISOString() })
+      .eq("estacion", oldName);
+    if (e3) throw e3;
+
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+
+// Vacantes de personal (Brechas reales de Operación) — antes una lista fija
+// en el código, ahora capturable desde el portal igual que
+// capacidad_procesos/infraestructura.
+export async function getVacantesPersonal() {
+  try {
+    const { data, error } = await supabase
+      .from("sop_vacantes_personal")
+      .select("*")
+      .eq("activo", true)
+      .order("id", { ascending: true });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error("Error al cargar vacantes de personal S&OP:", err);
+    return [];
+  }
+}
+
+export async function createVacantePersonal(payload, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_vacantes_personal")
+      .insert({
+        puesto: payload.puesto,
+        faltan: payload.faltan || 1,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function updateVacantePersonal(id, payload, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_vacantes_personal")
+      .update({
+        ...payload,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function deactivateVacantePersonal(id, actor) {
+  try {
+    const { error } = await supabase
+      .from("sop_vacantes_personal")
+      .update({
+        activo: false,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", id);
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+
 // Gestión de capacidad — mano de obra (sop_capacidad_procesos) e
 // infraestructura (sop_infraestructura). Ambas son catálogos capturables
 // desde Plan de operación, mismo patrón activo/inactivo que sop_productos
