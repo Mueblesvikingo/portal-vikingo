@@ -154,9 +154,15 @@ function TablaCargaCapacidad({ columnas }) {
                 const esCuello = c.cuelloBotella?.estacion === estacion;
                 return (
                   <td key={c.key} className="px-2 py-1.5 text-right">
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[8px] font-black uppercase ${estado.tone}`}>
+                    <span
+                      title={`Carga real: ${formatNumber(fila?.cargaMin || 0)} min necesarios ÷ Capacidad: ${formatNumber(fila?.capacidadMin || 0)} min disponibles`}
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[8px] font-black uppercase ${estado.tone}`}
+                    >
                       {esCuello && "🔻 "}{((fila?.utilizacion || 0) * 100).toFixed(0)}%
                     </span>
+                    <p className="mt-0.5 text-[8px] font-semibold normal-case tracking-normal text-slate-400">
+                      {formatNumber(fila?.cargaMin || 0)}/{formatNumber(fila?.capacidadMin || 0)} min
+                    </p>
                   </td>
                 );
               })}
@@ -670,6 +676,9 @@ function OperacionSemanalView({ productos, parametros, capacidadProcesos, tiempo
           ) : (
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="p-3">
+                <p className="mb-2 text-[9px] font-semibold normal-case tracking-normal text-slate-400">
+                  % Utilización = carga real (piezas de la semana × minutos estándar de su familia en esa estación) ÷ capacidad real (personas × horas × turnos × eficiencia × 5 días). El detalle en minutos aparece debajo de cada %.
+                </p>
                 <TablaCargaCapacidad columnas={[{ key: "semana", label: "% Utilización", filas, cuelloBotella, piezasSinClasificar }]} />
                 <SimuladorMejora
                   capacidadProcesos={capacidadProcesos}
