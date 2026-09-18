@@ -23,7 +23,10 @@ export default function SolicitarRecursoModal({ onSubmit, onClose, defaultNombre
     setSaving(true);
     const ok = await onSubmit({ nombre: nombre.trim(), fecha: fecha || null, costo: Number(costo) || 0, periodicidad });
     setSaving(false);
-    if (ok) onClose();
+    if (ok) {
+      window.alert('Solicitud enviada. Puedes verla y darle seguimiento en S&OP → pestaña "Decisiones (Director)", o en el módulo Centro de Decisiones → Bandeja de pendientes.');
+      onClose();
+    }
   }
 
   return (

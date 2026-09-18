@@ -16,7 +16,10 @@ export default function SolicitudModal({ onSubmit, onClose, initialDraft }) {
     setSaving(true);
     const ok = await onSubmit(draft);
     setSaving(false);
-    if (ok) onClose();
+    if (ok) {
+      window.alert('Solicitud enviada. Puedes verla y darle seguimiento en S&OP → pestaña "Decisiones (Director)", o en el módulo Centro de Decisiones → Bandeja de pendientes.');
+      onClose();
+    }
   }
 
   return (
