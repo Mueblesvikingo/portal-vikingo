@@ -8,7 +8,7 @@ import { getVentana } from "../../services/sopVentanaSemanalService";
 // Producción) — se usa para ordenar filas/columnas consistentemente aunque
 // capacidadProcesos venga en otro orden desde Supabase.
 const ESTACIONES_ORDEN = ["Corte Madera", "Armado Casco", "Hab. Resorte", "Hab. Esponja", "Corte Tela", "Costura", "Tapiceria", "Empaque"];
-const FAMILIAS_ORDEN = ["Base Vinil", "Base Tela", "Cabecera Vinil", "Cabecera Tela", "Converticama", "Sala/Sofa", "Reposet", "Sillon"];
+const FAMILIAS_ORDEN = ["Base Vinil", "Base Tela", "Cabecera Vinil", "Cabecera Tela", "Converticama", "Sala/Sofa", "Reposet", "Sillon", "Recámaras"];
 const DIAS_SEMANA = 5;
 
 // Vacantes reales de personal (PCP-MA-02-Infraestructura, auditoría de
