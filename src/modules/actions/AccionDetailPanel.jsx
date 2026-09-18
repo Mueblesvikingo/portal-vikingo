@@ -744,10 +744,11 @@ export default function AccionDetailPanel({
             </div>
 
             {/* Línea de tiempo: siempre visible, es lo primero que se debe
-                leer al abrir cualquier acción. Cada bloque es la forma de
-                navegar a su sección (Análisis de causa / Plan de acción /
-                Línea de tiempo con el detalle fino) — reemplaza a tener esas
-                tres como pestañas aparte, que quedaban redundantes. */}
+                leer al abrir cualquier acción. Cada bloque navega a su
+                sección de contenido, y si se hace clic en una etapa distinta
+                a la actual (y hay permiso), también ofrece avanzar/mover la
+                acción a esa etapa real — un solo control, sin duplicar la
+                fila de pastillas "Flujo" que existía aparte. */}
             <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
               <div className="overflow-x-auto pb-1">
                 <div className="flex items-stretch" style={{ minWidth: `${etapas.length * 148}px` }}>
@@ -760,12 +761,30 @@ export default function AccionDetailPanel({
                       ? historial.find((h) => h.campo === "creado")?.created_at
                       : [...historial].reverse().find((h) => h.campo === "estado" && h.valor_nuevo === etapa)?.created_at;
                     const etapaSubTab = subTabParaEtapa(etapa);
+                    // "Aprobada" es la firma del Director, y "Verificación de
+                    // eficacia" la valida el auditor SIG/equipo estratégico —
+                    // ninguna de las dos basta con canEdit para avanzar ahí
+                    // (mismo criterio que tenía la fila de pastillas "Flujo").
+                    const bloqueadaPorAprobacion = etapa === "Aprobada" && !isCurrent && !isPast && !canApprove;
+                    const bloqueadaPorVerificacion = etapa === "Verificación de eficacia" && !isCurrent && !isPast && !canVerify;
+                    const bloqueada = bloqueadaPorAprobacion || bloqueadaPorVerificacion;
+                    const puedeAvanzarAqui = canEdit && !bloqueada && !isCurrent;
                     return (
                       <div key={etapa} className="flex items-center">
                         <button
                           type="button"
-                          onClick={() => setSubTab(etapaSubTab)}
-                          title={`Abrir "${etapa}"`}
+                          onClick={() => {
+                            if (puedeAvanzarAqui && window.confirm(`¿Marcar "${accion.titulo}" como "${etapa}"?`)) {
+                              onUpdate({ estado: etapa });
+                            }
+                            setSubTab(etapaSubTab);
+                          }}
+                          title={
+                            bloqueadaPorAprobacion ? "Solo el Director General puede aprobar — clic para ver el contenido"
+                              : bloqueadaPorVerificacion ? "Solo el Coordinador SIG o el equipo estratégico puede verificar la eficacia — clic para ver el contenido"
+                              : puedeAvanzarAqui ? `Ver, o marcar la acción como "${etapa}"`
+                              : `Abrir "${etapa}"`
+                          }
                           className="flex w-[132px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border-2 px-2.5 py-3 text-center transition hover:opacity-80"
                           style={{
                             borderColor: subTab === etapaSubTab ? color : alcanzada ? color : `${color}30`,
@@ -903,42 +922,6 @@ export default function AccionDetailPanel({
                         >
                           {accion.con_riesgo ? "Sí" : "No"}
                         </button>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-slate-100 pt-2.5">
-                      <p className="mb-2 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className="text-[12px]">🔄</span> Flujo</p>
-                      <div className="flex flex-wrap items-center gap-1">
-                        {etapas.map((etapa, index) => {
-                          const isCurrent = accion.estado === etapa;
-                          const isPast = etapas.indexOf(accion.estado) > index;
-                          // "Aprobada" es la única etapa que no basta con canEdit —
-                          // es la firma del Director, no un paso más del flujo.
-                          const bloqueadaPorAprobacion = etapa === "Aprobada" && !isCurrent && !isPast && !canApprove;
-                          // "Verificación de eficacia" la valida el auditor SIG /
-                          // equipo estratégico, no cualquiera con canEdit.
-                          const bloqueadaPorVerificacion = etapa === "Verificación de eficacia" && !isCurrent && !isPast && !canVerify;
-                          const bloqueada = bloqueadaPorAprobacion || bloqueadaPorVerificacion;
-                          const alcanzada = isCurrent || isPast;
-                          const color = ESTADO_COLOR[etapa] || "#94a3b8";
-                          return (
-                            <button
-                              key={etapa}
-                              type="button"
-                              disabled={!canEdit || bloqueada}
-                              onClick={() => onUpdate({ estado: etapa })}
-                              title={bloqueadaPorAprobacion ? "Solo el Director General puede aprobar" : bloqueadaPorVerificacion ? "Solo el Coordinador SIG o el equipo estratégico puede verificar la eficacia" : undefined}
-                              style={{
-                                borderColor: alcanzada ? color : `${color}30`,
-                                background: alcanzada ? `${color}18` : "#fff",
-                                color: alcanzada ? color : "#94a3b8",
-                              }}
-                              className={`rounded-full border px-2.5 py-1 text-[9px] font-black transition ${canEdit && !bloqueada ? "hover:opacity-80" : ""} ${bloqueada ? "cursor-not-allowed opacity-50" : ""}`}
-                            >
-                              {isPast ? "✓ " : ""}{etapa}
-                            </button>
-                          );
-                        })}
                       </div>
                     </div>
 
@@ -1148,7 +1131,7 @@ export default function AccionDetailPanel({
                     {prioridadFechaBlock}
                     <div className="border-t border-slate-100 pt-2.5">
                       <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo: una fila por persona</p>
-                      <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">Cada renglón es una acción concreta con su propio responsable, fecha y horas estimadas — arma el plan aquí antes de que Dirección apruebe (etapa "Aprobada" en Flujo, en "Ver detalle").</p>
+                      <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">Cada renglón es una acción concreta con su propio responsable, fecha y horas estimadas — arma el plan aquí antes de que Dirección apruebe (bloque "Aprobada" en la línea de tiempo, arriba).</p>
                       <div className="mt-2"><PlanResponsablesTable {...planTableProps} /></div>
                     </div>
                   </div>
@@ -1166,7 +1149,7 @@ export default function AccionDetailPanel({
                         <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">
                           {yaAprobada
                             ? "Dirección ya aprobó — manda todas las filas pendientes a Balance de Carga, o arma un proyecto en el Tablero PMO."
-                            : "Disponible en cuanto Dirección apruebe la acción (etapa \"Aprobada\" en Flujo, en \"Ver detalle\")."}
+                            : "Disponible en cuanto Dirección apruebe la acción (bloque \"Aprobada\" en la línea de tiempo, arriba)."}
                         </p>
                         <div className="mt-1.5 flex flex-wrap gap-2">
                           <button
