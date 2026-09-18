@@ -442,7 +442,7 @@ export default function SopModule({ currentUser }) {
         wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
         process: "S&OP",
       });
-      setMessage("Acuerdo enviado a la Bandeja del Centro de Decisiones.");
+      setMessage("Acuerdo enviado a Decisiones (Director).");
       return true;
     } catch (err) {
       console.error(err);
@@ -470,7 +470,7 @@ export default function SopModule({ currentUser }) {
         wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
         process: "S&OP",
       });
-      setMessage("Solicitud de capacidad enviada a la Bandeja del Centro de Decisiones.");
+      setMessage("Solicitud de capacidad enviada a Decisiones (Director).");
       return true;
     } catch (err) {
       console.error(err);
@@ -494,7 +494,7 @@ export default function SopModule({ currentUser }) {
         wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
         process: "S&OP",
       });
-      setMessage("Solicitud financiera enviada a la Bandeja del Centro de Decisiones.");
+      setMessage("Solicitud financiera enviada a Decisiones (Director).");
       return true;
     } catch (err) {
       console.error(err);
@@ -522,7 +522,7 @@ export default function SopModule({ currentUser }) {
         wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
         process: "S&OP",
       });
-      setMessage("Solicitud de recurso enviada a la Bandeja del Centro de Decisiones.");
+      setMessage("Solicitud de recurso enviada a Decisiones (Director).");
       return true;
     } catch (err) {
       console.error(err);
@@ -642,7 +642,7 @@ export default function SopModule({ currentUser }) {
         wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
         process: "S&OP",
       });
-      setMessage("Solicitud enviada a la Bandeja del Centro de Decisiones.");
+      setMessage("Solicitud enviada a Decisiones (Director).");
       return true;
     } catch (err) {
       console.error(err);

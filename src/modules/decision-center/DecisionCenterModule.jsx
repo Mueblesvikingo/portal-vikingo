@@ -111,7 +111,12 @@ export default function DecisionCenterModule({ currentUser }) {
     try {
       const data = await getStrategicDecisions();
 
-      const formatted = data.map((item) => ({
+      // Las solicitudes de S&OP (proceso: "S&OP") se gestionan por completo
+      // dentro de S&OP → Decisiones (Director) — se excluyen aquí para no
+      // duplicarlas en Centro de Decisiones.
+      const formatted = data
+        .filter((item) => item.proceso !== "S&OP")
+        .map((item) => ({
         id: item.id,
         decision: item.titulo_de_decision,
         owner: item.responsable,

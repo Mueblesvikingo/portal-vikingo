@@ -92,7 +92,7 @@ function ComoFuncionaOperacionModal({ onClose }) {
           <div>
             <p className="font-black uppercase tracking-widest text-slate-400">5. Brechas reales y solicitudes</p>
             <p className="mt-1">
-              Muestra vacantes de personal y equipo fuera de servicio detectados. Desde ahí, o desde el botón <b>"Solicitar a Dirección"</b>, se puede enviar una solicitud de recurso/capacidad — cae directo en la Bandeja del Centro de Decisiones para que el Director la apruebe, detenga o rechace.
+              Muestra vacantes de personal y equipo fuera de servicio detectados. Desde ahí, o desde el botón <b>"Solicitar a Dirección"</b>, se puede enviar una solicitud de recurso/capacidad — cae directo en S&OP → Decisiones (Director) para que el Director la apruebe, detenga o rechace.
             </p>
           </div>
         </div>

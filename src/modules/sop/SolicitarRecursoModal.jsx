@@ -24,7 +24,7 @@ export default function SolicitarRecursoModal({ onSubmit, onClose, defaultNombre
     const ok = await onSubmit({ nombre: nombre.trim(), fecha: fecha || null, costo: Number(costo) || 0, periodicidad });
     setSaving(false);
     if (ok) {
-      window.alert('Solicitud enviada. Puedes verla y darle seguimiento en S&OP → pestaña "Decisiones (Director)", o en el módulo Centro de Decisiones → Bandeja de pendientes.');
+      window.alert('Solicitud enviada. Puedes verla y darle seguimiento en S&OP → pestaña "Decisiones (Director)".');
       onClose();
     }
   }
@@ -33,7 +33,7 @@ export default function SolicitarRecursoModal({ onSubmit, onClose, defaultNombre
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
         <p className="text-xs font-black uppercase tracking-widest text-slate-700">Solicitar recurso a Dirección</p>
-        <p className="mt-1 text-[10px] font-bold text-slate-400">Requerimiento de infraestructura — se envía a la Bandeja del Centro de Decisiones.</p>
+        <p className="mt-1 text-[10px] font-bold text-slate-400">Requerimiento de infraestructura — se envía a S&OP → Decisiones (Director).</p>
 
         <div className="mt-3 space-y-2">
           <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
