@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from "recharts";
-import { buildHorizonte, formatFechaCorta, formatMoney, LINEAS, EGRESO_CAMPOS_SEMANA, INGRESO_CAMPOS_SEMANA } from "./sopHelpers";
+import { buildHorizonte, formatFechaCorta, formatMoney, extraerCosto, LINEAS, EGRESO_CAMPOS_SEMANA, INGRESO_CAMPOS_SEMANA } from "./sopHelpers";
 import SolicitudModal from "./SolicitudModal";
 import SolicitarRecursoModal from "./SolicitarRecursoModal";
 import { getVentana, upsertVentana } from "../../services/sopVentanaSemanalService";
-
-const SEMANAS_POR_MES = 4.33;
 
 // Numero clicable -> input, mismo patron que EditableNum de OperacionTab.jsx.
 function EditableMonto({ value, canEdit, onSave }) {
@@ -80,7 +78,7 @@ function CeldaAjustable({ value, ajustada, canEdit, onSave, onReset }) {
 // completo, ese ya se ve en la vista mensual); la liquidez esperada es
 // ingresos - egresos, calculada, no capturada aparte. Se guarda en la misma
 // tabla genérica sop_ventana_semanal, pestaña "financiero".
-function FinancieroSemanalView({ currentUser, semanaLunes, canEdit, onSolicitarRecurso }) {
+function FinancieroSemanalView({ currentUser, semanaLunes, canEdit, onSolicitarRecurso, solicitudesSop }) {
   const [loading, setLoading] = useState(true);
   const [montos, setMontos] = useState({});
   const [showSolicitarRecurso, setShowSolicitarRecurso] = useState(false);
@@ -88,6 +86,21 @@ function FinancieroSemanalView({ currentUser, semanaLunes, canEdit, onSolicitarR
   const lunes = new Date(`${semanaLunes}T00:00:00`);
   const viernes = new Date(lunes);
   viernes.setDate(lunes.getDate() + 4);
+
+  // Inversión en recursos aprobada por Dirección para ESTA semana — se
+  // calcula sola, no se captura a mano: toma las solicitudes de S&OP ya
+  // "Decidida" (aprobadas) cuya fecha de compromiso cae dentro de esta
+  // semana, y suma su costo (prorrateado si es mensual, igual que la
+  // pestaña Decisiones (Director)). Nota: si el costo es "Semanal" o
+  // "Mensual" solo se refleja en la semana de su fecha de compromiso, no se
+  // repite automáticamente en las semanas siguientes.
+  const inversionRecursos = (solicitudesSop || [])
+    .filter((d) => {
+      if (d.estado !== "Decidida" || !d.fecha_compromiso) return false;
+      const fecha = new Date(`${String(d.fecha_compromiso).slice(0, 10)}T00:00:00`);
+      return fecha >= lunes && fecha <= viernes;
+    })
+    .reduce((sum, d) => sum + (extraerCosto(d.recomendacion)?.montoSemanal || 0), 0);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,7 +119,7 @@ function FinancieroSemanalView({ currentUser, semanaLunes, canEdit, onSolicitarR
     await upsertVentana({ pestana: "financiero", semanaLunes, datos: next }, { actor: currentUser });
   }
 
-  const totalEgresos = EGRESO_CAMPOS_SEMANA.reduce((s, c) => s + Number(montos[c.key] || 0), 0);
+  const totalEgresos = EGRESO_CAMPOS_SEMANA.reduce((s, c) => s + Number(montos[c.key] || 0), 0) + inversionRecursos;
   const totalIngresos = INGRESO_CAMPOS_SEMANA.reduce((s, c) => s + Number(montos[c.key] || 0), 0);
   const liquidezEsperada = totalIngresos - totalEgresos;
 
@@ -143,6 +156,10 @@ function FinancieroSemanalView({ currentUser, semanaLunes, canEdit, onSolicitarR
                 <EditableMonto value={montos[c.key] || 0} canEdit={canEdit} onSave={(n) => handleGuardarCampo(c.key, n)} />
               </div>
             ))}
+            <div className="flex items-center justify-between rounded-lg bg-violet-50 px-2.5 py-1.5" title="Se calcula sola: suma el costo de las solicitudes de recurso ya aprobadas por Dirección con fecha de compromiso en esta semana. No se captura a mano.">
+              <span className="text-[10px] font-bold text-violet-700">Inversión en recursos (aprobada)</span>
+              <span className="text-[10px] font-black text-violet-700">{formatMoney(inversionRecursos)}</span>
+            </div>
           </div>
           <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Total egresos</span>
@@ -196,6 +213,7 @@ export default function FinancieroTab({
   onSolicitarRecurso,
   vistaSemanal,
   semanaLunes,
+  solicitudesSop = [],
 }) {
   const [showSolicitud, setShowSolicitud] = useState(false);
   const [nuevaFila, setNuevaFila] = useState({ concepto: "", categoria: "Gasto" });
@@ -336,6 +354,7 @@ export default function FinancieroTab({
         semanaLunes={semanaLunes}
         canEdit={canEdit}
         onSolicitarRecurso={onSolicitarRecurso}
+        solicitudesSop={solicitudesSop}
       />
     );
   }

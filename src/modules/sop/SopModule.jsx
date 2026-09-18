@@ -1035,6 +1035,7 @@ export default function SopModule({ currentUser }) {
                 onSolicitarRecurso={handleSolicitarRecurso}
                 semanaLunes={semanaVentana}
                 vistaSemanal={vistaSemanal}
+                solicitudesSop={solicitudesSop}
               />
             )}
             {activeTab === "inventarios" && (

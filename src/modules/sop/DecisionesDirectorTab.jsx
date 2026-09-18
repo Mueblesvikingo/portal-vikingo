@@ -1,30 +1,6 @@
 import { useEffect, useState } from "react";
-import { formatFechaCorta, formatMoney, EGRESO_CAMPOS_SEMANA, INGRESO_CAMPOS_SEMANA } from "./sopHelpers";
+import { formatFechaCorta, formatMoney, extraerCosto, EGRESO_CAMPOS_SEMANA, INGRESO_CAMPOS_SEMANA } from "./sopHelpers";
 import { getVentana } from "../../services/sopVentanaSemanalService";
-
-// El costo solo viaja como texto dentro de la recomendación (no hay columna
-// dedicada en decisiones_estrategicas) — hoy únicamente "Solicitar recurso"
-// lo redacta con este formato exacto ("Costo estimado: $X"), así que es lo
-// único que se puede sumar contra la liquidez. Las demás solicitudes
-// (capacidad/financiero/genéricas) se muestran igual, solo sin costo.
-// Semanas por mes usadas en el resto del módulo (SEMANAS_POR_MES) — aquí
-// para convertir un costo mensual a su equivalente semanal y poder
-// compararlo contra la liquidez esperada de UNA semana.
-const SEMANAS_POR_MES = 4.33;
-
-function extraerCosto(recomendacion) {
-  const m = /Costo estimado:\s*\$?\s*([\d,]+(?:\.\d+)?)(?:\s*\(([^)]+)\))?/i.exec(recomendacion || "");
-  if (!m) return null;
-  const monto = Number(m[1].replace(/,/g, ""));
-  if (!Number.isFinite(monto)) return null;
-  const periodicidad = m[2] || "Único";
-  // Único y Semanal se comparan tal cual contra la liquidez de una semana
-  // (Único, asumiendo que se pagaría esa misma semana); Mensual se
-  // prorratea entre semanas del mes para no sobreestimar el impacto de una
-  // sola semana.
-  const montoSemanal = /mensual/i.test(periodicidad) ? monto / SEMANAS_POR_MES : monto;
-  return { monto, periodicidad, montoSemanal };
-}
 
 const ESTADO_STYLE = {
   Solicitud: { badge: "border-sky-200 bg-sky-50 text-sky-700", label: "Pendiente" },

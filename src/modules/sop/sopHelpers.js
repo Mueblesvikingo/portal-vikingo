@@ -162,6 +162,26 @@ export function getSemanaReferenciaISO() {
   return { lunes, domingo, lunesISO: toISODate(lunes), domingoISO: toISODate(domingo) };
 }
 
+// El costo solo viaja como texto dentro de la recomendación (no hay columna
+// dedicada en decisiones_estrategicas) — hoy únicamente "Solicitar recurso"
+// lo redacta con este formato exacto ("Costo estimado: $X"), así que es lo
+// único que se puede sumar contra la liquidez o mostrar como egreso.
+// Compartido por Decisiones (Director) y Plan financiero.
+export const SEMANAS_POR_MES = 4.33;
+
+export function extraerCosto(recomendacion) {
+  const m = /Costo estimado:\s*\$?\s*([\d,]+(?:\.\d+)?)(?:\s*\(([^)]+)\))?/i.exec(recomendacion || "");
+  if (!m) return null;
+  const monto = Number(m[1].replace(/,/g, ""));
+  if (!Number.isFinite(monto)) return null;
+  const periodicidad = m[2] || "Único";
+  // Único y Semanal se comparan tal cual (Único, asumiendo que se pagaría
+  // esa misma semana); Mensual se prorratea entre semanas del mes para no
+  // sobreestimar el impacto de una sola semana.
+  const montoSemanal = /mensual/i.test(periodicidad) ? monto / SEMANAS_POR_MES : monto;
+  return { monto, periodicidad, montoSemanal };
+}
+
 // Categorías de la Vista semanal de Plan financiero (egresos/ingresos
 // esperados) — compartidas con la pestaña Decisiones (Director) para poder
 // calcular ahí mismo la liquidez esperada de la semana sin duplicar la lista.
