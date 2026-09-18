@@ -725,18 +725,34 @@ function InfraestructuraSection({ infraestructura, capacidadProcesos, canEdit, o
 // (calculado de infraestructura, horas/turno=0). Cada una con acceso
 // directo a "Solicitar recurso" para mandarla a Dirección sin tener que
 // redactar la solicitud desde cero.
-function BrechasRealesSection({ infraestructura, vacantesPersonal, canEdit, currentUser, onSolicitarRecurso, onCreateVacante, onUpdateVacante, onDeactivateVacante }) {
+function BrechasRealesSection({ infraestructura, capacidadProcesos, vacantesPersonal, canEdit, currentUser, onSolicitarRecurso, onCreateVacante, onUpdateVacante, onDeactivateVacante, onCreateInfra }) {
   const [solicitando, setSolicitando] = useState(null);
   const [nuevaVacante, setNuevaVacante] = useState({ puesto: "", faltan: 1 });
-  const [saving, setSaving] = useState(false);
+  const [savingVacante, setSavingVacante] = useState(false);
+  const [nuevoFuera, setNuevoFuera] = useState({ nombre_equipo: "", proceso: "", cantidad: 1 });
+  const [savingFuera, setSavingFuera] = useState(false);
   const equipoFuera = infraestructura.filter((e) => Number(e.horas_disponibles_turno) === 0);
+  const estacionesReales = ordenarEstaciones(capacidadProcesos.map((p) => ({ estacion: p.proceso }))).map((p) => p.estacion);
 
   async function handleAgregarVacante() {
     if (!nuevaVacante.puesto.trim()) return;
-    setSaving(true);
+    setSavingVacante(true);
     const ok = await onCreateVacante(nuevaVacante, currentUser);
-    setSaving(false);
+    setSavingVacante(false);
     if (ok) setNuevaVacante({ puesto: "", faltan: 1 });
+  }
+
+  // Auto-agrega el sufijo "(fuera de servicio)" si no lo escribieron —
+  // mismo texto que ya usan las filas sembradas de PCP-MA-02, para que se
+  // reconozcan igual sin obligar a teclearlo cada vez.
+  async function handleAgregarFuera() {
+    const nombreBase = nuevoFuera.nombre_equipo.trim();
+    if (!nombreBase) return;
+    const nombre_equipo = /fuera de servicio/i.test(nombreBase) ? nombreBase : `${nombreBase} (fuera de servicio)`;
+    setSavingFuera(true);
+    const ok = await onCreateInfra({ ...nuevoFuera, nombre_equipo, horas_disponibles_turno: 0, turnos_activos: 1 }, currentUser);
+    setSavingFuera(false);
+    if (ok) setNuevoFuera({ nombre_equipo: "", proceso: "", cantidad: 1 });
   }
 
   if (vacantesPersonal.length === 0 && equipoFuera.length === 0 && !canEdit) return null;
@@ -779,27 +795,50 @@ function BrechasRealesSection({ infraestructura, vacantesPersonal, canEdit, curr
                 Faltan
                 <input type="number" min="1" value={nuevaVacante.faltan} onChange={(e) => setNuevaVacante((c) => ({ ...c, faltan: Number(e.target.value) }))} className="mt-1 h-8 w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-700 outline-none" />
               </label>
-              <button type="button" disabled={saving} onClick={handleAgregarVacante} className="h-8 rounded-lg bg-[#001225] px-3 text-[9px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
-                {saving ? "Guardando..." : "+ Agregar vacante"}
+              <button type="button" disabled={savingVacante} onClick={handleAgregarVacante} className="h-8 rounded-lg bg-[#001225] px-3 text-[9px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+                {savingVacante ? "Guardando..." : "+ Agregar vacante"}
               </button>
             </div>
           )}
         </div>
-        {equipoFuera.length > 0 && (
-          <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Equipo fuera de servicio</p>
-            <div className="mt-1.5 space-y-1">
-              {equipoFuera.map((e) => (
-                <div key={e.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5">
-                  <span className="text-[10px] font-bold text-slate-600">{e.nombre_equipo} ({e.proceso}) — {e.cantidad} fuera de servicio</span>
-                  {canEdit && (
-                    <button type="button" onClick={() => setSolicitando(`Reparación/reemplazo: ${e.nombre_equipo} (${e.proceso})`)} className="text-[9px] font-black text-violet-600 hover:underline">🛠 Solicitar recurso</button>
-                  )}
-                </div>
-              ))}
-            </div>
+        <div>
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Equipo fuera de servicio</p>
+          <div className="mt-1.5 space-y-1">
+            {equipoFuera.length === 0 && <p className="text-[10px] font-bold text-slate-300">Sin equipo fuera de servicio capturado.</p>}
+            {equipoFuera.map((e) => (
+              <div key={e.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5">
+                <span className="text-[10px] font-bold text-slate-600">{e.nombre_equipo} ({e.proceso || "sin estación"}) — {e.cantidad} fuera de servicio</span>
+                {canEdit && (
+                  <button type="button" onClick={() => setSolicitando(`Reparación/reemplazo: ${e.nombre_equipo} (${e.proceso})`)} className="text-[9px] font-black text-violet-600 hover:underline">🛠 Solicitar recurso</button>
+                )}
+              </div>
+            ))}
           </div>
-        )}
+          {canEdit && (
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                Equipo
+                <input value={nuevoFuera.nombre_equipo} onChange={(e) => setNuevoFuera((c) => ({ ...c, nombre_equipo: e.target.value }))} placeholder="Ej. Sierra radial" className="mt-1 h-8 w-48 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-700 outline-none" />
+              </label>
+              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                Estación
+                <select value={nuevoFuera.proceso} onChange={(e) => setNuevoFuera((c) => ({ ...c, proceso: e.target.value }))} className="mt-1 h-8 w-32 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-700 outline-none">
+                  <option value="">Sin asignar</option>
+                  {estacionesReales.map((est) => (
+                    <option key={est} value={est}>{est}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                Cantidad
+                <input type="number" min="1" value={nuevoFuera.cantidad} onChange={(e) => setNuevoFuera((c) => ({ ...c, cantidad: Number(e.target.value) }))} className="mt-1 h-8 w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-700 outline-none" />
+              </label>
+              <button type="button" disabled={savingFuera} onClick={handleAgregarFuera} className="h-8 rounded-lg bg-[#001225] px-3 text-[9px] font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+                {savingFuera ? "Guardando..." : "+ Agregar equipo fuera de servicio"}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       {solicitando && (
         <SolicitarRecursoModal defaultNombre={solicitando} onSubmit={(draft) => onSolicitarRecurso(draft, currentUser)} onClose={() => setSolicitando(null)} />
@@ -1101,6 +1140,7 @@ export default function OperacionTab({
           />
           <BrechasRealesSection
             infraestructura={infraestructura}
+            capacidadProcesos={capacidadProcesos}
             vacantesPersonal={vacantesPersonal}
             canEdit={canEdit}
             currentUser={currentUser}
@@ -1108,6 +1148,7 @@ export default function OperacionTab({
             onCreateVacante={onCreateVacante}
             onUpdateVacante={onUpdateVacante}
             onDeactivateVacante={onDeactivateVacante}
+            onCreateInfra={onCreateInfra}
           />
         </div>
       </>
@@ -1242,6 +1283,7 @@ export default function OperacionTab({
 
       <BrechasRealesSection
         infraestructura={infraestructura}
+        capacidadProcesos={capacidadProcesos}
         vacantesPersonal={vacantesPersonal}
         canEdit={canEdit}
         currentUser={currentUser}
@@ -1249,6 +1291,7 @@ export default function OperacionTab({
         onCreateVacante={onCreateVacante}
         onUpdateVacante={onUpdateVacante}
         onDeactivateVacante={onDeactivateVacante}
+        onCreateInfra={onCreateInfra}
       />
     </div>
   );
