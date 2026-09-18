@@ -61,6 +61,7 @@ function EditableCell({ value, canEdit, onSave }) {
 export default function InventariosTab({ productos, canEdit, currentUser, semanaLunes, onSaveFamilia }) {
   const [loading, setLoading] = useState(true);
   const [saldosPorProducto, setSaldosPorProducto] = useState({});
+  const [planPorProducto, setPlanPorProducto] = useState({});
   const [importMsg, setImportMsg] = useState("");
 
   const lunes = new Date(`${semanaLunes}T00:00:00`);
@@ -75,9 +76,13 @@ export default function InventariosTab({ productos, canEdit, currentUser, semana
     let cancelled = false;
     setLoading(true);
     setImportMsg("");
-    getVentana("inventarios", semanaLunes).then((result) => {
+    Promise.all([
+      getVentana("inventarios", semanaLunes),
+      getVentana("plan-venta", semanaLunes),
+    ]).then(([inventarioResult, planResult]) => {
       if (cancelled) return;
-      setSaldosPorProducto(result?.data?.datos?.saldosPorProducto || {});
+      setSaldosPorProducto(inventarioResult?.data?.datos?.saldosPorProducto || {});
+      setPlanPorProducto(planResult?.data?.datos?.piezasPorProducto || {});
       setLoading(false);
     });
     return () => { cancelled = true; };
@@ -95,6 +100,7 @@ export default function InventariosTab({ productos, canEdit, currentUser, semana
 
   const granTotalPiezas = productos.reduce((sum, p) => sum + Number(saldosPorProducto[p.id] || 0), 0);
   const granTotalValorizado = productos.reduce((sum, p) => sum + Number(saldosPorProducto[p.id] || 0) * Number(p.precio || 0), 0);
+  const granTotalPlan = productos.reduce((sum, p) => sum + Number(planPorProducto[p.id] || 0), 0);
 
   function handleExportar() {
     const header = ["Codigo", "Producto", "Linea", "Precio", "Saldo"];
@@ -180,31 +186,42 @@ export default function InventariosTab({ productos, canEdit, currentUser, semana
       {loading ? (
         <p className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</p>
       ) : (
+        <>
+        <p className="mb-2 text-[9px] font-semibold normal-case tracking-normal text-slate-400">
+          "Producción contempla" son las piezas ya capturadas esta misma semana en Plan de venta. "Saldo neto" = Saldo − Producción contempla: en verde alcanza, en rojo falta inventario para cubrir lo planeado.
+        </p>
         <div className="max-h-[75vh] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[560px] border-collapse text-[10px]">
+          <table className="w-full min-w-[780px] border-collapse text-[10px]">
             <thead>
               <tr className="text-left text-[9px] font-black uppercase tracking-widest text-white/60">
                 <th className="sticky left-0 top-0 z-30 bg-[#001225] px-3 py-2 text-white">Producto</th>
                 <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">Precio</th>
                 <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-left" title="Familia real (Planeación de Producción) — de aquí sale su carga en Plan de operación">Familia</th>
                 <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">Saldo</th>
+                <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right" title="Piezas capturadas esta semana en Plan de venta para este producto">Producción contempla</th>
+                <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right" title="Saldo − Producción contempla. Positivo = alcanza; negativo = falta inventario para cubrir lo planeado.">Saldo neto</th>
               </tr>
             </thead>
             <tbody>
               {grouped.map((group) => {
                 const lineaTotal = group.items.reduce((sum, p) => sum + Number(saldosPorProducto[p.id] || 0), 0);
+                const lineaPlan = group.items.reduce((sum, p) => sum + Number(planPorProducto[p.id] || 0), 0);
                 const style = LINEA_STYLE[group.linea] || LINEA_STYLE.Bases;
                 return (
                   <Fragment key={group.linea}>
                     <tr>
-                      <td colSpan={4} className={`px-3 py-1.5 ${style.row}`}>
+                      <td colSpan={6} className={`px-3 py-1.5 ${style.row}`}>
                         <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${style.badge}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
                           {group.linea}
                         </span>
                       </td>
                     </tr>
-                    {group.items.map((p) => (
+                    {group.items.map((p) => {
+                      const saldo = Number(saldosPorProducto[p.id] || 0);
+                      const plan = Number(planPorProducto[p.id] || 0);
+                      const saldoNeto = saldo - plan;
+                      return (
                       <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/70">
                         <td className="sticky left-0 z-10 bg-white px-3 py-1 font-bold text-slate-700">
                           <span className="text-[9px] text-slate-300">{p.codigo}</span> {p.nombre}
@@ -227,15 +244,24 @@ export default function InventariosTab({ productos, canEdit, currentUser, semana
                           )}
                         </td>
                         <td className="px-1 py-1">
-                          <EditableCell value={saldosPorProducto[p.id] || 0} canEdit={canEdit} onSave={(n) => handleGuardarProducto(p.id, n)} />
+                          <EditableCell value={saldo} canEdit={canEdit} onSave={(n) => handleGuardarProducto(p.id, n)} />
+                        </td>
+                        <td className="px-2 py-1 text-right text-[9px] font-bold text-slate-400">{formatNumber(plan)}</td>
+                        <td className="px-2 py-1 text-right">
+                          <span className={`inline-block rounded-full border px-2 py-0.5 text-[9px] font-black ${saldoNeto < 0 ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                            {saldoNeto > 0 ? "+" : ""}{formatNumber(saldoNeto)}
+                          </span>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                     <tr className={`border-b border-slate-100 ${style.total}`}>
                       <td className={`sticky left-0 z-10 px-3 py-1 text-[9px] font-black uppercase ${style.total}`}>Total {group.linea}</td>
                       <td />
                       <td />
                       <td className="px-2 py-1 text-right text-[9px] font-black">{formatNumber(lineaTotal)}</td>
+                      <td className="px-2 py-1 text-right text-[9px] font-black">{formatNumber(lineaPlan)}</td>
+                      <td className="px-2 py-1 text-right text-[9px] font-black">{lineaTotal - lineaPlan > 0 ? "+" : ""}{formatNumber(lineaTotal - lineaPlan)}</td>
                     </tr>
                   </Fragment>
                 );
@@ -247,10 +273,13 @@ export default function InventariosTab({ productos, canEdit, currentUser, semana
                 <td />
                 <td />
                 <td className="px-2 py-2 text-right text-[10px] font-black">{formatNumber(granTotalPiezas)}</td>
+                <td className="px-2 py-2 text-right text-[10px] font-black">{formatNumber(granTotalPlan)}</td>
+                <td className="px-2 py-2 text-right text-[10px] font-black">{granTotalPiezas - granTotalPlan > 0 ? "+" : ""}{formatNumber(granTotalPiezas - granTotalPlan)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
+        </>
       )}
     </div>
   );
