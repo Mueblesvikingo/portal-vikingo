@@ -72,6 +72,7 @@ import PrioridadesTab from "./PrioridadesTab";
 import HistoricoTab from "./HistoricoTab";
 import DecisionesDirectorTab from "./DecisionesDirectorTab";
 import InventariosTab from "./InventariosTab";
+import MpsTab from "./MpsTab";
 import DashboardTab from "./DashboardTab";
 import SolicitudModal from "./SolicitudModal";
 
@@ -82,12 +83,13 @@ const SOP_MANUAL_URL = "/manuales/SOP_Mission_Control.pdf";
 // que participa de la Vista semanal con datos propios por semana — Control
 // (solo ciclo de firmas, mensual) y Acuerdos S&OP (su propio sistema de
 // semanas vía sop_semanas) quedan fuera del filtro genérico de abajo.
-const PESTANA_VENTANA = { dashboard: "dashboard", "plan-venta": "plan-venta", operacion: "operacion", financiero: "financiero", inventarios: "inventarios" };
+const PESTANA_VENTANA = { dashboard: "dashboard", "plan-venta": "plan-venta", operacion: "operacion", financiero: "financiero", inventarios: "inventarios", mps: "mps" };
 
-// Inventarios no tiene un "modo mensual" equivalente (el saldo siempre es
-// de una semana puntual) — a diferencia de las otras 4, muestra su tabla y
-// el selector de semana del encabezado aunque "Vista semanal" esté apagada.
-const PESTANAS_SIEMPRE_SEMANALES = ["inventarios"];
+// Inventarios y MPS no tienen un "modo mensual" equivalente (el saldo y el
+// horizonte de producción siempre parten de una semana puntual) — a
+// diferencia de las otras, muestran su tabla y el selector de semana del
+// encabezado aunque "Vista semanal" esté apagada.
+const PESTANAS_SIEMPRE_SEMANALES = ["inventarios", "mps"];
 
 // Filtro discreto para moverse entre semanas de la Vista semanal y
 // consultar cualquiera ya guardada — una sola vez aquí en vez de repetir
@@ -158,6 +160,7 @@ const TABS = [
   { key: "control", label: "Control S&OP" },
   { key: "dashboard", label: "Dashboard" },
   { key: "plan-venta", label: "Plan de venta" },
+  { key: "mps", label: "MPS" },
   { key: "operacion", label: "Plan de operación" },
   { key: "financiero", label: "Plan financiero" },
   { key: "inventarios", label: "Inventarios" },
@@ -1080,6 +1083,14 @@ export default function SopModule({ currentUser }) {
                 vistaSemanal={vistaSemanal}
                 semanaLunes={semanaVentana}
                 onSolicitarRecurso={handleSolicitarRecurso}
+              />
+            )}
+            {activeTab === "mps" && (
+              <MpsTab
+                productos={productos}
+                canEdit={canEditPlanVenta}
+                currentUser={currentUser}
+                semanaLunes={semanaVentana}
               />
             )}
             {activeTab === "operacion" && (
