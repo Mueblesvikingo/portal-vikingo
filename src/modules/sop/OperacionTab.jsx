@@ -56,9 +56,9 @@ function ComoFuncionaOperacionModal({ onClose }) {
           </div>
 
           <div>
-            <p className="font-black uppercase tracking-widest text-slate-400">2a. Piezas sin familia clasificada</p>
+            <p className="font-black uppercase tracking-widest text-slate-400">2a. Piezas sin tiempo estándar real</p>
             <p className="mt-1">
-              Si abajo de la tabla aparece un aviso de "piezas no se contaron en esta tabla", significa que esos productos todavía no tienen "Familia" asignada en el catálogo (se asigna en Plan de venta → vista mensual → columna Familia). Sin esa clasificación no hay forma de saber qué tiempo estándar usar, así que esas piezas quedan fuera del cálculo hasta que se clasifiquen.
+              Si abajo de la tabla aparece un aviso de "piezas no se contaron en esta tabla", significa que esos productos tienen una familia asignada pero esa familia no tiene ningún tiempo estándar medido en las 8 estaciones (ej. muebles de madera como burós, tocadores y pijameros, clasificados solo por línea porque no pasan por tapicería). No se inventa un tiempo — esas piezas quedan fuera del cálculo hasta que exista un dato real que capturar.
             </p>
           </div>
 
@@ -173,8 +173,11 @@ function piezasPorProductoDelMes(planVenta, escenario, anio, mes) {
 // por estación — mismo cálculo que la hoja "Carga_vs_Capacidad" de
 // PCP-IF-01: piezas × tiempo estándar (familia × estación) da la carga;
 // operarios × horas turno × turnos × eficiencia × días da la capacidad.
-// Los productos sin familia clasificada no participan (no se inventa su
-// tiempo estándar) y se reportan aparte para que quede claro qué falta.
+// Un producto participa solo si su familia tiene AL MENOS un tiempo
+// estándar real capturado (aunque sea 0 en alguna estación) — una familia
+// "de relleno" (ej. muebles de madera clasificados solo por línea, sin
+// tiempo estándar medido en ninguna de las 8 estaciones de tapicería) no
+// participa, para no inventar un dato que no existe, y se reporta aparte.
 function calcularCargaEstaciones(piezasPorProducto, { productoFamilia, tiempoMap, capacidadProcesos, eficiencia, dias }) {
   const cargaPorEstacion = {};
   let piezasSinClasificar = 0;
@@ -182,7 +185,8 @@ function calcularCargaEstaciones(piezasPorProducto, { productoFamilia, tiempoMap
     const cantidad = Number(piezas || 0);
     if (!cantidad) continue;
     const familia = productoFamilia.get(Number(productoId));
-    if (!familia) {
+    const tieneTiempoReal = familia && capacidadProcesos.some((proc) => tiempoMap.has(`${familia}|${proc.proceso}`));
+    if (!tieneTiempoReal) {
       piezasSinClasificar += cantidad;
       continue;
     }
@@ -256,7 +260,7 @@ function TablaCargaCapacidad({ columnas }) {
           {columnas.some((c) => c.piezasSinClasificar > 0) && (
             <tr>
               <td colSpan={columnas.length + 1} className="px-3 py-1.5 text-[9px] font-semibold normal-case tracking-normal text-amber-600">
-                ⚠ {columnas.map((c) => formatNumber(c.piezasSinClasificar)).join(" / ")} pieza(s) planeada(s) no se contaron en esta tabla — son de productos que todavía no tienen "Familia" asignada en el catálogo (Plan de venta → vista mensual → columna Familia). Sin familia no se sabe qué tiempo estándar usar en cada estación, así que no suman carga hasta que se clasifiquen.
+                ⚠ {columnas.map((c) => formatNumber(c.piezasSinClasificar)).join(" / ")} pieza(s) planeada(s) no se contaron en esta tabla — son de productos cuya familia no tiene tiempo estándar real capturado en ninguna estación (ej. muebles de madera clasificados solo por línea, sin medición de tapicería). No se les inventa un tiempo, así que no suman carga hasta que haya un dato real que capturar.
               </td>
             </tr>
           )}
