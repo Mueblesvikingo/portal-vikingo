@@ -34,6 +34,13 @@ export function formatNumber(value) {
 
 export const LINEAS = ["Bases", "Recámaras", "Salas"];
 
+// Familias reales de Planeación de Producción (PCP-IF-01 Tiempos
+// estándar/Clasificación) — de aquí sale la carga real que ve Plan de
+// operación. "Sin clasificar" (familia null) es válido: ese producto
+// simplemente no participa todavía en ese cálculo. Compartida por Plan de
+// venta e Inventarios (mismo catálogo de productos).
+export const FAMILIAS_PRODUCTO = ["Base Vinil", "Base Tela", "Cabecera Vinil", "Cabecera Tela", "Converticama", "Sala/Sofa", "Reposet", "Sillon", "Recámaras"];
+
 // Parser CSV minimo (respeta comillas) — compartido por Plan de venta e
 // Inventarios para leer de vuelta un archivo exportado desde el portal o
 // armado en Excel con las mismas columnas. El separador se detecta solo

@@ -1143,6 +1143,7 @@ export default function SopModule({ currentUser }) {
                 canEdit={canEditPlanVenta}
                 currentUser={currentUser}
                 semanaLunes={semanaVentana}
+                onSaveFamilia={handleSaveFamilia}
               />
             )}
             {activeTab === "decisiones" && (

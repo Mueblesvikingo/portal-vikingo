@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { downloadCsv, formatFechaCorta, formatMoney, formatNumber, LINEAS, parseCsvSimple } from "./sopHelpers";
+import { downloadCsv, FAMILIAS_PRODUCTO, formatFechaCorta, formatMoney, formatNumber, LINEAS, parseCsvSimple } from "./sopHelpers";
 import { getVentana, upsertVentana } from "../../services/sopVentanaSemanalService";
 
 const LINEA_STYLE = {
@@ -58,7 +58,7 @@ function EditableCell({ value, canEdit, onSave }) {
 // genérica sop_ventana_semanal (pestaña "inventarios"), con un mapa
 // {productoId: saldo} — así el saldo queda fechado por semana y consultable
 // como el resto de la Vista semanal, sin tabla nueva.
-export default function InventariosTab({ productos, canEdit, currentUser, semanaLunes }) {
+export default function InventariosTab({ productos, canEdit, currentUser, semanaLunes, onSaveFamilia }) {
   const [loading, setLoading] = useState(true);
   const [saldosPorProducto, setSaldosPorProducto] = useState({});
   const [importMsg, setImportMsg] = useState("");
@@ -181,11 +181,12 @@ export default function InventariosTab({ productos, canEdit, currentUser, semana
         <p className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</p>
       ) : (
         <div className="max-h-[75vh] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[420px] border-collapse text-[10px]">
+          <table className="w-full min-w-[560px] border-collapse text-[10px]">
             <thead>
               <tr className="text-left text-[9px] font-black uppercase tracking-widest text-white/60">
                 <th className="sticky left-0 top-0 z-30 bg-[#001225] px-3 py-2 text-white">Producto</th>
                 <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">Precio</th>
+                <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-left" title="Familia real (Planeación de Producción) — de aquí sale su carga en Plan de operación">Familia</th>
                 <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">Saldo</th>
               </tr>
             </thead>
@@ -196,7 +197,7 @@ export default function InventariosTab({ productos, canEdit, currentUser, semana
                 return (
                   <Fragment key={group.linea}>
                     <tr>
-                      <td colSpan={3} className={`px-3 py-1.5 ${style.row}`}>
+                      <td colSpan={4} className={`px-3 py-1.5 ${style.row}`}>
                         <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${style.badge}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
                           {group.linea}
@@ -210,12 +211,29 @@ export default function InventariosTab({ productos, canEdit, currentUser, semana
                         </td>
                         <td className="px-2 py-1 text-right text-[9px] font-bold text-slate-400">{formatMoney(p.precio)}</td>
                         <td className="px-1 py-1">
+                          {canEdit ? (
+                            <select
+                              value={p.familia || ""}
+                              onChange={(e) => onSaveFamilia(p.id, e.target.value || null, currentUser)}
+                              className="h-6 w-28 rounded border border-slate-200 bg-white px-1 text-[9px] font-bold text-slate-700 outline-none"
+                            >
+                              <option value="">Sin clasificar</option>
+                              {FAMILIAS_PRODUCTO.map((f) => (
+                                <option key={f} value={f}>{f}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-[9px] font-bold text-slate-500">{p.familia || "Sin clasificar"}</span>
+                          )}
+                        </td>
+                        <td className="px-1 py-1">
                           <EditableCell value={saldosPorProducto[p.id] || 0} canEdit={canEdit} onSave={(n) => handleGuardarProducto(p.id, n)} />
                         </td>
                       </tr>
                     ))}
                     <tr className={`border-b border-slate-100 ${style.total}`}>
                       <td className={`sticky left-0 z-10 px-3 py-1 text-[9px] font-black uppercase ${style.total}`}>Total {group.linea}</td>
+                      <td />
                       <td />
                       <td className="px-2 py-1 text-right text-[9px] font-black">{formatNumber(lineaTotal)}</td>
                     </tr>
@@ -226,6 +244,7 @@ export default function InventariosTab({ productos, canEdit, currentUser, semana
             <tfoot>
               <tr className="bg-[#001225] text-white">
                 <td className="sticky left-0 z-10 bg-[#001225] px-3 py-2 text-[9px] font-black uppercase tracking-widest">Total general (piezas)</td>
+                <td />
                 <td />
                 <td className="px-2 py-2 text-right text-[10px] font-black">{formatNumber(granTotalPiezas)}</td>
               </tr>

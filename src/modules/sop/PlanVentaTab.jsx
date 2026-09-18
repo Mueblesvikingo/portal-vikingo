@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { buildHorizonte, downloadCsv, formatFechaCorta, formatMoney, formatNumber, LINEAS, parseCsvSimple } from "./sopHelpers";
+import { buildHorizonte, downloadCsv, FAMILIAS_PRODUCTO, formatFechaCorta, formatMoney, formatNumber, LINEAS, parseCsvSimple } from "./sopHelpers";
 import { getVentana, upsertVentana } from "../../services/sopVentanaSemanalService";
 import SolicitarRecursoModal from "./SolicitarRecursoModal";
 
@@ -8,12 +8,6 @@ const LINEA_STYLE = {
   Recámaras: { badge: "border-violet-200 bg-violet-50 text-violet-700", row: "bg-violet-50/50", total: "bg-violet-50 text-violet-700", dot: "bg-violet-400" },
   Salas: { badge: "border-amber-200 bg-amber-50 text-amber-700", row: "bg-amber-50/50", total: "bg-amber-50 text-amber-700", dot: "bg-amber-400" },
 };
-
-// Familias reales de Planeación de Producción (PCP-IF-01 Tiempos
-// estándar/Clasificación) — de aquí sale la carga real que ve Plan de
-// operación. "Sin clasificar" (familia null) es válido: ese producto
-// simplemente no participa todavía en ese cálculo.
-const FAMILIAS_PRODUCTO = ["Base Vinil", "Base Tela", "Cabecera Vinil", "Cabecera Tela", "Converticama", "Sala/Sofa", "Reposet", "Sillon", "Recámaras"];
 
 function EditableCell({ value, canEdit, onSave, format = formatNumber, step = "1", width = "w-16" }) {
   const [editing, setEditing] = useState(false);
