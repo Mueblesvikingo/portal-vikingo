@@ -69,15 +69,22 @@ export function getPiezasProporcionalSemana(planVenta, escenario, semanaLunes) {
 // Parser CSV minimo (respeta comillas) — compartido por Plan de venta e
 // Inventarios para leer de vuelta un archivo exportado desde el portal o
 // armado en Excel con las mismas columnas. El separador se detecta solo
-// (punto y coma o coma) mirando la primera línea, para leer tanto los
-// archivos nuevos (exportados en ;) como uno viejo o pegado a mano en
-// coma.
+// (punto y coma o coma) mirando la primera línea (o la directiva "sep=" si
+// el archivo la trae — ver downloadCsv), para leer tanto los archivos
+// nuevos como uno viejo o pegado a mano en coma.
 export function parseCsvSimple(text) {
-  const clean = text.replace(/^﻿/, "");
-  const primeraLinea = clean.split(/\r\n|\n|\r/, 1)[0] || "";
-  const puntoYComas = (primeraLinea.match(/;/g) || []).length;
-  const comas = (primeraLinea.match(/,/g) || []).length;
-  const delimitador = puntoYComas > comas ? ";" : ",";
+  let clean = text.replace(/^﻿/, "");
+  const sepMatch = /^sep=(.)\r?\n/.exec(clean);
+  let delimitador;
+  if (sepMatch) {
+    delimitador = sepMatch[1];
+    clean = clean.slice(sepMatch[0].length);
+  } else {
+    const primeraLinea = clean.split(/\r\n|\n|\r/, 1)[0] || "";
+    const puntoYComas = (primeraLinea.match(/;/g) || []).length;
+    const comas = (primeraLinea.match(/,/g) || []).length;
+    delimitador = puntoYComas > comas ? ";" : ",";
+  }
 
   const rows = [];
   let row = [];
@@ -102,17 +109,19 @@ export function parseCsvSimple(text) {
   return rows;
 }
 
-// Excel en configuración regional México/España usa punto y coma como
-// separador de columnas al abrir un .csv de un doble clic (porque la coma
-// ya es su separador decimal) — exportar con coma hacía que todo el
-// archivo se viera amontonado en una sola columna. downloadCsv exporta
-// siempre con ; para que abra bien directamente en Excel.
+// El separador de columnas que Excel usa para abrir un .csv de un doble
+// clic depende de la configuración regional de Windows de cada equipo (no
+// siempre es ";" aunque el sistema esté en español/México) — así que en
+// vez de adivinarlo, se declara explícito con la directiva "sep=;" como
+// primera línea del archivo, un truco que Excel reconoce y respeta sin
+// importar la configuración regional. parseCsvSimple la reconoce y la
+// quita antes de leer el resto.
 export function downloadCsv(filename, header, rows) {
   const escapeCsv = (value) => {
     const s = String(value ?? "");
     return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const csv = [header, ...rows].map((r) => r.map(escapeCsv).join(";")).join("\r\n");
+  const csv = "sep=;\r\n" + [header, ...rows].map((r) => r.map(escapeCsv).join(";")).join("\r\n");
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
