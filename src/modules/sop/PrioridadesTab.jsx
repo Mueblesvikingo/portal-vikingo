@@ -204,7 +204,7 @@ export default function PrioridadesTab({ prioridades, control, canEdit, onUpsert
               <tr><td colSpan={6} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">Aún no hay prioridades semanales registradas.</td></tr>
             )}
             {historial.map((p) => (
-              <tr key={p.id} className="border-b border-slate-50">
+              <tr key={p.id} className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60">
                 <td className="px-3 py-1.5 font-bold text-slate-700">{p.anio}-{String(p.mes).padStart(2, "0")} / S{p.semana}</td>
                 <td className="px-2 py-1.5 text-slate-600">{p.area}</td>
                 <td className="px-2 py-1.5 text-slate-700">{p.prioridad}</td>

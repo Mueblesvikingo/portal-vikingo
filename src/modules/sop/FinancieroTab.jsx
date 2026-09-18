@@ -392,7 +392,7 @@ export default function FinancieroTab({
             </tr>
           </thead>
           <tbody>
-            <tr className="border-b border-slate-50">
+            <tr className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60">
               <td className="px-3 py-1.5 font-bold text-slate-700">Ventas netas totales</td>
               {filas.map((f, i) => (
                 <td key={i} className="px-2 py-1.5 text-right text-slate-600">
@@ -407,14 +407,14 @@ export default function FinancieroTab({
               ))}
               <td className="px-2 py-1.5 text-right font-black text-slate-800">{formatMoney(totales.ventasNetas)}</td>
             </tr>
-            <tr className="border-b border-slate-50">
+            <tr className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60">
               <td className="px-3 py-1.5 font-bold text-slate-700">Margen bruto %</td>
               {filas.map((f, i) => (
                 <td key={i} className="px-2 py-1.5 text-right text-slate-600">{(f.margenBrutoPct * 100).toFixed(1)}%</td>
               ))}
               <td className="px-2 py-1.5 text-right font-black text-slate-800">{(totalMargenBrutoPct * 100).toFixed(1)}%</td>
             </tr>
-            <tr className="border-b border-slate-50">
+            <tr className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60">
               <td className="px-3 py-1.5 font-bold text-slate-700">Margen bruto ($)</td>
               {filas.map((f, i) => (
                 <td key={i} className="px-2 py-1.5 text-right text-slate-600">
@@ -429,7 +429,7 @@ export default function FinancieroTab({
               ))}
               <td className="px-2 py-1.5 text-right font-black text-slate-800">{formatMoney(totales.margenBruto)}</td>
             </tr>
-            <tr className="border-b border-slate-50">
+            <tr className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60">
               <td className="px-3 py-1.5 font-bold text-slate-700">Gastos fijos</td>
               {filas.map((f, i) => (
                 <td key={i} className="px-2 py-1.5 text-right text-slate-600">
@@ -488,7 +488,7 @@ export default function FinancieroTab({
                   <tr><td colSpan={horizonte.length + (canEdit ? 3 : 2)} className="px-2 py-4 text-center text-[10px] font-bold text-slate-300">Aún no hay partidas capturadas.</td></tr>
                 )}
                 {financieroFilas.map((fila, index) => (
-                  <tr key={fila.id} className="border-t border-slate-50">
+                  <tr key={fila.id} className="border-t border-slate-50 odd:bg-white even:bg-slate-50/60">
                     <td className="px-2 py-1 font-bold text-slate-700">{fila.concepto}</td>
                     <td className="px-2 py-1">
                       <span className={`rounded-full border px-2 py-0.5 text-[8px] font-black uppercase ${fila.categoria === "Ingreso" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>

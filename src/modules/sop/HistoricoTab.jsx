@@ -174,7 +174,7 @@ export default function HistoricoTab({ historico, productos, planVenta, control,
             {historico.map((h) => {
               const efectividad = Number(h.venta_planeada) > 0 ? (Number(h.venta_real) / Number(h.venta_planeada)) * 100 : null;
               return (
-                <tr key={h.id} className="border-b border-slate-50">
+                <tr key={h.id} className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60">
                   <td className="px-3 py-1.5 font-bold text-slate-700">{h.mes?.slice(0, 7)}</td>
                   <td className="px-2 py-1.5 text-right text-slate-600">{formatMoney(h.venta_planeada)}</td>
                   <td className="px-2 py-1.5 text-right text-slate-600">{formatMoney(h.venta_real)}</td>

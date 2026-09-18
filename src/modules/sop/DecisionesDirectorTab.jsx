@@ -155,7 +155,7 @@ export default function DecisionesDirectorTab({ solicitudes, canDecide, onResolv
                 const costo = extraerCosto(d.recomendacion);
                 const estilo = ESTADO_STYLE[d.estado] || { badge: "border-slate-200 bg-slate-50 text-slate-500", label: d.estado || "—" };
                 return (
-                  <tr key={d.id} className="border-b border-slate-50 align-top">
+                  <tr key={d.id} className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60 align-top">
                     <td className="px-3 py-2">
                       <p className="font-black text-slate-700">{d.titulo_de_decision}</p>
                       {d.recomendacion && <p className="mt-0.5 text-[9px] font-semibold text-slate-400">{d.recomendacion}</p>}

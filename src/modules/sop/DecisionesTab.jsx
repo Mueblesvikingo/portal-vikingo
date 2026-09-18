@@ -244,9 +244,9 @@ export default function DecisionesTab({
             {decisionesMostradas.length === 0 && (
               <tr><td colSpan={6} className="px-3 py-8 text-center text-[11px] font-bold text-slate-300">{vistaSemanal ? (currentSopSemana ? "Aún no hay acuerdos registrados para esta semana." : "Da clic en \"Nueva\" o \"Consultar\" para empezar.") : "Aún no hay acuerdos registrados."}</td></tr>
             )}
-            {decisionesMostradas.map((d) => (
+            {decisionesMostradas.map((d, idx) => (
               <Fragment key={d.id}>
-                <tr key={d.id} className="border-b border-slate-50">
+                <tr className={`border-b border-slate-50 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
                   <td className="px-3 py-1.5 font-bold text-slate-700">{d.mes_reunion?.slice(0, 7)}</td>
                   <td className="px-2 py-1.5 text-slate-700">{d.decision}</td>
                   <td className="px-2 py-1.5 text-slate-600">{d.opcion_elegida || "—"}</td>

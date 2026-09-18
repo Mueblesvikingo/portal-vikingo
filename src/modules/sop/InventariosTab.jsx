@@ -222,8 +222,8 @@ export default function InventariosTab({ productos, canEdit, currentUser, semana
                       const plan = Number(planPorProducto[p.id] || 0);
                       const saldoNeto = saldo - plan;
                       return (
-                      <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/70">
-                        <td className="sticky left-0 z-10 bg-white px-3 py-1 font-bold text-slate-700">
+                      <tr key={p.id} className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60 hover:bg-sky-50/60">
+                        <td className="sticky left-0 z-10 bg-inherit px-3 py-1 font-bold text-slate-700">
                           <span className="text-[9px] text-slate-300">{p.codigo}</span> {p.nombre}
                         </td>
                         <td className="px-2 py-1 text-right text-[9px] font-bold text-slate-400">{formatMoney(p.precio)}</td>

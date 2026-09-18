@@ -264,7 +264,7 @@ function TablaCargaCapacidad({ columnas }) {
         </thead>
         <tbody>
           {estaciones.map((estacion) => (
-            <tr key={estacion} className="border-b border-slate-50">
+            <tr key={estacion} className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60">
               <td className="px-3 py-1.5 font-bold text-slate-700">{estacion}</td>
               {columnas.map((c) => {
                 const fila = c.filas.find((f) => f.estacion === estacion);
@@ -369,7 +369,7 @@ function TiemposEstandarSection({ tiemposEstandar, canEdit, onUpdateTiempoEstand
             </thead>
             <tbody>
               {familias.map((familia) => (
-                <tr key={familia} className="border-t border-slate-50">
+                <tr key={familia} className="border-t border-slate-50 odd:bg-white even:bg-slate-50/60">
                   <td className="px-2 py-1 font-bold text-slate-700">{familia}</td>
                   {estacionesCols.map((estacion) => {
                     const t = porFamiliaEstacion.get(`${familia}|${estacion}`);
@@ -538,7 +538,7 @@ function CapacidadRealSection({ capacidadProcesos, canEdit, onCreateProceso, onU
                   <tr><td colSpan={5} className="px-2 py-4 text-center text-[10px] font-bold text-slate-300">Aún no hay estaciones capturadas.</td></tr>
                 )}
                 {ordenarEstaciones(capacidadProcesos.map((p) => ({ estacion: p.proceso, ...p }))).map((p) => (
-                  <tr key={p.id} className="border-t border-slate-50">
+                  <tr key={p.id} className="border-t border-slate-50 odd:bg-white even:bg-slate-50/60">
                     <td className="px-2 py-1 font-bold text-slate-700">
                       <EditableText
                         value={p.proceso}
@@ -637,10 +637,10 @@ function InfraestructuraSection({ infraestructura, capacidadProcesos, canEdit, o
                 {infraestructura.length === 0 && (
                   <tr><td colSpan={6} className="px-2 py-4 text-center text-[10px] font-bold text-slate-300">Aún no hay equipos capturados.</td></tr>
                 )}
-                {infraestructura.map((e) => {
+                {infraestructura.map((e, i) => {
                   const fueraDeServicio = Number(e.horas_disponibles_turno) === 0;
                   return (
-                    <tr key={e.id} className={`border-t border-slate-50 ${fueraDeServicio ? "bg-red-50/40" : ""}`}>
+                    <tr key={e.id} className={`border-t border-slate-50 ${fueraDeServicio ? "bg-red-50/40" : i % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
                       <td className="px-2 py-1 font-bold text-slate-700">
                         <EditableText value={e.nombre_equipo} canEdit={canEdit} width="w-36" onSave={(v) => onUpdateInfra(e.id, { nombre_equipo: v }, currentUser)} />
                         {fueraDeServicio && <span className="ml-1.5 rounded-full border border-red-200 bg-red-50 px-1.5 py-0.5 text-[8px] font-black uppercase text-red-600">Fuera de servicio</span>}
@@ -946,7 +946,7 @@ function OperacionSemanalView({ productos, parametros, capacidadProcesos, tiempo
               </thead>
               <tbody>
                 {LINEAS.map((linea) => (
-                  <tr key={linea} className="border-b border-slate-50">
+                  <tr key={linea} className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60">
                     <td className="px-3 py-1.5 font-bold text-slate-700">{linea}</td>
                     <td className="px-2 py-1.5 text-right text-slate-600">{formatNumber(porLinea[linea])}</td>
                   </tr>
@@ -1182,7 +1182,7 @@ export default function OperacionTab({
           </thead>
           <tbody>
             {LINEAS.map((linea) => (
-              <tr key={linea} className="border-b border-slate-50">
+              <tr key={linea} className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60">
                 <td className="px-3 py-1.5 font-bold text-slate-700">{linea}</td>
                 {demandaPorMes.map((m, i) => (
                   <td key={i} className="px-2 py-1.5 text-right text-slate-600">{formatNumber(m.porLinea[linea])}</td>

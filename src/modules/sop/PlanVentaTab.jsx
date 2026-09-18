@@ -316,8 +316,8 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCre
                     {group.items.map((p) => {
                       const productoPct = granTotalPiezas > 0 ? ((Number(piezasPorProducto[p.id] || 0) / granTotalPiezas) * 100) : 0;
                       return (
-                      <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/70">
-                        <td className="sticky left-0 z-10 bg-white px-3 py-1 font-bold text-slate-700">
+                      <tr key={p.id} className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60 hover:bg-sky-50/60">
+                        <td className="sticky left-0 z-10 bg-inherit px-3 py-1 font-bold text-slate-700">
                           <span className="text-[9px] text-slate-300">{p.codigo}</span> {p.nombre}
                           {canEdit && (
                             <button
@@ -566,8 +566,8 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
                     const productoPiezasTotal = horizonte.reduce((s, m) => s + getPiezas(p.id, m.anio, m.mes), 0);
                     const productoPct = granTotalPiezas > 0 ? (productoPiezasTotal / granTotalPiezas) * 100 : 0;
                     return (
-                    <tr key={p.id} className={`border-b border-slate-50 hover:bg-slate-50/70`}>
-                      <td className="sticky left-0 z-10 bg-white px-3 py-1 font-bold text-slate-700">
+                    <tr key={p.id} className="border-b border-slate-50 odd:bg-white even:bg-slate-50/60 hover:bg-sky-50/60">
+                      <td className="sticky left-0 z-10 bg-inherit px-3 py-1 font-bold text-slate-700">
                         <span className="text-[9px] text-slate-300">{p.codigo}</span> {p.nombre}
                         {canEdit && (
                           <button
