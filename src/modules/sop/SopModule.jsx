@@ -920,8 +920,8 @@ export default function SopModule({ currentUser }) {
               >
                 📅 Vista semanal
               </button>
-              <span className="max-w-[200px] text-[9px] font-semibold leading-tight text-white/50">
-                Captura la semana siguiente para la junta de alineación de cada martes
+              <span className="max-w-[200px] text-[9px] font-semibold leading-tight text-white/90">
+                Captura de la semana siguiente para la junta de alineación de cada martes
               </span>
               {(vistaSemanal || PESTANAS_SIEMPRE_SEMANALES.includes(activeTab)) && PESTANA_VENTANA[activeTab] && (
                 <SelectorSemanaVentana semanaLunes={semanaVentana} onChange={setSemanaVentana} pestana={PESTANA_VENTANA[activeTab]} />
