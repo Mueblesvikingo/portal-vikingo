@@ -13,7 +13,7 @@ const LINEA_STYLE = {
 // estándar/Clasificación) — de aquí sale la carga real que ve Plan de
 // operación. "Sin clasificar" (familia null) es válido: ese producto
 // simplemente no participa todavía en ese cálculo.
-const FAMILIAS_PRODUCTO = ["Base Vinil", "Base Tela", "Cabecera Vinil", "Cabecera Tela", "Converticama", "Sala/Sofa", "Reposet", "Sillon"];
+const FAMILIAS_PRODUCTO = ["Base Vinil", "Base Tela", "Cabecera Vinil", "Cabecera Tela", "Converticama", "Sala/Sofa", "Reposet", "Sillon", "Recámaras"];
 
 function EditableCell({ value, canEdit, onSave, format = formatNumber, step = "1", width = "w-16" }) {
   const [editing, setEditing] = useState(false);
@@ -133,7 +133,7 @@ function AgregarProductoForm({ onCreate, onClose, currentUser, siguienteOrden, d
 // de los 3 campos planos que usan las demás pestañas. Exportar/importar CSV
 // y alta/baja de producto replican el mismo patrón ya usado en la vista
 // mensual, para no inventar un segundo mecanismo.
-function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCreateProducto, onDeactivateProducto, onSolicitarRecurso, semanaLunes }) {
+function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCreateProducto, onDeactivateProducto, onSavePrecio, onSaveFamilia, onSolicitarRecurso, semanaLunes }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(null);
   const [piezasPorProducto, setPiezasPorProducto] = useState({});
@@ -270,11 +270,13 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCre
         <p className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</p>
       ) : (
         <div className="max-h-[75vh] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[420px] border-collapse text-[10px]">
+          <table className="w-full min-w-[640px] border-collapse text-[10px]">
             <thead>
               <tr className="text-left text-[9px] font-black uppercase tracking-widest text-white/60">
                 <th className="sticky left-0 top-0 z-30 bg-[#001225] px-3 py-2 text-white">Producto</th>
                 <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">Precio</th>
+                <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-left" title="Familia real (Planeación de Producción) — de aquí sale su carga en Plan de operación">Familia</th>
+                <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">% Part.</th>
                 <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">Semana {formatFechaCorta(lunes)}–{formatFechaCorta(viernes)}</th>
               </tr>
             </thead>
@@ -285,7 +287,7 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCre
                 return (
                   <Fragment key={group.linea}>
                     <tr>
-                      <td colSpan={3} className={`px-3 py-1.5 ${style.row}`}>
+                      <td colSpan={5} className={`px-3 py-1.5 ${style.row}`}>
                         <div className="flex items-center justify-between gap-2">
                           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${style.badge}`}>
                             <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
@@ -306,7 +308,7 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCre
                     </tr>
                     {agregarEnLinea === group.linea && (
                       <tr>
-                        <td colSpan={3} className="px-3 py-2">
+                        <td colSpan={5} className="px-3 py-2">
                           <AgregarProductoForm
                             onCreate={onCreateProducto}
                             onClose={() => setAgregarEnLinea(null)}
@@ -317,7 +319,9 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCre
                         </td>
                       </tr>
                     )}
-                    {group.items.map((p) => (
+                    {group.items.map((p) => {
+                      const productoPct = granTotalPiezas > 0 ? ((Number(piezasPorProducto[p.id] || 0) / granTotalPiezas) * 100) : 0;
+                      return (
                       <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/70">
                         <td className="sticky left-0 z-10 bg-white px-3 py-1 font-bold text-slate-700">
                           <span className="text-[9px] text-slate-300">{p.codigo}</span> {p.nombre}
@@ -336,7 +340,33 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCre
                             </button>
                           )}
                         </td>
-                        <td className="px-2 py-1 text-right text-[9px] font-bold text-slate-400">{formatMoney(p.precio)}</td>
+                        <td className="px-1 py-1">
+                          <EditableCell
+                            value={p.precio}
+                            canEdit={canEdit}
+                            onSave={(n) => onSavePrecio(p.id, n, currentUser)}
+                            format={formatMoney}
+                            step="1"
+                            width="w-20"
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          {canEdit ? (
+                            <select
+                              value={p.familia || ""}
+                              onChange={(e) => onSaveFamilia(p.id, e.target.value || null, currentUser)}
+                              className="h-6 w-28 rounded border border-slate-200 bg-white px-1 text-[9px] font-bold text-slate-700 outline-none"
+                            >
+                              <option value="">Sin clasificar</option>
+                              {FAMILIAS_PRODUCTO.map((f) => (
+                                <option key={f} value={f}>{f}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-[9px] font-bold text-slate-500">{p.familia || "Sin clasificar"}</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1 text-right text-[9px] font-bold text-slate-400">{productoPct.toFixed(1)}%</td>
                         <td className="px-1 py-1">
                           <EditableCell
                             value={piezasPorProducto[p.id] || 0}
@@ -346,10 +376,13 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCre
                           {saving === p.id && <span className="ml-1 text-[9px] text-slate-300">guardando…</span>}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                     <tr className={`border-b border-slate-100 ${style.total}`}>
                       <td className={`sticky left-0 z-10 px-3 py-1 text-[9px] font-black uppercase ${style.total}`}>Total {group.linea}</td>
                       <td />
+                      <td />
+                      <td className="px-2 py-1 text-right text-[9px] font-black">{(granTotalPiezas > 0 ? (lineaTotal / granTotalPiezas) * 100 : 0).toFixed(1)}%</td>
                       <td className="px-2 py-1 text-right text-[9px] font-black">{formatNumber(lineaTotal)}</td>
                     </tr>
                   </Fragment>
@@ -360,6 +393,8 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCre
               <tr className="bg-[#001225] text-white">
                 <td className="sticky left-0 z-10 bg-[#001225] px-3 py-2 text-[9px] font-black uppercase tracking-widest">Total general (piezas)</td>
                 <td />
+                <td />
+                <td className="px-2 py-2 text-right text-[10px] font-black">100%</td>
                 <td className="px-2 py-2 text-right text-[10px] font-black">{formatNumber(granTotalPiezas)}</td>
               </tr>
             </tfoot>
@@ -442,6 +477,8 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
         canEdit={canEdit}
         onCreateProducto={onCreateProducto}
         onDeactivateProducto={onDeactivateProducto}
+        onSavePrecio={onSavePrecio}
+        onSaveFamilia={onSaveFamilia}
         onSolicitarRecurso={onSolicitarRecurso}
         semanaLunes={semanaLunes}
       />
