@@ -164,11 +164,11 @@ const TABS = [
   { key: "decisiones", label: "Acuerdos S&OP" },
   { key: "decisiones-director", label: "Decisiones (Director)" },
   { key: "prioridades", label: "Prioridades semanales" },
-  // "Histórico S&OP" oculto temporalmente a pedido — el componente y su
-  // carga de datos se dejan intactos, solo se quita del menú de pestañas.
+  { key: "historico", label: "Histórico S&OP" },
+  // "Parámetros" oculta temporalmente a pedido — el componente y su carga
+  // de datos se dejan intactos, solo se quita del menú de pestañas.
   // Para reactivarla: descomentar la línea de abajo.
-  // { key: "historico", label: "Histórico S&OP" },
-  { key: "parametros", label: "Parámetros" },
+  // { key: "parametros", label: "Parámetros" },
 ];
 
 export default function SopModule({ currentUser }) {
