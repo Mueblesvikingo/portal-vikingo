@@ -7,6 +7,7 @@ import {
   createProducto,
   setProductoActivo,
   updateProductoPrecio,
+  updateProductoFamilia,
   getControl,
   updateControl,
   getParametros,
@@ -32,6 +33,7 @@ import {
   updatePrioridadSemana,
   getCapacidadProcesos,
   getTiemposEstandar,
+  updateTiempoEstandar,
   createCapacidadProceso,
   updateCapacidadProceso,
   deactivateCapacidadProceso,
@@ -308,6 +310,17 @@ export default function SopModule({ currentUser }) {
     }
     setProductos((current) => current.map((p) => (p.id === productoId ? result.data : p)));
     setMessage("Precio actualizado.");
+  }
+
+  async function handleSaveFamilia(productoId, familia, actor) {
+    const result = await updateProductoFamilia(productoId, familia, actor);
+    if (!result.ok) {
+      console.error(result.error);
+      setMessage("No fue posible guardar la familia.");
+      return;
+    }
+    setProductos((current) => current.map((p) => (p.id === productoId ? result.data : p)));
+    setMessage("Familia actualizada.");
   }
 
   async function handleCreateProducto(payload, actor) {
@@ -807,6 +820,15 @@ export default function SopModule({ currentUser }) {
     setCapacidadProcesos((current) => current.filter((p) => p.id !== id));
   }
 
+  async function handleUpdateTiempoEstandar(id, minutosPorPieza, actor) {
+    const ok = await updateTiempoEstandar(id, minutosPorPieza, actor);
+    if (!ok) {
+      setMessage("No fue posible actualizar el tiempo estándar.");
+      return;
+    }
+    setTiemposEstandar((current) => current.map((t) => (t.id === id ? { ...t, minutos_por_pieza: minutosPorPieza } : t)));
+  }
+
   async function handleCreateInfra(payload, actor) {
     const result = await createInfraestructura(payload, actor);
     if (!result.ok) {
@@ -959,6 +981,7 @@ export default function SopModule({ currentUser }) {
                 canEdit={canEditPlanVenta}
                 onSave={handleSavePlanVenta}
                 onSavePrecio={handleSavePrecio}
+                onSaveFamilia={handleSaveFamilia}
                 onCreateProducto={handleCreateProducto}
                 onDeactivateProducto={handleDeactivateProducto}
                 currentUser={currentUser}
@@ -976,6 +999,7 @@ export default function SopModule({ currentUser }) {
                 capacidadProcesos={capacidadProcesos}
                 infraestructura={infraestructura}
                 tiemposEstandar={tiemposEstandar}
+                onUpdateTiempoEstandar={handleUpdateTiempoEstandar}
                 canEdit={canEditOperacionParams}
                 currentUser={currentUser}
                 onCreateProceso={handleCreateProceso}

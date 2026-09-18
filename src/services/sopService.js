@@ -89,6 +89,30 @@ export async function updateProductoPrecio(id, precio, actor) {
   }
 }
 
+// Familia real (PCP-IF-01 Clasificación) — de qué familia de Tiempos
+// estándar sale la carga real de este producto en Plan de operación.
+// null = sin clasificar, no participa en ese cálculo (se avisa aparte).
+export async function updateProductoFamilia(id, familia, actor) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_productos")
+      .update({
+        familia: familia || null,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    return { ok: false, error: err, data: null };
+  }
+}
+
 export async function getControl() {
   try {
     const { data, error } = await supabase
@@ -632,9 +656,10 @@ export async function closeCurrentMonth({ control, resumenMes, ventaReal, actor 
 }
 
 // Tiempos estándar reales (minutos por pieza) por familia de producto ×
-// estación — de PCP-IF-01 Análisis Planeación Producción. Catálogo fijo de
-// referencia (no se edita desde el portal por ahora), usado para calcular
-// la carga real en minutos que exige el Plan de venta en cada estación.
+// estación — de PCP-IF-01 Análisis Planeación Producción. Se cargó como
+// catálogo real inicial, pero es editable desde el portal (los tiempos
+// cambian si mejora el proceso o cambia el producto), y de ahí sale la
+// carga real en minutos que exige el Plan de venta en cada estación.
 export async function getTiemposEstandar() {
   try {
     const { data, error } = await supabase.from("sop_tiempos_estandar").select("*");
@@ -643,6 +668,25 @@ export async function getTiemposEstandar() {
   } catch (err) {
     console.error("Error al cargar tiempos estándar S&OP:", err);
     return [];
+  }
+}
+
+export async function updateTiempoEstandar(id, minutosPorPieza, actor) {
+  try {
+    const { error } = await supabase
+      .from("sop_tiempos_estandar")
+      .update({
+        minutos_por_pieza: minutosPorPieza,
+        updated_at: new Date().toISOString(),
+        updated_by_persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+        updated_by_nombre: actor?.nombre || actor?.usuario || null,
+      })
+      .eq("id", id);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error("Error al actualizar tiempo estándar S&OP:", err);
+    return false;
   }
 }
 

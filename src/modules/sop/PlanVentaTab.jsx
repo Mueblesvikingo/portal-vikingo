@@ -9,6 +9,12 @@ const LINEA_STYLE = {
   Salas: { badge: "border-amber-200 bg-amber-50 text-amber-700", row: "bg-amber-50/50", total: "bg-amber-50 text-amber-700", dot: "bg-amber-400" },
 };
 
+// Familias reales de Planeación de Producción (PCP-IF-01 Tiempos
+// estándar/Clasificación) — de aquí sale la carga real que ve Plan de
+// operación. "Sin clasificar" (familia null) es válido: ese producto
+// simplemente no participa todavía en ese cálculo.
+const FAMILIAS_PRODUCTO = ["Base Vinil", "Base Tela", "Cabecera Vinil", "Cabecera Tela", "Converticama", "Sala/Sofa", "Reposet", "Sillon"];
+
 function EditableCell({ value, canEdit, onSave, format = formatNumber, step = "1", width = "w-16" }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value ?? 0));
@@ -383,7 +389,7 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCre
 // se sigue filtrando/guardando con este valor fijo.
 const ESCENARIO_UNICO = "Base";
 
-export default function PlanVentaTab({ productos, planVenta, control, canEdit, onSave, onSavePrecio, onCreateProducto, onDeactivateProducto, currentUser, vistaSemanal, semanaLunes, onSolicitarRecurso }) {
+export default function PlanVentaTab({ productos, planVenta, control, canEdit, onSave, onSavePrecio, onSaveFamilia, onCreateProducto, onDeactivateProducto, currentUser, vistaSemanal, semanaLunes, onSolicitarRecurso }) {
   const escenario = ESCENARIO_UNICO;
   const [showAgregar, setShowAgregar] = useState(false);
   const [mesExportarIdx, setMesExportarIdx] = useState(0);
@@ -528,6 +534,7 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
             <tr className="text-left text-[9px] font-black uppercase tracking-widest text-white/60">
               <th className="sticky left-0 top-0 z-30 bg-[#001225] px-3 py-2 text-white">Producto</th>
               <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">Precio</th>
+              <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-left" title="Familia real (Planeación de Producción) — de aquí sale su carga en Plan de operación">Familia</th>
               <th className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">% Part.</th>
               {horizonte.map((m) => (
                 <th key={`${m.anio}-${m.mes}`} className="sticky top-0 z-20 bg-[#001225] px-2 py-2 text-right">{m.label}</th>
@@ -543,7 +550,7 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
               return (
                 <>
                   <tr key={`h-${group.linea}`}>
-                    <td colSpan={horizonte.length + 3} className={`px-3 py-1.5 ${style.row}`}>
+                    <td colSpan={horizonte.length + 4} className={`px-3 py-1.5 ${style.row}`}>
                       <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${style.badge}`}>
                         <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
                         {group.linea}
@@ -582,6 +589,22 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
                           width="w-20"
                         />
                       </td>
+                      <td className="px-1 py-1">
+                        {canEdit ? (
+                          <select
+                            value={p.familia || ""}
+                            onChange={(e) => onSaveFamilia(p.id, e.target.value || null, currentUser)}
+                            className="h-6 w-28 rounded border border-slate-200 bg-white px-1 text-[9px] font-bold text-slate-700 outline-none"
+                          >
+                            <option value="">Sin clasificar</option>
+                            {FAMILIAS_PRODUCTO.map((f) => (
+                              <option key={f} value={f}>{f}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-[9px] font-bold text-slate-500">{p.familia || "Sin clasificar"}</span>
+                        )}
+                      </td>
                       <td className="px-2 py-1 text-right text-[9px] font-bold text-slate-400">{productoPct.toFixed(1)}%</td>
                       {horizonte.map((m) => (
                         <td key={`${m.anio}-${m.mes}`} className="px-1 py-1">
@@ -598,6 +621,7 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
                   <tr key={`t-${group.linea}`} className={`border-b border-slate-100 ${style.total}`}>
                     <td className={`sticky left-0 z-10 px-3 py-1 text-[9px] font-black uppercase ${style.total}`}>Total {group.linea}</td>
                     <td />
+                    <td />
                     <td className="px-2 py-1 text-right text-[9px] font-black">{lineaPct.toFixed(1)}%</td>
                     {lineaTotales.map((t, i) => (
                       <td key={i} className="px-2 py-1 text-right text-[9px] font-black">{formatNumber(t)}</td>
@@ -611,6 +635,7 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
             <tr className="bg-[#001225] text-white">
               <td className="sticky left-0 z-10 bg-[#001225] px-3 py-2 text-[9px] font-black uppercase tracking-widest">Total general (piezas)</td>
               <td />
+              <td />
               <td className="px-2 py-2 text-right text-[10px] font-black">100.0%</td>
               {totalesPorMes.map((m, i) => (
                 <td key={i} className="px-2 py-2 text-right text-[10px] font-black">{formatNumber(m.piezas)}</td>
@@ -618,6 +643,7 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
             </tr>
             <tr className="bg-[#001225]/95 text-white">
               <td className="sticky left-0 z-10 bg-[#001225] px-3 py-2 text-[9px] font-black uppercase tracking-widest">Total general ($)</td>
+              <td />
               <td />
               <td />
               {totalesPorMes.map((m, i) => (

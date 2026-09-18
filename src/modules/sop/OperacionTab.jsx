@@ -8,6 +8,7 @@ import { getVentana } from "../../services/sopVentanaSemanalService";
 // Producción) — se usa para ordenar filas/columnas consistentemente aunque
 // capacidadProcesos venga en otro orden desde Supabase.
 const ESTACIONES_ORDEN = ["Corte Madera", "Armado Casco", "Hab. Resorte", "Hab. Esponja", "Corte Tela", "Costura", "Tapiceria", "Empaque"];
+const FAMILIAS_ORDEN = ["Base Vinil", "Base Tela", "Cabecera Vinil", "Cabecera Tela", "Converticama", "Sala/Sofa", "Reposet", "Sillon"];
 const DIAS_SEMANA = 5;
 
 // Vacantes reales de personal (PCP-MA-02-Infraestructura, auditoría de
@@ -179,6 +180,141 @@ function TablaCargaCapacidad({ columnas }) {
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Matriz editable de tiempos estándar (familia × estación) — el dato real
+// que alimenta la carga de la tabla de arriba. Se cargó inicial con datos
+// reales de PCP-IF-01, pero el proceso cambia con el tiempo (mejoras,
+// productos nuevos), así que queda editable aquí en vez de fijo.
+function TiemposEstandarSection({ tiemposEstandar, canEdit, onUpdateTiempoEstandar, currentUser }) {
+  const porFamiliaEstacion = useMemo(() => new Map(tiemposEstandar.map((t) => [`${t.familia}|${t.estacion}`, t])), [tiemposEstandar]);
+  const familias = FAMILIAS_ORDEN.filter((f) => tiemposEstandar.some((t) => t.familia === f));
+
+  if (tiemposEstandar.length === 0) return null;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-sm">
+      <div className="flex items-center gap-2 bg-sky-50/60 px-4 py-2.5">
+        <span className="h-2 w-2 rounded-full bg-sky-400" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-sky-700">Tiempos estándar (minutos por pieza)</p>
+      </div>
+      <div className="p-4">
+        <p className="text-[9px] font-bold normal-case tracking-normal text-slate-400">
+          Minutos que toma cada pieza en cada estación, por familia de producto — de aquí sale la carga real de la tabla de arriba. Edítalos si el proceso mejora o cambia.
+        </p>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[760px] border-collapse text-[10px]">
+            <thead>
+              <tr className="bg-slate-50 text-left text-[9px] font-black uppercase tracking-widest text-slate-400">
+                <th className="px-2 py-1.5">Familia</th>
+                {ESTACIONES_ORDEN.map((e) => (
+                  <th key={e} className="px-2 py-1.5 text-center">{e}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {familias.map((familia) => (
+                <tr key={familia} className="border-t border-slate-50">
+                  <td className="px-2 py-1 font-bold text-slate-700">{familia}</td>
+                  {ESTACIONES_ORDEN.map((estacion) => {
+                    const t = porFamiliaEstacion.get(`${familia}|${estacion}`);
+                    return (
+                      <td key={estacion} className="px-1 py-1 text-center">
+                        {t ? (
+                          <EditableNum value={t.minutos_por_pieza} canEdit={canEdit} onSave={(n) => onUpdateTiempoEstandar(t.id, n, currentUser)} />
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Simulador de mejora de capacidad — Teoría de Restricciones (Theory of
+// Constraints): mejorar una estación que no es el cuello de botella no
+// aumenta la capacidad real de la planta, solo invertir en la que sí lo es
+// mueve la aguja. Deja probar +personas/+turnos por estación sin guardar
+// nada, recalcula con el mismo motor real (calcularCargaEstaciones) y
+// muestra si el cuello de botella se alivia o se mueve a otra estación.
+function SimuladorMejora({ capacidadProcesos, canEdit, calcularColumnas }) {
+  const [activo, setActivo] = useState(false);
+  const [deltas, setDeltas] = useState({});
+
+  if (!canEdit || capacidadProcesos.length === 0) return null;
+
+  function setDelta(estacion, campo, valor) {
+    setDeltas((c) => ({ ...c, [estacion]: { ...c[estacion], [campo]: valor } }));
+  }
+
+  const capacidadSimulada = capacidadProcesos.map((p) => ({
+    ...p,
+    operarios: Number(p.operarios || 0) + Number(deltas[p.proceso]?.operarios || 0),
+    turnos_activos: Number(p.turnos_activos || 0) + Number(deltas[p.proceso]?.turnos || 0),
+  }));
+  const columnasSimuladas = activo ? calcularColumnas(capacidadSimulada) : [];
+
+  return (
+    <div className="mt-4 border-t border-slate-100 pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">🧪 Simulador de mejora (Teoría de Restricciones)</p>
+        <button
+          type="button"
+          onClick={() => setActivo((v) => !v)}
+          className={`rounded-lg border px-2.5 py-1 text-[9px] font-black uppercase tracking-widest transition ${activo ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+        >
+          {activo ? "Ocultar simulación" : "Probar cambios"}
+        </button>
+      </div>
+      {activo && (
+        <>
+          <p className="mt-1.5 text-[9px] font-semibold normal-case tracking-normal text-slate-400">
+            Agrega personas o turnos de prueba (no se guarda nada) y compara contra la tabla real de arriba: mejorar una estación que no es el cuello de botella no sube la capacidad de la planta — solo ayuda invertir en la que sí lo es.
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {ordenarEstaciones(capacidadProcesos.map((p) => ({ estacion: p.proceso }))).map(({ estacion }) => (
+              <div key={estacion} className="rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
+                <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">{estacion}</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <label className="text-[8px] font-bold text-slate-400">
+                    + pers.
+                    <input
+                      type="number"
+                      min="0"
+                      value={deltas[estacion]?.operarios || 0}
+                      onChange={(e) => setDelta(estacion, "operarios", Number(e.target.value))}
+                      className="ml-1 h-6 w-10 rounded border border-slate-200 bg-white px-1 text-center text-[10px] font-bold text-slate-700 outline-none"
+                    />
+                  </label>
+                  <label className="text-[8px] font-bold text-slate-400">
+                    + turnos
+                    <input
+                      type="number"
+                      min="0"
+                      value={deltas[estacion]?.turnos || 0}
+                      onChange={(e) => setDelta(estacion, "turnos", Number(e.target.value))}
+                      className="ml-1 h-6 w-10 rounded border border-slate-200 bg-white px-1 text-center text-[10px] font-bold text-slate-700 outline-none"
+                    />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3">
+            <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-violet-600">Resultado simulado</p>
+            <TablaCargaCapacidad columnas={columnasSimuladas} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -535,6 +671,14 @@ function OperacionSemanalView({ productos, parametros, capacidadProcesos, tiempo
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="p-3">
                 <TablaCargaCapacidad columnas={[{ key: "semana", label: "% Utilización", filas, cuelloBotella, piezasSinClasificar }]} />
+                <SimuladorMejora
+                  capacidadProcesos={capacidadProcesos}
+                  canEdit={canEdit}
+                  calcularColumnas={(capSim) => {
+                    const sim = calcularCargaEstaciones(piezasPorProducto, { productoFamilia, tiempoMap, capacidadProcesos: capSim, eficiencia, dias: DIAS_SEMANA });
+                    return [{ key: "semana-sim", label: "% Utilización (simulado)", ...sim }];
+                  }}
+                />
               </div>
             </div>
           )}
@@ -562,6 +706,7 @@ export default function OperacionTab({
   onDeactivateInfra,
   onSolicitarCapacidad,
   onSolicitarRecurso,
+  onUpdateTiempoEstandar,
   vistaSemanal,
   semanaLunes,
 }) {
@@ -658,6 +803,7 @@ export default function OperacionTab({
             onDeactivateInfra={onDeactivateInfra}
             currentUser={currentUser}
           />
+          <TiemposEstandarSection tiemposEstandar={tiemposEstandar} canEdit={canEdit} onUpdateTiempoEstandar={onUpdateTiempoEstandar} currentUser={currentUser} />
           <BrechasRealesSection infraestructura={infraestructura} canEdit={canEdit} currentUser={currentUser} onSolicitarRecurso={onSolicitarRecurso} />
         </div>
       </>
@@ -732,7 +878,20 @@ export default function OperacionTab({
               Falta capturar: {capacidadProcesos.length === 0 && "dotación por estación (abajo). "}{!diasHabilesMes && "días hábiles del mes (Parámetros). "}{tiemposEstandar.length === 0 && "tiempos estándar por familia (catálogo interno)."}
             </p>
           ) : (
-            <TablaCargaCapacidad columnas={porMesEstaciones} />
+            <>
+              <TablaCargaCapacidad columnas={porMesEstaciones} />
+              <SimuladorMejora
+                capacidadProcesos={capacidadProcesos}
+                canEdit={canEdit}
+                calcularColumnas={(capSim) =>
+                  horizonte.map((m) => {
+                    const piezasMes = piezasPorProductoDelMes(planVenta, escenarioActivo, m.anio, m.mes);
+                    const sim = calcularCargaEstaciones(piezasMes, { productoFamilia, tiempoMap, capacidadProcesos: capSim, eficiencia, dias: diasHabilesMes });
+                    return { key: `${m.anio}-${m.mes}`, label: m.label, ...sim };
+                  })
+                }
+              />
+            </>
           )}
         </div>
       </div>
@@ -754,6 +913,8 @@ export default function OperacionTab({
         onDeactivateInfra={onDeactivateInfra}
         currentUser={currentUser}
       />
+
+      <TiemposEstandarSection tiemposEstandar={tiemposEstandar} canEdit={canEdit} onUpdateTiempoEstandar={onUpdateTiempoEstandar} currentUser={currentUser} />
 
       <BrechasRealesSection infraestructura={infraestructura} canEdit={canEdit} currentUser={currentUser} onSolicitarRecurso={onSolicitarRecurso} />
     </div>
