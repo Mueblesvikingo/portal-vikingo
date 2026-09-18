@@ -833,109 +833,112 @@ export default function AccionDetailPanel({
                   <div className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
                 ) : subTab === "detalle" ? (
                   <div className="space-y-3">
-                    <div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" style={{ borderLeft: `4px solid ${TIPO_COLOR[accion.tipo] || "#94a3b8"}` }}>
                       <h2 className="text-lg font-black text-slate-900">
                         <EditableText value={accion.titulo} canEdit={canEdit} onSave={(v) => onUpdate({ titulo: v })} />
                       </h2>
                       <div className="mt-1 text-[11px] text-slate-500">
                         <EditableText value={accion.descripcion} canEdit={canEdit} onSave={(v) => onUpdate({ descripcion: v })} placeholder="Sin descripción" multiline />
                       </div>
+
+                      {(correccionOrigen || derivadas.length > 0) && (
+                        <div className="mt-2 space-y-1">
+                          {correccionOrigen && (
+                            <button type="button" onClick={() => onNavigateToAccion?.(correccionOrigen.id)} className="flex w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-left text-[10px] font-bold text-slate-600 hover:bg-slate-100">
+                              <span className="text-slate-400">↳ Corrección de origen:</span> {correccionOrigen.codigo} — {correccionOrigen.titulo}
+                            </button>
+                          )}
+                          {derivadas.length > 0 && (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{derivadas.length} acción(es) correctiva(s) derivada(s)</p>
+                              <div className="mt-0.5 flex flex-wrap gap-1">
+                                {derivadas.map((d) => (
+                                  <button key={d.id} type="button" onClick={() => onNavigateToAccion?.(d.id)} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-bold text-slate-600 hover:bg-slate-100">
+                                    {d.codigo}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    {(correccionOrigen || derivadas.length > 0) && (
-                      <div className="space-y-1">
-                        {correccionOrigen && (
-                          <button type="button" onClick={() => onNavigateToAccion?.(correccionOrigen.id)} className="flex w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-left text-[10px] font-bold text-slate-600 hover:bg-slate-100">
-                            <span className="text-slate-400">↳ Corrección de origen:</span> {correccionOrigen.codigo} — {correccionOrigen.titulo}
+                    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                      <p className="mb-2 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className="text-[12px]">🗂️</span> Detalle del registro</p>
+                      <div className="grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-3">
+                        <div className="rounded-xl bg-slate-50 px-2.5 py-2">
+                          <p className="font-black uppercase tracking-widest text-slate-400">Nivel</p>
+                          <EditableSelect value={accion.nivel} options={NIVELES_ACCION} canEdit={canEdit} onSave={(v) => onUpdate({ nivel: v })} />
+                        </div>
+                        <div className="rounded-xl bg-slate-50 px-2.5 py-2">
+                          <p className="font-black uppercase tracking-widest text-slate-400">Tipo</p>
+                          <EditableSelect value={accion.tipo} options={TIPOS_ACCION} canEdit={canEdit} onSave={(v) => onUpdate({ tipo: v })} />
+                        </div>
+                        <div className="rounded-xl bg-slate-50 px-2.5 py-2">
+                          <p className="font-black uppercase tracking-widest text-slate-400">Proceso</p>
+                          <EditableSelect
+                            value={accion.proceso_id || ""}
+                            options={[{ value: "", label: "Sin proceso" }, ...procesos.map((p) => ({ value: p.id, label: p.nombre }))]}
+                            canEdit={canEdit}
+                            onSave={(v) => onUpdate({ proceso_id: v || null, subproceso_id: null, subproceso_texto: null })}
+                            labelFor={() => (accion.proceso_id ? procesosById[accion.proceso_id]?.nombre : "Sin proceso")}
+                          />
+                        </div>
+                        <div className="rounded-xl bg-slate-50 px-2.5 py-2">
+                          <p className="font-black uppercase tracking-widest text-slate-400">Área / subproceso</p>
+                          {(() => {
+                            // Texto libre (no todo caso real cae en el catálogo de Diseño
+                            // Organizacional) con sugerencias de las áreas ya conocidas del
+                            // proceso — si lo escrito coincide con una, se liga también a
+                            // subproceso_id para reportes; si no, se guarda solo el texto.
+                            const procesoActual = accion.proceso_id ? procesosById[accion.proceso_id] : null;
+                            const areasDisponibles = procesoActual ? (subprocesos || []).filter((s) => s.proceso === procesoActual.nombre) : [];
+                            const valorActual = accion.subproceso_texto || (accion.subproceso_id ? subprocesosById[accion.subproceso_id]?.nombre?.trim() : "") || "";
+                            return (
+                              <EditableSmallField
+                                value={valorActual}
+                                canEdit={canEdit && !!procesoActual}
+                                placeholder={procesoActual ? "Sin área específica" : "Elige primero un proceso"}
+                                suggestions={areasDisponibles.map((s) => s.nombre.trim())}
+                                listId="area-subproceso-sugeridas-detalle"
+                                onSave={(v) => {
+                                  const texto = String(v || "").trim();
+                                  const coincidencia = texto
+                                    ? areasDisponibles.find((s) => s.nombre.trim().toLowerCase() === texto.toLowerCase())
+                                    : null;
+                                  onUpdate({ subproceso_texto: texto || null, subproceso_id: coincidencia?.id || null });
+                                }}
+                              />
+                            );
+                          })()}
+                        </div>
+                        <div className="rounded-xl bg-slate-50 px-2.5 py-2">
+                          <p className="font-black uppercase tracking-widest text-slate-400">Objetivo estratégico</p>
+                          <EditableSelect
+                            value={accion.objetivo_id || ""}
+                            options={[{ value: "", label: "Sin vincular" }, ...objetivos.map((o) => ({ value: o.id, label: o.codigo }))]}
+                            canEdit={canEdit}
+                            onSave={(v) => onUpdate({ objetivo_id: v || null })}
+                            labelFor={() => (accion.objetivo_id ? objetivosById[accion.objetivo_id]?.codigo : "Sin vincular")}
+                          />
+                        </div>
+                        <div className="rounded-xl bg-slate-50 px-2.5 py-2">
+                          <p className="font-black uppercase tracking-widest text-slate-400">Con riesgo</p>
+                          <button
+                            type="button"
+                            disabled={!canEdit}
+                            onClick={() => onUpdate({ con_riesgo: !accion.con_riesgo })}
+                            className={`mt-0.5 rounded-full border px-2 py-0.5 text-[10px] font-black ${accion.con_riesgo ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-white text-slate-400"}`}
+                          >
+                            {accion.con_riesgo ? "Sí" : "No"}
                           </button>
-                        )}
-                        {derivadas.length > 0 && (
-                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
-                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{derivadas.length} acción(es) correctiva(s) derivada(s)</p>
-                            <div className="mt-0.5 flex flex-wrap gap-1">
-                              {derivadas.map((d) => (
-                                <button key={d.id} type="button" onClick={() => onNavigateToAccion?.(d.id)} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-bold text-slate-600 hover:bg-slate-100">
-                                  {d.codigo}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2.5 text-[10px] sm:grid-cols-3">
-                      <div>
-                        <p className="font-black uppercase tracking-widest text-slate-400">Nivel</p>
-                        <EditableSelect value={accion.nivel} options={NIVELES_ACCION} canEdit={canEdit} onSave={(v) => onUpdate({ nivel: v })} />
-                      </div>
-                      <div>
-                        <p className="font-black uppercase tracking-widest text-slate-400">Tipo</p>
-                        <EditableSelect value={accion.tipo} options={TIPOS_ACCION} canEdit={canEdit} onSave={(v) => onUpdate({ tipo: v })} />
-                      </div>
-                      <div>
-                        <p className="font-black uppercase tracking-widest text-slate-400">Proceso</p>
-                        <EditableSelect
-                          value={accion.proceso_id || ""}
-                          options={[{ value: "", label: "Sin proceso" }, ...procesos.map((p) => ({ value: p.id, label: p.nombre }))]}
-                          canEdit={canEdit}
-                          onSave={(v) => onUpdate({ proceso_id: v || null, subproceso_id: null, subproceso_texto: null })}
-                          labelFor={() => (accion.proceso_id ? procesosById[accion.proceso_id]?.nombre : "Sin proceso")}
-                        />
-                      </div>
-                      <div>
-                        <p className="font-black uppercase tracking-widest text-slate-400">Área / subproceso</p>
-                        {(() => {
-                          // Texto libre (no todo caso real cae en el catálogo de Diseño
-                          // Organizacional) con sugerencias de las áreas ya conocidas del
-                          // proceso — si lo escrito coincide con una, se liga también a
-                          // subproceso_id para reportes; si no, se guarda solo el texto.
-                          const procesoActual = accion.proceso_id ? procesosById[accion.proceso_id] : null;
-                          const areasDisponibles = procesoActual ? (subprocesos || []).filter((s) => s.proceso === procesoActual.nombre) : [];
-                          const valorActual = accion.subproceso_texto || (accion.subproceso_id ? subprocesosById[accion.subproceso_id]?.nombre?.trim() : "") || "";
-                          return (
-                            <EditableSmallField
-                              value={valorActual}
-                              canEdit={canEdit && !!procesoActual}
-                              placeholder={procesoActual ? "Sin área específica" : "Elige primero un proceso"}
-                              suggestions={areasDisponibles.map((s) => s.nombre.trim())}
-                              listId="area-subproceso-sugeridas-detalle"
-                              onSave={(v) => {
-                                const texto = String(v || "").trim();
-                                const coincidencia = texto
-                                  ? areasDisponibles.find((s) => s.nombre.trim().toLowerCase() === texto.toLowerCase())
-                                  : null;
-                                onUpdate({ subproceso_texto: texto || null, subproceso_id: coincidencia?.id || null });
-                              }}
-                            />
-                          );
-                        })()}
-                      </div>
-                      <div>
-                        <p className="font-black uppercase tracking-widest text-slate-400">Objetivo estratégico</p>
-                        <EditableSelect
-                          value={accion.objetivo_id || ""}
-                          options={[{ value: "", label: "Sin vincular" }, ...objetivos.map((o) => ({ value: o.id, label: o.codigo }))]}
-                          canEdit={canEdit}
-                          onSave={(v) => onUpdate({ objetivo_id: v || null })}
-                          labelFor={() => (accion.objetivo_id ? objetivosById[accion.objetivo_id]?.codigo : "Sin vincular")}
-                        />
-                      </div>
-                      <div>
-                        <p className="font-black uppercase tracking-widest text-slate-400">Con riesgo</p>
-                        <button
-                          type="button"
-                          disabled={!canEdit}
-                          onClick={() => onUpdate({ con_riesgo: !accion.con_riesgo })}
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${accion.con_riesgo ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-slate-50 text-slate-400"}`}
-                        >
-                          {accion.con_riesgo ? "Sí" : "No"}
-                        </button>
+                        </div>
                       </div>
                     </div>
 
                     {involucrados.length > 0 && (
-                      <div className="border-t border-slate-100 pt-2.5">
+                      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
                         <p className="mb-2 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className="text-[12px]">👥</span> Involucrados — notificados de esta acción</p>
                         <div className="flex flex-wrap gap-1.5">
                           {involucrados.map((i) => (
@@ -957,9 +960,8 @@ export default function AccionDetailPanel({
                       </div>
                     )}
 
-
                     {canEdit && (
-                      <div className="flex justify-end gap-2 border-t border-slate-100 pt-2.5">
+                      <div className="flex justify-end gap-2">
                         <button
                           type="button"
                           disabled={escalando}
