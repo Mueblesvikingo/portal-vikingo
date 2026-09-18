@@ -58,7 +58,10 @@ function ComoFuncionaOperacionModal({ onClose }) {
           <div>
             <p className="font-black uppercase tracking-widest text-slate-400">2a. Piezas sin tiempo estándar real</p>
             <p className="mt-1">
-              Si abajo de la tabla aparece un aviso de "piezas no se contaron en esta tabla", significa que esos productos tienen una familia asignada pero esa familia no tiene ningún tiempo estándar medido en las 8 estaciones (ej. muebles de MDF como burós, tocadores y pijameros, clasificados solo por línea porque no pasan por tapicería). No se inventa un tiempo — esas piezas quedan fuera del cálculo hasta que exista un dato real que capturar.
+              Si abajo de la tabla aparece un aviso de "piezas no se contaron en esta tabla", es porque esos productos tienen una familia que todavía no tiene <b>ninguna</b> fila en Tiempos estándar — no se inventa un tiempo, así que quedan totalmente fuera del cálculo hasta que exista al menos un dato real que capturar.
+            </p>
+            <p className="mt-1">
+              Distinto es el caso de burós, tocadores y pijameros (familia "Recámaras", muebles de MDF): sí tienen su fila en Tiempos estándar, hoy capturada en 0 minutos en las 8 estaciones porque aún no se mide su tiempo real. Mientras siga en 0 cuentan como <b>0% de carga</b> (no como "sin clasificar") — en cuanto se capture un minuto real en alguna estación, empiezan a sumar carga ahí normalmente.
             </p>
           </div>
 
