@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { formatFechaCorta, formatMoney, formatNumber, LINEAS, parseCsvSimple } from "./sopHelpers";
+import { downloadCsv, formatFechaCorta, formatMoney, formatNumber, LINEAS, parseCsvSimple } from "./sopHelpers";
 import { getVentana, upsertVentana } from "../../services/sopVentanaSemanalService";
 
 const LINEA_STYLE = {
@@ -98,21 +98,8 @@ export default function InventariosTab({ productos, canEdit, currentUser, semana
 
   function handleExportar() {
     const header = ["Codigo", "Producto", "Linea", "Precio", "Saldo"];
-    const escapeCsv = (value) => {
-      const s = String(value ?? "");
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
     const rows = productos.map((p) => [p.codigo, p.nombre, p.linea, p.precio, saldosPorProducto[p.id] || 0]);
-    const csv = [header, ...rows].map((r) => r.map(escapeCsv).join(",")).join("\r\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Inventario_semana_${semanaLunes}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadCsv(`Inventario_semana_${semanaLunes}.csv`, header, rows);
   }
 
   // Importa por Código + Saldo — mismo formato que exporta este botón, para

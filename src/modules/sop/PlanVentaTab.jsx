@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { buildHorizonte, formatFechaCorta, formatMoney, formatNumber, LINEAS, parseCsvSimple } from "./sopHelpers";
+import { buildHorizonte, downloadCsv, formatFechaCorta, formatMoney, formatNumber, LINEAS, parseCsvSimple } from "./sopHelpers";
 import { getVentana, upsertVentana } from "../../services/sopVentanaSemanalService";
 import SolicitarRecursoModal from "./SolicitarRecursoModal";
 
@@ -174,21 +174,8 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCre
 
   function handleExportarSemana() {
     const header = ["Codigo", "Producto", "Linea", "Precio", "Piezas"];
-    const escapeCsv = (value) => {
-      const s = String(value ?? "");
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
     const rows = productos.map((p) => [p.codigo, p.nombre, p.linea, p.precio, piezasPorProducto[p.id] || 0]);
-    const csv = [header, ...rows].map((r) => r.map(escapeCsv).join(",")).join("\r\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Plan_de_venta_semana_${semanaLunes}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadCsv(`Plan_de_venta_semana_${semanaLunes}.csv`, header, rows);
   }
 
   // Importa por Código (columna "Codigo") + piezas (columna "Piezas") — el
@@ -438,25 +425,12 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
     const mes = horizonte[mesExportarIdx];
     if (!mes) return;
     const header = ["Codigo", "Producto", "Linea", "Precio", "% Participacion", "Piezas"];
-    const escapeCsv = (value) => {
-      const s = String(value ?? "");
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
     const rows = productos.map((p) => {
       const productoPiezasTotal = horizonte.reduce((s, m) => s + getPiezas(p.id, m.anio, m.mes), 0);
       const pct = granTotalPiezas > 0 ? (productoPiezasTotal / granTotalPiezas) * 100 : 0;
       return [p.codigo, p.nombre, p.linea, p.precio, `${pct.toFixed(1)}%`, getPiezas(p.id, mes.anio, mes.mes)];
     });
-    const csv = [header, ...rows].map((r) => r.map(escapeCsv).join(",")).join("\r\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Plan_de_venta_${mes.label}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadCsv(`Plan_de_venta_${mes.label}.csv`, header, rows);
   }
 
   if (vistaSemanal) {

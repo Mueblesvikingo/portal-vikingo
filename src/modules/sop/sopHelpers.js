@@ -68,13 +68,21 @@ export function getPiezasProporcionalSemana(planVenta, escenario, semanaLunes) {
 
 // Parser CSV minimo (respeta comillas) — compartido por Plan de venta e
 // Inventarios para leer de vuelta un archivo exportado desde el portal o
-// armado en Excel con las mismas columnas.
+// armado en Excel con las mismas columnas. El separador se detecta solo
+// (punto y coma o coma) mirando la primera línea, para leer tanto los
+// archivos nuevos (exportados en ;) como uno viejo o pegado a mano en
+// coma.
 export function parseCsvSimple(text) {
+  const clean = text.replace(/^﻿/, "");
+  const primeraLinea = clean.split(/\r\n|\n|\r/, 1)[0] || "";
+  const puntoYComas = (primeraLinea.match(/;/g) || []).length;
+  const comas = (primeraLinea.match(/,/g) || []).length;
+  const delimitador = puntoYComas > comas ? ";" : ",";
+
   const rows = [];
   let row = [];
   let cell = "";
   let inQuotes = false;
-  const clean = text.replace(/^﻿/, "");
   for (let i = 0; i < clean.length; i++) {
     const c = clean[i];
     if (inQuotes) {
@@ -82,7 +90,7 @@ export function parseCsvSimple(text) {
       else if (c === '"') inQuotes = false;
       else cell += c;
     } else if (c === '"') inQuotes = true;
-    else if (c === ",") { row.push(cell); cell = ""; }
+    else if (c === delimitador) { row.push(cell); cell = ""; }
     else if (c === "\n" || c === "\r") {
       if (c === "\r" && clean[i + 1] === "\n") i++;
       row.push(cell); cell = "";
@@ -92,6 +100,28 @@ export function parseCsvSimple(text) {
   }
   if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
   return rows;
+}
+
+// Excel en configuración regional México/España usa punto y coma como
+// separador de columnas al abrir un .csv de un doble clic (porque la coma
+// ya es su separador decimal) — exportar con coma hacía que todo el
+// archivo se viera amontonado en una sola columna. downloadCsv exporta
+// siempre con ; para que abra bien directamente en Excel.
+export function downloadCsv(filename, header, rows) {
+  const escapeCsv = (value) => {
+    const s = String(value ?? "");
+    return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [header, ...rows].map((r) => r.map(escapeCsv).join(";")).join("\r\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // Semana de referencia para la "Vista semanal" de S&OP (capa temporal
