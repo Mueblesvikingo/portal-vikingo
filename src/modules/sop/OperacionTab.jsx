@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { buildHorizonte, formatFechaCorta, formatNumber, getPiezasProporcionalSemana, LINEAS } from "./sopHelpers";
+import { buildHorizonte, formatFechaCorta, formatNumber, LINEAS } from "./sopHelpers";
 import SolicitudModal from "./SolicitudModal";
 import SolicitarRecursoModal from "./SolicitarRecursoModal";
 import { getVentana } from "../../services/sopVentanaSemanalService";
@@ -55,7 +55,7 @@ function ComoFuncionaOperacionModal({ onClose }) {
           <div>
             <p className="font-black uppercase tracking-widest text-slate-400">2b. Demanda de la semana (Vista semanal)</p>
             <p className="mt-1">
-              En Vista semanal, si un producto todavía no se captura en Plan de venta para esa semana en particular, se usa como estimado su parte proporcional del plan mensual (piezas del mes ÷ semanas del mes) — así no se ve demanda en cero solo por falta de captura. En cuanto se captura la semana real en Plan de venta, ese dato manda sobre el estimado.
+              En Vista semanal, la demanda es la captura real de esa semana en Plan de venta — no se estima ni se rellena con el plan mensual. Un producto que aún no se captura esa semana en particular cuenta como 0 hasta que un líder lo capture.
             </p>
           </div>
 
@@ -852,7 +852,7 @@ function BrechasRealesSection({ infraestructura, capacidadProcesos, vacantesPers
 // la demanda sale del compromiso de piezas ya capturado en Plan de venta
 // (sop_ventana_semanal, pestaña "plan-venta") y los días son 5 (semana
 // laboral completa, igual que el análisis real de Planeación de Producción).
-function OperacionSemanalView({ productos, planVenta, escenarioActivo, parametros, capacidadProcesos, tiemposEstandar, semanaLunes, canEdit, currentUser, onSolicitarRecurso }) {
+function OperacionSemanalView({ productos, parametros, capacidadProcesos, tiemposEstandar, semanaLunes, canEdit, currentUser, onSolicitarRecurso }) {
   const [loading, setLoading] = useState(true);
   const [capturaSemana, setCapturaSemana] = useState({});
   const [showSolicitarRecurso, setShowSolicitarRecurso] = useState(false);
@@ -873,20 +873,10 @@ function OperacionSemanalView({ productos, planVenta, escenarioActivo, parametro
     return () => { cancelled = true; };
   }, [semanaLunes]);
 
-  const proporcionalMes = useMemo(() => getPiezasProporcionalSemana(planVenta, escenarioActivo, semanaLunes), [planVenta, escenarioActivo, semanaLunes]);
-
-  // Un producto ya capturado esa semana (aunque sea en 0) manda sobre el
-  // estimado; uno que nunca se ha tocado toma su parte proporcional del
-  // plan mensual, para no mostrar demanda en cero solo porque nadie lo ha
-  // capturado todavía esa semana en particular.
-  const piezasPorProducto = useMemo(() => {
-    const map = { ...proporcionalMes };
-    for (const [productoId, piezas] of Object.entries(capturaSemana)) {
-      map[productoId] = Number(piezas || 0);
-    }
-    return map;
-  }, [proporcionalMes, capturaSemana]);
-  const hayEstimado = Object.keys(proporcionalMes).some((id) => !(id in capturaSemana));
+  // Demanda real capturada por los líderes para esta semana en Plan de
+  // venta — sin estimados: lo que no se ha capturado todavía cuenta como 0
+  // hasta que se capture, no se rellena con un promedio del mes.
+  const piezasPorProducto = capturaSemana;
 
   const productoLinea = useMemo(() => new Map(productos.map((p) => [p.id, p.linea])), [productos]);
   const productoFamilia = useMemo(() => new Map(productos.map((p) => [p.id, p.familia || null])), [productos]);
@@ -937,12 +927,6 @@ function OperacionSemanalView({ productos, planVenta, escenarioActivo, parametro
       </div>
 
       {showComoFunciona && <ComoFuncionaOperacionModal onClose={() => setShowComoFunciona(false)} />}
-
-      {hayEstimado && !loading && (
-        <p className="rounded-xl bg-slate-50 px-3 py-2 text-[9px] font-bold text-slate-400">
-          Los productos que aún no se capturan esta semana en Plan de venta usan como estimado su parte proporcional del plan mensual (piezas del mes ÷ semanas del mes). En cuanto se capture la semana en Plan de venta, ese dato real toma prioridad.
-        </p>
-      )}
 
       {showSolicitarRecurso && (
         <SolicitarRecursoModal onSubmit={(draft) => onSolicitarRecurso(draft, currentUser)} onClose={() => setShowSolicitarRecurso(false)} />
@@ -1101,8 +1085,6 @@ export default function OperacionTab({
       <>
         <OperacionSemanalView
           productos={productos}
-          planVenta={planVenta}
-          escenarioActivo={escenarioActivo}
           parametros={parametros}
           capacidadProcesos={capacidadProcesos}
           tiemposEstandar={tiemposEstandar}

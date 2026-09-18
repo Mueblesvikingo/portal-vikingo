@@ -34,38 +34,6 @@ export function formatNumber(value) {
 
 export const LINEAS = ["Bases", "Recámaras", "Salas"];
 
-// Cuenta cuántos lunes (inicio de semana) caen dentro de un mes calendario
-// — se usa para repartir proporcionalmente el plan mensual entre sus
-// semanas reales (4 o 5 según el mes), en vez de una constante fija.
-export function contarSemanasDelMes(anio, mes) {
-  let count = 0;
-  const d = new Date(anio, mes - 1, 1);
-  while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
-  while (d.getMonth() === mes - 1) {
-    count++;
-    d.setDate(d.getDate() + 7);
-  }
-  return count || 1;
-}
-
-// Reparto proporcional del Plan de venta mensual entre las semanas de su
-// mes — sirve como estimado inicial para una semana de Vista semanal que
-// aún no tiene captura propia (Plan de operación lo usa para no mostrar
-// demanda en cero en productos/líneas que simplemente no se han capturado
-// todavía esa semana). Nunca sustituye una captura real ya guardada.
-export function getPiezasProporcionalSemana(planVenta, escenario, semanaLunes) {
-  const lunes = new Date(`${semanaLunes}T00:00:00`);
-  const anio = lunes.getFullYear();
-  const mes = lunes.getMonth() + 1;
-  const semanas = contarSemanasDelMes(anio, mes);
-  const map = {};
-  for (const row of planVenta) {
-    if (row.escenario !== escenario || row.anio !== anio || row.mes !== mes) continue;
-    map[row.producto_id] = (map[row.producto_id] || 0) + Number(row.piezas || 0) / semanas;
-  }
-  return map;
-}
-
 // Parser CSV minimo (respeta comillas) — compartido por Plan de venta e
 // Inventarios para leer de vuelta un archivo exportado desde el portal o
 // armado en Excel con las mismas columnas. El separador se detecta solo
