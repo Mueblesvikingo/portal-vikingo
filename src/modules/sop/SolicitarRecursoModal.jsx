@@ -4,10 +4,13 @@ import { useState } from "react";
 // — a propósito más angosto que SolicitudModal (solo nombre/fecha/costo,
 // sin descripción ni riesgo) porque es justo lo que se necesita para
 // justificar una compra, no una decisión estratégica completa.
+const PERIODICIDADES = ["Único", "Semanal", "Mensual"];
+
 export default function SolicitarRecursoModal({ onSubmit, onClose, defaultNombre }) {
   const [nombre, setNombre] = useState(defaultNombre || "");
   const [fecha, setFecha] = useState("");
   const [costo, setCosto] = useState("");
+  const [periodicidad, setPeriodicidad] = useState("Único");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -18,7 +21,7 @@ export default function SolicitarRecursoModal({ onSubmit, onClose, defaultNombre
     }
     setError("");
     setSaving(true);
-    const ok = await onSubmit({ nombre: nombre.trim(), fecha: fecha || null, costo: Number(costo) || 0 });
+    const ok = await onSubmit({ nombre: nombre.trim(), fecha: fecha || null, costo: Number(costo) || 0, periodicidad });
     setSaving(false);
     if (ok) onClose();
   }
@@ -62,6 +65,18 @@ export default function SolicitarRecursoModal({ onSubmit, onClose, defaultNombre
               />
             </label>
           </div>
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Periodicidad del costo
+            <select
+              value={periodicidad}
+              onChange={(e) => setPeriodicidad(e.target.value)}
+              className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+            >
+              {PERIODICIDADES.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {error && <p className="mt-2 text-[10px] font-bold text-red-600">{error}</p>}

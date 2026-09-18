@@ -518,7 +518,7 @@ export default function SopModule({ currentUser }) {
         executionType: null,
         dueDate: draft.fecha || null,
         consequence: "",
-        recommendation: `Requerimiento de infraestructura. Costo estimado: $${Number(draft.costo || 0).toLocaleString("es-MX")}.`,
+        recommendation: `Requerimiento de infraestructura. Costo estimado: $${Number(draft.costo || 0).toLocaleString("es-MX")} (${draft.periodicidad || "Único"}).`,
         wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
         process: "S&OP",
       });
