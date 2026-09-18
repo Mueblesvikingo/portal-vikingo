@@ -631,6 +631,21 @@ export async function closeCurrentMonth({ control, resumenMes, ventaReal, actor 
   }
 }
 
+// Tiempos estándar reales (minutos por pieza) por familia de producto ×
+// estación — de PCP-IF-01 Análisis Planeación Producción. Catálogo fijo de
+// referencia (no se edita desde el portal por ahora), usado para calcular
+// la carga real en minutos que exige el Plan de venta en cada estación.
+export async function getTiemposEstandar() {
+  try {
+    const { data, error } = await supabase.from("sop_tiempos_estandar").select("*");
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error("Error al cargar tiempos estándar S&OP:", err);
+    return [];
+  }
+}
+
 // Gestión de capacidad — mano de obra (sop_capacidad_procesos) e
 // infraestructura (sop_infraestructura). Ambas son catálogos capturables
 // desde Plan de operación, mismo patrón activo/inactivo que sop_productos

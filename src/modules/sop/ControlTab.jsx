@@ -327,6 +327,7 @@ export default function ControlTab({
   planVenta = [],
   productos = [],
   historico = [],
+  vistaSemanal = false,
 }) {
   // El <input type="month"> solo acepta/devuelve "AAAA-MM", pero la columna
   // en Supabase es tipo date ("AAAA-MM-DD") — hay que recortar al mostrar y
@@ -363,6 +364,27 @@ export default function ControlTab({
     if (draft.estado !== control.estado) payload.estado = draft.estado;
     await onSave(control.id, payload);
     setSaving(false);
+  }
+
+  // Mientras está activa la "Vista semanal" del módulo, esta pestaña se
+  // reduce a lo único que de verdad se revisa en la junta semanal: el
+  // avance de las firmas. Metas/Control del ciclo/Horizonte son datos
+  // mensuales que no cambian semana a semana — vuelven a verse completos
+  // en cuanto se apaga la Vista semanal.
+  if (vistaSemanal) {
+    return (
+      <div className="space-y-3 p-3">
+        <CicloFirmasSection
+          control={control}
+          firmas={firmas}
+          currentUser={currentUser}
+          personasCatalogo={personasCatalogo}
+          onUpsertFirma={onUpsertFirma}
+          onResetFirmas={onResetFirmas}
+          onAlertaLider={onAlertaLider}
+        />
+      </div>
+    );
   }
 
   return (

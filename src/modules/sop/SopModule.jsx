@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { getSemanaReferenciaISO } from "./sopHelpers";
-import { canViewModule, canEditSopOperacionParams, canEditSopFinancieroParams, canEditSopPlanVenta, canCreateSopSolicitud } from "../../services/permissionsService";
+import { getSemanaReferenciaISO, getProximoLunes, formatFechaCorta, toISODate } from "./sopHelpers";
+import { getSemanasConDatos } from "../../services/sopVentanaSemanalService";
+import { canViewModule, canEditSopOperacionParams, canEditSopFinancieroParams, canEditSopPlanVenta, canCreateSopSolicitud, isDirectorGeneral } from "../../services/permissionsService";
 import {
   getProductos,
   createProducto,
@@ -30,6 +31,7 @@ import {
   upsertPrioridadSemana,
   updatePrioridadSemana,
   getCapacidadProcesos,
+  getTiemposEstandar,
   createCapacidadProceso,
   updateCapacidadProceso,
   deactivateCapacidadProceso,
@@ -48,7 +50,7 @@ import {
   deleteFinancieroAjuste,
 } from "../../services/sopService";
 import { getPersonas } from "../../services/organizationCatalogService";
-import { createStrategicDecision } from "../../services/decisionService";
+import { createStrategicDecision, getStrategicDecisions, updateStrategicDecision } from "../../services/decisionService";
 import { createWorkloadAssignment } from "../../services/workloadService";
 import ControlTab from "./ControlTab";
 import ParametrosTab from "./ParametrosTab";
@@ -58,11 +60,89 @@ import FinancieroTab from "./FinancieroTab";
 import DecisionesTab from "./DecisionesTab";
 import PrioridadesTab from "./PrioridadesTab";
 import HistoricoTab from "./HistoricoTab";
+import DecisionesDirectorTab from "./DecisionesDirectorTab";
+import InventariosTab from "./InventariosTab";
 import DashboardTab from "./DashboardTab";
 import SolicitudModal from "./SolicitudModal";
 
 const SOP_VIDEO_URL = "https://www.youtube.com/embed/p8qnJBX1yH8?autoplay=1&rel=0&modestbranding=1";
 const SOP_MANUAL_URL = "/manuales/SOP_Mission_Control.pdf";
+
+// A qué pestaña de sop_ventana_semanal corresponde cada pestaña del módulo
+// que participa de la Vista semanal con datos propios por semana — Control
+// (solo ciclo de firmas, mensual) y Acuerdos S&OP (su propio sistema de
+// semanas vía sop_semanas) quedan fuera del filtro genérico de abajo.
+const PESTANA_VENTANA = { dashboard: "dashboard", "plan-venta": "plan-venta", operacion: "operacion", financiero: "financiero", inventarios: "inventarios" };
+
+// Inventarios no tiene un "modo mensual" equivalente (el saldo siempre es
+// de una semana puntual) — a diferencia de las otras 4, muestra su tabla y
+// el selector de semana del encabezado aunque "Vista semanal" esté apagada.
+const PESTANAS_SIEMPRE_SEMANALES = ["inventarios"];
+
+// Filtro discreto para moverse entre semanas de la Vista semanal y
+// consultar cualquiera ya guardada — una sola vez aquí en vez de repetir
+// "Nueva/Guardar/Consultar" en cada una de las 4 pestañas que comparten el
+// mismo concepto de semana (a diferencia de Acuerdos S&OP, que sí necesita
+// su propio registro de semana porque liga acuerdos reales a ella).
+function SelectorSemanaVentana({ semanaLunes, onChange, pestana }) {
+  const [showHistorial, setShowHistorial] = useState(false);
+  const [historial, setHistorial] = useState([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
+  const lunes = new Date(`${semanaLunes}T00:00:00`);
+  const viernes = new Date(lunes);
+  viernes.setDate(lunes.getDate() + 4);
+
+  function irSemana(deltaSemanas) {
+    const next = new Date(lunes);
+    next.setDate(next.getDate() + deltaSemanas * 7);
+    onChange(toISODate(next));
+  }
+
+  async function toggleHistorial() {
+    const next = !showHistorial;
+    setShowHistorial(next);
+    if (next) {
+      setLoadingHistorial(true);
+      const result = await getSemanasConDatos(pestana, { limit: 12 });
+      setHistorial(result?.data || []);
+      setLoadingHistorial(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <button type="button" onClick={() => irSemana(-1)} title="Semana anterior" className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/10 text-[11px] font-black text-white/60 hover:bg-white/20">‹</button>
+      <span className="whitespace-nowrap text-[9px] font-bold text-white/70">{formatFechaCorta(lunes)}–{formatFechaCorta(viernes)}</span>
+      <button type="button" onClick={() => irSemana(1)} title="Semana siguiente" className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/10 text-[11px] font-black text-white/60 hover:bg-white/20">›</button>
+      <div className="relative">
+        <button type="button" onClick={toggleHistorial} className="rounded-lg bg-white/10 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-white/60 hover:bg-white/20">
+          Historial
+        </button>
+        {showHistorial && (
+          <div className="absolute right-0 top-7 z-20 max-h-56 w-48 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+            {loadingHistorial && <p className="px-2 py-2 text-[10px] font-bold text-slate-300">Cargando…</p>}
+            {!loadingHistorial && historial.length === 0 && <p className="px-2 py-2 text-[10px] font-bold text-slate-300">Sin semanas guardadas.</p>}
+            {!loadingHistorial && historial.map((h) => {
+              const l = new Date(`${h.semana_lunes}T00:00:00`);
+              const v = new Date(l);
+              v.setDate(l.getDate() + 4);
+              return (
+                <button
+                  key={h.semana_lunes}
+                  type="button"
+                  onClick={() => { onChange(h.semana_lunes); setShowHistorial(false); }}
+                  className={`block w-full rounded-lg px-2 py-1.5 text-left text-[10px] font-bold hover:bg-indigo-50 ${h.semana_lunes === semanaLunes ? "bg-indigo-50 text-indigo-700" : "text-slate-600"}`}
+                >
+                  {formatFechaCorta(l)} – {formatFechaCorta(v)}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const TABS = [
   { key: "control", label: "Control S&OP" },
@@ -70,9 +150,14 @@ const TABS = [
   { key: "plan-venta", label: "Plan de venta" },
   { key: "operacion", label: "Plan de operación" },
   { key: "financiero", label: "Plan financiero" },
+  { key: "inventarios", label: "Inventarios" },
   { key: "decisiones", label: "Acuerdos S&OP" },
+  { key: "decisiones-director", label: "Decisiones (Director)" },
   { key: "prioridades", label: "Prioridades semanales" },
-  { key: "historico", label: "Histórico S&OP" },
+  // "Histórico S&OP" oculto temporalmente a pedido — el componente y su
+  // carga de datos se dejan intactos, solo se quita del menú de pestañas.
+  // Para reactivarla: descomentar la línea de abajo.
+  // { key: "historico", label: "Histórico S&OP" },
   { key: "parametros", label: "Parámetros" },
 ];
 
@@ -83,6 +168,12 @@ export default function SopModule({ currentUser }) {
   // siguiente para la junta de alineación de cada martes). Un solo control
   // global en vez de repetir el switch en cada pestaña.
   const [vistaSemanal, setVistaSemanal] = useState(false);
+  // Semana que muestran Dashboard/Plan de venta/Operación/Financiero en
+  // Vista semanal — un solo selector para las 4 (comparten el mismo
+  // compromiso de Plan de venta, así que deben mirar siempre la misma
+  // semana entre sí). Arranca en el próximo lunes; el filtro de abajo deja
+  // moverse a cualquier otra ya guardada.
+  const [semanaVentana, setSemanaVentana] = useState(() => toISODate(getProximoLunes()));
   const [loading, setLoading] = useState(true);
   const [productos, setProductos] = useState([]);
   const [control, setControl] = useState(null);
@@ -90,12 +181,14 @@ export default function SopModule({ currentUser }) {
   const [planVenta, setPlanVenta] = useState([]);
   const [ventaReal, setVentaReal] = useState([]);
   const [decisiones, setDecisiones] = useState([]);
+  const [solicitudesSop, setSolicitudesSop] = useState([]);
   const [sopSemanas, setSopSemanas] = useState([]);
   const [currentSopSemana, setCurrentSopSemana] = useState(null);
   const [historico, setHistorico] = useState([]);
   const [firmas, setFirmas] = useState([]);
   const [prioridades, setPrioridades] = useState([]);
   const [capacidadProcesos, setCapacidadProcesos] = useState([]);
+  const [tiemposEstandar, setTiemposEstandar] = useState([]);
   const [infraestructura, setInfraestructura] = useState([]);
   const [financieroFilas, setFinancieroFilas] = useState([]);
   const [financieroMontos, setFinancieroMontos] = useState([]);
@@ -113,7 +206,7 @@ export default function SopModule({ currentUser }) {
 
   async function loadAll() {
     setLoading(true);
-    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, sopSemanasData, historicoData, prioridadesData, capacidadProcesosData, infraestructuraData, financieroFilasData, financieroMontosData, financieroAjustesData, personasData] = await Promise.all([
+    const [productosData, controlData, parametrosData, planData, ventaRealData, decisionesData, sopSemanasData, historicoData, prioridadesData, capacidadProcesosData, infraestructuraData, financieroFilasData, financieroMontosData, financieroAjustesData, personasData, solicitudesSopData, tiemposEstandarData] = await Promise.all([
       getProductos(),
       getControl(),
       getParametros(),
@@ -129,6 +222,8 @@ export default function SopModule({ currentUser }) {
       getFinancieroMontos(),
       getFinancieroAjustes(),
       getPersonas().catch(() => []),
+      getStrategicDecisions().catch(() => []),
+      getTiemposEstandar(),
     ]);
     setProductos(productosData);
     setControl(controlData);
@@ -141,10 +236,12 @@ export default function SopModule({ currentUser }) {
     setPrioridades(prioridadesData);
     setCapacidadProcesos(capacidadProcesosData);
     setInfraestructura(infraestructuraData);
+    setTiemposEstandar(tiemposEstandarData);
     setFinancieroFilas(financieroFilasData);
     setFinancieroMontos(financieroMontosData);
     setFinancieroAjustes(financieroAjustesData);
     setPersonasCatalogo(personasData);
+    setSolicitudesSop((solicitudesSopData || []).filter((d) => d.proceso === "S&OP"));
 
     if (controlData?.mes_activo) {
       const anio = Number(controlData.mes_activo.slice(0, 4));
@@ -389,6 +486,60 @@ export default function SopModule({ currentUser }) {
     } catch (err) {
       console.error(err);
       setMessage("No fue posible enviar la solicitud financiera.");
+      return false;
+    }
+  }
+
+  // Solicitud de recurso de infraestructura — mismo mecanismo (Bandeja del
+  // Centro de Decisiones) que Solicitar capacidad/financiero, pero con el
+  // formulario angosto de SolicitarRecursoModal (nombre/fecha/costo). No
+  // existe columna de costo en decisiones_estrategicas, así que se anota en
+  // la recomendación en vez de tocar ese esquema.
+  async function handleSolicitarRecurso(draft, actor) {
+    try {
+      await createStrategicDecision({
+        title: draft.nombre,
+        owner: actor?.nombre || actor?.usuario || "",
+        risk: "Moderado",
+        status: "Solicitud",
+        executionType: null,
+        dueDate: draft.fecha || null,
+        consequence: "",
+        recommendation: `Requerimiento de infraestructura. Costo estimado: $${Number(draft.costo || 0).toLocaleString("es-MX")}.`,
+        wrap: { options: [""], evidence: "", distance: "", prevention: "", finalDecision: "" },
+        process: "S&OP",
+      });
+      setMessage("Solicitud de recurso enviada a la Bandeja del Centro de Decisiones.");
+      return true;
+    } catch (err) {
+      console.error(err);
+      setMessage("No fue posible enviar la solicitud de recurso.");
+      return false;
+    }
+  }
+
+  // Acción del Director sobre una solicitud recibida (pestaña "Decisiones
+  // (Director)"): aprobar/detener/rechazar, con comentario opcional y, si se
+  // aprueba, la fecha para la que se aprueba. Se reutiliza el vocabulario de
+  // estado que ya entiende el Centro de Decisiones general (Decidida/Stand
+  // by/Cerrada) para que la solicitud resuelta también se vea consistente
+  // ahí — el detalle fino (quién resolvió qué y con qué comentario) queda en
+  // decision_final, que no tiene otro uso todavía.
+  async function handleResolverSolicitud(decision, accion, { comentario, fechaAprobacion } = {}) {
+    const ESTADO_POR_ACCION = { aprobar: "Decidida", detener: "Stand by", rechazar: "Cerrada" };
+    const ETIQUETA_POR_ACCION = { aprobar: "Aprobada", detener: "En espera", rechazar: "Rechazada" };
+    const nuevoEstado = ESTADO_POR_ACCION[accion];
+    if (!nuevoEstado) return false;
+    const firma = `${ETIQUETA_POR_ACCION[accion]}${comentario ? `. ${comentario}` : "."} — ${currentUser?.nombre || currentUser?.usuario || "Director"} (${new Date().toLocaleDateString("es-MX")})`;
+    const updates = { estado: nuevoEstado, decision_final: firma };
+    if (accion === "aprobar" && fechaAprobacion) updates.fecha_compromiso = fechaAprobacion;
+    try {
+      await updateStrategicDecision(decision.id, updates);
+      setSolicitudesSop((current) => current.map((d) => (d.id === decision.id ? { ...d, ...updates } : d)));
+      return true;
+    } catch (err) {
+      console.error(err);
+      setMessage("No fue posible actualizar la solicitud.");
       return false;
     }
   }
@@ -758,16 +909,24 @@ export default function SopModule({ currentUser }) {
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={() => setVistaSemanal((v) => !v)}
-              title="Mientras el ciclo mensual madura: captura de la semana siguiente, para la junta de alineación de cada martes."
-              className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${
-                vistaSemanal ? "bg-indigo-500 text-white" : "bg-white/10 text-white/60 hover:bg-white/20"
-              }`}
-            >
-              📅 Vista semanal
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setVistaSemanal((v) => !v)}
+                title="Mientras el ciclo mensual madura: captura de la semana siguiente, para la junta de alineación de cada martes."
+                className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${
+                  vistaSemanal ? "bg-indigo-500 text-white" : "bg-white/10 text-white/60 hover:bg-white/20"
+                }`}
+              >
+                📅 Vista semanal
+              </button>
+              <span className="max-w-[200px] text-[9px] font-semibold leading-tight text-white/50">
+                Captura la semana siguiente para la junta de alineación de cada martes
+              </span>
+              {(vistaSemanal || PESTANAS_SIEMPRE_SEMANALES.includes(activeTab)) && PESTANA_VENTANA[activeTab] && (
+                <SelectorSemanaVentana semanaLunes={semanaVentana} onChange={setSemanaVentana} pestana={PESTANA_VENTANA[activeTab]} />
+              )}
+            </div>
           </div>
         </div>
 
@@ -789,6 +948,7 @@ export default function SopModule({ currentUser }) {
                 onSaveVentaReal={handleSaveVentaReal}
                 currentUser={currentUser}
                 vistaSemanal={vistaSemanal}
+                semanaLunes={semanaVentana}
               />
             )}
             {activeTab === "plan-venta" && (
@@ -803,6 +963,8 @@ export default function SopModule({ currentUser }) {
                 onDeactivateProducto={handleDeactivateProducto}
                 currentUser={currentUser}
                 vistaSemanal={vistaSemanal}
+                semanaLunes={semanaVentana}
+                onSolicitarRecurso={handleSolicitarRecurso}
               />
             )}
             {activeTab === "operacion" && (
@@ -813,6 +975,7 @@ export default function SopModule({ currentUser }) {
                 parametros={parametros}
                 capacidadProcesos={capacidadProcesos}
                 infraestructura={infraestructura}
+                tiemposEstandar={tiemposEstandar}
                 canEdit={canEditOperacionParams}
                 currentUser={currentUser}
                 onCreateProceso={handleCreateProceso}
@@ -822,7 +985,9 @@ export default function SopModule({ currentUser }) {
                 onUpdateInfra={handleUpdateInfra}
                 onDeactivateInfra={handleDeactivateInfra}
                 onSolicitarCapacidad={handleSolicitarCapacidad}
+                onSolicitarRecurso={handleSolicitarRecurso}
                 vistaSemanal={vistaSemanal}
+                semanaLunes={semanaVentana}
               />
             )}
             {activeTab === "financiero" && (
@@ -843,7 +1008,17 @@ export default function SopModule({ currentUser }) {
                 onUpsertAjuste={handleUpsertFinancieroAjuste}
                 onDeleteAjuste={handleDeleteFinancieroAjuste}
                 onSolicitarFinanciero={handleSolicitarFinanciero}
+                onSolicitarRecurso={handleSolicitarRecurso}
+                semanaLunes={semanaVentana}
                 vistaSemanal={vistaSemanal}
+              />
+            )}
+            {activeTab === "inventarios" && (
+              <InventariosTab
+                productos={productos}
+                canEdit={canEditPlanVenta}
+                currentUser={currentUser}
+                semanaLunes={semanaVentana}
               />
             )}
             {activeTab === "decisiones" && (
@@ -864,6 +1039,14 @@ export default function SopModule({ currentUser }) {
                 onGuardarSemana={handleGuardarSopSemana}
                 onConsultarSemana={handleConsultarSopSemana}
                 onCerrarSemana={handleCerrarSopSemana}
+              />
+            )}
+            {activeTab === "decisiones-director" && (
+              <DecisionesDirectorTab
+                solicitudes={solicitudesSop}
+                canDecide={isDirectorGeneral(currentUser)}
+                onResolverSolicitud={handleResolverSolicitud}
+                semanaLunes={semanaVentana}
               />
             )}
             {activeTab === "prioridades" && (
@@ -903,6 +1086,7 @@ export default function SopModule({ currentUser }) {
                 planVenta={planVenta}
                 productos={productos}
                 historico={historico}
+                vistaSemanal={vistaSemanal}
               />
             )}
             {activeTab === "parametros" && (

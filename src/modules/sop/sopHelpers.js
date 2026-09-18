@@ -34,6 +34,34 @@ export function formatNumber(value) {
 
 export const LINEAS = ["Bases", "Recámaras", "Salas"];
 
+// Parser CSV minimo (respeta comillas) — compartido por Plan de venta e
+// Inventarios para leer de vuelta un archivo exportado desde el portal o
+// armado en Excel con las mismas columnas.
+export function parseCsvSimple(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+  const clean = text.replace(/^﻿/, "");
+  for (let i = 0; i < clean.length; i++) {
+    const c = clean[i];
+    if (inQuotes) {
+      if (c === '"' && clean[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') inQuotes = false;
+      else cell += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ",") { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && clean[i + 1] === "\n") i++;
+      row.push(cell); cell = "";
+      if (row.some((v) => v !== "")) rows.push(row);
+      row = [];
+    } else cell += c;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
 // Semana de referencia para la "Vista semanal" de S&OP (capa temporal
 // mientras el ciclo mensual madura): siempre el próximo lunes a viernes, la
 // semana que se revisa en la junta de alineación de cada martes.
@@ -62,6 +90,19 @@ export function getSemanaReferenciaISO() {
   domingo.setDate(lunes.getDate() + 6);
   return { lunes, domingo, lunesISO: toISODate(lunes), domingoISO: toISODate(domingo) };
 }
+
+// Categorías de la Vista semanal de Plan financiero (egresos/ingresos
+// esperados) — compartidas con la pestaña Decisiones (Director) para poder
+// calcular ahí mismo la liquidez esperada de la semana sin duplicar la lista.
+export const EGRESO_CAMPOS_SEMANA = [
+  { key: "proveedores", label: "Proveedores / Compras" },
+  { key: "nomina", label: "Nómina" },
+  { key: "gastosGenerales", label: "Gastos generales" },
+];
+export const INGRESO_CAMPOS_SEMANA = [
+  { key: "ventasContado", label: "Ventas de contado" },
+  { key: "cobranza", label: "Cobranza" },
+];
 
 // Ciclo mensual S&OP (VEN-SP-03): 4 etapas en orden, con su día límite
 // dentro del mes del ciclo — tomado directo del taller con el consultor

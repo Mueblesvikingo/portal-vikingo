@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { buildHorizonte, formatFechaCorta, formatMoney, formatNumber, getProximoLunes, LINEAS, toISODate } from "./sopHelpers";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { buildHorizonte, formatFechaCorta, formatMoney, formatNumber, LINEAS, parseCsvSimple } from "./sopHelpers";
 import { getVentana, upsertVentana } from "../../services/sopVentanaSemanalService";
+import SolicitarRecursoModal from "./SolicitarRecursoModal";
 
 const LINEA_STYLE = {
   Bases: { badge: "border-sky-200 bg-sky-50 text-sky-700", row: "bg-sky-50/50", total: "bg-sky-50 text-sky-700", dot: "bg-sky-400" },
@@ -62,10 +63,10 @@ function EditableCell({ value, canEdit, onSave, format = formatNumber, step = "1
   );
 }
 
-function AgregarProductoForm({ onCreate, onClose, currentUser, siguienteOrden }) {
+function AgregarProductoForm({ onCreate, onClose, currentUser, siguienteOrden, defaultLinea }) {
   const [codigo, setCodigo] = useState("");
   const [nombre, setNombre] = useState("");
-  const [linea, setLinea] = useState(LINEAS[0]);
+  const [linea, setLinea] = useState(defaultLinea || LINEAS[0]);
   const [precio, setPrecio] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -120,23 +121,28 @@ function AgregarProductoForm({ onCreate, onClose, currentUser, siguienteOrden })
 // 3 campos que se usaba antes (igual en las 5 pestañas de S&OP), esta
 // respeta el concepto real de la pestaña: la misma tabla de productos
 // agrupada por línea, con la misma celda editable, pero con una sola
-// columna (la semana que viene) en vez del horizonte de 6 meses — el dato
-// se guarda en la misma tabla genérica `sop_ventana_semanal` (pestaña
-// "plan-venta"), solo que su `datos` es un mapa {productoId: piezas} en
-// vez de los 3 campos planos que usan las demás pestañas.
-function PlanVentaSemanalTable({ productos, grouped, currentUser }) {
+// columna (la semana elegida) en vez del horizonte de 6 meses — el dato se
+// guarda en la misma tabla genérica `sop_ventana_semanal` (pestaña
+// "plan-venta"), solo que su `datos` es un mapa {productoId: piezas} en vez
+// de los 3 campos planos que usan las demás pestañas. Exportar/importar CSV
+// y alta/baja de producto replican el mismo patrón ya usado en la vista
+// mensual, para no inventar un segundo mecanismo.
+function PlanVentaSemanalTable({ productos, grouped, currentUser, canEdit, onCreateProducto, onDeactivateProducto, onSolicitarRecurso, semanaLunes }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(null);
   const [piezasPorProducto, setPiezasPorProducto] = useState({});
+  const [agregarEnLinea, setAgregarEnLinea] = useState(null);
+  const [importMsg, setImportMsg] = useState("");
+  const [showSolicitarRecurso, setShowSolicitarRecurso] = useState(false);
 
-  const lunes = getProximoLunes();
+  const lunes = new Date(`${semanaLunes}T00:00:00`);
   const viernes = new Date(lunes);
   viernes.setDate(lunes.getDate() + 4);
-  const semanaLunes = toISODate(lunes);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setImportMsg("");
     getVentana("plan-venta", semanaLunes).then((result) => {
       if (cancelled) return;
       setPiezasPorProducto(result?.data?.datos?.piezasPorProducto || {});
@@ -145,16 +151,78 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser }) {
     return () => { cancelled = true; };
   }, [semanaLunes]);
 
-  async function handleGuardarProducto(productoId, piezas) {
-    const next = { ...piezasPorProducto, [productoId]: piezas };
-    setSaving(productoId);
+  async function guardarMapa(next) {
     const result = await upsertVentana({ pestana: "plan-venta", semanaLunes, datos: { piezasPorProducto: next } }, { actor: currentUser });
-    setSaving(null);
     if (result?.ok) setPiezasPorProducto(next);
+    return result?.ok;
+  }
+
+  async function handleGuardarProducto(productoId, piezas) {
+    setSaving(productoId);
+    await guardarMapa({ ...piezasPorProducto, [productoId]: piezas });
+    setSaving(null);
   }
 
   const granTotalPiezas = productos.reduce((sum, p) => sum + Number(piezasPorProducto[p.id] || 0), 0);
   const granTotalMonto = productos.reduce((sum, p) => sum + Number(piezasPorProducto[p.id] || 0) * Number(p.precio || 0), 0);
+
+  function handleExportarSemana() {
+    const header = ["Codigo", "Producto", "Linea", "Precio", "Piezas"];
+    const escapeCsv = (value) => {
+      const s = String(value ?? "");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = productos.map((p) => [p.codigo, p.nombre, p.linea, p.precio, piezasPorProducto[p.id] || 0]);
+    const csv = [header, ...rows].map((r) => r.map(escapeCsv).join(",")).join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Plan_de_venta_semana_${semanaLunes}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // Importa por Código (columna "Codigo") + piezas (columna "Piezas") — el
+  // resto de columnas del CSV exportado (Producto/Linea/Precio) se ignoran
+  // al leer, son solo referencia visual para quien edita el archivo.
+  async function handleImportarArchivo(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const text = await file.text();
+    const rows = parseCsvSimple(text);
+    if (rows.length < 2) { setImportMsg("El archivo no tiene filas para importar."); return; }
+    const header = rows[0].map((h) => h.trim().toLowerCase());
+    const idxCodigo = header.indexOf("codigo");
+    const idxPiezas = header.indexOf("piezas");
+    if (idxCodigo === -1 || idxPiezas === -1) {
+      setImportMsg('El archivo debe tener columnas "Codigo" y "Piezas".');
+      return;
+    }
+    const porCodigo = new Map(productos.map((p) => [String(p.codigo).trim().toLowerCase(), p]));
+    const next = { ...piezasPorProducto };
+    let actualizados = 0;
+    const noEncontrados = [];
+    for (const row of rows.slice(1)) {
+      const codigo = String(row[idxCodigo] || "").trim();
+      if (!codigo) continue;
+      const producto = porCodigo.get(codigo.toLowerCase());
+      if (!producto) { noEncontrados.push(codigo); continue; }
+      const piezas = Number(row[idxPiezas]);
+      if (!Number.isFinite(piezas)) continue;
+      next[producto.id] = piezas;
+      actualizados++;
+    }
+    const ok = await guardarMapa(next);
+    setImportMsg(
+      ok
+        ? `${actualizados} producto(s) actualizados desde el archivo.${noEncontrados.length ? ` Código(s) no encontrados: ${noEncontrados.join(", ")}.` : ""}`
+        : "No se pudo guardar la importación — intenta de nuevo."
+    );
+  }
 
   return (
     <div className="p-3">
@@ -162,7 +230,30 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser }) {
         <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-indigo-700">
           Vista semanal · compromiso de venta del {formatFechaCorta(lunes)} al {formatFechaCorta(viernes)}
         </span>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canEdit && (
+            <label className="cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
+              ⭱ Importar
+              <input type="file" accept=".csv" onChange={handleImportarArchivo} className="hidden" />
+            </label>
+          )}
+          <button
+            type="button"
+            onClick={handleExportarSemana}
+            title="Descarga código, producto, línea, precio y piezas de esta semana — mismo formato que espera Importar."
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-emerald-700"
+          >
+            ⭳ Exportar
+          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setShowSolicitarRecurso(true)}
+              className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-violet-700 hover:bg-violet-100"
+            >
+              🛠 Solicitar recurso
+            </button>
+          )}
           <div className="rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-right">
             <p className="text-[9px] font-black uppercase tracking-widest text-sky-500">Total piezas (semana)</p>
             <p className="text-sm font-black text-sky-900">{formatNumber(granTotalPiezas)}</p>
@@ -173,6 +264,14 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser }) {
           </div>
         </div>
       </div>
+
+      {showSolicitarRecurso && (
+        <SolicitarRecursoModal onSubmit={(draft) => onSolicitarRecurso(draft, currentUser)} onClose={() => setShowSolicitarRecurso(false)} />
+      )}
+
+      {importMsg && (
+        <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-bold text-slate-600">{importMsg}</div>
+      )}
 
       {loading ? (
         <p className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</p>
@@ -191,19 +290,58 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser }) {
                 const lineaTotal = group.items.reduce((sum, p) => sum + Number(piezasPorProducto[p.id] || 0), 0);
                 const style = LINEA_STYLE[group.linea] || LINEA_STYLE.Bases;
                 return (
-                  <>
-                    <tr key={`h-${group.linea}`}>
+                  <Fragment key={group.linea}>
+                    <tr>
                       <td colSpan={3} className={`px-3 py-1.5 ${style.row}`}>
-                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${style.badge}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
-                          {group.linea}
-                        </span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${style.badge}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
+                            {group.linea}
+                          </span>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => setAgregarEnLinea(agregarEnLinea === group.linea ? null : group.linea)}
+                              title={`Agregar producto en ${group.linea}`}
+                              className="rounded-full border border-slate-300 bg-white/70 px-2 py-0.5 text-[9px] font-black text-slate-500 hover:bg-white"
+                            >
+                              + Producto
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
+                    {agregarEnLinea === group.linea && (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-2">
+                          <AgregarProductoForm
+                            onCreate={onCreateProducto}
+                            onClose={() => setAgregarEnLinea(null)}
+                            currentUser={currentUser}
+                            siguienteOrden={Math.max(0, ...productos.map((p) => p.orden || 0)) + 1}
+                            defaultLinea={group.linea}
+                          />
+                        </td>
+                      </tr>
+                    )}
                     {group.items.map((p) => (
                       <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/70">
                         <td className="sticky left-0 z-10 bg-white px-3 py-1 font-bold text-slate-700">
                           <span className="text-[9px] text-slate-300">{p.codigo}</span> {p.nombre}
+                          {canEdit && (
+                            <button
+                              type="button"
+                              title="Quitar producto del catálogo"
+                              onClick={() => {
+                                if (window.confirm(`¿Quitar "${p.nombre}" del Plan de venta? No se borra su historial, solo deja de mostrarse.`)) {
+                                  onDeactivateProducto(p.id, currentUser);
+                                }
+                              }}
+                              className="ml-1.5 text-[9px] font-black text-red-300 hover:text-red-600"
+                            >
+                              ×
+                            </button>
+                          )}
                         </td>
                         <td className="px-2 py-1 text-right text-[9px] font-bold text-slate-400">{formatMoney(p.precio)}</td>
                         <td className="px-1 py-1">
@@ -216,12 +354,12 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser }) {
                         </td>
                       </tr>
                     ))}
-                    <tr key={`t-${group.linea}`} className={`border-b border-slate-100 ${style.total}`}>
+                    <tr className={`border-b border-slate-100 ${style.total}`}>
                       <td className={`sticky left-0 z-10 px-3 py-1 text-[9px] font-black uppercase ${style.total}`}>Total {group.linea}</td>
                       <td />
                       <td className="px-2 py-1 text-right text-[9px] font-black">{formatNumber(lineaTotal)}</td>
                     </tr>
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -245,7 +383,7 @@ function PlanVentaSemanalTable({ productos, grouped, currentUser }) {
 // se sigue filtrando/guardando con este valor fijo.
 const ESCENARIO_UNICO = "Base";
 
-export default function PlanVentaTab({ productos, planVenta, control, canEdit, onSave, onSavePrecio, onCreateProducto, onDeactivateProducto, currentUser, vistaSemanal }) {
+export default function PlanVentaTab({ productos, planVenta, control, canEdit, onSave, onSavePrecio, onCreateProducto, onDeactivateProducto, currentUser, vistaSemanal, semanaLunes, onSolicitarRecurso }) {
   const escenario = ESCENARIO_UNICO;
   const [showAgregar, setShowAgregar] = useState(false);
   const [mesExportarIdx, setMesExportarIdx] = useState(0);
@@ -315,7 +453,20 @@ export default function PlanVentaTab({ productos, planVenta, control, canEdit, o
     URL.revokeObjectURL(url);
   }
 
-  if (vistaSemanal) return <PlanVentaSemanalTable productos={productos} grouped={grouped} currentUser={currentUser} />;
+  if (vistaSemanal) {
+    return (
+      <PlanVentaSemanalTable
+        productos={productos}
+        grouped={grouped}
+        currentUser={currentUser}
+        canEdit={canEdit}
+        onCreateProducto={onCreateProducto}
+        onDeactivateProducto={onDeactivateProducto}
+        onSolicitarRecurso={onSolicitarRecurso}
+        semanaLunes={semanaLunes}
+      />
+    );
+  }
 
   return (
     <div className="space-y-3 p-3">

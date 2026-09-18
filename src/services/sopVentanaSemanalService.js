@@ -24,6 +24,24 @@ export async function getVentana(pestana, semanaLunes) {
   }
 }
 
+// Semanas ya guardadas de una pestaña — para el filtro "Historial" de la
+// Vista semanal (consultar cualquier semana pasada, no solo la próxima).
+export async function getSemanasConDatos(pestana, { limit = 12 } = {}) {
+  try {
+    const { data, error } = await supabase
+      .from("sop_ventana_semanal")
+      .select("semana_lunes, updated_at")
+      .eq("pestana", pestana)
+      .order("semana_lunes", { ascending: false })
+      .limit(limit);
+    if (error) return { ok: false, error, data: [] };
+    return { ok: true, error: null, data: data || [] };
+  } catch (err) {
+    console.error("Error al listar semanas guardadas S&OP:", err);
+    return { ok: false, error: err, data: [] };
+  }
+}
+
 export async function upsertVentana({ pestana, semanaLunes, datos }, { actor } = {}) {
   try {
     const { data, error } = await supabase

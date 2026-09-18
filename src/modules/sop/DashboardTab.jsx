@@ -1,26 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { buildHorizonte, formatFechaCorta, formatMoney, formatNumber, getProximoLunes, LINEAS, MES_NOMBRE, toISODate } from "./sopHelpers";
+import { buildHorizonte, formatFechaCorta, formatMoney, formatNumber, LINEAS, MES_NOMBRE } from "./sopHelpers";
 import { getVentana, upsertVentana } from "../../services/sopVentanaSemanalService";
 
-// Vista semanal de Dashboard — en vez del formulario genérico de 3 campos,
-// reutiliza el compromiso de venta semanal que ya se captura en Plan de
-// venta (mismo dato, mismo lugar de guardado: sop_ventana_semanal pestana
-// "plan-venta") para calcular Plan/Margen/Utilidad de la semana con las
-// mismas fórmulas del Dashboard mensual, y agrega su propia captura de
-// "venta real de la semana" para comparar Plan vs Real igual que abajo.
-const SEMANAS_POR_MES = 4.33;
-
-function DashboardSemanalView({ productos, parametros, currentUser }) {
+// Vista semanal de Dashboard — reducida a lo que de verdad se revisa en la
+// junta semanal: venta y producción, planificado contra real. El plan sale
+// del mismo compromiso semanal ya capturado en Plan de venta (piezas por
+// producto, misma tabla sop_ventana_semanal, pestaña "plan-venta"); en una
+// operación de fabricación bajo pedido, las piezas planeadas a vender son
+// las mismas que hay que producir esa semana, así que no se duplica un
+// "plan de producción" aparte. Lo real de ambas (venta $ y producción en
+// piezas) se captura cada lunes, con el resultado de la semana que terminó.
+function DashboardSemanalView({ productos, currentUser, semanaLunes }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [piezasPorProducto, setPiezasPorProducto] = useState({});
   const [ventaRealSemana, setVentaRealSemana] = useState(null);
+  const [produccionRealSemana, setProduccionRealSemana] = useState(null);
 
-  const lunes = getProximoLunes();
+  const lunes = new Date(`${semanaLunes}T00:00:00`);
   const viernes = new Date(lunes);
   viernes.setDate(lunes.getDate() + 4);
-  const semanaLunes = toISODate(lunes);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,6 +29,7 @@ function DashboardSemanalView({ productos, parametros, currentUser }) {
       if (cancelled) return;
       setPiezasPorProducto(planResult?.data?.datos?.piezasPorProducto || {});
       setVentaRealSemana(dashResult?.data?.datos?.montoVentaReal ?? null);
+      setProduccionRealSemana(dashResult?.data?.datos?.piezasProduccionReal ?? null);
       setLoading(false);
     });
     return () => { cancelled = true; };
@@ -36,85 +37,151 @@ function DashboardSemanalView({ productos, parametros, currentUser }) {
 
   const productoMap = useMemo(() => new Map(productos.map((p) => [p.id, p])), [productos]);
 
-  const porLinea = useMemo(() => {
-    const map = Object.fromEntries(LINEAS.map((l) => [l, { piezas: 0, monto: 0 }]));
-    for (const [productoId, piezas] of Object.entries(piezasPorProducto)) {
+  const { ventaPlanSemana, piezasPlanSemana } = useMemo(() => {
+    let monto = 0;
+    let piezas = 0;
+    for (const [productoId, cantidad] of Object.entries(piezasPorProducto)) {
       const producto = productoMap.get(Number(productoId));
-      if (!producto || !Number(piezas)) continue;
-      map[producto.linea].piezas += Number(piezas);
-      map[producto.linea].monto += Number(piezas) * Number(producto.precio || 0);
+      if (!producto || !Number(cantidad)) continue;
+      piezas += Number(cantidad);
+      monto += Number(cantidad) * Number(producto.precio || 0);
     }
-    return map;
+    return { ventaPlanSemana: monto, piezasPlanSemana: piezas };
   }, [piezasPorProducto, productoMap]);
 
-  const ventaPlanSemana = LINEAS.reduce((s, l) => s + porLinea[l].monto, 0);
-  const piezasPlanSemana = LINEAS.reduce((s, l) => s + porLinea[l].piezas, 0);
-  const margenPorLinea = {
-    Bases: Number(parametros?.margen_bruto_bases ?? 0),
-    "Recámaras": Number(parametros?.margen_bruto_recamaras ?? 0),
-    Salas: Number(parametros?.margen_bruto_salas ?? 0),
-  };
-  const margenBrutoSemana = LINEAS.reduce((s, l) => s + porLinea[l].monto * margenPorLinea[l], 0);
-  const gastosFijosSemana = Number(parametros?.gastos_fijos_mensuales || 0) / SEMANAS_POR_MES;
-  const utilidadOperativaSemana = margenBrutoSemana - gastosFijosSemana;
-  const gap = ventaRealSemana != null ? ventaRealSemana - ventaPlanSemana : null;
+  const gapVenta = ventaRealSemana != null ? ventaRealSemana - ventaPlanSemana : null;
+  const gapProduccion = produccionRealSemana != null ? produccionRealSemana - piezasPlanSemana : null;
 
-  async function handleGuardarReal(monto) {
+  async function handleGuardarVentaReal(monto) {
     setSaving(true);
-    const result = await upsertVentana({ pestana: "dashboard", semanaLunes, datos: { montoVentaReal: monto } }, { actor: currentUser });
+    const result = await upsertVentana({ pestana: "dashboard", semanaLunes, datos: { montoVentaReal: monto, piezasProduccionReal: produccionRealSemana } }, { actor: currentUser });
     setSaving(false);
     if (result?.ok) setVentaRealSemana(monto);
+  }
+
+  async function handleGuardarProduccionReal(piezas) {
+    setSaving(true);
+    const result = await upsertVentana({ pestana: "dashboard", semanaLunes, datos: { montoVentaReal: ventaRealSemana, piezasProduccionReal: piezas } }, { actor: currentUser });
+    setSaving(false);
+    if (result?.ok) setProduccionRealSemana(piezas);
   }
 
   return (
     <div className="space-y-3 p-3">
       <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-indigo-700">
-        Vista semanal · del {formatFechaCorta(lunes)} al {formatFechaCorta(viernes)} — a partir del compromiso ya capturado en Plan de venta
+        Vista semanal · semana del {formatFechaCorta(lunes)} al {formatFechaCorta(viernes)} — lo real se captura cada lunes, con el resultado de la semana que terminó
       </div>
       {loading ? (
         <p className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</p>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <KpiCard label="Venta plan (semana)" value={formatMoney(ventaPlanSemana)} sub={`${formatNumber(piezasPlanSemana)} piezas`} tone="slate" />
-            <KpiCard
-              label="Venta real (semana)"
-              value={ventaRealSemana != null ? formatMoney(ventaRealSemana) : "Sin capturar"}
-              sub={gap != null ? `Gap vs plan: ${formatMoney(gap)}` : "Captúrala abajo"}
-              tone={ventaRealSemana == null ? "slate" : gap >= 0 ? "emerald" : "red"}
-            />
-            <KpiCard label="Margen bruto (semana)" value={formatMoney(margenBrutoSemana)} tone="emerald" />
-            <KpiCard
-              label="Utilidad operativa (semana)"
-              value={formatMoney(utilidadOperativaSemana)}
-              sub={`Gastos fijos ≈ ${formatMoney(gastosFijosSemana)} (mensual ÷ ${SEMANAS_POR_MES})`}
-              tone={utilidadOperativaSemana >= 0 ? "emerald" : "red"}
-            />
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Venta — plan vs. real de la semana</p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-3">
+              <KpiCard label="Venta plan" value={formatMoney(ventaPlanSemana)} sub={`${formatNumber(piezasPlanSemana)} piezas`} tone="slate" />
+              <KpiCard
+                label="Venta real"
+                value={ventaRealSemana != null ? formatMoney(ventaRealSemana) : "Sin capturar"}
+                sub={gapVenta != null ? `Gap vs. plan: ${formatMoney(gapVenta)}` : "Captúrala abajo, cada lunes"}
+                tone={ventaRealSemana == null ? "slate" : gapVenta >= 0 ? "emerald" : "red"}
+              />
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Capturar venta real</p>
+                <div className="mt-1"><EditableMonto value={ventaRealSemana} canEdit onSave={handleGuardarVentaReal} /></div>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={140}>
+              <BarChart data={[{ nombre: "Semana", Plan: ventaPlanSemana, Real: ventaRealSemana ?? 0 }]} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="nombre" tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={{ stroke: "#cbd5e1" }} tickLine={false} />
+                <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(v)} width={64} />
+                <Tooltip formatter={(v) => formatMoney(v)} />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Bar dataKey="Plan" fill="#94a3b8" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="Real" fill="#0ea5e9" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Captura de venta real de la semana</p>
-            <div className="mt-1.5 max-w-xs">
-              <EditableMonto value={ventaRealSemana} canEdit onSave={handleGuardarReal} />
-              {saving && <span className="text-[9px] text-slate-300">guardando…</span>}
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Producción — plan vs. real de la semana</p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-3">
+              <KpiCard label="Producción plan" value={`${formatNumber(piezasPlanSemana)} pzas`} sub="= piezas comprometidas en Plan de venta" tone="slate" />
+              <KpiCard
+                label="Producción real"
+                value={produccionRealSemana != null ? `${formatNumber(produccionRealSemana)} pzas` : "Sin capturar"}
+                sub={gapProduccion != null ? `Gap vs. plan: ${formatNumber(gapProduccion)} pzas` : "Captúrala abajo, cada lunes"}
+                tone={produccionRealSemana == null ? "slate" : gapProduccion >= 0 ? "emerald" : "red"}
+              />
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Capturar producción real</p>
+                <div className="mt-1"><EditableNumero value={produccionRealSemana} canEdit onSave={handleGuardarProduccionReal} /></div>
+              </div>
             </div>
+            <ResponsiveContainer width="100%" height={140}>
+              <BarChart data={[{ nombre: "Semana", Plan: piezasPlanSemana, Real: produccionRealSemana ?? 0 }]} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="nombre" tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={{ stroke: "#cbd5e1" }} tickLine={false} />
+                <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={40} />
+                <Tooltip formatter={(v) => `${formatNumber(v)} pzas`} />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Bar dataKey="Plan" fill="#94a3b8" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="Real" fill="#10b981" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Desglose por línea (semana)</p>
-            <div className="mt-2 grid gap-2 sm:grid-cols-3">
-              {LINEAS.map((linea) => (
-                <div key={linea} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{linea}</p>
-                  <p className="mt-1 text-sm font-black text-slate-900">{formatMoney(porLinea[linea].monto)}</p>
-                  <p className="text-[10px] font-bold text-slate-500">{formatNumber(porLinea[linea].piezas)} piezas</p>
-                </div>
-              ))}
-            </div>
-          </div>
+          {saving && <p className="text-[9px] font-bold text-slate-300">Guardando…</p>}
         </>
       )}
     </div>
+  );
+}
+
+// Igual que EditableMonto de abajo pero sin formato de moneda — para
+// capturar piezas (producción real).
+function EditableNumero({ value, canEdit, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value ?? ""));
+
+  if (!canEdit) {
+    return <span className="block text-[11px] font-black text-slate-700">{value != null ? formatNumber(value) : "—"}</span>;
+  }
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(String(value ?? ""));
+          setEditing(true);
+        }}
+        className="block w-full rounded px-1 text-left text-[11px] font-black text-slate-700 transition hover:bg-sky-50"
+      >
+        {value != null ? `${formatNumber(value)} pzas` : "Capturar"}
+      </button>
+    );
+  }
+
+  function commit() {
+    setEditing(false);
+    const n = Number(draft);
+    if (Number.isFinite(n) && n !== Number(value ?? 0)) onSave(n);
+  }
+
+  return (
+    <input
+      autoFocus
+      type="number"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") { e.preventDefault(); commit(); }
+        if (e.key === "Escape") setEditing(false);
+      }}
+      className="h-9 w-full rounded-lg border border-sky-300 bg-white px-2 text-[11px] font-bold text-slate-800 outline-none"
+    />
   );
 }
 
@@ -191,7 +258,7 @@ function KpiCard({ label, value, sub, tone = "slate" }) {
   );
 }
 
-export default function DashboardTab({ productos, planVenta, control, parametros, ventaReal = [], historico = [], canEdit = false, onSaveVentaReal, currentUser, vistaSemanal }) {
+export default function DashboardTab({ productos, planVenta, control, parametros, ventaReal = [], historico = [], canEdit = false, onSaveVentaReal, currentUser, vistaSemanal, semanaLunes }) {
   const horizonte = useMemo(() => buildHorizonte(control?.mes_activo, control?.horizonte_meses || 6), [control]);
   const escenarioActivo = parametros?.escenario_venta || "Base";
 
@@ -295,7 +362,7 @@ export default function DashboardTab({ productos, planVenta, control, parametros
   );
   const gapPlanVsReal = ventaRealTotal - planParaMesesConReal;
 
-  if (vistaSemanal) return <DashboardSemanalView productos={productos} parametros={parametros} currentUser={currentUser} />;
+  if (vistaSemanal) return <DashboardSemanalView productos={productos} currentUser={currentUser} semanaLunes={semanaLunes} />;
 
   return (
     <div className="space-y-3 p-3">
