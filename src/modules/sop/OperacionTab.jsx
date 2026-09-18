@@ -70,9 +70,15 @@ function ComoFuncionaOperacionModal({ onClose }) {
           </div>
 
           <div>
-            <p className="font-black uppercase tracking-widest text-slate-400">3. Simulador de mejora</p>
+            <p className="font-black uppercase tracking-widest text-slate-400">3. Simulador de mejora (Teoría de Restricciones)</p>
             <p className="mt-1">
-              Permite probar, sin guardar nada, qué pasaría si se agregan personas o turnos a una estación. Sirve para confirmar que invertir en el cuello de botella real sube la capacidad de la planta — invertir en una estación que no es el cuello de botella no ayuda (es la lógica de Teoría de Restricciones).
+              La <b>Teoría de Restricciones</b> dice algo simple: una cadena solo es tan fuerte como su eslabón más débil. En una planta, la producción total nunca puede ser mayor que lo que alcanza a procesar la estación más saturada (el <b>cuello de botella</b>) — sin importar qué tan rápidas o desahogadas estén las demás.
+            </p>
+            <p className="mt-1">
+              Por eso, agregar personas o turnos a una estación que <b>no</b> es el cuello de botella no aumenta lo que realmente sale de la planta: esa estación ya tenía "tiempo de sobra", así que solo termina esperando más a la que sí está saturada. La única inversión que mueve la aguja es la que se hace en el cuello de botella actual — y en cuanto se alivia, es normal que el cuello de botella "se mueva" a la siguiente estación más cargada.
+            </p>
+            <p className="mt-1">
+              El <b>Simulador de mejora</b> deja probar esto sin guardar nada: eliges cuántas personas o turnos agregarías a una estación, y recalcula el % de Utilización de todas para que veas si el cuello de botella realmente se alivia (o si solo se movió a otra estación) antes de gastar en esa inversión de verdad.
             </p>
           </div>
 
