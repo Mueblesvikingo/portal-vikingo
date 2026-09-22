@@ -156,6 +156,18 @@ export default function ActionsModule({ currentUser }) {
         mensaje: `Dirección aprobó el plan de acción de ${result.data.codigo}: ${result.data.titulo}.`,
         urgente: true,
       });
+    } else if (updates.estado === "En validación" && previous?.estado !== "En validación") {
+      await notificarInvolucrados(id, {
+        tipo: "validacion",
+        mensaje: `${result.data.codigo} pasó a "En validación": ${result.data.titulo}.`,
+        urgente: true,
+      });
+    } else if (updates.estado === "Verificación de eficacia" && previous?.estado !== "Verificación de eficacia") {
+      await notificarInvolucrados(id, {
+        tipo: "eficacia",
+        mensaje: `${result.data.codigo} pasó a "Verificación de eficacia": ${result.data.titulo}.`,
+        urgente: true,
+      });
     } else if (updates.estado === "Cerrada" && previous?.estado !== "Cerrada") {
       await notificarInvolucrados(id, {
         tipo: "cierre",

@@ -5,6 +5,8 @@ import {
   getHistorial,
   getComentarios,
   addComentario,
+  addObservacionEtapa,
+  notificarInvolucrados,
   getAdjuntos,
   addAdjunto,
   getInvolucrados,
@@ -471,6 +473,98 @@ function PlanResponsablesTable({
   );
 }
 
+// Bloque de decisión de una etapa gateada (Aprobada / En validación /
+// Verificación de eficacia): un solo botón de check (avanza la acción a esa
+// etapa) y, como alternativa, "Dejar observación" — que registra una fila
+// con fecha/nombre/texto (misma tabla que un comentario normal, etiquetada
+// con la etapa) y notifica a los involucrados, que deben dar su propio
+// "Visto" desde la campanita. Reemplaza a la palomita genérica del stepper
+// solo en estas 3 etapas — el resto del flujo sigue igual.
+function EtapaDecisionBlock({ etapaLabel, checkLabel, canDecide, isCurrent, comentariosEtapa, onDecidir, onAgregarObservacion }) {
+  const [mostrarObservacion, setMostrarObservacion] = useState(false);
+  const [texto, setTexto] = useState("");
+  const [decidiendo, setDecidiendo] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+
+  async function handleDecidir() {
+    setDecidiendo(true);
+    await onDecidir();
+    setDecidiendo(false);
+  }
+
+  async function handleEnviarObservacion() {
+    if (!texto.trim()) return;
+    setEnviando(true);
+    await onAgregarObservacion(texto.trim());
+    setEnviando(false);
+    setTexto("");
+    setMostrarObservacion(false);
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Decisión de esta etapa</p>
+      {isCurrent ? (
+        <p className="mt-1.5 text-[10px] font-black text-emerald-700">✓ Ya está en "{etapaLabel}".</p>
+      ) : canDecide ? (
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={decidiendo}
+            onClick={handleDecidir}
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {decidiendo ? "Guardando…" : `✓ ${checkLabel}`}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMostrarObservacion((v) => !v)}
+            className={`rounded-lg border px-3 py-1.5 text-[10px] font-black transition ${mostrarObservacion ? "border-amber-300 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-500 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"}`}
+          >
+            📝 Dejar observación
+          </button>
+        </div>
+      ) : (
+        <p className="mt-1.5 text-[10px] font-bold text-slate-400">Solo quien tiene permiso de esta etapa puede {checkLabel.toLowerCase()} o dejar una observación aquí.</p>
+      )}
+
+      {mostrarObservacion && (
+        <div className="mt-2.5 space-y-1.5 border-t border-slate-100 pt-2.5">
+          <textarea
+            autoFocus
+            rows={2}
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            placeholder="Motivo u observación para quienes están involucrados…"
+            className="w-full rounded-lg border border-amber-200 bg-amber-50/40 px-2 py-1.5 text-[11px] font-semibold text-slate-700 outline-none"
+          />
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => { setMostrarObservacion(false); setTexto(""); }} className="rounded-lg border border-slate-200 px-2.5 py-1 text-[9px] font-black text-slate-500">Cancelar</button>
+            <button type="button" disabled={enviando || !texto.trim()} onClick={handleEnviarObservacion} className="rounded-lg bg-amber-600 px-3 py-1 text-[9px] font-black text-white disabled:cursor-not-allowed disabled:opacity-50">
+              {enviando ? "Enviando…" : "Notificar observación"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {comentariosEtapa.length > 0 && (
+        <div className="mt-2.5 space-y-1.5 border-t border-slate-100 pt-2.5">
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Observaciones de esta etapa</p>
+          {comentariosEtapa.map((c) => (
+            <div key={c.id} className="rounded-lg border border-amber-100 bg-amber-50/60 px-2.5 py-1.5">
+              <div className="flex items-center justify-between gap-2 text-[9px] font-black text-amber-700">
+                <span>{c.usuario_nombre || "—"}</span>
+                <span className="shrink-0 font-bold text-slate-400">{formatDateTime(c.created_at)}</span>
+              </div>
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-700">{c.comentario}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AccionDetailPanel({
   accion, acciones, tiposFlujo, procesos, subprocesos, personas, objetivos, procesosById, subprocesosById, personasById, objetivosById,
   currentUser, initialSubTab, onUpdate, onDeactivate, onClose, onCreateProyecto, onEnviarPlanResponsables, onProgramarJunta, onNavigateToAccion,
@@ -523,6 +617,17 @@ export default function AccionDetailPanel({
   const yaAprobada = etapaAprobadaIndex === -1 || etapas.indexOf(accion.estado) >= etapaAprobadaIndex;
   const vencida = isVencida(accion);
   const esCritica = accion.prioridad === "Crítica";
+
+  // Etapas con bloque de decisión dedicado (check + observación) en vez de
+  // la palomita genérica del stepper — "En validación" usa el mismo permiso
+  // que "Aprobada" (Director General), confirmado explícitamente para este
+  // rediseño; "Verificación de eficacia" ya usaba canVerify.
+  const ETAPAS_CON_DECISION = ["Aprobada", "En validación", "Verificación de eficacia"];
+  const estadoIndex = etapas.indexOf(accion.estado);
+  function etapaStatus(etapaLabel) {
+    const idx = etapas.indexOf(etapaLabel);
+    return { isCurrent: accion.estado === etapaLabel, isPast: idx !== -1 && estadoIndex > idx };
+  }
 
   // HLS 10.2: "reaccionar" (Corrección inmediata) y "eliminar la causa"
   // (Acción Correctiva) son dos pasos distintos de la misma no conformidad
@@ -702,6 +807,30 @@ export default function AccionDetailPanel({
     setNuevoComentario("");
   }
 
+  // Check de una etapa gateada — mismo `onUpdate({estado})` que ya usaba la
+  // palomita genérica del stepper; ActionsModule.handleUpdateAccion ya se
+  // encarga de notificar a los involucrados en esta transición (mismo
+  // patrón que "Aprobada"/"Cerrada"), así que aquí no se duplica el aviso.
+  async function handleDecidirEtapa(etapaLabel) {
+    if (!window.confirm(`¿Marcar "${accion.titulo}" como "${etapaLabel}"?`)) return;
+    await onUpdate({ estado: etapaLabel });
+  }
+
+  // Observación de Dirección (o de quien tenga permiso en esa etapa): queda
+  // en accion_comentarios etiquetada con la etapa, y notifica a todos los
+  // involucrados de la acción — cada uno debe dar su propio "Visto" desde la
+  // campanita (mismo mecanismo ya usado para el resto de avisos del flujo).
+  async function handleAgregarObservacionEtapa(etapaLabel, texto) {
+    const result = await addObservacionEtapa({ accionId: accion.id, etapa: etapaLabel, texto }, currentUser);
+    if (!result?.ok) { console.error(result?.error); alert("No fue posible guardar la observación."); return; }
+    setComentarios((current) => [...current, result.data]);
+    await notificarInvolucrados(accion.id, {
+      tipo: "observacion",
+      mensaje: `Observación en "${etapaLabel}" de ${accion.codigo}: ${texto.slice(0, 140)}`,
+      urgente: true,
+    });
+  }
+
   async function handleAddAdjunto() {
     if (!nuevoAdjunto.nombre.trim() || !nuevoAdjunto.url.trim()) return;
     const result = await addAdjunto({ accionId: accion.id, nombreArchivo: nuevoAdjunto.nombre.trim(), url: nuevoAdjunto.url.trim() }, currentUser);
@@ -766,9 +895,14 @@ export default function AccionDetailPanel({
                     // ninguna de las dos basta con canEdit para marcarla
                     // (mismo criterio que tenía la fila de pastillas "Flujo").
                     const bloqueadaPorAprobacion = etapa === "Aprobada" && !isCurrent && !isPast && !canApprove;
+                    const bloqueadaPorValidacion = etapa === "En validación" && !isCurrent && !isPast && !canApprove;
                     const bloqueadaPorVerificacion = etapa === "Verificación de eficacia" && !isCurrent && !isPast && !canVerify;
-                    const bloqueada = bloqueadaPorAprobacion || bloqueadaPorVerificacion;
-                    const puedeMarcarAqui = canEdit && !bloqueada && !isCurrent;
+                    const bloqueada = bloqueadaPorAprobacion || bloqueadaPorValidacion || bloqueadaPorVerificacion;
+                    // Aprobada/En validación/Verificación de eficacia tienen su
+                    // propio bloque de decisión (check + observación) dentro de
+                    // la pestaña de esa etapa — la palomita genérica del
+                    // stepper se apaga solo para esas 3, el resto sigue igual.
+                    const puedeMarcarAqui = canEdit && !bloqueada && !isCurrent && !ETAPAS_CON_DECISION.includes(etapa);
                     return (
                       <div key={etapa} className="flex items-center">
                         <div className="relative">
@@ -790,6 +924,7 @@ export default function AccionDetailPanel({
                             onClick={() => setSubTab(etapaSubTab)}
                             title={
                               bloqueadaPorAprobacion ? "Solo el Director General puede aprobar — clic para ver el contenido"
+                                : bloqueadaPorValidacion ? "Solo el Director General puede validar — clic para ver el contenido"
                                 : bloqueadaPorVerificacion ? "Solo el Coordinador SIG o el equipo estratégico puede verificar la eficacia — clic para ver el contenido"
                                 : `Abrir "${etapa}"`
                             }
@@ -1061,6 +1196,15 @@ export default function AccionDetailPanel({
                   <div className="space-y-3">
                     {causaRaizBlock}
                     {prioridadFechaBlock}
+                    <EtapaDecisionBlock
+                      etapaLabel="Aprobada"
+                      checkLabel="Aprobar"
+                      canDecide={canApprove}
+                      isCurrent={etapaStatus("Aprobada").isCurrent}
+                      comentariosEtapa={comentarios.filter((c) => c.etapa === "Aprobada")}
+                      onDecidir={() => handleDecidirEtapa("Aprobada")}
+                      onAgregarObservacion={(texto) => handleAgregarObservacionEtapa("Aprobada", texto)}
+                    />
                     <div className="border-t border-slate-100 pt-2.5">
                       <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo: una fila por persona</p>
                       <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">Cada renglón es una acción concreta con su propio responsable, fecha y horas estimadas — arma el plan aquí antes de que Dirección apruebe (bloque "Aprobada" en la línea de tiempo, arriba).</p>
@@ -1134,6 +1278,15 @@ export default function AccionDetailPanel({
                     <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-2.5 text-[11px] font-bold text-violet-700">
                       En validación: confirma que la corrección resolvió el problema y no se repite antes de cerrar la acción.
                     </div>
+                    <EtapaDecisionBlock
+                      etapaLabel="En validación"
+                      checkLabel="Validar"
+                      canDecide={canApprove}
+                      isCurrent={etapaStatus("En validación").isCurrent}
+                      comentariosEtapa={comentarios.filter((c) => c.etapa === "En validación")}
+                      onDecidir={() => handleDecidirEtapa("En validación")}
+                      onAgregarObservacion={(texto) => handleAgregarObservacionEtapa("En validación", texto)}
+                    />
                     <PlanResponsablesTable {...planTableProps} soloLectura />
                     {(accion.enlace_ejecucion_texto || accion.enlace_ejecucion_url) && (
                       <div className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
@@ -1167,6 +1320,15 @@ export default function AccionDetailPanel({
                     ) : (
                       <p className="text-[10px] font-bold text-slate-300">Este tipo de acción no requiere verificación de eficacia formal.</p>
                     )}
+                    <EtapaDecisionBlock
+                      etapaLabel="Verificación de eficacia"
+                      checkLabel="Confirmar eficacia"
+                      canDecide={canVerify}
+                      isCurrent={etapaStatus("Verificación de eficacia").isCurrent}
+                      comentariosEtapa={comentarios.filter((c) => c.etapa === "Verificación de eficacia")}
+                      onDecidir={() => handleDecidirEtapa("Verificación de eficacia")}
+                      onAgregarObservacion={(texto) => handleAgregarObservacionEtapa("Verificación de eficacia", texto)}
+                    />
                   </div>
                 ) : subTab === "linea_tiempo" ? (
                   <div className="space-y-3">

@@ -283,6 +283,28 @@ export async function addComentario({ accionId, comentario }, actor) {
   }
 }
 
+// Observación de etapa (Aprobada / En validación / Verificación de
+// eficacia): misma tabla que un comentario normal, solo que etiquetada con
+// la etapa desde la que se capturó — así el bloque de decisión de cada
+// etapa puede mostrar únicamente sus propias observaciones (fecha, nombre,
+// texto) sin necesitar una tabla nueva.
+export async function addObservacionEtapa({ accionId, etapa, texto }, actor) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    const { data, error } = await supabase
+      .from("accion_comentarios")
+      .insert({ accion_id: accionId, comentario: texto, etapa, persona_id: personaId, usuario_nombre: nombre })
+      .select("*")
+      .single();
+
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al guardar observación de etapa:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
 export async function getAdjuntos(accionId) {
   try {
     const { data, error } = await supabase
