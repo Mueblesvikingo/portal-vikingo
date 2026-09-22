@@ -1,5 +1,12 @@
 import { Fragment, useMemo, useState } from "react";
 import { formatFechaCorta } from "./sopHelpers";
+import MinutasPanel from "../../components/MinutasPanel";
+
+// Proceso relacionado (opcional) al crear una minuta de S&OP — mismo campo
+// libre que Seguimiento Estratégico, aquí acotado a las áreas del ciclo
+// S&OP (ver ETAPAS_CICLO en sopHelpers.js) en vez del catálogo de procesos
+// generales.
+const SOP_PROCESO_OPTIONS = ["Comercial", "Operaciones", "Financiero", "Inventarios", "Dirección"];
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -101,6 +108,7 @@ export default function DecisionesTab({
   const [convertingId, setConvertingId] = useState(null);
   const [sendingId, setSendingId] = useState(null);
   const [showSemanas, setShowSemanas] = useState(false);
+  const [subTab, setSubTab] = useState("acuerdos");
 
   async function handleSave() {
     if (vistaSemanal) {
@@ -144,6 +152,27 @@ export default function DecisionesTab({
 
   return (
     <div className="space-y-3 p-3">
+      <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1">
+        <button
+          type="button"
+          onClick={() => setSubTab("acuerdos")}
+          className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${subTab === "acuerdos" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
+        >
+          Acuerdos
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab("minutas")}
+          className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${subTab === "minutas" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
+        >
+          Minutas
+        </button>
+      </div>
+
+      {subTab === "minutas" ? (
+        <MinutasPanel currentUser={currentUser} modulo="S&OP" procesoOptions={SOP_PROCESO_OPTIONS} />
+      ) : (
+        <>
       {vistaSemanal && (
         <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -287,6 +316,8 @@ export default function DecisionesTab({
         </table>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

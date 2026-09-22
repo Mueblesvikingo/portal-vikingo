@@ -11,24 +11,33 @@ function actorFields(actor) {
 
 // Identidad Vikingo (negro + rojo oscuro) y encabezado de documento controlado
 // del SIG, siguiendo el formato de SIG-P-02/SIG-P-03. Código asignado revisando
-// la carpeta "04) Documentación del SIG" / "03) Formatos": el único SIG-F
-// existente es SIG-F-01 (Presupuesto Estrategia), por lo que a esta minuta
-// (primer Formato del proceso "Planeación estratégica del SIG" para Seguimiento
-// Estratégico) le corresponde el siguiente consecutivo.
+// la carpeta "04) Documentación del SIG" / "03) Formatos": SIG-F-01
+// (Presupuesto Estrategia), SIG-F-02 (esta minuta, origen Seguimiento
+// Estratégico), SIG-F-03/04 (Programa/Informe de auditoría) — S&OP reutiliza
+// la misma minuta con su propio código (siguiente consecutivo libre) y su
+// propio texto de "Aplicación" en el encabezado del PDF.
 const NEGRO = [23, 23, 23];
 const ROJO = [124, 20, 22];
 const GRIS = [120, 120, 120];
 const GRIS_LINEA = [205, 205, 205];
-const DOC_CODIGO = "SIG-F-02";
 const DOC_EDICION = "01";
 const DOC_FECHA_EDICION = "19/08/2026";
-const DOC_APLICACION = "Seguimiento Estratégico";
 const LOGO_RATIO = 432 / 122;
 
-export async function getMinutas() {
+const MODULO_DOC_INFO = {
+  "Seguimiento Estratégico": { codigo: "SIG-F-02", aplicacion: "Seguimiento Estratégico" },
+  "S&OP": { codigo: "SIG-F-05", aplicacion: "S&OP — Alineación Ventas y Operación" },
+};
+function docInfoPorModulo(modulo) {
+  return MODULO_DOC_INFO[modulo] || MODULO_DOC_INFO["Seguimiento Estratégico"];
+}
+
+export async function getMinutas(modulo) {
   try {
+    let query = supabase.from("seguimiento_minutas").select("*").order("fecha", { ascending: false }).order("created_at", { ascending: false });
+    if (modulo) query = query.eq("modulo", modulo);
     const [{ data: minutas, error: mErr }, { data: participantes, error: pErr }] = await Promise.all([
-      supabase.from("seguimiento_minutas").select("*").order("fecha", { ascending: false }).order("created_at", { ascending: false }),
+      query,
       supabase.from("seguimiento_minuta_participantes").select("*, persona:personas(id,nombre)").order("orden"),
     ]);
     if (mErr || pErr) {
@@ -62,7 +71,7 @@ export async function getMinutaDetalle(minutaId) {
   }
 }
 
-export async function createMinuta({ tipo, titulo, fecha, procesoRelacionado, participantesPersonaIds, puntos }, actor) {
+export async function createMinuta({ tipo, titulo, fecha, procesoRelacionado, participantesPersonaIds, puntos }, actor, modulo) {
   try {
     const { personaId, nombre } = actorFields(actor);
     const { data: minuta, error } = await supabase
@@ -72,6 +81,7 @@ export async function createMinuta({ tipo, titulo, fecha, procesoRelacionado, pa
         titulo,
         fecha: fecha || new Date().toISOString().slice(0, 10),
         proceso_relacionado: procesoRelacionado || null,
+        modulo: modulo || "Seguimiento Estratégico",
         created_by_persona_id: personaId,
         created_by_nombre: nombre,
       })
@@ -154,6 +164,8 @@ function buildPdfDoc(minuta) {
   // Encabezado de documento controlado del SIG: logo + nombre del documento +
   // ficha (Código/Estado/Edición/Aplicación/Fecha/Página), replicando la
   // estructura del encabezado usado en SIG-P-02/SIG-P-03.
+  const docInfo = docInfoPorModulo(minuta.modulo);
+
   function drawHeader() {
     const top = 30;
     const headerHeight = 80;
@@ -189,10 +201,10 @@ function buildPdfDoc(minuta) {
     doc.setTextColor(...ROJO);
     doc.text("Sistema Integrado de Gestión", middleX, top + 46, { maxWidth: middleWidth });
     doc.setTextColor(...GRIS);
-    doc.text(`Aplicación: ${DOC_APLICACION}`, middleX, top + 60, { maxWidth: middleWidth });
+    doc.text(`Aplicación: ${docInfo.aplicacion}`, middleX, top + 60, { maxWidth: middleWidth });
 
     const metaRows = [
-      ["Código:", DOC_CODIGO],
+      ["Código:", docInfo.codigo],
       ["Estado:", "Vigente"],
       ["Edición:", DOC_EDICION],
       ["Fecha:", DOC_FECHA_EDICION],
