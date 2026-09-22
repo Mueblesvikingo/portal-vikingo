@@ -160,17 +160,17 @@ const TABS = [
   { key: "control", label: "Control S&OP" },
   { key: "dashboard", label: "Dashboard" },
   { key: "plan-venta", label: "Plan de venta" },
-  { key: "mps", label: "MPS" },
   { key: "operacion", label: "Plan de operación" },
+  { key: "mps", label: "MPS" },
   { key: "financiero", label: "Plan financiero" },
   { key: "inventarios", label: "Inventarios" },
   { key: "decisiones", label: "Acuerdos S&OP" },
   { key: "decisiones-director", label: "Decisiones (Director)" },
   { key: "prioridades", label: "Prioridades semanales" },
-  { key: "historico", label: "Histórico S&OP" },
-  // "Parámetros" oculta temporalmente a pedido — el componente y su carga
-  // de datos se dejan intactos, solo se quita del menú de pestañas.
-  // Para reactivarla: descomentar la línea de abajo.
+  // "Histórico S&OP" y "Parámetros" ocultas temporalmente a pedido — el
+  // componente y su carga de datos se dejan intactos, solo se quitan del
+  // menú de pestañas. Para reactivarlas: descomentar la línea de abajo.
+  // { key: "historico", label: "Histórico S&OP" },
   // { key: "parametros", label: "Parámetros" },
 ];
 

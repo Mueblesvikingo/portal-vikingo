@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { downloadCsv, formatFechaCorta, formatNumber, LINEAS, toISODate } from "./sopHelpers";
+import { downloadCsv, formatFechaCorta, formatNumber, LINEAS, parseCsvSimple, toISODate } from "./sopHelpers";
 import { getVentana, upsertVentana } from "../../services/sopVentanaSemanalService";
 
 const LINEA_STYLE = {
@@ -99,6 +99,7 @@ export default function MpsTab({ productos, canEdit, currentUser, semanaLunes })
   const [demandaPorSemana, setDemandaPorSemana] = useState([]);
   const [overridesPorSemana, setOverridesPorSemana] = useState([]);
   const [vista, setVista] = useState("mps");
+  const [importMsg, setImportMsg] = useState("");
 
   const semanas = useMemo(() => buildSemanas(semanaLunes, HORIZONTE_SEMANAS), [semanaLunes]);
 
@@ -188,6 +189,52 @@ export default function MpsTab({ productos, canEdit, currentUser, semanaLunes })
     downloadCsv(`MPS_${VISTAS.find((v) => v.key === vista).label.replace(/\s+/g, "_")}_${semanaLunes}.csv`, header, rows);
   }
 
+  // Importa por Código, con una columna por semana en el mismo orden que
+  // Exportar — sin importar qué vista estaba seleccionada al exportar, lo
+  // que se carga siempre es "A producir (MPS)": es la única cifra editable
+  // de esta pestaña (Demanda viene de Plan de venta, Saldo se calcula solo).
+  async function handleImportar(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const text = await file.text();
+    const rows = parseCsvSimple(text);
+    if (rows.length < 2) { setImportMsg("El archivo no tiene filas para importar."); return; }
+    const header = rows[0].map((h) => h.trim().toLowerCase());
+    const idxCodigo = header.indexOf("codigo");
+    if (idxCodigo === -1) { setImportMsg('El archivo debe tener una columna "Codigo".'); return; }
+    const porCodigo = new Map(productos.map((p) => [String(p.codigo).trim().toLowerCase(), p]));
+    const nextPorSemana = overridesPorSemana.map((m) => ({ ...m }));
+    let actualizados = 0;
+    const noEncontrados = [];
+    for (const row of rows.slice(1)) {
+      const codigo = String(row[idxCodigo] || "").trim();
+      if (!codigo) continue;
+      const producto = porCodigo.get(codigo.toLowerCase());
+      if (!producto) { noEncontrados.push(codigo); continue; }
+      let tocoAlguno = false;
+      semanas.forEach((s, semanaIdx) => {
+        const colIdx = 3 + semanaIdx;
+        if (colIdx >= row.length) return;
+        const valor = Number(row[colIdx]);
+        if (!Number.isFinite(valor)) return;
+        nextPorSemana[semanaIdx][producto.id] = valor;
+        tocoAlguno = true;
+      });
+      if (tocoAlguno) actualizados++;
+    }
+    const resultados = await Promise.all(
+      semanas.map((s, i) => upsertVentana({ pestana: "mps", semanaLunes: s, datos: { mpsPorProducto: nextPorSemana[i] } }, { actor: currentUser }))
+    );
+    const ok = resultados.every((r) => r?.ok);
+    if (ok) setOverridesPorSemana(nextPorSemana);
+    setImportMsg(
+      ok
+        ? `${actualizados} producto(s) actualizados en "A producir (MPS)".${noEncontrados.length ? ` Código(s) no encontrados: ${noEncontrados.join(", ")}.` : ""}`
+        : "No se pudo guardar la importación — intenta de nuevo."
+    );
+  }
+
   if (loading) return <div className="p-3"><p className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</p></div>;
 
   return (
@@ -196,14 +243,27 @@ export default function MpsTab({ productos, canEdit, currentUser, semanaLunes })
         <p className="text-[10px] font-black uppercase tracking-widest text-indigo-700">
           MPS · {HORIZONTE_SEMANAS} semanas desde {formatFechaCorta(new Date(`${semanas[0]}T00:00:00`))}
         </p>
-        <button
-          type="button"
-          onClick={handleExportar}
-          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-emerald-700"
-        >
-          ⭳ Exportar
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {canEdit && (
+            <label className="cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
+              ⭱ Importar
+              <input type="file" accept=".csv" onChange={handleImportar} className="hidden" />
+            </label>
+          )}
+          <button
+            type="button"
+            onClick={handleExportar}
+            title="Descarga código, producto, línea y la vista actual por semana — Importar siempre carga esas columnas en A producir (MPS), sin importar qué vista exportaste."
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-emerald-700"
+          >
+            ⭳ Exportar
+          </button>
+        </div>
       </div>
+
+      {importMsg && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-bold text-slate-600">{importMsg}</div>
+      )}
 
       <p className="text-[9px] font-semibold normal-case tracking-normal text-slate-400">
         Saldo inicial = Inventarios de la semana de arranque (real). Las semanas siguientes son proyección: cada una arrastra el saldo de la anterior menos su demanda (Plan de venta) más lo que se produce. "A producir" sugiere lo justo para cubrir el faltante (lote por lote) — editable; el punto ámbar marca una cantidad distinta ya decidida por el planificador.
