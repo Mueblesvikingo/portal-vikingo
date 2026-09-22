@@ -70,7 +70,7 @@ function AlertaLiderForm({ etapa, personasCatalogo, onEnviar, onCancel }) {
 function FirmaCard({ etapa, firma, habilitada, canApprove, onAction, isEquipoEstrategico, personasCatalogo, onAlertaLider }) {
   const estado = firma?.estado || "Pendiente";
   const estilo = FIRMA_STYLE[estado];
-  const fechaLimite = getFechaLimite(firma?.anio, firma?.mes, etapa.key);
+  const fechaLimite = getFechaLimite(firma?.semana_lunes, etapa.key);
   const hoy = new Date();
   const vencido = estado !== "Aprobado" && fechaLimite && hoy > fechaLimite;
   const [comentando, setComentando] = useState(false);
@@ -87,7 +87,7 @@ function FirmaCard({ etapa, firma, habilitada, canApprove, onAction, isEquipoEst
         </span>
       </div>
       <p className="mt-1.5 text-[9px] font-bold normal-case tracking-normal text-slate-400">
-        Límite: <b className="text-slate-600">{fechaLimite ? fechaLimite.toLocaleDateString("es-MX") : "—"}</b>
+        Límite: <b className="text-slate-600">{fechaLimite ? fechaLimite.toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</b>
         {vencido && <span className="ml-1 font-black text-red-600">VENCIDO</span>}
       </p>
       {firma?.fecha && (
@@ -249,18 +249,16 @@ function MetasEstrategicasSection({ control, parametros, planVenta, productos, h
   );
 }
 
-function CicloFirmasSection({ control, firmas, currentUser, personasCatalogo, onUpsertFirma, onResetFirmas, onAlertaLider }) {
-  const anio = control?.mes_activo ? Number(control.mes_activo.slice(0, 4)) : null;
-  const mes = control?.mes_activo ? Number(control.mes_activo.slice(5, 7)) : null;
+function CicloFirmasSection({ semanaLunes, firmas, currentUser, personasCatalogo, onUpsertFirma, onResetFirmas, onAlertaLider }) {
   const equipoEstrategico = isStrategicTeamMember(currentUser);
   const [resetting, setResetting] = useState(false);
   const [confirmandoReset, setConfirmandoReset] = useState(false);
 
-  const firmasPorEtapa = Object.fromEntries(ETAPAS_CICLO.map((e) => [e.key, { ...firmas.find((f) => f.etapa === e.key), anio, mes }]));
+  const firmasPorEtapa = Object.fromEntries(ETAPAS_CICLO.map((e) => [e.key, { ...firmas.find((f) => f.etapa === e.key), semana_lunes: semanaLunes }]));
 
   async function handleReset() {
     setResetting(true);
-    await onResetFirmas(anio, mes);
+    await onResetFirmas(semanaLunes);
     setResetting(false);
     setConfirmandoReset(false);
   }
@@ -270,9 +268,9 @@ function CicloFirmasSection({ control, firmas, currentUser, personasCatalogo, on
       <div className="flex items-center justify-between gap-2 bg-amber-50/60 px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-amber-400" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Ciclo de firmas del mes activo (VEN-SP-03)</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Ciclo de firmas de la semana (VEN-SP-03)</p>
         </div>
-        {equipoEstrategico && anio && mes && (
+        {equipoEstrategico && semanaLunes && (
           confirmandoReset ? (
             <div className="flex items-center gap-2">
               <span className="text-[9px] font-bold text-amber-700">¿Reiniciar las 4 etapas a Pendiente?</span>
@@ -290,8 +288,8 @@ function CicloFirmasSection({ control, firmas, currentUser, personasCatalogo, on
       </div>
       <div className="p-4">
         <p className="text-[9px] font-bold normal-case tracking-normal text-slate-400">
-          Validación secuencial Comercial → Operativa → Financiera → Alineación integral, con fecha límite por etapa. Si Dirección rechaza la reunión ejecutiva, las tres validaciones vuelven a Pendiente para reajustar la propuesta.
-          {equipoEstrategico && " El reinicio (solo equipo estratégico) limpia las 4 etapas a Pendiente y deja listo el ciclo del mes siguiente en el sistema."}
+          Validación secuencial Comercial (martes 10:00) → Operativa y Financiera (martes 16:00) → Alineación integral (miércoles 10:00, junta). Si Dirección rechaza la reunión ejecutiva, las tres validaciones vuelven a Pendiente para reajustar la propuesta.
+          {equipoEstrategico && " El reinicio (solo equipo estratégico) limpia las 4 etapas a Pendiente para esta misma semana."}
         </p>
         <div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-4">
           {ETAPAS_CICLO.map((etapa) => (
@@ -300,8 +298,8 @@ function CicloFirmasSection({ control, firmas, currentUser, personasCatalogo, on
               etapa={etapa}
               firma={firmasPorEtapa[etapa.key]}
               habilitada={isHabilitada(etapa.key, firmasPorEtapa)}
-              canApprove={anio && mes && canApproveSopEtapa(currentUser, etapa.key)}
-              onAction={(estado, comentario) => onUpsertFirma(anio, mes, etapa.key, estado, comentario)}
+              canApprove={!!semanaLunes && canApproveSopEtapa(currentUser, etapa.key)}
+              onAction={(estado, comentario) => onUpsertFirma(semanaLunes, etapa.key, estado, comentario)}
               isEquipoEstrategico={equipoEstrategico}
               personasCatalogo={personasCatalogo}
               onAlertaLider={(payload) => onAlertaLider(etapa, payload, currentUser)}
@@ -328,6 +326,7 @@ export default function ControlTab({
   productos = [],
   historico = [],
   vistaSemanal = false,
+  semanaLunes,
 }) {
   // El <input type="month"> solo acepta/devuelve "AAAA-MM", pero la columna
   // en Supabase es tipo date ("AAAA-MM-DD") — hay que recortar al mostrar y
@@ -375,7 +374,7 @@ export default function ControlTab({
     return (
       <div className="space-y-3 p-3">
         <CicloFirmasSection
-          control={control}
+          semanaLunes={semanaLunes}
           firmas={firmas}
           currentUser={currentUser}
           personasCatalogo={personasCatalogo}
@@ -467,7 +466,7 @@ export default function ControlTab({
       </div>
 
       <CicloFirmasSection
-        control={control}
+        semanaLunes={semanaLunes}
         firmas={firmas}
         currentUser={currentUser}
         personasCatalogo={personasCatalogo}

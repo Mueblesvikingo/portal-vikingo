@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getSemanaReferenciaISO, getProximoLunes, formatFechaCorta, toISODate } from "./sopHelpers";
 import { getSemanasConDatos } from "../../services/sopVentanaSemanalService";
-import { canViewModule, canEditSopOperacionParams, canEditSopFinancieroParams, canEditSopPlanVenta, canCreateSopSolicitud, isDirectorGeneral } from "../../services/permissionsService";
+import { canEditSopOperacionParams, canEditSopFinancieroParams, canEditSopPlanVenta, canEditSopInventarios, canCreateSopSolicitud, isDirectorGeneral, isStrategicTeamMember } from "../../services/permissionsService";
 import {
   getProductos,
   createProducto,
@@ -83,13 +83,16 @@ const SOP_MANUAL_URL = "/manuales/SOP_Mission_Control.pdf";
 // que participa de la Vista semanal con datos propios por semana — Control
 // (solo ciclo de firmas, mensual) y Acuerdos S&OP (su propio sistema de
 // semanas vía sop_semanas) quedan fuera del filtro genérico de abajo.
-const PESTANA_VENTANA = { dashboard: "dashboard", "plan-venta": "plan-venta", operacion: "operacion", financiero: "financiero", inventarios: "inventarios", mps: "mps" };
+const PESTANA_VENTANA = { dashboard: "dashboard", "plan-venta": "plan-venta", operacion: "operacion", financiero: "financiero", inventarios: "inventarios", mps: "mps", control: "control" };
 
-// Inventarios y MPS no tienen un "modo mensual" equivalente (el saldo y el
-// horizonte de producción siempre parten de una semana puntual) — a
-// diferencia de las otras, muestran su tabla y el selector de semana del
-// encabezado aunque "Vista semanal" esté apagada.
-const PESTANAS_SIEMPRE_SEMANALES = ["inventarios", "mps"];
+// Inventarios, MPS y Control S&OP no tienen un "modo mensual" equivalente
+// (el saldo, el horizonte de producción y el ciclo de firmas siempre parten
+// de una semana puntual) — a diferencia de las otras, muestran su tabla y
+// el selector de semana del encabezado aunque "Vista semanal" esté apagada.
+// Nota: "control" no tiene su propia fila en sop_ventana_semanal (el ciclo
+// de firmas vive en sop_firmas_ciclo), así que su "Historial" del selector
+// siempre sale vacío — las flechas ‹ › sí funcionan igual.
+const PESTANAS_SIEMPRE_SEMANALES = ["inventarios", "mps", "control"];
 
 // Filtro discreto para moverse entre semanas de la Vista semanal y
 // consultar cualquiera ya guardada — una sola vez aquí en vez de repetir
@@ -215,10 +218,15 @@ export default function SopModule({ currentUser }) {
   const [personasCatalogo, setPersonasCatalogo] = useState([]);
   const [message, setMessage] = useState("");
 
-  const canEdit = canViewModule(currentUser, "sop");
+  // Pestañas sin un dueño específico (Dashboard, Control S&OP, Acuerdos
+  // S&OP, Prioridades, Histórico): de solo lectura para cualquiera fuera
+  // del equipo estratégico — ver comentario junto a los permisos de S&OP
+  // en permissionsService.js.
+  const canEditGeneral = isStrategicTeamMember(currentUser);
   const canEditOperacionParams = canEditSopOperacionParams(currentUser);
   const canEditFinancieroParams = canEditSopFinancieroParams(currentUser);
   const canEditPlanVenta = canEditSopPlanVenta(currentUser);
+  const canEditInventarios = canEditSopInventarios(currentUser);
   const canCreateSolicitud = canCreateSopSolicitud(currentUser);
   const [showSolicitudModal, setShowSolicitudModal] = useState(false);
   const [showSopVideo, setShowSopVideo] = useState(false);
@@ -263,19 +271,25 @@ export default function SopModule({ currentUser }) {
     setFinancieroAjustes(financieroAjustesData);
     setPersonasCatalogo(personasData);
     setSolicitudesSop((solicitudesSopData || []).filter((d) => d.proceso === "S&OP"));
-
-    if (controlData?.mes_activo) {
-      const anio = Number(controlData.mes_activo.slice(0, 4));
-      const mes = Number(controlData.mes_activo.slice(5, 7));
-      await ensureFirmasCiclo(anio, mes);
-      setFirmas(await getFirmasCiclo(anio, mes));
-    }
     setLoading(false);
   }
 
   useEffect(() => {
     loadAll();
   }, []);
+
+  // El ciclo de firmas sigue a la semana seleccionada arriba (flechas de
+  // Vista semanal), no a un mes fijo — se re-crea/recarga cada vez que se
+  // cambia de semana.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await ensureFirmasCiclo(semanaVentana);
+      const data = await getFirmasCiclo(semanaVentana);
+      if (!cancelled) setFirmas(data);
+    })();
+    return () => { cancelled = true; };
+  }, [semanaVentana]);
 
   useEffect(() => {
     if (!message) return;
@@ -707,8 +721,8 @@ export default function SopModule({ currentUser }) {
   // especial: si Dirección rechaza la reunión ejecutiva, el diagrama regresa
   // al paso "alinear supuestos" — las 3 validaciones previas se reabren a
   // Pendiente para que se reajuste la propuesta antes de volver a firmarlas.
-  async function handleUpsertFirma(anio, mes, etapa, estado, comentario) {
-    const result = await upsertFirma(anio, mes, etapa, estado, comentario, currentUser);
+  async function handleUpsertFirma(semanaLunes, etapa, estado, comentario) {
+    const result = await upsertFirma(semanaLunes, etapa, estado, comentario, currentUser);
     if (!result.ok) {
       console.error(result.error);
       setMessage("No fue posible actualizar la firma del ciclo.");
@@ -718,30 +732,29 @@ export default function SopModule({ currentUser }) {
     if (etapa === "ejecutivo" && estado === "Rechazado") {
       const reaperturas = await Promise.all(
         ["comercial", "operativo", "financiero"].map((e) =>
-          upsertFirma(anio, mes, e, "Pendiente", "Reabierto: la reunión ejecutiva rechazó el plan integrado.", currentUser)
+          upsertFirma(semanaLunes, e, "Pendiente", "Reabierto: la reunión ejecutiva rechazó el plan integrado.", currentUser)
         )
       );
       nuevasFirmas = [...nuevasFirmas, ...reaperturas.filter((r) => r.ok).map((r) => r.data)];
     }
     setFirmas((current) => {
-      const filtered = current.filter((f) => !nuevasFirmas.some((n) => n.anio === f.anio && n.mes === f.mes && n.etapa === f.etapa));
+      const filtered = current.filter((f) => !nuevasFirmas.some((n) => n.semana_lunes === f.semana_lunes && n.etapa === f.etapa));
       return [...filtered, ...nuevasFirmas];
     });
     setMessage("Ciclo de firmas actualizado.");
   }
 
   // Reinicio manual (solo equipo estratégico, gateado en ControlTab): limpia
-  // las 4 etapas del ciclo activo a Pendiente y deja listo el ciclo del mes
-  // siguiente en la base de datos.
-  async function handleResetFirmas(anio, mes) {
-    const result = await resetCicloFirmas(anio, mes, currentUser);
+  // las 4 etapas del ciclo de la semana activa a Pendiente.
+  async function handleResetFirmas(semanaLunes) {
+    const result = await resetCicloFirmas(semanaLunes, currentUser);
     if (!result.ok) {
       console.error(result.error);
       setMessage("No fue posible reiniciar el ciclo de firmas.");
       return;
     }
     setFirmas((current) => {
-      const filtered = current.filter((f) => !(f.anio === anio && f.mes === mes));
+      const filtered = current.filter((f) => f.semana_lunes !== semanaLunes);
       return [...filtered, ...result.data];
     });
     setMessage("Ciclo de firmas reiniciado.");
@@ -971,11 +984,6 @@ export default function SopModule({ currentUser }) {
     setControl(result.data);
     const historicoData = await getHistorico();
     setHistorico(historicoData);
-    if (result.data?.mes_activo) {
-      const anio = Number(result.data.mes_activo.slice(0, 4));
-      const mes = Number(result.data.mes_activo.slice(5, 7));
-      setFirmas(await getFirmasCiclo(anio, mes));
-    }
     setMessage(`Mes ${resumenMes.label} cerrado. El horizonte avanzó al siguiente mes.`);
     return true;
   }
@@ -1066,7 +1074,7 @@ export default function SopModule({ currentUser }) {
                 parametros={parametros}
                 ventaReal={ventaReal}
                 historico={historico}
-                canEdit={canEdit}
+                canEdit={canEditGeneral}
                 onSaveVentaReal={handleSaveVentaReal}
                 currentUser={currentUser}
                 vistaSemanal={vistaSemanal}
@@ -1093,7 +1101,7 @@ export default function SopModule({ currentUser }) {
             {activeTab === "mps" && (
               <MpsTab
                 productos={productos}
-                canEdit={canEditPlanVenta}
+                canEdit={canEditOperacionParams}
                 currentUser={currentUser}
                 semanaLunes={semanaVentana}
               />
@@ -1156,7 +1164,7 @@ export default function SopModule({ currentUser }) {
             {activeTab === "inventarios" && (
               <InventariosTab
                 productos={productos}
-                canEdit={canEditPlanVenta}
+                canEdit={canEditInventarios}
                 currentUser={currentUser}
                 semanaLunes={semanaVentana}
                 onSaveFamilia={handleSaveFamilia}
@@ -1165,7 +1173,7 @@ export default function SopModule({ currentUser }) {
             {activeTab === "decisiones" && (
               <DecisionesTab
                 decisiones={decisiones}
-                canEdit={canEdit}
+                canEdit={canEditGeneral}
                 canRequestDirectorDecision={canCreateSolicitud}
                 onCreate={handleCreateDecision}
                 vistaSemanal={vistaSemanal}
@@ -1194,7 +1202,7 @@ export default function SopModule({ currentUser }) {
               <PrioridadesTab
                 prioridades={prioridades}
                 control={control}
-                canEdit={canEdit}
+                canEdit={canEditGeneral}
                 onUpsert={handleUpsertPrioridad}
                 onUpdateEstado={handleUpdatePrioridadEstado}
                 currentUser={currentUser}
@@ -1207,7 +1215,7 @@ export default function SopModule({ currentUser }) {
                 planVenta={planVenta}
                 control={control}
                 parametros={parametros}
-                canEdit={canEdit}
+                canEdit={canEditGeneral}
                 onCloseMonth={handleCloseMonth}
                 currentUser={currentUser}
               />
@@ -1215,7 +1223,7 @@ export default function SopModule({ currentUser }) {
             {activeTab === "control" && (
               <ControlTab
                 control={control}
-                canEdit={canEdit}
+                canEdit={canEditGeneral}
                 onSave={handleSaveControl}
                 firmas={firmas}
                 currentUser={currentUser}
@@ -1228,6 +1236,7 @@ export default function SopModule({ currentUser }) {
                 productos={productos}
                 historico={historico}
                 vistaSemanal={vistaSemanal}
+                semanaLunes={semanaVentana}
               />
             )}
             {activeTab === "parametros" && (

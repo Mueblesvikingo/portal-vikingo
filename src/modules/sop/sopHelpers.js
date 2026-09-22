@@ -172,23 +172,24 @@ export const INGRESO_CAMPOS_SEMANA = [
   { key: "cobranza", label: "Cobranza" },
 ];
 
-// Ciclo mensual S&OP (VEN-SP-03): 4 etapas en orden, con su día límite
-// dentro del mes del ciclo — tomado directo del taller con el consultor
-// (comercial primeros 5 días, operativo hasta el 15, financiero hasta el 20
-// con margen, ejecutivo cierra con la reunión de fin de mes).
+// Ciclo semanal S&OP (VEN-SP-03): 4 etapas en orden, con su límite real
+// dentro de la semana (martes 10:00 Ventas, martes 16:00 Operación y
+// Financiero, miércoles 10:00 la junta de alineación) — calendario real
+// confirmado por Dirección, ya no el ciclo mensual original del taller.
 export const ETAPAS_CICLO = [
-  { key: "comercial", label: "Validación comercial", dia: 5 },
-  { key: "operativo", label: "Validación operativa", dia: 15 },
-  { key: "financiero", label: "Validación financiera", dia: 20 },
-  { key: "ejecutivo", label: "Alineación integral (reunión ejecutiva)", dia: 0 }, // 0 = último día del mes
+  { key: "comercial", label: "Validación comercial", diasDesdeLunes: 1, hora: 10, minuto: 0 },
+  { key: "operativo", label: "Validación operativa", diasDesdeLunes: 1, hora: 16, minuto: 0 },
+  { key: "financiero", label: "Validación financiera", diasDesdeLunes: 1, hora: 16, minuto: 0 },
+  { key: "ejecutivo", label: "Alineación integral (junta miércoles 10:00–10:30)", diasDesdeLunes: 2, hora: 10, minuto: 0 },
 ];
 
-// Devuelve la fecha límite (Date) de una etapa dentro del ciclo (anio, mes).
-// dia=0 se interpreta como "último día del mes" usando el truco de pedir el
-// día 0 del mes siguiente (JS Date normaliza eso al último día del mes actual).
-export function getFechaLimite(anio, mes, etapaKey) {
+// Devuelve la fecha y hora límite (Date) de una etapa dentro de la semana
+// (semanaLunes, formato ISO "AAAA-MM-DD" — el lunes de esa semana).
+export function getFechaLimite(semanaLunes, etapaKey) {
   const etapa = ETAPAS_CICLO.find((e) => e.key === etapaKey);
-  if (!etapa || !anio || !mes) return null;
-  if (etapa.dia === 0) return new Date(anio, mes, 0);
-  return new Date(anio, mes - 1, etapa.dia);
+  if (!etapa || !semanaLunes) return null;
+  const fecha = new Date(`${semanaLunes}T00:00:00`);
+  fecha.setDate(fecha.getDate() + etapa.diasDesdeLunes);
+  fecha.setHours(etapa.hora, etapa.minuto, 0, 0);
+  return fecha;
 }

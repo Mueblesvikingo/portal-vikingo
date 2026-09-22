@@ -419,13 +419,22 @@ export async function getHistorico() {
 
 const ETAPAS_CICLO_KEYS = ["comercial", "operativo", "financiero", "ejecutivo"];
 
-export async function getFirmasCiclo(anio, mes) {
+// anio/mes siguen existiendo en la tabla (NOT NULL, uso histórico del ciclo
+// mensual) pero ya no son la llave real — se derivan de semana_lunes solo
+// para no romper esa columna. La llave real ahora es (semana_lunes, etapa),
+// así el ciclo de firmas sigue a la semana que se esté viendo en Vista
+// semanal, no a un mes fijo.
+function anioMesDeSemana(semanaLunes) {
+  const d = new Date(`${semanaLunes}T00:00:00`);
+  return { anio: d.getFullYear(), mes: d.getMonth() + 1 };
+}
+
+export async function getFirmasCiclo(semanaLunes) {
   try {
     const { data, error } = await supabase
       .from("sop_firmas_ciclo")
       .select("*")
-      .eq("anio", anio)
-      .eq("mes", mes);
+      .eq("semana_lunes", semanaLunes);
 
     if (error) {
       console.error("Error al cargar firmas del ciclo S&OP:", error);
@@ -438,15 +447,16 @@ export async function getFirmasCiclo(anio, mes) {
   }
 }
 
-// Crea las 4 filas "Pendiente" del ciclo (anio, mes) si todavia no existen —
-// ignoreDuplicates hace que sea seguro llamarla varias veces (al cargar el
-// modulo y al cerrar un mes) sin pisar firmas ya capturadas.
-export async function ensureFirmasCiclo(anio, mes) {
+// Crea las 4 filas "Pendiente" de la semana si todavia no existen —
+// ignoreDuplicates hace que sea seguro llamarla cada vez que se entra a
+// Control S&OP con esa semana seleccionada, sin pisar firmas ya capturadas.
+export async function ensureFirmasCiclo(semanaLunes) {
   try {
-    const rows = ETAPAS_CICLO_KEYS.map((etapa) => ({ anio, mes, etapa, estado: "Pendiente" }));
+    const { anio, mes } = anioMesDeSemana(semanaLunes);
+    const rows = ETAPAS_CICLO_KEYS.map((etapa) => ({ semana_lunes: semanaLunes, anio, mes, etapa, estado: "Pendiente" }));
     const { error } = await supabase
       .from("sop_firmas_ciclo")
-      .upsert(rows, { onConflict: "anio,mes,etapa", ignoreDuplicates: true });
+      .upsert(rows, { onConflict: "semana_lunes,etapa", ignoreDuplicates: true });
 
     if (error) console.error("No se pudo inicializar el ciclo de firmas S&OP:", error);
   } catch (err) {
@@ -454,12 +464,14 @@ export async function ensureFirmasCiclo(anio, mes) {
   }
 }
 
-export async function upsertFirma(anio, mes, etapa, estado, comentario, actor) {
+export async function upsertFirma(semanaLunes, etapa, estado, comentario, actor) {
   try {
+    const { anio, mes } = anioMesDeSemana(semanaLunes);
     const { data, error } = await supabase
       .from("sop_firmas_ciclo")
       .upsert(
         {
+          semana_lunes: semanaLunes,
           anio,
           mes,
           etapa,
@@ -470,7 +482,7 @@ export async function upsertFirma(anio, mes, etapa, estado, comentario, actor) {
           fecha: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "anio,mes,etapa" }
+        { onConflict: "semana_lunes,etapa" }
       )
       .select("*")
       .single();
@@ -485,13 +497,12 @@ export async function upsertFirma(anio, mes, etapa, estado, comentario, actor) {
 // Reinicio manual del ciclo de firmas (solo equipo estrategico) — util cuando
 // el ciclo quedo en un estado inconsistente (ej. varias etapas rechazadas a
 // la vez mientras se probaba el flujo) y hay que empezar de nuevo sin
-// esperar a que se cierre el mes. Ademas deja listo (Pendiente) el ciclo del
-// mes siguiente en la base de datos, para que ya este disponible en cuanto
-// ese mes se vuelva el mes activo (el avance real de mes_activo sigue
-// pasando unicamente al cerrar el mes en Historico S&OP, no aqui).
-export async function resetCicloFirmas(anio, mes, actor) {
+// esperar a la siguiente semana.
+export async function resetCicloFirmas(semanaLunes, actor) {
   try {
+    const { anio, mes } = anioMesDeSemana(semanaLunes);
     const rows = ETAPAS_CICLO_KEYS.map((etapa) => ({
+      semana_lunes: semanaLunes,
       anio,
       mes,
       etapa,
@@ -504,13 +515,10 @@ export async function resetCicloFirmas(anio, mes, actor) {
     }));
     const { data, error } = await supabase
       .from("sop_firmas_ciclo")
-      .upsert(rows, { onConflict: "anio,mes,etapa" })
+      .upsert(rows, { onConflict: "semana_lunes,etapa" })
       .select("*");
 
     if (error) return { ok: false, error, data: null };
-
-    const nextMonth = new Date(anio, mes, 1);
-    await ensureFirmasCiclo(nextMonth.getFullYear(), nextMonth.getMonth() + 1);
 
     return { ok: true, error: null, data };
   } catch (err) {
@@ -646,8 +654,6 @@ export async function closeCurrentMonth({ control, resumenMes, ventaReal, actor 
       .single();
 
     if (controlError) return { ok: false, error: controlError };
-
-    await ensureFirmasCiclo(nextMonth.getFullYear(), nextMonth.getMonth() + 1);
 
     return { ok: true, error: null, data: controlData };
   } catch (err) {

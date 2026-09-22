@@ -329,12 +329,15 @@ export function canEditStrategicKpis(user) {
   return STRATEGIC_KPI_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
 }
 
-// Parámetros S&OP, sección "Capacidad y mezcla" / "Factores de consumo de
-// tapicería" (lo que alimenta Plan de operación): decisión explícita de
-// restringirlo a Director General (Alejandro) y Gerente de Operaciones
-// (Hugo), más el equipo estratégico (PM, Coordinador SIG, Analista de
-// Procesos, Director General).
-const SOP_OPERACION_EDITOR_PERSONA_IDS = [14, 13];
+// Permisos por pestaña de S&OP — un solo dueño por pestaña (además del
+// equipo estratégico, que siempre ve y edita todo vía isStrategicTeamMember
+// arriba de cada función). Decisión explícita: Ventas = solo Brisa,
+// Operaciones y MPS = solo Hugo, Inventarios = solo Kevin (Coordinador de
+// Inventarios), Financiero = solo Samantha. El resto de las pestañas del
+// módulo (Dashboard, Control S&OP, Acuerdos S&OP, Prioridades, Histórico)
+// quedan de solo lectura para cualquiera fuera del equipo estratégico —
+// ver SopModule.jsx, variable canEditGeneral.
+const SOP_OPERACION_EDITOR_PERSONA_IDS = [13];
 
 export function canEditSopOperacionParams(user) {
   if (isStrategicTeamMember(user)) return true;
@@ -350,22 +353,28 @@ export function canEditSopFinancieroParams(user) {
   return SOP_FINANCIERO_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
 }
 
-// Plan de venta S&OP: solo Director General (Alejandro) y Gerente Comercial
-// (Brisa) capturan piezas y precio, más el equipo estratégico (PM,
-// Coordinador SIG, Analista de Procesos, Director General) — el resto del
-// equipo con acceso a S&OP (Hugo, Beatriz, Kevin, Samantha) ve el módulo
-// pero no edita esta pestaña en particular.
-const SOP_PLAN_VENTA_EDITOR_PERSONA_IDS = [14, 26];
+// Plan de venta S&OP: solo Gerente Comercial (Brisa) captura piezas y
+// precio, más el equipo estratégico.
+const SOP_PLAN_VENTA_EDITOR_PERSONA_IDS = [26];
 
 export function canEditSopPlanVenta(user) {
   if (isStrategicTeamMember(user)) return true;
   return SOP_PLAN_VENTA_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
 }
 
+// Inventarios S&OP: solo Kevin (Coordinador de Inventarios) captura el
+// saldo, más el equipo estratégico.
+const SOP_INVENTARIOS_EDITOR_PERSONA_IDS = [5];
+
+export function canEditSopInventarios(user) {
+  if (isStrategicTeamMember(user)) return true;
+  return SOP_INVENTARIOS_EDITOR_PERSONA_IDS.includes(Number(user?.persona_id));
+}
+
 // Botón "+ Solicitud" dentro de S&OP: quién puede mandar una solicitud
 // directo a la Bandeja del Centro de Decisiones sin tener acceso al módulo
 // completo de Centro de Decisiones (que sigue siendo solo equipo estratégico).
-const SOP_SOLICITUD_PERSONA_IDS = [13, 7, 26];
+const SOP_SOLICITUD_PERSONA_IDS = [13, 7, 26, 5];
 
 export function canCreateSopSolicitud(user) {
   return SOP_SOLICITUD_PERSONA_IDS.includes(Number(user?.persona_id));
