@@ -178,8 +178,10 @@ export default function SopModule({ currentUser }) {
   const [activeTab, setActiveTab] = useState("dashboard");
   // Capa temporal mientras el ciclo mensual madura: cambia la vista de las
   // pestañas de captura a modo semanal (visibilidad real de la semana
-  // siguiente para la junta de alineación de cada martes). Un solo control
-  // global en vez de repetir el switch en cada pestaña.
+  // siguiente para la junta de alineación del jueves). La captura corre de
+  // martes a jueves en secuencia lógica: Ventas primero, luego Operaciones,
+  // cierra Finanzas. Un solo control global en vez de repetir el switch en
+  // cada pestaña.
   const [vistaSemanal, setVistaSemanal] = useState(false);
   // Semana que muestran Dashboard/Plan de venta/Operación/Financiero en
   // Vista semanal — un solo selector para las 4 (comparten el mismo
@@ -1030,15 +1032,15 @@ export default function SopModule({ currentUser }) {
               <button
                 type="button"
                 onClick={() => setVistaSemanal((v) => !v)}
-                title="Mientras el ciclo mensual madura: captura de la semana siguiente, para la junta de alineación de cada martes."
+                title="Mientras el ciclo mensual madura: captura de la semana siguiente, de martes a jueves (Ventas → Operaciones → Finanzas) para la junta de alineación del jueves."
                 className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${
                   vistaSemanal ? "bg-indigo-500 text-white" : "bg-white/10 text-white/60 hover:bg-white/20"
                 }`}
               >
                 📅 Vista semanal
               </button>
-              <span className="max-w-[200px] text-[9px] font-semibold leading-tight text-white/90">
-                Captura de la semana siguiente para la junta de alineación de cada martes
+              <span className="max-w-[220px] text-[9px] font-semibold leading-tight text-white/90">
+                Martes a jueves: captura Ventas → Operaciones → Finanzas, para la junta de alineación del jueves
               </span>
               {(vistaSemanal || PESTANAS_SIEMPRE_SEMANALES.includes(activeTab)) && PESTANA_VENTANA[activeTab] && (
                 <SelectorSemanaVentana semanaLunes={semanaVentana} onChange={setSemanaVentana} pestana={PESTANA_VENTANA[activeTab]} />
