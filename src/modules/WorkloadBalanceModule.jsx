@@ -1769,9 +1769,9 @@ export default function WorkloadBalanceModule({
       const byId = peopleOptions.find((person) => String(person.id) === String(currentUser.persona_id));
       if (byId) return byId.id;
     }
-    const currentName = normalizeText(currentUser?.name);
+    const currentName = normalizeText(currentUser?.nombre || currentUser?.persona_nombre || currentUser?.name);
     return peopleOptions.find((person) => normalizeText(person.name) === currentName)?.id || "";
-  }, [currentUser?.persona_id, currentUser?.name, peopleOptions]);
+  }, [currentUser?.persona_id, currentUser?.nombre, currentUser?.persona_nombre, currentUser?.name, peopleOptions]);
   // `personFilter` se inicializa una sola vez (useState lazy) a partir de
   // currentUser.persona_id. Si en ese primer render peopleCatalog aún no
   // había cargado (o la sesión tardó en resolver el id), el filtro puede
