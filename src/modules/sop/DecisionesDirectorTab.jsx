@@ -87,7 +87,7 @@ export default function DecisionesDirectorTab({ solicitudes, canDecide, onResolv
       if (!datos) { setLiquidezSemana(null); setLoadingLiquidez(false); return; }
       const totalEgresos = EGRESO_CAMPOS_SEMANA.reduce((s, c) => s + Number(datos[c.key] || 0), 0);
       const totalIngresos = INGRESO_CAMPOS_SEMANA.reduce((s, c) => s + Number(datos[c.key] || 0), 0);
-      setLiquidezSemana(totalIngresos - totalEgresos);
+      setLiquidezSemana(Number(datos.saldoInicial || 0) + totalIngresos - totalEgresos);
       setLoadingLiquidez(false);
     });
     return () => { cancelled = true; };
@@ -118,7 +118,7 @@ export default function DecisionesDirectorTab({ solicitudes, canDecide, onResolv
             </span>
           )}
         </div>
-        <p className="mt-1.5 text-[9px] font-bold text-slate-400">Solo suma el costo de las solicitudes que lo indicaron (ej. "Solicitar recurso") — los costos mensuales se prorratean entre semanas del mes, los únicos y semanales se comparan tal cual. La liquidez sale de Plan financiero → Vista semanal, de la semana seleccionada arriba.</p>
+        <p className="mt-1.5 text-[9px] font-bold text-slate-400">Solo suma el costo de las solicitudes que lo indicaron (ej. "Solicitar recurso") — los costos mensuales se prorratean entre semanas del mes, los únicos y semanales se comparan tal cual. La liquidez es saldo inicial + ingresos − egresos de Plan financiero → Vista semanal, de la semana seleccionada arriba.</p>
       </div>
 
       <div className="flex flex-wrap gap-1.5">

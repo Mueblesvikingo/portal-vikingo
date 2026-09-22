@@ -53,6 +53,102 @@ function EditableMonto({ value, canEdit, onSave }) {
   );
 }
 
+// Conceptos que se capturan como tabla desplegable (varios movimientos que
+// suman un total) en vez de un solo número — los demás (Nómina, Gastos
+// generales) suelen ser una sola cifra y se quedan como EditableMonto.
+const CONCEPTOS_DETALLE = ["proveedores", "ventasContado", "cobranza"];
+
+function sumaDetalle(lista) {
+  return (lista || []).reduce((s, d) => s + Number(d.monto || 0), 0);
+}
+
+// Fila de detalle (nombre + monto) dentro de un concepto desplegable —
+// mismo patrón de commit-on-blur/Enter que el resto del módulo, para no
+// disparar un guardado por cada tecla.
+function FilaDetalle({ item, canEdit, onGuardar, onQuitar }) {
+  const [nombre, setNombre] = useState(item.nombre || "");
+  const [monto, setMonto] = useState(String(item.monto ?? 0));
+
+  function commitNombre() {
+    if (nombre !== (item.nombre || "")) onGuardar({ ...item, nombre });
+  }
+  function commitMonto() {
+    const n = Number(monto);
+    if (Number.isFinite(n) && n !== Number(item.monto || 0)) onGuardar({ ...item, monto: n });
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        value={nombre}
+        disabled={!canEdit}
+        onChange={(e) => setNombre(e.target.value)}
+        onBlur={commitNombre}
+        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        placeholder="Concepto"
+        className="h-7 flex-1 rounded border border-slate-200 bg-white px-2 text-[10px] font-bold normal-case tracking-normal text-slate-700 outline-none disabled:bg-slate-50"
+      />
+      <input
+        type="number"
+        value={monto}
+        disabled={!canEdit}
+        onChange={(e) => setMonto(e.target.value)}
+        onBlur={commitMonto}
+        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        className="h-7 w-24 rounded border border-slate-200 bg-white px-2 text-right text-[10px] font-bold text-slate-700 outline-none disabled:bg-slate-50"
+      />
+      {canEdit && (
+        <button type="button" onClick={onQuitar} className="text-[10px] font-black text-red-400 hover:text-red-600">×</button>
+      )}
+    </div>
+  );
+}
+
+// Fila de concepto en Egresos/Ingresos — para Proveedores/Ventas de
+// contado/Cobranza es una tabla desplegable (el total sale de sumar sus
+// movimientos); para el resto sigue siendo un número directo.
+function FilaConcepto({ campo, montos, canEdit, abierto, onToggle, onGuardarCampo, onAgregarLinea, onEditarLinea, onQuitarLinea }) {
+  const tieneDetalle = CONCEPTOS_DETALLE.includes(campo.key);
+  const lista = montos._detalles?.[campo.key] || [];
+
+  return (
+    <div className="rounded-lg bg-slate-50 px-2.5 py-1.5">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600">
+          {campo.label}
+          {tieneDetalle && (
+            <button type="button" onClick={onToggle} className="text-[9px] font-black text-sky-600 hover:underline">
+              {abierto ? "▾ Ocultar" : `▸ Detalle${lista.length ? ` (${lista.length})` : ""}`}
+            </button>
+          )}
+        </span>
+        {tieneDetalle ? (
+          <span className="text-[10px] font-bold text-slate-600">{formatMoney(sumaDetalle(lista))}</span>
+        ) : (
+          <EditableMonto value={montos[campo.key] || 0} canEdit={canEdit} onSave={(n) => onGuardarCampo(campo.key, n)} />
+        )}
+      </div>
+      {tieneDetalle && abierto && (
+        <div className="mt-2 space-y-1.5 border-t border-slate-200 pt-2">
+          {lista.length === 0 && <p className="text-[9px] font-bold text-slate-300">Sin movimientos capturados.</p>}
+          {lista.map((item) => (
+            <FilaDetalle
+              key={item.id}
+              item={item}
+              canEdit={canEdit}
+              onGuardar={(next) => onEditarLinea(campo.key, item.id, next)}
+              onQuitar={() => onQuitarLinea(campo.key, item.id)}
+            />
+          ))}
+          {canEdit && (
+            <button type="button" onClick={() => onAgregarLinea(campo.key)} className="text-[9px] font-black text-sky-600 hover:underline">+ Agregar</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Celda de una fila calculada (Ventas/Margen/Gastos fijos): editable como
 // ajuste manual. Si esta ajustada se marca con un punto ambar clicable que
 // la restablece al valor real de Plan de venta/Parametros.
@@ -82,6 +178,7 @@ function FinancieroSemanalView({ currentUser, semanaLunes, canEdit, onSolicitarR
   const [loading, setLoading] = useState(true);
   const [montos, setMontos] = useState({});
   const [showSolicitarRecurso, setShowSolicitarRecurso] = useState(false);
+  const [detalleAbierto, setDetalleAbierto] = useState(null);
 
   const lunes = new Date(`${semanaLunes}T00:00:00`);
   const viernes = new Date(lunes);
@@ -113,15 +210,44 @@ function FinancieroSemanalView({ currentUser, semanaLunes, canEdit, onSolicitarR
     return () => { cancelled = true; };
   }, [semanaLunes]);
 
-  async function handleGuardarCampo(key, monto) {
-    const next = { ...montos, [key]: monto };
+  async function guardar(next) {
     setMontos(next);
     await upsertVentana({ pestana: "financiero", semanaLunes, datos: next }, { actor: currentUser });
   }
 
+  function handleGuardarCampo(key, monto) {
+    guardar({ ...montos, [key]: monto });
+  }
+
+  // El total del concepto (proveedores/ventasContado/cobranza) siempre se
+  // guarda también como número plano en su misma llave — así Decisiones
+  // (Director) sigue leyendo un número simple para el cálculo de liquidez,
+  // sin tener que saber que por dentro es una lista de movimientos.
+  function handleGuardarDetalle(conceptKey, nextLista) {
+    const detalles = { ...(montos._detalles || {}), [conceptKey]: nextLista };
+    guardar({ ...montos, _detalles: detalles, [conceptKey]: sumaDetalle(nextLista) });
+  }
+
+  function handleAgregarLinea(conceptKey) {
+    const lista = montos._detalles?.[conceptKey] || [];
+    setDetalleAbierto(conceptKey);
+    handleGuardarDetalle(conceptKey, [...lista, { id: Date.now(), nombre: "", monto: 0 }]);
+  }
+
+  function handleEditarLinea(conceptKey, id, nextItem) {
+    const lista = (montos._detalles?.[conceptKey] || []).map((d) => (d.id === id ? nextItem : d));
+    handleGuardarDetalle(conceptKey, lista);
+  }
+
+  function handleQuitarLinea(conceptKey, id) {
+    const lista = (montos._detalles?.[conceptKey] || []).filter((d) => d.id !== id);
+    handleGuardarDetalle(conceptKey, lista);
+  }
+
+  const saldoInicial = Number(montos.saldoInicial || 0);
   const totalEgresos = EGRESO_CAMPOS_SEMANA.reduce((s, c) => s + Number(montos[c.key] || 0), 0) + inversionRecursos;
   const totalIngresos = INGRESO_CAMPOS_SEMANA.reduce((s, c) => s + Number(montos[c.key] || 0), 0);
-  const liquidezEsperada = totalIngresos - totalEgresos;
+  const liquidezEsperada = saldoInicial + totalIngresos - totalEgresos;
 
   if (loading) return <div className="p-3"><p className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</p></div>;
 
@@ -146,15 +272,31 @@ function FinancieroSemanalView({ currentUser, semanaLunes, canEdit, onSolicitarR
         <SolicitarRecursoModal onSubmit={(draft) => onSolicitarRecurso(draft, currentUser)} onClose={() => setShowSolicitarRecurso(false)} />
       )}
 
+      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div>
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Saldo inicial</p>
+          <p className="text-[9px] font-bold text-slate-400">Efectivo disponible al empezar la semana.</p>
+        </div>
+        <EditableMonto value={montos.saldoInicial || 0} canEdit={canEdit} onSave={(n) => handleGuardarCampo("saldoInicial", n)} />
+      </div>
+
       <div className="grid gap-3 md:grid-cols-2">
         <div className="rounded-2xl border border-red-100 bg-white p-4 shadow-sm">
           <p className="text-[9px] font-black uppercase tracking-widest text-red-600">Egresos esperados</p>
           <div className="mt-2 space-y-1.5">
             {EGRESO_CAMPOS_SEMANA.map((c) => (
-              <div key={c.key} className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5">
-                <span className="text-[10px] font-bold text-slate-600">{c.label}</span>
-                <EditableMonto value={montos[c.key] || 0} canEdit={canEdit} onSave={(n) => handleGuardarCampo(c.key, n)} />
-              </div>
+              <FilaConcepto
+                key={c.key}
+                campo={c}
+                montos={montos}
+                canEdit={canEdit}
+                abierto={detalleAbierto === c.key}
+                onToggle={() => setDetalleAbierto(detalleAbierto === c.key ? null : c.key)}
+                onGuardarCampo={handleGuardarCampo}
+                onAgregarLinea={handleAgregarLinea}
+                onEditarLinea={handleEditarLinea}
+                onQuitarLinea={handleQuitarLinea}
+              />
             ))}
             <div className="flex items-center justify-between rounded-lg bg-violet-50 px-2.5 py-1.5" title="Se calcula sola: suma el costo de las solicitudes de recurso ya aprobadas por Dirección con fecha de compromiso en esta semana. No se captura a mano.">
               <span className="text-[10px] font-bold text-violet-700">Inversión en recursos (aprobada)</span>
@@ -171,10 +313,18 @@ function FinancieroSemanalView({ currentUser, semanaLunes, canEdit, onSolicitarR
           <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Ingresos esperados</p>
           <div className="mt-2 space-y-1.5">
             {INGRESO_CAMPOS_SEMANA.map((c) => (
-              <div key={c.key} className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5">
-                <span className="text-[10px] font-bold text-slate-600">{c.label}</span>
-                <EditableMonto value={montos[c.key] || 0} canEdit={canEdit} onSave={(n) => handleGuardarCampo(c.key, n)} />
-              </div>
+              <FilaConcepto
+                key={c.key}
+                campo={c}
+                montos={montos}
+                canEdit={canEdit}
+                abierto={detalleAbierto === c.key}
+                onToggle={() => setDetalleAbierto(detalleAbierto === c.key ? null : c.key)}
+                onGuardarCampo={handleGuardarCampo}
+                onAgregarLinea={handleAgregarLinea}
+                onEditarLinea={handleEditarLinea}
+                onQuitarLinea={handleQuitarLinea}
+              />
             ))}
           </div>
           <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
@@ -187,7 +337,7 @@ function FinancieroSemanalView({ currentUser, semanaLunes, canEdit, onSolicitarR
       <div className={`rounded-2xl border p-4 shadow-sm ${liquidezEsperada >= 0 ? "border-emerald-200 bg-emerald-50/60" : "border-red-200 bg-red-50/60"}`}>
         <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Efectivo esperado al final de la semana (liquidez)</p>
         <p className={`mt-1 text-2xl font-black ${liquidezEsperada >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatMoney(liquidezEsperada)}</p>
-        <p className="mt-1 text-[9px] font-bold text-slate-400">Ingresos esperados − egresos esperados de la semana.</p>
+        <p className="mt-1 text-[9px] font-bold text-slate-400">Saldo inicial + ingresos esperados − egresos esperados de la semana.</p>
       </div>
     </div>
   );
