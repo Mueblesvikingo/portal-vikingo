@@ -2,8 +2,9 @@ import { supabase } from "./supabase";
 
 // Ventana semanal de alineación S&OP — capa temporal mientras el ciclo
 // mensual madura: da visibilidad real de la semana siguiente por pestaña,
-// para la junta de alineación del jueves (captura de martes a jueves).
-// Una sola tabla para las 5
+// para la junta de alineación del miércoles (10:00–10:30). Calendario real:
+// martes 10:00 Ventas, martes 16:00 Operaciones/MPS y Finanzas, miércoles
+// AM Dirección revisa y resuelve solicitudes. Una sola tabla para las 5
 // pestañas (dashboard/plan-venta/operacion/financiero/decisiones): `datos`
 // guarda los campos propios de cada una en jsonb, evitando 5 tablas casi
 // idénticas para un registro que es, en el fondo, siempre lo mismo

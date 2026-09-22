@@ -149,33 +149,36 @@ export default function InventariosTab({ productos, canEdit, currentUser, semana
 
   return (
     <div className="p-3">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
         <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-indigo-700">
           Saldo de inventario · semana del {formatFechaCorta(lunes)} al {formatFechaCorta(viernes)}
         </span>
-        <div className="flex flex-wrap items-center gap-2">
-          {canEdit && (
-            <label className="cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
-              ⭱ Importar
-              <input type="file" accept=".csv" onChange={handleImportar} className="hidden" />
-            </label>
-          )}
-          <button
-            type="button"
-            onClick={handleExportar}
-            title="Descarga código, producto, línea, precio y saldo — mismo formato que espera Importar."
-            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-emerald-700"
-          >
-            ⭳ Exportar
-          </button>
-          <div className="rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-right">
-            <p className="text-[9px] font-black uppercase tracking-widest text-sky-500">Total en existencia</p>
-            <p className="text-sm font-black text-sky-900">{formatNumber(granTotalPiezas)} pzas</p>
-          </div>
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-2 text-right">
-            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Valorizado</p>
-            <p className="text-sm font-black text-emerald-900">{formatMoney(granTotalValorizado)}</p>
-          </div>
+      </div>
+      <p className="mb-3 text-[9px] font-semibold normal-case tracking-normal text-slate-400">
+        A diferencia de las demás pestañas, este saldo se actualiza <b>todos los días a las 8:00 am</b>, no solo una vez por semana.
+      </p>
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        {canEdit && (
+          <label className="cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
+            ⭱ Importar
+            <input type="file" accept=".csv" onChange={handleImportar} className="hidden" />
+          </label>
+        )}
+        <button
+          type="button"
+          onClick={handleExportar}
+          title="Descarga código, producto, línea, precio y saldo — mismo formato que espera Importar."
+          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-emerald-700"
+        >
+          ⭳ Exportar
+        </button>
+        <div className="rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-2 text-right">
+          <p className="text-[9px] font-black uppercase tracking-widest text-sky-500">Total en existencia</p>
+          <p className="text-sm font-black text-sky-900">{formatNumber(granTotalPiezas)} pzas</p>
+        </div>
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-2 text-right">
+          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Valorizado</p>
+          <p className="text-sm font-black text-emerald-900">{formatMoney(granTotalValorizado)}</p>
         </div>
       </div>
 

@@ -110,8 +110,9 @@ export function downloadCsv(filename, header, rows) {
 
 // Semana de referencia para la "Vista semanal" de S&OP (capa temporal
 // mientras el ciclo mensual madura): siempre el próximo lunes a viernes, la
-// semana que se revisa en la junta de alineación del jueves (captura de
-// martes a jueves: Ventas → Operaciones → Finanzas).
+// semana que se revisa en la junta de alineación del miércoles (10:00–10:30).
+// Calendario real: martes 10:00 Ventas, martes 16:00 Operaciones/MPS y
+// Finanzas, miércoles AM Dirección revisa y resuelve solicitudes.
 export function getProximoLunes() {
   const hoy = new Date();
   const dia = hoy.getDay(); // 0=domingo ... 1=lunes ... 6=sábado
