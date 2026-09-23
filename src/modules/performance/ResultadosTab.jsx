@@ -104,12 +104,11 @@ const VISIBLE_MESES = MESES.map((label, index) => ({ label, index })).slice(7);
 // no mezclar el gusto visual de una persona con el dato real que comparten
 // todos.
 const TABLE_PALETTES = [
-  { key: "sky", hex: "#F2F7FD" },
-  { key: "mint", hex: "#F1FAF5" },
-  { key: "peach", hex: "#FDF7F1" },
-  { key: "lavender", hex: "#F9F6FD" },
-  { key: "sand", hex: "#FBF9F2" },
-  { key: "rose", hex: "#FDF3F5" },
+  { key: "sky", hex: "#EAF3FC" },
+  { key: "mint", hex: "#E9F7EF" },
+  { key: "peach", hex: "#FCEFE2" },
+  { key: "lavender", hex: "#F1EAFB" },
+  { key: "rose", hex: "#FCE9EF" },
 ];
 const TABLE_PALETTE_STORAGE_KEY = "portalVikingo.resultadosPalette.v1";
 
