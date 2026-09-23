@@ -361,6 +361,7 @@ export default function OperationalPerformanceModule({ currentUser }) {
                 onUpdateKpi={handleUpdateKpi}
                 onToggleKpiActivo={handleToggleKpiActivo}
                 onEscalarKpi={handleEscalarKpi}
+                gaugesPosition="bottom"
               />
             ) : activeTab === "resultados" ? (
               <ResultadosTab

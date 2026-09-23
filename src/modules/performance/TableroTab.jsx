@@ -115,7 +115,7 @@ function DetailField({ label, children }) {
   );
 }
 
-export default function TableroTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onUpdateKpi, onToggleKpiActivo, onEscalarKpi }) {
+export default function TableroTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onUpdateKpi, onToggleKpiActivo, onEscalarKpi, gaugesPosition = "top" }) {
   const [openKpiId, setOpenKpiId] = useState(null);
   const isEstrategico = scope === "ESTRATEGICO";
   const mesActualLabel = getCurrentMonthInfo().label;
@@ -136,20 +136,43 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
   const showGroupHeader = isEstrategico || groups.length > 0;
   const colCount = canEdit ? 5 : 4;
 
+  const gaugesTop = (
+    <div className={`grid gap-3 ${isEstrategico ? "md:grid-cols-4" : groups.length > 1 ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
+      {groups.map((group) => {
+        const groupCumplimientos = group.items
+          .filter((k) => k.activo)
+          .map((k) => computeCumplimiento(resultados, k, anio).cumplimiento)
+          .filter((v) => v !== null && v !== undefined);
+        const avg = groupCumplimientos.length
+          ? Math.round(groupCumplimientos.reduce((a, b) => a + b, 0) / groupCumplimientos.length)
+          : null;
+        return <GaugeCard key={group.label} label={group.label} cumplimiento={avg} color={group.color} />;
+      })}
+    </div>
+  );
+
+  // Puesta discreta al final: en vez de la caja grande de arriba, una tira
+  // angosta que no compite con la tabla de indicadores (pedido explícito
+  // para Desempeño Operativo, donde solo hay un grupo "Operativos" y la
+  // caja completa se sentía estorbosa por encima de la tabla).
+  const gaugesBottom = (
+    <div className="flex flex-wrap justify-center gap-3 sm:justify-start">
+      {groups.map((group) => {
+        const groupCumplimientos = group.items
+          .filter((k) => k.activo)
+          .map((k) => computeCumplimiento(resultados, k, anio).cumplimiento)
+          .filter((v) => v !== null && v !== undefined);
+        const avg = groupCumplimientos.length
+          ? Math.round(groupCumplimientos.reduce((a, b) => a + b, 0) / groupCumplimientos.length)
+          : null;
+        return <GaugeCard key={group.label} label={group.label} cumplimiento={avg} color={group.color} />;
+      })}
+    </div>
+  );
+
   return (
     <div className="space-y-4">
-      <div className={`grid gap-3 ${isEstrategico ? "md:grid-cols-4" : groups.length > 1 ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
-        {groups.map((group) => {
-          const groupCumplimientos = group.items
-            .filter((k) => k.activo)
-            .map((k) => computeCumplimiento(resultados, k, anio).cumplimiento)
-            .filter((v) => v !== null && v !== undefined);
-          const avg = groupCumplimientos.length
-            ? Math.round(groupCumplimientos.reduce((a, b) => a + b, 0) / groupCumplimientos.length)
-            : null;
-          return <GaugeCard key={group.label} label={group.label} cumplimiento={avg} color={group.color} />;
-        })}
-      </div>
+      {gaugesPosition === "top" && gaugesTop}
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
@@ -301,6 +324,8 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
         </table>
         </div>
       </div>
+
+      {gaugesPosition === "bottom" && gaugesBottom}
     </div>
   );
 }
