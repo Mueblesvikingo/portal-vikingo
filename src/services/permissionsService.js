@@ -191,8 +191,19 @@ function getRolesFieldValue(user, moduleKey, field) {
   return values.some(Boolean);
 }
 
+// TEMPORAL (pedido explícito del usuario, 23-sep-2026): mientras se sigue
+// puliendo Desempeño Operativo, solo el Coordinador SIG debe verlo — ni
+// siquiera los supervisores de área para quienes se construyó, ni el resto
+// del equipo estratégico. Quitar este bloque (y el `return` que lo usa en
+// defaultVisible) para restaurar la visibilidad normal cuando esté listo.
+const DESEMPENO_OPERATIVO_WIP_ROLES = ["Coordinador SIG"];
+
 function defaultVisible(user, moduleKey) {
   if (MODULES_HIDDEN_BY_DEFAULT.includes(moduleKey)) return false;
+
+  if (moduleKey === "operational-performance") {
+    return getApplicableRoles(user).some((role) => DESEMPENO_OPERATIVO_WIP_ROLES.includes(role));
+  }
 
   if (isOperativeRole(user)) {
     return MODULES_VISIBLE_FOR_OPERATIVE_ROLES.includes(moduleKey);
