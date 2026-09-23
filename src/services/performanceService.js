@@ -150,6 +150,20 @@ export async function activateKpi(id, options) {
   return updateKpi(id, { activo: true }, options);
 }
 
+// Borrado definitivo (no "desactivar"): se usa cuando el usuario pide quitar
+// un KPI por completo, no solo ocultarlo. Los resultados e historial de ese
+// KPI se van con él por el `on delete cascade` de las tablas relacionadas.
+export async function deleteKpi(id) {
+  try {
+    const { error } = await supabase.from("desempeno_kpis").delete().eq("id", id);
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    console.error("Error inesperado al eliminar KPI:", err);
+    return { ok: false, error: err };
+  }
+}
+
 // `previousValor` es el valor actual de esa celda (kpi_id, anio, mes,
 // semana, tipo) antes de este guardado, para poder registrar el cambio en
 // el historial. `semana` (1-4) solo aplica a KPIs de captura semanal — para

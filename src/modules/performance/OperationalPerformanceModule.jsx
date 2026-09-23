@@ -7,6 +7,7 @@ import {
   updateKpi,
   deactivateKpi,
   activateKpi,
+  deleteKpi,
   upsertResultado,
   AREAS_OPERATIVAS,
 } from "../../services/operationalPerformanceService";
@@ -229,6 +230,13 @@ export default function OperationalPerformanceModule({ currentUser }) {
     setKpis((current) => current.map((k) => (k.id === kpi.id ? { ...k, ...result.data } : k)));
   }
 
+  async function handleDeleteKpi(kpi) {
+    const result = await deleteKpi(kpi.id);
+    if (!result?.ok) { console.error(result?.error); setMessage("No fue posible eliminar el KPI."); return; }
+    setKpis((current) => current.filter((k) => k.id !== kpi.id));
+    setResultados((current) => current.filter((r) => Number(r.kpi_id) !== kpi.id));
+  }
+
   async function handleSaveResultado(payload) {
     const semana = payload.semana ?? null;
     const previousValor = getResultadoValue(resultados, payload.kpiId, payload.anio, payload.mes, payload.tipo, semana);
@@ -361,6 +369,7 @@ export default function OperationalPerformanceModule({ currentUser }) {
                 onUpdateKpi={handleUpdateKpi}
                 onToggleKpiActivo={handleToggleKpiActivo}
                 onEscalarKpi={handleEscalarKpi}
+                onDeleteKpi={handleDeleteKpi}
                 gaugesPosition="bottom"
               />
             ) : activeTab === "resultados" ? (

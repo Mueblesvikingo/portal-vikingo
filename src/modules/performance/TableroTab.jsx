@@ -115,7 +115,7 @@ function DetailField({ label, children }) {
   );
 }
 
-export default function TableroTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onUpdateKpi, onToggleKpiActivo, onEscalarKpi, gaugesPosition = "top" }) {
+export default function TableroTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onUpdateKpi, onToggleKpiActivo, onEscalarKpi, onDeleteKpi, gaugesPosition = "top" }) {
   const [openKpiId, setOpenKpiId] = useState(null);
   const isEstrategico = scope === "ESTRATEGICO";
   const mesActualLabel = getCurrentMonthInfo().label;
@@ -296,17 +296,32 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                                 {kpi.updated_by_nombre ? `Última edición: ${kpi.updated_by_nombre} · ${formatDateTime(kpi.updated_at)}` : "Sin ediciones registradas"}
                               </p>
                               {canEditKpi(kpi) && (
-                                <button
-                                  type="button"
-                                  onClick={() => onToggleKpiActivo(kpi)}
-                                  className={`rounded-lg border px-3 py-1 text-[10px] font-black transition ${
-                                    isInactivo
-                                      ? "border-emerald-200 text-emerald-600 hover:bg-emerald-50"
-                                      : "border-red-200 text-red-500 hover:bg-red-50"
-                                  }`}
-                                >
-                                  {isInactivo ? "Activar KPI" : "Desactivar KPI"}
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => onToggleKpiActivo(kpi)}
+                                    className={`rounded-lg border px-3 py-1 text-[10px] font-black transition ${
+                                      isInactivo
+                                        ? "border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                                        : "border-red-200 text-red-500 hover:bg-red-50"
+                                    }`}
+                                  >
+                                    {isInactivo ? "Activar KPI" : "Desactivar KPI"}
+                                  </button>
+                                  {onDeleteKpi && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (window.confirm(`¿Eliminar definitivamente "${kpi.nombre_indicador}"? Se borran también sus resultados capturados. Esta acción no se puede deshacer.`)) {
+                                          onDeleteKpi(kpi);
+                                        }
+                                      }}
+                                      className="rounded-lg border border-red-300 bg-red-50 px-3 py-1 text-[10px] font-black text-red-600 transition hover:bg-red-100"
+                                    >
+                                      Eliminar KPI
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </td>
