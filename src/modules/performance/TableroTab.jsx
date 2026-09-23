@@ -178,7 +178,7 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
         <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] border-collapse text-[11px]">
           <thead>
-            <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
+            <tr className="bg-[#203f73] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
               <th className="px-3 py-2 text-white">Indicador</th>
               <th className="px-3 py-2 text-right text-white">Real <span className="font-bold normal-case text-white/40">({mesActualLabel})</span></th>
               <th className="px-3 py-2 text-right">Meta <span className="font-bold normal-case text-white/40">({mesActualLabel})</span></th>

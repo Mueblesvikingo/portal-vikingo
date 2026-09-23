@@ -180,8 +180,8 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
       <div className="overflow-x-auto">
       <table className="w-full min-w-[560px] border-collapse text-[10px]">
         <thead>
-          <tr className="bg-[#001225] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
-            <th className="sticky left-0 bg-[#001225] px-3 py-2 text-white">KPI</th>
+          <tr className="bg-[#203f73] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
+            <th className="sticky left-0 bg-[#203f73] px-3 py-2 text-white">KPI</th>
             <th className="px-2 py-2">Tipo</th>
             {VISIBLE_MESES.map(({ label }) => <th key={label} className="px-2 py-2 text-right">{label}</th>)}
           </tr>
