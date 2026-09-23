@@ -95,7 +95,87 @@ function WeeklyRealCells({ kpi, mesIndex, resultados, anio, canEdit, onSave }) {
 // muestra/edita aquí.
 const VISIBLE_MESES = MESES.map((label, index) => ({ label, index })).slice(7);
 
-export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onSaveResultado }) {
+// Color de fondo por fila de KPI: puramente para no "perder" la fila al leer
+// una tabla ancha — no es un estado (eso ya lo codifica el cumplimiento), así
+// que la paleta es deliberadamente pastel/discreta. Cada usuario elige su
+// propio color por KPI; se guarda en localStorage (por navegador, no en
+// Supabase) para no mezclar preferencia visual de una persona con el dato
+// real que sí deben compartir todos.
+const ROW_COLOR_PALETTE = [
+  { key: "sky", hex: "#E3EEFB" },
+  { key: "mint", hex: "#E1F5EC" },
+  { key: "peach", hex: "#FDECDD" },
+  { key: "lavender", hex: "#EFE6FB" },
+  { key: "sand", hex: "#F7F1E3" },
+  { key: "rose", hex: "#FBE7EE" },
+];
+const ROW_COLOR_STORAGE_KEY = "portalVikingo.resultadosRowColors.v1";
+
+function loadRowColors(namespace) {
+  try {
+    const all = JSON.parse(localStorage.getItem(ROW_COLOR_STORAGE_KEY) || "{}");
+    return all[namespace] || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveRowColor(namespace, kpiId, colorKey) {
+  try {
+    const all = JSON.parse(localStorage.getItem(ROW_COLOR_STORAGE_KEY) || "{}");
+    const scoped = { ...(all[namespace] || {}) };
+    if (colorKey) scoped[kpiId] = colorKey;
+    else delete scoped[kpiId];
+    localStorage.setItem(ROW_COLOR_STORAGE_KEY, JSON.stringify({ ...all, [namespace]: scoped }));
+  } catch {
+    // localStorage no disponible (privado/bloqueado) — la elección solo dura la sesión en memoria.
+  }
+}
+
+function RowColorPicker({ colorKey, onPick }) {
+  const [open, setOpen] = useState(false);
+  const current = ROW_COLOR_PALETTE.find((c) => c.key === colorKey);
+  return (
+    <span className="relative inline-flex align-middle">
+      <button
+        type="button"
+        title="Color de la fila"
+        onClick={() => setOpen((v) => !v)}
+        className="ml-1.5 inline-block h-2.5 w-2.5 rounded-full border border-slate-300"
+        style={{ background: current ? current.hex : "transparent" }}
+      />
+      {open && (
+        <>
+          <span className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <span className="absolute left-0 top-4 z-20 flex items-center gap-1 rounded-full border border-slate-200 bg-white px-1.5 py-1 shadow-md">
+            {ROW_COLOR_PALETTE.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                title={c.key === colorKey ? "Quitar color" : "Elegir este color"}
+                onClick={() => { onPick(c.key === colorKey ? null : c.key); setOpen(false); }}
+                className="h-3.5 w-3.5 rounded-full border transition"
+                style={{ background: c.hex, borderColor: c.key === colorKey ? "#64748b" : "#e2e8f0" }}
+              />
+            ))}
+          </span>
+        </>
+      )}
+    </span>
+  );
+}
+
+export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onSaveResultado, namespace = "org" }) {
+  const [rowColors, setRowColors] = useState(() => loadRowColors(namespace));
+  const setRowColor = (kpiId, colorKey) => {
+    setRowColors((prev) => {
+      const next = { ...prev };
+      if (colorKey) next[kpiId] = colorKey;
+      else delete next[kpiId];
+      return next;
+    });
+    saveRowColor(namespace, kpiId, colorKey);
+  };
   const isEstrategico = scope === "ESTRATEGICO";
   const groups = isEstrategico
     ? PERSPECTIVAS.map((p) => ({ label: p, items: kpis.filter((k) => k.perspectiva === p) }))
@@ -130,14 +210,17 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
                   </td>
                 </tr>
               )}
-              {group.items.map((kpi) => (
+              {group.items.map((kpi) => {
+                const rowColorHex = ROW_COLOR_PALETTE.find((c) => c.key === rowColors[kpi.id])?.hex || null;
+                return (
                 <Fragment key={kpi.id}>
-                  <tr className="border-b border-slate-50 transition hover:bg-slate-50/70">
-                    <td rowSpan={2} className="sticky left-0 bg-white px-3 py-1.5 align-top font-black text-slate-800" style={{ boxShadow: `inset 3px 0 0 ${groupColor}` }}>
+                  <tr className="border-b border-slate-50 transition hover:bg-slate-50/70" style={rowColorHex ? { background: rowColorHex } : undefined}>
+                    <td rowSpan={2} className={`sticky left-0 px-3 py-1.5 align-top font-black text-slate-800 ${rowColorHex ? "" : "bg-white"}`} style={{ boxShadow: `inset 3px 0 0 ${groupColor}`, background: rowColorHex || undefined }}>
                       {kpi.nombre_indicador}
                       {kpi.periodicidad === "Semanal" && (
                         <span className="ml-1.5 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[8px] font-black uppercase tracking-wide text-violet-600">Semanal</span>
                       )}
+                      <RowColorPicker colorKey={rowColors[kpi.id]} onPick={(colorKey) => setRowColor(kpi.id, colorKey)} />
                     </td>
                     <td className="px-2 py-1 text-slate-400">Meta</td>
                     {VISIBLE_MESES.map(({ index }) => (
@@ -146,7 +229,7 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
                       </td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-100">
+                  <tr className="border-b border-slate-100" style={rowColorHex ? { background: rowColorHex } : undefined}>
                     <td className="px-2 py-1 text-slate-400">Real</td>
                     {VISIBLE_MESES.map(({ index }) => (
                       <td key={index} className="px-2 py-1">
@@ -159,7 +242,8 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
                     ))}
                   </tr>
                 </Fragment>
-              ))}
+                );
+              })}
             </Fragment>
             );
           })}

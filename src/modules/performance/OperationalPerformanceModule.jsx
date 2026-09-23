@@ -372,6 +372,7 @@ export default function OperationalPerformanceModule({ currentUser }) {
                 canEdit={canEdit}
                 canEditKpi={canEditKpi}
                 onSaveResultado={handleSaveResultado}
+                namespace="operativo"
               />
             ) : (
               <ProcesoChartsTab kpis={activeScopedKpis} resultados={resultados} anio={CURRENT_YEAR} />
