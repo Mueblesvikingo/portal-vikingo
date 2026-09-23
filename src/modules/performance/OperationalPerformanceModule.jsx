@@ -12,12 +12,78 @@ import {
 } from "../../services/operationalPerformanceService";
 import { isStrategicTeamMember, canEditDesempenoOperativoArea, getOwnDesempenoOperativoArea } from "../../services/permissionsService";
 import { createStrategicDecision } from "../../services/decisionService";
-import { getResultadoValue, formatDateTime, formatKpiValue } from "./performanceHelpers";
+import { getResultadoValue, formatDateTime, formatKpiValue, computeCumplimiento, getCumplimientoStatus } from "./performanceHelpers";
 import TableroTab from "./TableroTab";
 import ResultadosTab from "./ResultadosTab";
 import ProcesoChartsTab from "./ProcesoChartsTab";
 
 const CURRENT_YEAR = new Date().getFullYear();
+
+// Un ícono por indicador — ayuda a reconocer cada tarjeta de un vistazo sin
+// tener que leer el nombre completo, pensado para consultarse rápido desde
+// el piso de producción. Si un supervisor agrega un KPI propio con otro
+// nombre, cae en el ícono genérico.
+const KPI_ICONS = {
+  "% Utilización de EPP": "🦺",
+  "Número de incidencias": "⚠️",
+  "% Merma": "♻️",
+  "Productividad (% Plan logrado)": "🎯",
+  "Eficiencia en el uso del personal": "👷",
+};
+
+// Tarjeta de resumen por KPI (golden reference #2 del mantra de diseño: la
+// dona + riel de KPI de Balance de Carga) — el estado se codifica 3 veces a
+// la vez (color del borde/ícono, palabra "En meta/Atención/Crítico" y barra
+// de avance), pensado para que un supervisor sepa cómo va sin leer números.
+function OperationalKpiSummaryCard({ kpi, resultados, anio }) {
+  const { real, meta, cumplimiento, esMesAnterior, mesUsadoLabel } = computeCumplimiento(resultados, kpi, anio);
+  const status = getCumplimientoStatus(cumplimiento);
+  const barValue = cumplimiento === null || cumplimiento === undefined ? 0 : Math.min(cumplimiento, 100);
+  return (
+    <div className="relative overflow-hidden rounded-2xl border bg-white p-3 shadow-sm" style={{ borderColor: `${status.color}35` }}>
+      <span className="absolute inset-y-0 left-0 w-1" style={{ background: status.color }} />
+      <div className="flex items-start justify-between gap-2 pl-1.5">
+        <span className="text-lg leading-none">{KPI_ICONS[kpi.nombre_indicador] || "📌"}</span>
+        <span className="rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-wide" style={{ backgroundColor: `${status.color}1f`, color: status.color }}>
+          {status.label}
+        </span>
+      </div>
+      <p className="mt-2 truncate pl-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400" title={kpi.nombre_indicador}>
+        {kpi.nombre_indicador}
+      </p>
+      <div className="mt-0.5 flex items-baseline gap-1.5 pl-1.5">
+        <p className="text-2xl font-black leading-none text-slate-900">{formatKpiValue(real, kpi.unidad_medida)}</p>
+        {esMesAnterior && real !== null && <span className="text-[8px] font-bold text-amber-500">{mesUsadoLabel}</span>}
+      </div>
+      <p className="pl-1.5 text-[9px] font-bold text-slate-400">Meta: {formatKpiValue(meta, kpi.unidad_medida)}</p>
+      <div className="mx-1.5 mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-full rounded-full transition-all" style={{ width: `${barValue}%`, background: status.color }} />
+      </div>
+    </div>
+  );
+}
+
+function OperationalKpiSummaryBand({ kpis, resultados, anio }) {
+  if (kpis.length === 0) return null;
+  const statuses = kpis.map((kpi) => getCumplimientoStatus(computeCumplimiento(resultados, kpi, anio).cumplimiento).label);
+  const enMeta = statuses.filter((label) => label === "En meta").length;
+  const criticos = statuses.filter((label) => label === "Crítico").length;
+  return (
+    <div className="space-y-2">
+      <p className="px-1 text-[11px] font-bold text-slate-500">
+        {criticos > 0
+          ? `⚠️ ${criticos} de ${kpis.length} indicador(es) en estado Crítico esta semana — revísalos abajo.`
+          : `✅ ${enMeta} de ${kpis.length} indicadores en meta esta semana.`}
+        <span className="ml-2 text-slate-300">Verde = vas bien · Ámbar = ponle ojo · Rojo = actúa ya</span>
+      </p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        {kpis.map((kpi) => (
+          <OperationalKpiSummaryCard key={kpi.id} kpi={kpi} resultados={resultados} anio={anio} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const KPI_FIELD_LABELS = {
   nombre_indicador: "Indicador",
@@ -253,6 +319,12 @@ export default function OperationalPerformanceModule({ currentUser }) {
           </div>
           {!canEdit && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold text-amber-700">Modo solo lectura</span>}
         </div>
+
+        {!loading && (
+          <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+            <OperationalKpiSummaryBand kpis={activeScopedKpis} resultados={resultados} anio={CURRENT_YEAR} />
+          </div>
+        )}
 
         <div className="mt-2 overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-3 bg-[#001225] px-4 py-1.5 text-white">
