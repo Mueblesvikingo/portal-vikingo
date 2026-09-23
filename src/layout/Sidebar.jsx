@@ -9,6 +9,7 @@ const menuItems = [
   { label: "Seguimiento Estratégico", route: "/strategic-followup", moduleKey: "strategic-followup" },
   { label: "S&OP", route: "/sop", moduleKey: "sop" },
   { label: "Desempeño Organizacional", route: "/performance", moduleKey: "performance" },
+  { label: "Desempeño Operativo", route: "/operational-performance", moduleKey: "operational-performance" },
   { label: "Diseño organizacional", route: "/capacity", moduleKey: "capacity" },
   { label: "Balance de Carga", route: "/workload-balance", moduleKey: "workload-balance" },
   { label: "Organigrama", route: "/organigrama", moduleKey: "organigrama" },

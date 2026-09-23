@@ -5,6 +5,7 @@ import { canViewModule, isDirectorGeneral } from "../../services/permissionsServ
 
 import ExecutiveHome from "../../modules/executive/ExecutiveHome";
 import PerformanceModule from "../../modules/performance/PerformanceModule";
+import OperationalPerformanceModule from "../../modules/performance/OperationalPerformanceModule";
 import CapacityModule from "../../modules/organizational-capacity/CapacityModule";
 import DecisionCenterModule from "../../modules/decision-center/DecisionCenterModule";
 import StrategicFollowupModule from "../../modules/strategic-followup/StrategicFollowupModule";
@@ -70,6 +71,11 @@ export default function AppRouter({
           <Route
             path="/performance"
             element={<Guarded moduleKey="performance" currentUser={currentUser}><PerformanceModule currentUser={currentUser} /></Guarded>}
+          />
+
+          <Route
+            path="/operational-performance"
+            element={<Guarded moduleKey="operational-performance" currentUser={currentUser}><OperationalPerformanceModule currentUser={currentUser} /></Guarded>}
           />
 
 {/* Despliegue Estratégico ya no es un módulo aparte: vive como pestaña

@@ -47,7 +47,7 @@ const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
 // sus claves de acceso — antes solo Supervisor/Auxiliar quedaban acotados,
 // por eso seguían viendo el tablero completo.
 const OPERATIVE_ROLE_PREFIXES = ["Supervisor", "Auxiliar", "Inspector de Calidad"];
-const MODULES_VISIBLE_FOR_OPERATIVE_ROLES = ["organigrama", "workload-balance", "acciones"];
+const MODULES_VISIBLE_FOR_OPERATIVE_ROLES = ["organigrama", "workload-balance", "acciones", "operational-performance"];
 
 export function isOperativeRole(user) {
   return getApplicableRoles(user).some((role) =>
@@ -504,6 +504,32 @@ export function canEditWorkloadForPersonRoles(user, targetPersonRoles = [], targ
   const allowedPersonas = WORKLOAD_SCOPED_EDITOR_PERSONAS[userId];
   if (allowedPersonas && targetPersonId != null && allowedPersonas.includes(Number(targetPersonId))) return true;
   return false;
+}
+
+// Desempeño Operativo: cada área la edita únicamente su propio supervisor
+// (identificado por persona_id — su puesto real es "Supervisor de costura/
+// Carpintería/tapicería" en Catálogo Organizacional), más Hugo Terrones
+// como Coordinador de Producción sobre las 3 áreas, más el equipo
+// estratégico como respaldo. Confirmado explícitamente por el usuario
+// (23/09/2026).
+const DESEMPENO_OPERATIVO_AREA_OWNERS = {
+  27: "Corte y costura de tela", // ORDUÑA PEÑA JOSELINE — Supervisor de costura
+  2: "Carpintería y armado de madera", // HERNÁNDEZ DURÁN JOSE GUADALUPE — Supervisor de Carpintería
+  8: "Tapicería", // NERI HERNANDEZ SANDRA EVELYN — Supervisor de tapicería
+};
+const DESEMPENO_OPERATIVO_COORDINADOR_IDS = [13]; // TERRONES TAPIA HUGO — Coordinador de Producción
+
+export function canEditDesempenoOperativoArea(user, area) {
+  if (isStrategicTeamMember(user)) return true;
+  const personaId = Number(user?.persona_id);
+  if (DESEMPENO_OPERATIVO_COORDINADOR_IDS.includes(personaId)) return true;
+  return DESEMPENO_OPERATIVO_AREA_OWNERS[personaId] === area;
+}
+
+// Área por defecto al abrir el módulo para un supervisor (no equipo
+// estratégico ni Hugo, que ven todas): su propia área, si tiene una.
+export function getOwnDesempenoOperativoArea(user) {
+  return DESEMPENO_OPERATIVO_AREA_OWNERS[Number(user?.persona_id)] || null;
 }
 
 // Tablero Gerencial de Proyectos (PMO): por pedido explícito, solo PM y
