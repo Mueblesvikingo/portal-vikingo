@@ -8,7 +8,7 @@ import { formatDateTime } from "./performanceHelpers";
 const MOTIVOS = [
   { key: "Falta de material", icon: "📦", color: "#d97706", bg: "#fef3e2" },
   { key: "Falla de máquina", icon: "🔧", color: "#dc2626", bg: "#fdecec" },
-  { key: "Falta de personal", icon: "👤", color: "#0284c7", bg: "#e6f4fc" },
+  { key: "Ocio del personal", icon: "👤", color: "#0284c7", bg: "#e6f4fc" },
   { key: "Mantenimiento programado", icon: "🛠️", color: "#7c3aed", bg: "#f3edfd" },
   { key: "Otro", icon: "📌", color: "#64748b", bg: "#f1f5f9" },
 ];
