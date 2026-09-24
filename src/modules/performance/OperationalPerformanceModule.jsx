@@ -30,6 +30,7 @@ const KPI_ICONS = {
   "% Merma": "♻️",
   "Productividad (% Plan logrado)": "🎯",
   "Eficiencia en el uso del personal": "👷",
+  "% Cierre de no conformidades": "✅",
 };
 
 // Tarjeta de resumen por KPI (golden reference #2 del mantra de diseño: la
