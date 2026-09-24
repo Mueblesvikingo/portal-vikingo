@@ -10,6 +10,7 @@ import {
   deactivateKpi,
   activateKpi,
   upsertResultado,
+  deleteResultado,
 } from "../../services/performanceService";
 import { isStrategicTeamMember, canEditStrategicKpis } from "../../services/permissionsService";
 import { createStrategicDecision } from "../../services/decisionService";
@@ -235,6 +236,25 @@ export default function PerformanceModule({ currentUser }) {
     });
   }
 
+  // Para KPIs con `cero_es_sin_dato`: capturar un 0 borra la celda en vez de
+  // guardar un cero real (ver EditableValue en ResultadosTab.jsx).
+  async function handleClearResultado({ kpiId, anio, mes, semana, tipo, previousValor }) {
+    const result = await deleteResultado({ kpiId, anio, mes, semana, tipo }, { actor: currentUser, previousValor });
+    if (!result?.ok) { console.error(result?.error); setMessage("No fue posible borrar el resultado."); return; }
+    setResultados((current) =>
+      current.filter(
+        (r) =>
+          !(
+            Number(r.kpi_id) === kpiId &&
+            Number(r.anio) === anio &&
+            Number(r.mes) === mes &&
+            (r.semana ?? null) === (semana ?? null) &&
+            r.tipo === tipo
+          )
+      )
+    );
+  }
+
   // Escalar un KPI en estado Crítico al Centro de Decisiones — mismo
   // mecanismo (createStrategicDecision con status "Solicitud") que ya usan
   // S&OP y Seguimiento Estratégico para mandar solicitudes a la Bandeja de
@@ -387,6 +407,7 @@ export default function PerformanceModule({ currentUser }) {
                 canEdit={canEdit}
                 canEditKpi={canEditKpi}
                 onSaveResultado={handleSaveResultado}
+                onClearResultado={handleClearResultado}
               />
             ) : activeTab === "graficas" ? (
               <ProcesoChartsTab kpis={activeScopedKpis} resultados={resultados} anio={CURRENT_YEAR} />

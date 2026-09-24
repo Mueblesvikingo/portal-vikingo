@@ -211,6 +211,35 @@ export async function upsertResultado({ kpiId, anio, mes, semana = null, tipo, v
   }
 }
 
+// Para KPIs marcados `cero_es_sin_dato`: capturar un 0 no guarda un cero real,
+// borra la celda (vuelve a "—" y sale del promedio/cumplimiento) — evita que
+// una captura vacía se confunda con un resultado real de 0%.
+export async function deleteResultado({ kpiId, anio, mes, semana = null, tipo }, { actor, previousValor } = {}) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    let query = supabase.from("desempeno_resultados").delete().eq("kpi_id", kpiId).eq("anio", anio).eq("mes", mes).eq("tipo", tipo);
+    query = semana === null ? query.is("semana", null) : query.eq("semana", semana);
+    const { error } = await query;
+    if (error) return { ok: false, error };
+
+    if (previousValor != null) {
+      await logHistorialEntries([{
+        kpi_id: kpiId,
+        tipo_registro: "resultado",
+        referencia: semana ? `${anio}-${mes}-s${semana}-${tipo}` : `${anio}-${mes}-${tipo}`,
+        valor_anterior: String(previousValor),
+        valor_nuevo: null,
+        persona_id: personaId,
+        usuario_nombre: nombre,
+      }]);
+    }
+    return { ok: true, error: null };
+  } catch (err) {
+    console.error("Error inesperado al borrar resultado de desempeño:", err);
+    return { ok: false, error: err };
+  }
+}
+
 export async function getMacroprocesos() {
   try {
     const { data, error } = await supabase

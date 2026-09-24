@@ -4,7 +4,7 @@ import {
   getWeeksInMonth, getMonthlyRealValue, getResultadoValue, getCumplimientoStatus, computeCumplimientoValue,
 } from "./performanceHelpers";
 
-function EditableValue({ kpi, mesIndex, tipo, semana = null, resultados, anio, canEdit, onSave, compact = false }) {
+function EditableValue({ kpi, mesIndex, tipo, semana = null, resultados, anio, canEdit, onSave, onClear, compact = false }) {
   const [editing, setEditing] = useState(false);
   const row = getResultadoRow(resultados, kpi.id, anio, mesIndex + 1, tipo, semana);
   const rawValue = row ? Number(row.valor) : null;
@@ -43,6 +43,10 @@ function EditableValue({ kpi, mesIndex, tipo, semana = null, resultados, anio, c
         if (draft === "") return;
         const num = Number(draft);
         if (!Number.isFinite(num)) return;
+        if (num === 0 && kpi.cero_es_sin_dato && onClear) {
+          if (rawValue !== null) onClear({ kpiId: kpi.id, anio, mes: mesIndex + 1, semana, tipo, previousValor: rawValue });
+          return;
+        }
         const valor = kpi.unidad_medida === "porcentaje" ? num / 100 : num;
         onSave({ kpiId: kpi.id, anio, mes: mesIndex + 1, semana, tipo, valor });
       }}
@@ -60,7 +64,7 @@ function EditableValue({ kpi, mesIndex, tipo, semana = null, resultados, anio, c
 // El "Real" mensual que ve el gauge es el promedio de esas semanas; aquí
 // además se muestra ese % contra la Meta mensual, para no tener que ir a
 // otra pantalla a ver si el mes va bien.
-function WeeklyRealCells({ kpi, mesIndex, resultados, anio, canEdit, onSave }) {
+function WeeklyRealCells({ kpi, mesIndex, resultados, anio, canEdit, onSave, onClear }) {
   const mes = mesIndex + 1;
   const totalSemanas = getWeeksInMonth(anio, mes);
   const semanas = Array.from({ length: totalSemanas }, (_, i) => i + 1);
@@ -75,7 +79,7 @@ function WeeklyRealCells({ kpi, mesIndex, resultados, anio, canEdit, onSave }) {
         {semanas.map((semana) => (
           <div key={semana} className="flex items-center gap-0.5">
             <span className="text-[7px] font-black text-slate-300">S{semana}</span>
-            <EditableValue kpi={kpi} mesIndex={mesIndex} tipo="real" semana={semana} resultados={resultados} anio={anio} canEdit={canEdit} onSave={onSave} compact />
+            <EditableValue kpi={kpi} mesIndex={mesIndex} tipo="real" semana={semana} resultados={resultados} anio={anio} canEdit={canEdit} onSave={onSave} onClear={onClear} compact />
           </div>
         ))}
       </div>
@@ -155,7 +159,7 @@ function TablePalettePicker({ paletteKey, onPick }) {
   );
 }
 
-export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onSaveResultado, namespace = "org" }) {
+export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onSaveResultado, onClearResultado, namespace = "org" }) {
   const [paletteKey, setPaletteKey] = useState(() => loadTablePalette(namespace));
   const handlePickPalette = (key) => {
     setPaletteKey(key);
@@ -216,7 +220,7 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
                     <td className="px-2 py-1 text-slate-400">Meta</td>
                     {VISIBLE_MESES.map(({ index }) => (
                       <td key={index} className="px-2 py-1">
-                        <EditableValue kpi={kpi} mesIndex={index} tipo="meta" resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} />
+                        <EditableValue kpi={kpi} mesIndex={index} tipo="meta" resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} onClear={onClearResultado} />
                       </td>
                     ))}
                   </tr>
@@ -225,9 +229,9 @@ export default function ResultadosTab({ kpis, resultados, anio, scope, canEdit, 
                     {VISIBLE_MESES.map(({ index }) => (
                       <td key={index} className="px-2 py-1">
                         {kpi.periodicidad === "Semanal" ? (
-                          <WeeklyRealCells kpi={kpi} mesIndex={index} resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} />
+                          <WeeklyRealCells kpi={kpi} mesIndex={index} resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} onClear={onClearResultado} />
                         ) : (
-                          <EditableValue kpi={kpi} mesIndex={index} tipo="real" resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} />
+                          <EditableValue kpi={kpi} mesIndex={index} tipo="real" resultados={resultados} anio={anio} canEdit={canEditKpi(kpi)} onSave={onSaveResultado} onClear={onClearResultado} />
                         )}
                       </td>
                     ))}
