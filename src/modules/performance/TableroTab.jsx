@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { PieChart, Pie, Cell } from "recharts";
 import {
   PERSPECTIVAS,
@@ -14,12 +14,29 @@ import {
   formatDateTime,
 } from "./performanceHelpers";
 
+// Textarea que crece con el contenido (en vez de un <input> de una sola
+// línea): con texto largo (objetivo, fórmula, fuente...) un input de una
+// línea solo muestra un fragmento desplazado horizontalmente, escondiendo la
+// mayoría de las palabras mientras se edita — con esto se ve todo el texto
+// completo, envuelto en varias líneas, sin scroll oculto.
 function EditableText({ value, onSave, canEdit, className = "", placeholder = "" }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value || "");
+  const textareaRef = useRef(null);
+
+  const resize = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  useEffect(() => {
+    if (editing) resize();
+  }, [editing, draft]);
 
   if (!canEdit) {
-    return <span className={className}>{value || <span className="text-slate-300">{placeholder}</span>}</span>;
+    return <span className={`whitespace-pre-wrap break-words ${className}`}>{value || <span className="text-slate-300">{placeholder}</span>}</span>;
   }
 
   if (!editing) {
@@ -27,7 +44,7 @@ function EditableText({ value, onSave, canEdit, className = "", placeholder = ""
       <button
         type="button"
         onClick={() => { setDraft(value || ""); setEditing(true); }}
-        className={`w-full rounded px-1 text-left transition hover:bg-sky-50 ${className}`}
+        className={`w-full whitespace-pre-wrap break-words rounded px-1 text-left transition hover:bg-sky-50 ${className}`}
       >
         {value || <span className="text-slate-300">{placeholder || "Clic para editar"}</span>}
       </button>
@@ -35,16 +52,18 @@ function EditableText({ value, onSave, canEdit, className = "", placeholder = ""
   }
 
   return (
-    <input
+    <textarea
+      ref={textareaRef}
       autoFocus
+      rows={1}
       value={draft}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => { setEditing(false); if (draft !== value) onSave(draft); }}
       onKeyDown={(event) => {
-        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.blur(); }
         if (event.key === "Escape") { setDraft(value || ""); setEditing(false); }
       }}
-      className="w-full rounded border border-sky-300 bg-white px-1 text-[11px] font-bold text-slate-800 outline-none"
+      className="w-full resize-none overflow-hidden whitespace-pre-wrap break-words rounded border border-sky-300 bg-white px-1 py-0.5 text-[11px] font-bold leading-snug text-slate-800 outline-none"
     />
   );
 }
