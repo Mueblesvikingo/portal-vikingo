@@ -34,6 +34,7 @@ const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
   "performance",
   "operational-performance",
   "acciones",
+  "calidad",
 ];
 
 // Supervisores, auxiliares e inspectores de calidad (cualquier rol que
@@ -48,7 +49,7 @@ const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
 // sus claves de acceso — antes solo Supervisor/Auxiliar quedaban acotados,
 // por eso seguían viendo el tablero completo.
 const OPERATIVE_ROLE_PREFIXES = ["Supervisor", "Auxiliar", "Inspector de Calidad"];
-const MODULES_VISIBLE_FOR_OPERATIVE_ROLES = ["organigrama", "workload-balance", "acciones", "operational-performance"];
+const MODULES_VISIBLE_FOR_OPERATIVE_ROLES = ["organigrama", "workload-balance", "acciones", "operational-performance", "calidad"];
 
 export function isOperativeRole(user) {
   return getApplicableRoles(user).some((role) =>

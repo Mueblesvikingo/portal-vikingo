@@ -16,6 +16,7 @@ const menuItems = [
   { label: "Acciones de Mejora", route: "/acciones", moduleKey: "acciones" },
   { label: "Madurez Organizacional", route: "/maturity", moduleKey: "maturity" },
   { label: "Diagnóstico SIG", route: "/sig", moduleKey: "sig" },
+  { label: "Gestión de Calidad", route: "/calidad", moduleKey: "calidad" },
   { label: "Catálogo Organizacional", route: "/organization-catalog", moduleKey: "organization-catalog" },
 ];
 
