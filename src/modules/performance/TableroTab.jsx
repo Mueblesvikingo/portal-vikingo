@@ -236,7 +236,9 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
   // para Desempeño Operativo, donde solo hay un grupo "Operativos" y la
   // caja completa se sentía estorbosa por encima de la tabla).
   const gaugesBottom = (
-    <div className="flex flex-wrap justify-center gap-3 sm:justify-start">
+    <div>
+      <p className="mb-2 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">Desempeño general</p>
+      <div className="flex flex-wrap justify-center gap-3">
       {groups.map((group) => {
         const groupCumplimientos = group.items
           .filter((k) => k.activo)
@@ -253,6 +255,7 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
           </Fragment>
         );
       })}
+      </div>
     </div>
   );
 
