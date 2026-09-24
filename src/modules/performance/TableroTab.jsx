@@ -50,12 +50,12 @@ function EditableText({ value, onSave, canEdit, className = "", placeholder = ""
 }
 
 function EditableSelect({ value, options, onSave, canEdit, labelFor = (v) => v }) {
-  if (!canEdit) return <span>{labelFor(value)}</span>;
+  if (!canEdit) return <span className="font-bold text-slate-800">{labelFor(value)}</span>;
   return (
     <select
       value={value || ""}
       onChange={(event) => onSave(event.target.value)}
-      className="w-full rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[10px] font-bold text-slate-700 outline-none"
+      className="w-full rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-bold text-slate-800 outline-none transition focus:border-sky-300"
     >
       {options.map((opt) => (
         <option key={opt.value || opt} value={opt.value || opt}>{opt.label || opt}</option>
@@ -106,11 +106,14 @@ function GaugeCard({ label, cumplimiento, color }) {
   );
 }
 
-function DetailField({ label, children }) {
+function DetailField({ icon, label, tone, children }) {
   return (
-    <div>
-      <p className="mb-0.5 text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-      {children}
+    <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
+      <p className="mb-1 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest" style={{ color: tone || "#94a3b8" }}>
+        <span aria-hidden>{icon}</span>
+        {label}
+      </p>
+      <div className="text-[11px] font-bold leading-snug text-slate-800">{children}</div>
     </div>
   );
 }
@@ -263,35 +266,41 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                         )}
                       </tr>
                       {isOpen && (
-                        <tr className="border-b border-slate-100 bg-slate-50/50">
-                          <td colSpan={colCount} className="px-4 py-3">
-                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                              <DetailField label="Objetivo estratégico">
-                                <EditableText value={kpi.objetivo_estrategico} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { objetivo_estrategico: v })} className="text-slate-700" />
-                              </DetailField>
-                              <DetailField label="Fórmula">
-                                <EditableText value={kpi.formula_texto} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { formula_texto: v })} className="text-slate-700" />
-                              </DetailField>
-                              <DetailField label="Fuente">
-                                <EditableText value={kpi.fuente_datos} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { fuente_datos: v })} className="text-slate-700" />
-                              </DetailField>
-                              <DetailField label="Responsable">
-                                <EditableText value={kpi.responsable_rol} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { responsable_rol: v })} className="text-slate-700" />
-                              </DetailField>
-                              <DetailField label="Periodicidad">
-                                <EditableSelect value={kpi.periodicidad} options={PERIODICIDAD_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { periodicidad: v })} />
-                              </DetailField>
-                              <DetailField label="Medida">
-                                <EditableSelect value={kpi.unidad_medida} options={UNIDAD_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { unidad_medida: v })} />
-                              </DetailField>
-                              <DetailField label="Gráfico">
-                                <EditableSelect value={kpi.tipo_grafico} options={TIPO_GRAFICO_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { tipo_grafico: v })} />
-                              </DetailField>
-                              <DetailField label="Sentido">
-                                <EditableSelect value={kpi.sentido || "Mayor es mejor"} options={SENTIDO_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { sentido: v })} />
-                              </DetailField>
-                            </div>
-                            <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-2">
+                        <tr className="border-b border-slate-100">
+                          <td colSpan={colCount} className="p-0">
+                            <div className="border-l-4 px-4 py-3.5" style={{ borderColor: group.color, background: `${group.color}0a` }}>
+                              <p className="mb-2 text-[9px] font-black uppercase tracking-widest text-slate-400">Ficha del indicador</p>
+                              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                                <DetailField icon="🎯" label="Objetivo estratégico" tone={group.color}>
+                                  <EditableText value={kpi.objetivo_estrategico} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { objetivo_estrategico: v })} />
+                                </DetailField>
+                                <DetailField icon="🧮" label="Fórmula" tone={group.color}>
+                                  <EditableText value={kpi.formula_texto} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { formula_texto: v })} />
+                                </DetailField>
+                                <DetailField icon="🗂️" label="Fuente" tone={group.color}>
+                                  <EditableText value={kpi.fuente_datos} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { fuente_datos: v })} />
+                                </DetailField>
+                                <DetailField icon="👤" label="Responsable" tone={group.color}>
+                                  <EditableText value={kpi.responsable_rol} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { responsable_rol: v })} />
+                                </DetailField>
+                              </div>
+
+                              <p className="mb-2 mt-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Configuración</p>
+                              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                                <DetailField icon="🔁" label="Periodicidad" tone={group.color}>
+                                  <EditableSelect value={kpi.periodicidad} options={PERIODICIDAD_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { periodicidad: v })} />
+                                </DetailField>
+                                <DetailField icon="📏" label="Medida" tone={group.color}>
+                                  <EditableSelect value={kpi.unidad_medida} options={UNIDAD_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { unidad_medida: v })} />
+                                </DetailField>
+                                <DetailField icon="📊" label="Gráfico" tone={group.color}>
+                                  <EditableSelect value={kpi.tipo_grafico} options={TIPO_GRAFICO_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { tipo_grafico: v })} />
+                                </DetailField>
+                                <DetailField icon="↕️" label="Sentido" tone={group.color}>
+                                  <EditableSelect value={kpi.sentido || "Mayor es mejor"} options={SENTIDO_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { sentido: v })} />
+                                </DetailField>
+                              </div>
+                            <div className="mt-3 flex items-center justify-between border-t pt-2" style={{ borderColor: `${group.color}33` }}>
                               <p className="text-[9px] font-bold text-slate-400">
                                 {kpi.updated_by_nombre ? `Última edición: ${kpi.updated_by_nombre} · ${formatDateTime(kpi.updated_at)}` : "Sin ediciones registradas"}
                               </p>
@@ -323,6 +332,7 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                                   )}
                                 </div>
                               )}
+                            </div>
                             </div>
                           </td>
                         </tr>
