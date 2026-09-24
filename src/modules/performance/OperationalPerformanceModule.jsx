@@ -232,6 +232,13 @@ export default function OperationalPerformanceModule({ currentUser }) {
     }
   }
 
+  // Refresco liviano tras guardar en la bitácora (no vuelve a pedir kpis ni
+  // mueve `loading`, para no parpadear la pantalla completa por un registro).
+  async function refreshResultados() {
+    const resultadosData = await getResultados({ anio: CURRENT_YEAR });
+    setResultados(resultadosData);
+  }
+
   useEffect(() => {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -445,7 +452,7 @@ export default function OperationalPerformanceModule({ currentUser }) {
         kpisById={kpisById}
       />
       {bitacoraKpi && (
-        <KpiBitacoraModal kpi={bitacoraKpi} currentUser={currentUser} onClose={() => setBitacoraKpi(null)} />
+        <KpiBitacoraModal kpi={bitacoraKpi} currentUser={currentUser} onClose={() => setBitacoraKpi(null)} onRecomputed={refreshResultados} />
       )}
     </section>
   );

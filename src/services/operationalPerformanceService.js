@@ -202,7 +202,7 @@ export async function createBitacoraEntry(kpiId, payload, actor) {
       .insert({
         kpi_id: kpiId,
         fecha: payload.fecha,
-        horas: payload.horas === "" || payload.horas === undefined || payload.horas === null ? null : Number(payload.horas),
+        minutos: payload.minutos === "" || payload.minutos === undefined || payload.minutos === null ? null : Number(payload.minutos),
         motivo: payload.motivo || null,
         observacion: payload.observacion || null,
         persona_id: personaId,
@@ -215,6 +215,69 @@ export async function createBitacoraEntry(kpiId, payload, actor) {
   } catch (err) {
     console.error("Error inesperado al crear registro de bitácora:", err);
     return { ok: false, error: err, data: null };
+  }
+}
+
+function countMondaysUpTo(anio, mes, day) {
+  let count = 0;
+  for (let d = 1; d <= day; d++) {
+    if (new Date(anio, mes - 1, d).getDay() === 1) count += 1;
+  }
+  return Math.max(1, count);
+}
+
+async function fetchExistingReal(kpiId, anio, mes, semana) {
+  try {
+    let query = supabase.from("desempeno_operativo_resultados").select("valor").eq("kpi_id", kpiId).eq("anio", anio).eq("mes", mes).eq("tipo", "real");
+    query = semana === null ? query.is("semana", null) : query.eq("semana", semana);
+    const { data } = await query.maybeSingle();
+    return data ? Number(data.valor) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Recalcula el Real semanal de un KPI con bitácora habilitada a partir de
+// TODOS sus registros de paro: agrupa por semana del mes (mismo criterio de
+// "contar lunes" que ya usa getWeeksInMonth), convierte minutos → horas, y
+// aplica (Horas programadas − Horas paradas) / Horas programadas × 100. Se
+// recalculan todas las semanas con registros (no solo la del nuevo dato) para
+// que editar/agregar una fecha pasada también corrija su semana, sin tener
+// que rastrear cuál cambió.
+export async function recomputeKpiRealFromBitacora(kpi, actor) {
+  const horasProgramadas = Number(kpi?.horas_programadas_semana);
+  if (!horasProgramadas || horasProgramadas <= 0) {
+    return { ok: false, error: "Falta configurar Horas programadas/semana en la ficha del KPI." };
+  }
+  try {
+    const { data: allEntries, error } = await supabase
+      .from("desempeno_operativo_bitacora")
+      .select("fecha, minutos")
+      .eq("kpi_id", kpi.id);
+    if (error) return { ok: false, error };
+
+    const buckets = new Map();
+    for (const entry of allEntries || []) {
+      const [y, m, d] = entry.fecha.split("-").map(Number);
+      const semana = countMondaysUpTo(y, m, d);
+      const key = `${y}-${m}-${semana}`;
+      buckets.set(key, (buckets.get(key) || 0) + (Number(entry.minutos) || 0));
+    }
+
+    for (const [key, minutosTotales] of buckets.entries()) {
+      const [anio, mes, semana] = key.split("-").map(Number);
+      const horasParadas = minutosTotales / 60;
+      const pct = Math.max(0, Math.min(100, ((horasProgramadas - horasParadas) / horasProgramadas) * 100));
+      const valor = Number((pct / 100).toFixed(4));
+      const previousValor = await fetchExistingReal(kpi.id, anio, mes, semana);
+      if (String(previousValor ?? "") !== String(valor)) {
+        await upsertResultado({ kpiId: kpi.id, anio, mes, semana, tipo: "real", valor }, { actor, previousValor });
+      }
+    }
+    return { ok: true, error: null };
+  } catch (err) {
+    console.error("Error inesperado al recalcular KPI desde bitácora:", err);
+    return { ok: false, error: err };
   }
 }
 

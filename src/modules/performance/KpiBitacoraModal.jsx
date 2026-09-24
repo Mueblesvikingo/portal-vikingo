@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getBitacora, createBitacoraEntry } from "../../services/operationalPerformanceService";
+import { getBitacora, createBitacoraEntry, recomputeKpiRealFromBitacora } from "../../services/operationalPerformanceService";
 import { formatDateTime } from "./performanceHelpers";
 
 // Un color/ícono por motivo — no es estado (no hay "bueno/malo"), es
@@ -32,7 +32,7 @@ function daysAgoISO(n) {
 // reemplaza, la captura de Meta/Real de la pestaña Resultados. Presentada
 // como libreta digital: pestañas Captura/Historial, motivos codificados por
 // color e ícono, en vez de una tabla plana.
-export default function KpiBitacoraModal({ kpi, currentUser, onClose }) {
+export default function KpiBitacoraModal({ kpi, currentUser, onClose, onRecomputed }) {
   const [tab, setTab] = useState("captura");
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +40,7 @@ export default function KpiBitacoraModal({ kpi, currentUser, onClose }) {
   const [preset, setPreset] = useState("mes");
   const [desde, setDesde] = useState(firstDayOfMonthISO());
   const [hasta, setHasta] = useState(todayISO());
-  const [form, setForm] = useState({ fecha: todayISO(), horas: "", motivo: MOTIVOS[0].key, observacion: "" });
+  const [form, setForm] = useState({ fecha: todayISO(), minutos: "", motivo: MOTIVOS[0].key, observacion: "" });
   const [error, setError] = useState("");
   const [justSaved, setJustSaved] = useState(false);
 
@@ -68,15 +68,26 @@ export default function KpiBitacoraModal({ kpi, currentUser, onClose }) {
     setSaving(true);
     setError("");
     const result = await createBitacoraEntry(kpi.id, form, currentUser);
+    if (!result.ok) { setSaving(false); setError("No fue posible guardar el registro."); return; }
+
+    // El % del KPI se recalcula solo: suma los minutos de la semana del
+    // registro (y de cualquier otra semana con datos), los convierte a horas
+    // y aplica la fórmula contra "Horas programadas/semana" de la ficha —
+    // así Resultados/Tablero se actualizan sin captura manual aparte.
+    const recompute = await recomputeKpiRealFromBitacora(kpi, currentUser);
     setSaving(false);
-    if (!result.ok) { setError("No fue posible guardar el registro."); return; }
-    setForm({ fecha: todayISO(), horas: "", motivo: MOTIVOS[0].key, observacion: "" });
+    if (!recompute.ok) {
+      setError(typeof recompute.error === "string" ? recompute.error : "Registro guardado, pero no se pudo recalcular el % automáticamente.");
+    } else {
+      onRecomputed?.();
+    }
+    setForm({ fecha: todayISO(), minutos: "", motivo: MOTIVOS[0].key, observacion: "" });
     setJustSaved(true);
     setTimeout(() => setJustSaved(false), 2000);
     loadEntries();
   }
 
-  const totalHoras = entries.reduce((sum, e) => sum + (Number(e.horas) || 0), 0);
+  const totalMinutos = entries.reduce((sum, e) => sum + (Number(e.minutos) || 0), 0);
   const activeMeta = motivoMeta(form.motivo);
 
   return (
@@ -131,13 +142,13 @@ export default function KpiBitacoraModal({ kpi, currentUser, onClose }) {
                   />
                 </label>
                 <label className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                  ⏱️ Horas paradas
+                  ⏱️ Minutos parados
                   <input
                     type="number"
                     min="0"
-                    step="0.5"
-                    value={form.horas}
-                    onChange={(e) => setForm((f) => ({ ...f, horas: e.target.value }))}
+                    step="5"
+                    value={form.minutos}
+                    onChange={(e) => setForm((f) => ({ ...f, minutos: e.target.value }))}
                     placeholder="0"
                     className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-bold text-slate-800 outline-none"
                   />
@@ -184,8 +195,11 @@ export default function KpiBitacoraModal({ kpi, currentUser, onClose }) {
                 className="mt-3 w-full rounded-lg px-3 py-2 text-[11px] font-black text-white transition disabled:opacity-50"
                 style={{ background: justSaved ? "#16a34a" : "#001225" }}
               >
-                {saving ? "Guardando…" : justSaved ? "✓ Registro guardado" : "Guardar registro"}
+                {saving ? "Guardando…" : justSaved ? "✓ Registro guardado y % recalculado" : "Guardar registro"}
               </button>
+              <p className="mt-1.5 text-center text-[9px] font-bold text-slate-400">
+                El % del KPI se recalcula solo contra {kpi.horas_programadas_semana || "—"} h programadas/semana (editable en la ficha del KPI).
+              </p>
             </div>
           ) : (
             <div>
@@ -213,7 +227,7 @@ export default function KpiBitacoraModal({ kpi, currentUser, onClose }) {
 
               {!loading && entries.length > 0 && (
                 <div className="mt-2.5 flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[10px] font-black text-amber-700">
-                  ⏱️ {totalHoras} horas paradas registradas en este periodo · {entries.length} evento(s)
+                  ⏱️ {totalMinutos} min ({(totalMinutos / 60).toFixed(1)} h) parados en este periodo · {entries.length} evento(s)
                 </div>
               )}
 
@@ -231,8 +245,8 @@ export default function KpiBitacoraModal({ kpi, currentUser, onClose }) {
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center justify-between gap-1">
                             <span className="text-[10px] font-black text-slate-700">{entry.fecha}</span>
-                            {entry.horas !== null && (
-                              <span className="rounded-full px-1.5 py-0.5 text-[9px] font-black" style={{ background: meta.bg, color: meta.color }}>{entry.horas} h</span>
+                            {entry.minutos !== null && (
+                              <span className="rounded-full px-1.5 py-0.5 text-[9px] font-black" style={{ background: meta.bg, color: meta.color }}>{entry.minutos} min</span>
                             )}
                           </div>
                           <p className="mt-0.5 text-[10px] font-black" style={{ color: meta.color }}>{entry.motivo}</p>

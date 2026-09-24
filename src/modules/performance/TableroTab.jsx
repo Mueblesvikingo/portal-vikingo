@@ -68,6 +68,45 @@ function EditableText({ value, onSave, canEdit, className = "", placeholder = ""
   );
 }
 
+function EditableNumber({ value, onSave, canEdit, suffix = "" }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+
+  if (!canEdit) return <span className="font-bold text-slate-800">{value ?? "—"}{value != null ? suffix : ""}</span>;
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => { setDraft(value ?? ""); setEditing(true); }}
+        className="w-full rounded px-1 text-left font-bold text-slate-800 transition hover:bg-sky-50"
+      >
+        {value != null ? `${value}${suffix}` : <span className="text-slate-300">Clic para definir</span>}
+      </button>
+    );
+  }
+
+  return (
+    <input
+      autoFocus
+      type="number"
+      min="0"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        setEditing(false);
+        const num = draft === "" ? null : Number(draft);
+        if (num !== value) onSave(num);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Escape") { setDraft(value ?? ""); setEditing(false); }
+      }}
+      className="w-full rounded border border-sky-300 bg-white px-1 py-0.5 text-[11px] font-bold text-slate-800 outline-none"
+    />
+  );
+}
+
 function EditableSelect({ value, options, onSave, canEdit, labelFor = (v) => v }) {
   if (!canEdit) return <span className="font-bold text-slate-800">{labelFor(value)}</span>;
   return (
@@ -328,6 +367,11 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                                 <DetailField icon="↕️" label="Sentido" tone={group.color}>
                                   <EditableSelect value={kpi.sentido || "Mayor es mejor"} options={SENTIDO_OPTIONS} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { sentido: v })} />
                                 </DetailField>
+                                {kpi.bitacora_habilitada && (
+                                  <DetailField icon="⏱️" label="Horas programadas/semana" tone={group.color}>
+                                    <EditableNumber value={kpi.horas_programadas_semana} canEdit={canEditKpi(kpi)} onSave={(v) => onUpdateKpi(kpi.id, { horas_programadas_semana: v })} suffix=" h" />
+                                  </DetailField>
+                                )}
                               </div>
                             <div className="mt-3 flex items-center justify-between border-t pt-2" style={{ borderColor: `${group.color}33` }}>
                               <p className="text-[9px] font-bold text-slate-400">
