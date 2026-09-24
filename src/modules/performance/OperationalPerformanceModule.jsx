@@ -64,24 +64,68 @@ function OperationalKpiSummaryCard({ kpi, resultados, anio }) {
   );
 }
 
+// Modal ligero con la explicación de cada indicador (objetivo/fórmula/fuente
+// ya capturados en el propio KPI, sin duplicar el dato en otro lado) — pedido
+// explícito para que un supervisor nuevo entienda qué mide cada tarjeta sin
+// tener que preguntar.
+function KpiGuideModal({ kpis, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-3" onClick={onClose}>
+      <div
+        className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-[12px] font-black uppercase tracking-widest text-slate-700">Guía de indicadores</p>
+          <button type="button" onClick={onClose} className="rounded-full px-2 py-0.5 text-[11px] font-black text-slate-400 hover:bg-slate-100 hover:text-slate-600">✕</button>
+        </div>
+        <div className="space-y-2.5">
+          {kpis.map((kpi) => (
+            <div key={kpi.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-2.5">
+              <p className="flex items-center gap-1.5 text-[11px] font-black text-slate-800">
+                <span>{KPI_ICONS[kpi.nombre_indicador] || "📌"}</span>
+                {kpi.nombre_indicador}
+              </p>
+              {kpi.objetivo_estrategico && <p className="mt-1 text-[10px] text-slate-600"><span className="font-black text-slate-400">OBJETIVO · </span>{kpi.objetivo_estrategico}</p>}
+              {kpi.formula_texto && <p className="mt-0.5 text-[10px] text-slate-600"><span className="font-black text-slate-400">FÓRMULA · </span>{kpi.formula_texto}</p>}
+              {kpi.fuente_datos && <p className="mt-0.5 text-[10px] text-slate-600"><span className="font-black text-slate-400">FUENTE · </span>{kpi.fuente_datos}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OperationalKpiSummaryBand({ kpis, resultados, anio }) {
+  const [showGuide, setShowGuide] = useState(false);
   if (kpis.length === 0) return null;
   const statuses = kpis.map((kpi) => getCumplimientoStatus(computeCumplimiento(resultados, kpi, anio).cumplimiento).label);
   const enMeta = statuses.filter((label) => label === "En meta").length;
   const criticos = statuses.filter((label) => label === "Crítico").length;
   return (
     <div className="space-y-2">
-      <p className="px-1 text-[11px] font-bold text-slate-500">
-        {criticos > 0
-          ? `⚠️ ${criticos} de ${kpis.length} indicador(es) en estado Crítico esta semana — revísalos abajo.`
-          : `✅ ${enMeta} de ${kpis.length} indicadores en meta esta semana.`}
-        <span className="ml-2 text-slate-300">Verde = vas bien · Ámbar = ponle ojo · Rojo = actúa ya</span>
-      </p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
+        <p className="text-[11px] font-bold text-slate-500">
+          {criticos > 0
+            ? `⚠️ ${criticos} de ${kpis.length} indicador(es) en estado Crítico esta semana — revísalos abajo.`
+            : `✅ ${enMeta} de ${kpis.length} indicadores en meta esta semana.`}
+          <span className="ml-2 text-slate-300">Verde = vas bien · Ámbar = ponle ojo · Rojo = actúa ya</span>
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowGuide(true)}
+          className="rounded-full border border-slate-200 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-slate-400 transition hover:border-sky-200 hover:text-sky-600"
+        >
+          ℹ️ ¿Qué significa cada indicador?
+        </button>
+      </div>
+      <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
         {kpis.map((kpi) => (
           <OperationalKpiSummaryCard key={kpi.id} kpi={kpi} resultados={resultados} anio={anio} />
         ))}
       </div>
+      {showGuide && <KpiGuideModal kpis={kpis} onClose={() => setShowGuide(false)} />}
     </div>
   );
 }
