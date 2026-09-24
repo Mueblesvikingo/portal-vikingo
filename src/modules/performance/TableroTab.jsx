@@ -137,7 +137,7 @@ function DetailField({ icon, label, tone, children }) {
   );
 }
 
-export default function TableroTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onUpdateKpi, onToggleKpiActivo, onEscalarKpi, onDeleteKpi, gaugesPosition = "top" }) {
+export default function TableroTab({ kpis, resultados, anio, scope, canEdit, canEditKpi = () => canEdit, onUpdateKpi, onToggleKpiActivo, onEscalarKpi, onDeleteKpi, onOpenBitacora, gaugesPosition = "top" }) {
   const [openKpiId, setOpenKpiId] = useState(null);
   const isEstrategico = scope === "ESTRATEGICO";
   const mesActualLabel = getCurrentMonthInfo().label;
@@ -259,6 +259,16 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                         </td>
                         {canEditKpi(kpi) && (
                           <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                            {kpi.bitacora_habilitada && onOpenBitacora && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenBitacora(kpi)}
+                                title="Bitácora de observaciones"
+                                className="mr-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-slate-500 hover:border-sky-200 hover:text-sky-600"
+                              >
+                                📔 Bitácora
+                              </button>
+                            )}
                             {!isInactivo && status.label === "Crítico" && (
                               <button
                                 type="button"

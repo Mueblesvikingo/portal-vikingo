@@ -170,6 +170,54 @@ export async function deleteKpi(id) {
   }
 }
 
+// Bitácora de observaciones de un KPI (por ahora habilitada solo en
+// "Eficiencia en el uso del personal" vía `kpi.bitacora_habilitada`, ver
+// TableroTab): registros libres de fecha/horas/motivo, complementarios al
+// Real/Meta que ya se captura en Resultados — sirven para dejar evidencia de
+// POR QUÉ el número salió así (qué paró la línea y cuándo).
+export async function getBitacora(kpiId, { desde, hasta } = {}) {
+  try {
+    let query = supabase
+      .from("desempeno_operativo_bitacora")
+      .select("*")
+      .eq("kpi_id", kpiId)
+      .order("fecha", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (desde) query = query.gte("fecha", desde);
+    if (hasta) query = query.lte("fecha", hasta);
+    const { data, error } = await query;
+    if (error) return { ok: false, error, data: [] };
+    return { ok: true, error: null, data: data || [] };
+  } catch (err) {
+    console.error("Error inesperado al leer bitácora de KPI:", err);
+    return { ok: false, error: err, data: [] };
+  }
+}
+
+export async function createBitacoraEntry(kpiId, payload, actor) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    const { data, error } = await supabase
+      .from("desempeno_operativo_bitacora")
+      .insert({
+        kpi_id: kpiId,
+        fecha: payload.fecha,
+        horas: payload.horas === "" || payload.horas === undefined || payload.horas === null ? null : Number(payload.horas),
+        motivo: payload.motivo || null,
+        observacion: payload.observacion || null,
+        persona_id: personaId,
+        persona_nombre: nombre,
+      })
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al crear registro de bitácora:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
 // `previousValor` es el valor actual de esa celda (kpi_id, anio, mes,
 // semana, tipo) antes de este guardado, para poder registrar el cambio en
 // el historial. `semana` (1-5) solo aplica a KPIs de captura semanal.

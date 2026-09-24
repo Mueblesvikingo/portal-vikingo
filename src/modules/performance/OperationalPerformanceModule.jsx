@@ -17,6 +17,7 @@ import { getResultadoValue, formatDateTime, formatKpiValue, computeCumplimiento,
 import TableroTab from "./TableroTab";
 import ResultadosTab from "./ResultadosTab";
 import ProcesoChartsTab from "./ProcesoChartsTab";
+import KpiBitacoraModal from "./KpiBitacoraModal";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -213,6 +214,7 @@ export default function OperationalPerformanceModule({ currentUser }) {
   const [historialOpen, setHistorialOpen] = useState(false);
   const [historialLoading, setHistorialLoading] = useState(false);
   const [historialEntries, setHistorialEntries] = useState([]);
+  const [bitacoraKpi, setBitacoraKpi] = useState(null);
 
   const isStrategic = isStrategicTeamMember(currentUser);
 
@@ -415,6 +417,7 @@ export default function OperationalPerformanceModule({ currentUser }) {
                 onToggleKpiActivo={handleToggleKpiActivo}
                 onEscalarKpi={handleEscalarKpi}
                 onDeleteKpi={handleDeleteKpi}
+                onOpenBitacora={setBitacoraKpi}
                 gaugesPosition="bottom"
               />
             ) : activeTab === "resultados" ? (
@@ -441,6 +444,9 @@ export default function OperationalPerformanceModule({ currentUser }) {
         entries={historialEntries}
         kpisById={kpisById}
       />
+      {bitacoraKpi && (
+        <KpiBitacoraModal kpi={bitacoraKpi} currentUser={currentUser} onClose={() => setBitacoraKpi(null)} />
+      )}
     </section>
   );
 }
