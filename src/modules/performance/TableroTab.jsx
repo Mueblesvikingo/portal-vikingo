@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { PieChart, Pie, Cell } from "recharts";
+import bitacoraIcon from "../../assets/bitacora-icon.jpg";
 import {
   PERSPECTIVAS,
   PERSPECTIVA_COLOR,
@@ -164,6 +165,24 @@ function GaugeCard({ label, cumplimiento, color }) {
   );
 }
 
+// Mismo tamaño/forma que GaugeCard, para que se vean como un par junto al
+// gráfico general — la bitácora se abre desde aquí en vez de un botón chico
+// dentro de la fila del KPI (pedido explícito: más visible, más didáctico).
+function BitacoraTile({ onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col items-center rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50 to-white p-3 shadow-sm transition hover:shadow-md"
+      style={{ width: 132 }}
+    >
+      <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Bitácora digital</p>
+      <img src={bitacoraIcon} alt="Abrir bitácora" className="mt-1.5 h-16 w-16 rounded-xl object-cover" style={{ height: 76 }} />
+      <span className="mt-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-700">Ver / registrar</span>
+    </button>
+  );
+}
+
 function DetailField({ icon, label, tone, children }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
@@ -226,7 +245,13 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
         const avg = groupCumplimientos.length
           ? Math.round(groupCumplimientos.reduce((a, b) => a + b, 0) / groupCumplimientos.length)
           : null;
-        return <GaugeCard key={group.label} label={group.label} cumplimiento={avg} color={group.color} />;
+        const kpiConBitacora = onOpenBitacora ? group.items.find((k) => k.bitacora_habilitada) : null;
+        return (
+          <Fragment key={group.label}>
+            <GaugeCard label={group.label} cumplimiento={avg} color={group.color} />
+            {kpiConBitacora && <BitacoraTile onClick={() => onOpenBitacora(kpiConBitacora)} />}
+          </Fragment>
+        );
       })}
     </div>
   );
@@ -298,16 +323,6 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                         </td>
                         {canEditKpi(kpi) && (
                           <td className="px-3 py-1.5 text-right whitespace-nowrap">
-                            {kpi.bitacora_habilitada && onOpenBitacora && (
-                              <button
-                                type="button"
-                                onClick={() => onOpenBitacora(kpi)}
-                                title="Bitácora de observaciones"
-                                className="mr-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-slate-500 hover:border-sky-200 hover:text-sky-600"
-                              >
-                                📔 Bitácora
-                              </button>
-                            )}
                             {!isInactivo && status.label === "Crítico" && (
                               <button
                                 type="button"
