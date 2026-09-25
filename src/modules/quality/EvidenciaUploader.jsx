@@ -106,7 +106,7 @@ export default function EvidenciaUploader({ inspeccionId, evidencias = [], curre
     <div>
       {canEdit && (
         <div className="flex flex-wrap items-center gap-2">
-          <label className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-600 transition hover:border-sky-200 hover:text-sky-600">
+          <label className="cursor-pointer rounded-xl border border-[#edf0f4] bg-white px-3 py-1.5 text-xs font-medium text-[#0f1f3d] shadow-[0_1px_2px_rgba(11,31,58,0.08)] transition hover:border-[#f0d885] active:scale-[0.98]">
             📎 Subir foto
             <input type="file" accept="image/*" className="hidden" onChange={handleFileInput} disabled={uploading} />
           </label>
@@ -114,11 +114,11 @@ export default function EvidenciaUploader({ inspeccionId, evidencias = [], curre
             type="button"
             onClick={() => setShowCamera(true)}
             disabled={uploading}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-600 transition hover:border-sky-200 hover:text-sky-600"
+            className="rounded-xl border border-[#edf0f4] bg-white px-3 py-1.5 text-xs font-medium text-[#0f1f3d] shadow-[0_1px_2px_rgba(11,31,58,0.08)] transition hover:border-[#f0d885] active:scale-[0.98]"
           >
             📷 Tomar foto
           </button>
-          {uploading && <span className="text-[10px] font-bold text-slate-400">Subiendo…</span>}
+          {uploading && <span className="text-xs font-medium text-[#94a3b8]">Subiendo…</span>}
         </div>
       )}
       {error && <p className="mt-1 text-[10px] font-bold text-red-500">{error}</p>}

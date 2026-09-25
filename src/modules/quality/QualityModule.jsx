@@ -1,11 +1,12 @@
 import { useState } from "react";
 import MateriaPrimaPanel from "./MateriaPrimaPanel";
+import { cardClass } from "./coreliTheme";
 
 // Vista principal tipo grid (patrón adaptado de CORELI: bloques
 // seleccionables que abren su gestión en el mismo lugar, como cambiar de
-// pestaña, sin navegar a otra URL) + el mecanismo de estado local para
-// cambiar entre "grid" y "gestión de una planta" ya usado en otros paneles
-// del portal (tabs con useState).
+// pestaña, sin navegar a otra URL) — paleta, tarjetas y tipografía copiadas
+// literalmente del diseño móvil de CORELI (ver coreliTheme.js), porque este
+// módulo se usa casi siempre desde celular.
 const SECCIONES = [
   { key: "materia-prima", titulo: "Materia Prima", codigo: "F-GC-01U", icono: "📥", disponible: true },
   { key: "planta-1", titulo: "Planta 1", codigo: "F-GC-02U", icono: "🪚", disponible: false },
@@ -19,15 +20,17 @@ function SeccionTile({ seccion, onClick }) {
       type="button"
       onClick={() => seccion.disponible && onClick(seccion.key)}
       disabled={!seccion.disponible}
-      className={`flex flex-col items-center rounded-2xl border-2 bg-white p-4 shadow-sm transition ${
-        seccion.disponible ? "border-[#001225]/15 hover:-translate-y-0.5 hover:border-[#001225]/40 hover:shadow-md" : "border-slate-100 opacity-50"
+      className={`flex flex-col items-center p-4 transition ${cardClass} ${
+        seccion.disponible ? "active:scale-[0.98] hover:border-[#f0d885] hover:shadow-[0_8px_16px_-4px_rgba(11,31,58,0.12),0_24px_48px_-12px_rgba(11,31,58,0.18)]" : "opacity-50"
       }`}
     >
-      <span className="text-3xl">{seccion.icono}</span>
-      <p className="mt-2 text-[11px] font-black uppercase tracking-wide text-slate-800">{seccion.titulo}</p>
-      <p className="text-[9px] font-bold text-slate-400">{seccion.codigo}</p>
-      <span className={`mt-1.5 rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-wide ${
-        seccion.disponible ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+      <span className={`flex h-12 w-12 items-center justify-center rounded-xl text-2xl ${seccion.disponible ? "bg-[#fdf7e6]" : "bg-[#f7f7f4]"}`}>
+        {seccion.icono}
+      </span>
+      <p className="mt-2.5 text-sm font-semibold text-[#0f1f3d]">{seccion.titulo}</p>
+      <p className="text-xs text-[#5b6472]">{seccion.codigo}</p>
+      <span className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+        seccion.disponible ? "border border-green-200 bg-green-50 text-green-700" : "border border-[#edf0f4] bg-[#f7f7f4] text-[#5b6472]"
       }`}>
         {seccion.disponible ? "Disponible" : "Próximamente"}
       </span>
@@ -40,32 +43,35 @@ export default function QualityModule({ currentUser }) {
   const seccionActiva = SECCIONES.find((s) => s.key === activeSection);
 
   return (
-    <section className="mx-auto max-w-6xl px-3 py-4">
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between bg-[#001225] px-5 py-3 text-white">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/50">Gestión de Calidad</p>
-            <p className="text-lg font-black">{seccionActiva ? seccionActiva.titulo : "Formatos de inspección"}</p>
-          </div>
-          {seccionActiva && (
-            <button type="button" onClick={() => setActiveSection(null)} className="rounded-full border border-white/20 px-3 py-1 text-[10px] font-black text-white/80 hover:bg-white/10">
-              ← Gestión de Calidad
-            </button>
-          )}
+    <section className="mx-auto max-w-6xl px-3 py-4 sm:px-4">
+      <header className="mb-4 flex items-center gap-3 rounded-2xl bg-[#0b1f3a] px-4 py-3.5 sm:px-5">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#b8931f]">
+          <span className="text-base">✅</span>
         </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">Gestión de Calidad</p>
+          <p className="truncate text-lg font-bold text-white">{seccionActiva ? seccionActiva.titulo : "Formatos de inspección"}</p>
+        </div>
+        {seccionActiva && (
+          <button
+            type="button"
+            onClick={() => setActiveSection(null)}
+            className="shrink-0 rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10"
+          >
+            ← Gestión de Calidad
+          </button>
+        )}
+      </header>
 
-        <div className="p-3">
-          {!seccionActiva ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {SECCIONES.map((s) => (
-                <SeccionTile key={s.key} seccion={s} onClick={setActiveSection} />
-              ))}
-            </div>
-          ) : seccionActiva.key === "materia-prima" ? (
-            <MateriaPrimaPanel currentUser={currentUser} />
-          ) : null}
+      {!seccionActiva ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {SECCIONES.map((s) => (
+            <SeccionTile key={s.key} seccion={s} onClick={setActiveSection} />
+          ))}
         </div>
-      </div>
+      ) : seccionActiva.key === "materia-prima" ? (
+        <MateriaPrimaPanel currentUser={currentUser} />
+      ) : null}
     </section>
   );
 }
