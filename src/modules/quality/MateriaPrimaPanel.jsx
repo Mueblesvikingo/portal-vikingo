@@ -10,6 +10,7 @@ import {
   sugerirMuestreo,
 } from "../../services/calidadService";
 import EvidenciaUploader from "./EvidenciaUploader";
+import HelpTip from "./HelpTip";
 import { cardClass, btnPrimaryClass, btnSecondaryClass, btnGhostClass, statusBadgeClass } from "./coreliTheme";
 
 function todayISO() {
@@ -17,6 +18,17 @@ function todayISO() {
 }
 function nowHHMM() {
   return new Date().toTimeString().slice(0, 5);
+}
+const MES_LABEL = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+function agruparPorMes(recorridos) {
+  const grupos = new Map();
+  for (const r of recorridos) {
+    const [anio, mes] = r.fecha.split("-").map(Number);
+    const key = `${anio}-${mes}`;
+    if (!grupos.has(key)) grupos.set(key, { label: `${MES_LABEL[mes - 1]} ${anio}`, items: [] });
+    grupos.get(key).items.push(r);
+  }
+  return Array.from(grupos.values());
 }
 
 const INSPECCION_VACIA = {
@@ -163,13 +175,12 @@ function NuevaInspeccionForm({ puntos, onSave, onCancel }) {
   );
 }
 
-function InspeccionRow({ inspeccion, currentUser, onDelete, onEvidenciaChange, canEdit }) {
-  const [expanded, setExpanded] = useState(false);
+function InspeccionRow({ inspeccion, currentUser, onDelete, onEvidenciaChange, canEdit, expanded, onToggle }) {
   const esConforme = inspeccion.resultado !== "No Conforme";
 
   return (
     <div className="p-3.5">
-      <div role="button" tabIndex={0} onClick={() => setExpanded((v) => !v)} className="flex cursor-pointer items-center gap-3">
+      <div role="button" tabIndex={0} onClick={onToggle} className="flex cursor-pointer items-center gap-3">
         <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-base ${esConforme ? "bg-green-50" : "bg-red-50"}`}>
           {esConforme ? "✅" : "⚠️"}
         </span>
@@ -220,6 +231,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   const [selectedId, setSelectedId] = useState(null);
   const [inspecciones, setInspecciones] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [expandedInspeccionId, setExpandedInspeccionId] = useState(null);
   const [cierreForm, setCierreForm] = useState({ dictamen: "", observacion_general: "", responsable_area_nombre: "" });
 
   async function loadRecorridos() {
@@ -244,6 +256,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   }, []);
 
   useEffect(() => {
+    setExpandedInspeccionId(null);
     if (selectedId) loadInspecciones(selectedId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
@@ -281,36 +294,60 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   if (loading) return <div className="py-10 text-center text-sm font-medium text-[#94a3b8]">Cargando…</div>;
 
   if (!selectedId) {
+    const grupos = agruparPorMes(recorridos);
     return (
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-[#0f1f3d]">Recorridos de inspección</h2>
-            <p className="text-sm text-[#5b6472]">Recepción de Materia Prima · F-GC-01U</p>
+        <style>{`
+          @keyframes gcGoldPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(201,162,39,0.35); } 50% { box-shadow: 0 0 0 7px rgba(201,162,39,0.10); } }
+          .gc-gold-pulse { animation: gcGoldPulse 2.8s ease-in-out infinite; }
+        `}</style>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <h2 className="truncate text-xl font-bold tracking-tight text-[#0f1f3d]">Recorridos de inspección</h2>
+              <HelpTip>Un recorrido agrupa todas las inspecciones de materia prima hechas en una jornada. Se cierra con un dictamen (Conforme / Con observación / No conforme) y la firma de la inspectora.</HelpTip>
+            </div>
+            <p className="truncate text-sm text-[#5b6472]">Recepción de Materia Prima · F-GC-01U</p>
           </div>
           {canEdit && (
-            <button type="button" onClick={handleNuevoRecorrido} className={btnPrimaryClass}>+ Nuevo</button>
+            <button
+              type="button"
+              onClick={handleNuevoRecorrido}
+              className="gc-gold-pulse inline-flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#c9a227] bg-white px-4 py-2.5 text-sm font-semibold text-[#96771a] transition active:scale-[0.98] sm:flex-none"
+            >
+              📥 + Nuevo recorrido
+            </button>
           )}
         </div>
 
         {recorridos.length === 0 ? (
           <div className={`${cardClass} py-10 text-center text-sm font-medium text-[#94a3b8]`}>Aún no hay recorridos registrados.</div>
         ) : (
-          <div className={`${cardClass} divide-y divide-[#edf0f4] overflow-hidden`}>
-            {recorridos.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => setSelectedId(r.id)}
-                className="flex w-full items-center gap-3 p-4 text-left transition active:bg-[#f7f7f4]/60"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-[#0f1f3d]">{r.folio}</p>
-                  <p className="truncate text-xs text-[#5b6472]">{r.fecha} · {r.inspectora_nombre || "—"} · {r.jornada}</p>
+          <div className="space-y-3">
+            {grupos.map((grupo) => (
+              <div key={grupo.label} className={`${cardClass} overflow-hidden`}>
+                <div className="flex items-center justify-between bg-[#f7f7f4] px-4 py-2">
+                  <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-[#5b6472]">{grupo.label}</p>
+                  <span className="shrink-0 text-[11px] font-semibold text-[#94a3b8]">{grupo.items.length}</span>
                 </div>
-                <span className={statusBadgeClass(r.dictamen || "Abierto")}>{r.dictamen || "Abierto"}</span>
-                <span className="text-[#94a3b8]">›</span>
-              </button>
+                <div className="divide-y divide-[#edf0f4]">
+                  {grupo.items.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setSelectedId(r.id)}
+                      className="flex w-full items-center gap-3 p-4 text-left transition active:bg-[#f7f7f4]/60"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-[#0f1f3d]">{r.folio}</p>
+                        <p className="truncate text-xs text-[#5b6472]">{r.fecha} · {r.inspectora_nombre || "—"} · {r.jornada}</p>
+                      </div>
+                      <span className={statusBadgeClass(r.dictamen || "Abierto")}>{r.dictamen || "Abierto"}</span>
+                      <span className="shrink-0 text-[#94a3b8]">›</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -342,6 +379,8 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
               onDelete={handleDeleteInspeccion}
               onEvidenciaChange={() => loadInspecciones(selectedId)}
               canEdit={canEdit && !recorridoActivo?.cerrado_at}
+              expanded={expandedInspeccionId === insp.id}
+              onToggle={() => setExpandedInspeccionId((cur) => (cur === insp.id ? null : insp.id))}
             />
           ))}
         </div>
