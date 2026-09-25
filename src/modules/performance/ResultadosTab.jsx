@@ -4,6 +4,21 @@ import {
   getWeeksInMonth, getMonthlyRealValue, getResultadoValue, getCumplimientoStatus, computeCumplimientoValue,
 } from "./performanceHelpers";
 
+// Permite capturar una operación aritmética simple (ej. "50+30", "120/4") además de un
+// número plano. Solo se aceptan dígitos, punto decimal, espacios y +-*/() antes de evaluar,
+// así que no hay forma de colar código — cualquier otro caracter invalida la captura.
+function evaluateCapturedValue(input) {
+  const trimmed = input.trim();
+  if (trimmed === "" || !/^[0-9+\-*/().\s]+$/.test(trimmed)) return null;
+  try {
+    // eslint-disable-next-line no-new-func
+    const result = Function(`"use strict";return (${trimmed})`)();
+    return typeof result === "number" && Number.isFinite(result) ? result : null;
+  } catch {
+    return null;
+  }
+}
+
 function EditableValue({ kpi, mesIndex, tipo, semana = null, resultados, anio, canEdit, onSave, onClear, compact = false }) {
   const [editing, setEditing] = useState(false);
   const row = getResultadoRow(resultados, kpi.id, anio, mesIndex + 1, tipo, semana);
@@ -43,7 +58,11 @@ function EditableValue({ kpi, mesIndex, tipo, semana = null, resultados, anio, c
         if (draft === "") return;
         const num = Number(draft);
         if (!Number.isFinite(num)) return;
-        if (num === 0 && kpi.cero_es_sin_dato && onClear) {
+        // Un 0 capturado se trata como celda vacía salvo en KPIs "Menor es
+        // mejor" (ahí 0 suele ser justo la meta/resultado ideal — cero
+        // quiebres, cero desviación, cero incidentes — y sí es un dato real).
+        const ceroEsSinDato = (kpi.sentido || "Mayor es mejor") !== "Menor es mejor";
+        if (num === 0 && ceroEsSinDato && onClear) {
           if (rawValue !== null) onClear({ kpiId: kpi.id, anio, mes: mesIndex + 1, semana, tipo, previousValor: rawValue });
           return;
         }

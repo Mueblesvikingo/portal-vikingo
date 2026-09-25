@@ -9,6 +9,7 @@ import {
   activateKpi,
   deleteKpi,
   upsertResultado,
+  deleteResultado,
   AREAS_OPERATIVAS,
 } from "../../services/operationalPerformanceService";
 import { isStrategicTeamMember, canEditDesempenoOperativoArea, getOwnDesempenoOperativoArea } from "../../services/permissionsService";
@@ -311,6 +312,25 @@ export default function OperationalPerformanceModule({ currentUser }) {
     });
   }
 
+  // Para KPIs "Mayor es mejor": capturar un 0 borra la celda en vez de
+  // guardar un cero real (ver EditableValue en ResultadosTab.jsx).
+  async function handleClearResultado({ kpiId, anio, mes, semana, tipo, previousValor }) {
+    const result = await deleteResultado({ kpiId, anio, mes, semana, tipo }, { actor: currentUser, previousValor });
+    if (!result?.ok) { console.error(result?.error); setMessage("No fue posible borrar el resultado."); return; }
+    setResultados((current) =>
+      current.filter(
+        (r) =>
+          !(
+            Number(r.kpi_id) === kpiId &&
+            Number(r.anio) === anio &&
+            Number(r.mes) === mes &&
+            (r.semana ?? null) === (semana ?? null) &&
+            r.tipo === tipo
+          )
+      )
+    );
+  }
+
   // Escalar un KPI en estado Crítico al Centro de Decisiones — mismo
   // mecanismo ya usado en Desempeño Organizacional, S&OP y Seguimiento
   // Estratégico para mandar solicitudes a la Bandeja de Dirección.
@@ -436,6 +456,7 @@ export default function OperationalPerformanceModule({ currentUser }) {
                 canEdit={canEdit}
                 canEditKpi={canEditKpi}
                 onSaveResultado={handleSaveResultado}
+                onClearResultado={handleClearResultado}
                 namespace="operativo"
               />
             ) : (

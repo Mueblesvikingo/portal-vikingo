@@ -327,6 +327,35 @@ export async function upsertResultado({ kpiId, anio, mes, semana = null, tipo, v
   }
 }
 
+// Para KPIs "Mayor es mejor": capturar un 0 borra la celda en vez de guardar
+// un cero real (ver EditableValue en ResultadosTab.jsx) — en "Menor es mejor"
+// el 0 sí puede ser la meta/resultado real (cero incidencias, cero merma).
+export async function deleteResultado({ kpiId, anio, mes, semana = null, tipo }, { actor, previousValor } = {}) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    let query = supabase.from("desempeno_operativo_resultados").delete().eq("kpi_id", kpiId).eq("anio", anio).eq("mes", mes).eq("tipo", tipo);
+    query = semana === null ? query.is("semana", null) : query.eq("semana", semana);
+    const { error } = await query;
+    if (error) return { ok: false, error };
+
+    if (previousValor != null) {
+      await logHistorialEntries([{
+        kpi_id: kpiId,
+        tipo_registro: "resultado",
+        referencia: semana ? `${anio}-${mes}-s${semana}-${tipo}` : `${anio}-${mes}-${tipo}`,
+        valor_anterior: String(previousValor),
+        valor_nuevo: null,
+        persona_id: personaId,
+        usuario_nombre: nombre,
+      }]);
+    }
+    return { ok: true, error: null };
+  } catch (err) {
+    console.error("Error inesperado al borrar resultado de desempeño operativo:", err);
+    return { ok: false, error: err };
+  }
+}
+
 export async function getHistorialByKpiIds(kpiIds) {
   if (!kpiIds?.length) return [];
   try {
