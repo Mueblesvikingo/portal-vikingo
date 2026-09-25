@@ -193,8 +193,19 @@ function getRolesFieldValue(user, moduleKey, field) {
   return values.some(Boolean);
 }
 
+// TEMPORAL (pedido explícito del usuario, 25-sep-2026): mientras se sigue
+// puliendo Gestión de Calidad, solo el Coordinador SIG debe verlo — ni las
+// inspectoras para quienes se construyó, ni el resto del equipo estratégico.
+// Quitar este bloque (y el `return` que lo usa en defaultVisible) para
+// restaurar la visibilidad normal cuando esté listo.
+const CALIDAD_WIP_ROLES = ["Coordinador SIG"];
+
 function defaultVisible(user, moduleKey) {
   if (MODULES_HIDDEN_BY_DEFAULT.includes(moduleKey)) return false;
+
+  if (moduleKey === "calidad") {
+    return getApplicableRoles(user).some((role) => CALIDAD_WIP_ROLES.includes(role));
+  }
 
   if (isOperativeRole(user)) {
     return MODULES_VISIBLE_FOR_OPERATIVE_ROLES.includes(moduleKey);
