@@ -353,9 +353,9 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
 
   async function handleDeleteRecorrido(id, event) {
     event?.stopPropagation();
-    if (!window.confirm("¿Eliminar este recorrido por completo? Se borran también sus inspecciones y fotos de evidencia. Esta acción no se puede deshacer.")) return;
+    if (!window.confirm("¿Eliminar esta recepción por completo? Se borran también sus inspecciones y fotos de evidencia. Esta acción no se puede deshacer.")) return;
     const result = await deleteRecorrido(id);
-    if (!result.ok) { window.alert("No fue posible eliminar el recorrido."); return; }
+    if (!result.ok) { window.alert("No fue posible eliminar la recepción."); return; }
     if (selectedId === id) setSelectedId(null);
     loadRecorridos();
   }
@@ -383,8 +383,8 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
-              <h2 className="text-xl font-bold tracking-tight text-[#0f1f3d]">Recorridos de inspección</h2>
-              <HelpTip>Un recorrido agrupa todas las inspecciones de materia prima hechas en una jornada. Se cierra con un dictamen (Conforme / Con observación / No conforme) y la firma de la inspectora.</HelpTip>
+              <h2 className="text-xl font-bold tracking-tight text-[#0f1f3d]">Recepciones de materia prima</h2>
+              <HelpTip>Una recepción agrupa todas las inspecciones de materia prima hechas en una jornada (a diferencia de las plantas de producción, aquí no es un recorrido físico sino la revisión de lo que llega). Se cierra con un dictamen (Conforme / Con observación / No conforme) y la firma de la inspectora.</HelpTip>
             </div>
             <p className="text-sm text-[#5b6472]">Recepción de Materia Prima · F-GC-01U</p>
           </div>
@@ -394,13 +394,13 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
               onClick={handleNuevoRecorrido}
               className="gc-gold-pulse inline-flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#c9a227] bg-white px-4 py-2.5 text-sm font-semibold text-[#96771a] transition active:scale-[0.98] sm:flex-none"
             >
-              📥 + Nuevo recorrido
+              📥 + Nueva recepción
             </button>
           )}
         </div>
 
         {recorridos.length === 0 ? (
-          <div className={`${cardClass} py-10 text-center text-sm font-medium text-[#94a3b8]`}>Aún no hay recorridos registrados.</div>
+          <div className={`${cardClass} py-10 text-center text-sm font-medium text-[#94a3b8]`}>Aún no hay recepciones registradas.</div>
         ) : (
           <div className="space-y-3">
             {grupos.map((grupo) => (
@@ -428,7 +428,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
                           type="button"
                           onClick={(e) => handleDeleteRecorrido(r.id, e)}
                           className="shrink-0 rounded-lg p-1 text-red-400 transition hover:bg-red-50 hover:text-red-600"
-                          aria-label="Eliminar recorrido"
+                          aria-label="Eliminar recepción"
                         >
                           🗑️
                         </button>
@@ -448,10 +448,10 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <button type="button" onClick={() => setSelectedId(null)} className={`${btnGhostClass} -ml-3`}>← Recorridos</button>
+        <button type="button" onClick={() => setSelectedId(null)} className={`${btnGhostClass} -ml-3`}>← Recepciones</button>
         {canEdit && (
           <button type="button" onClick={() => handleDeleteRecorrido(selectedId)} className="text-xs font-medium text-red-500 hover:text-red-600">
-            🗑️ Eliminar recorrido
+            🗑️ Eliminar recepción
           </button>
         )}
       </div>
@@ -495,7 +495,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
 
       {canEdit && !recorridoActivo?.cerrado_at && (
         <div className={`${cardClass} p-4`}>
-          <p className="mb-3 text-sm font-bold text-[#0f1f3d]">Cierre / dictamen del recorrido</p>
+          <p className="mb-3 text-sm font-bold text-[#0f1f3d]">Cierre / dictamen de la recepción</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className={labelClass}>
               Dictamen
@@ -519,7 +519,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
             <input type="checkbox" checked={cierreForm.firmado} onChange={(e) => setCierreForm((f) => ({ ...f, firmado: e.target.checked }))} className="mt-0.5 h-4 w-4 shrink-0 accent-[#c9a227]" />
             Firmo esta inspección como {currentUser?.nombre || currentUser?.usuario || "Inspectora"}
           </label>
-          <button type="button" onClick={handleCerrar} disabled={!cierreForm.dictamen || !cierreForm.firmado} className={`mt-3 w-full sm:w-auto ${btnPrimaryClass}`}>Cerrar recorrido</button>
+          <button type="button" onClick={handleCerrar} disabled={!cierreForm.dictamen || !cierreForm.firmado} className={`mt-3 w-full sm:w-auto ${btnPrimaryClass}`}>Cerrar recepción</button>
         </div>
       )}
 
