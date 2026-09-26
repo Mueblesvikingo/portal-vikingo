@@ -81,7 +81,7 @@ function AccordionSection({ icon, title, subtitle, open, onToggle, children }) {
         <span className="text-base">{icon}</span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-[#0f1f3d]">{title}</span>
-          {subtitle && <span className="block truncate text-xs text-[#5b6472]">{subtitle}</span>}
+          {subtitle && <span className="block text-xs text-[#5b6472]">{subtitle}</span>}
         </span>
         <span className={`shrink-0 text-[#94a3b8] transition-transform ${open ? "rotate-180" : ""}`}>⌄</span>
       </button>
@@ -250,16 +250,16 @@ function InspeccionRow({ inspeccion, currentUser, onDelete, onEvidenciaChange, c
 
   return (
     <div className="p-3.5">
-      <div role="button" tabIndex={0} onClick={onToggle} className="flex cursor-pointer items-center gap-3">
+      <div role="button" tabIndex={0} onClick={onToggle} className="flex cursor-pointer items-start gap-3">
         <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-base ${esConforme ? "bg-green-50" : "bg-red-50"}`}>
           {esConforme ? "✅" : "⚠️"}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-[#0f1f3d]">{inspeccion.producto_texto || "Sin especificar"}</p>
-          <p className="truncate text-xs text-[#5b6472]">{inspeccion.hora} · {inspeccion.proveedor || "—"} · Lote {inspeccion.lote_identificacion || "—"}</p>
+          <p className="text-sm font-semibold text-[#0f1f3d]">{inspeccion.producto_texto || "Sin especificar"}</p>
+          <p className="text-xs text-[#5b6472]">{inspeccion.hora} · {inspeccion.proveedor || "—"} · Lote {inspeccion.lote_identificacion || "—"}</p>
         </div>
-        <span className={statusBadgeClass(inspeccion.clasificacion || inspeccion.resultado)}>{inspeccion.clasificacion || inspeccion.resultado}</span>
-        <span className={`text-[#94a3b8] transition-transform ${expanded ? "rotate-180" : ""}`}>⌄</span>
+        <span className={`shrink-0 ${statusBadgeClass(inspeccion.clasificacion || inspeccion.resultado)}`}>{inspeccion.clasificacion || inspeccion.resultado}</span>
+        <span className={`shrink-0 text-[#94a3b8] transition-transform ${expanded ? "rotate-180" : ""}`}>⌄</span>
       </div>
 
       {expanded && (
@@ -380,13 +380,13 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
           @keyframes gcGoldPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(201,162,39,0.35); } 50% { box-shadow: 0 0 0 7px rgba(201,162,39,0.10); } }
           .gc-gold-pulse { animation: gcGoldPulse 2.8s ease-in-out infinite; }
         `}</style>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <h2 className="truncate text-xl font-bold tracking-tight text-[#0f1f3d]">Recorridos de inspección</h2>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <h2 className="text-xl font-bold tracking-tight text-[#0f1f3d]">Recorridos de inspección</h2>
               <HelpTip>Un recorrido agrupa todas las inspecciones de materia prima hechas en una jornada. Se cierra con un dictamen (Conforme / Con observación / No conforme) y la firma de la inspectora.</HelpTip>
             </div>
-            <p className="truncate text-sm text-[#5b6472]">Recepción de Materia Prima · F-GC-01U</p>
+            <p className="text-sm text-[#5b6472]">Recepción de Materia Prima · F-GC-01U</p>
           </div>
           {canEdit && (
             <button
@@ -405,8 +405,8 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
           <div className="space-y-3">
             {grupos.map((grupo) => (
               <div key={grupo.label} className={`${cardClass} overflow-hidden`}>
-                <div className="flex items-center justify-between bg-[#f7f7f4] px-4 py-2">
-                  <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-[#5b6472]">{grupo.label}</p>
+                <div className="flex items-center justify-between gap-2 bg-[#f7f7f4] px-4 py-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5b6472]">{grupo.label}</p>
                   <span className="shrink-0 text-[11px] font-semibold text-[#94a3b8]">{grupo.items.length}</span>
                 </div>
                 <div className="divide-y divide-[#edf0f4]">
@@ -416,13 +416,13 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
                       role="button"
                       tabIndex={0}
                       onClick={() => setSelectedId(r.id)}
-                      className="flex w-full cursor-pointer items-center gap-3 p-4 text-left transition active:bg-[#f7f7f4]/60"
+                      className="flex w-full cursor-pointer items-start gap-3 p-4 text-left transition active:bg-[#f7f7f4]/60"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-[#0f1f3d]">{r.folio}</p>
-                        <p className="truncate text-xs text-[#5b6472]">{r.fecha} · {r.inspectora_nombre || "—"} · {r.jornada}</p>
+                        <p className="text-sm font-semibold text-[#0f1f3d]">{r.folio}</p>
+                        <p className="text-xs text-[#5b6472]">{r.fecha} · {r.inspectora_nombre || "—"} · {r.jornada}</p>
                       </div>
-                      <span className={statusBadgeClass(r.dictamen || "Abierto")}>{r.dictamen || "Abierto"}</span>
+                      <span className={`shrink-0 ${statusBadgeClass(r.dictamen || "Abierto")}`}>{r.dictamen || "Abierto"}</span>
                       {canEdit && (
                         <button
                           type="button"

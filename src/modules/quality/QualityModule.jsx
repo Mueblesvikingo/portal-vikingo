@@ -50,7 +50,7 @@ export default function QualityModule({ currentUser }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">Gestión de Calidad</p>
-          <p className="truncate text-lg font-bold text-white">{seccionActiva ? seccionActiva.titulo : "Formatos de inspección"}</p>
+          <p className="text-lg font-bold text-white">{seccionActiva ? seccionActiva.titulo : "Formatos de inspección"}</p>
         </div>
         {seccionActiva && (
           <button
@@ -58,7 +58,7 @@ export default function QualityModule({ currentUser }) {
             onClick={() => setActiveSection(null)}
             className="shrink-0 rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10"
           >
-            ← Gestión de Calidad
+            ← Volver
           </button>
         )}
       </header>
