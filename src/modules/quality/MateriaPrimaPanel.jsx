@@ -69,22 +69,50 @@ function PuntoControlChip({ letra, valor, onChange }) {
   );
 }
 
+// Sección desplegable — para ir llenando la inspección por partes en vez de
+// un formulario largo de un jalón (pedido explícito, pensado para celular).
+// Solo una sección abierta a la vez, misma regla que ya se usa para el
+// detalle de inspecciones en la lista.
+function AccordionSection({ icon, title, subtitle, open, onToggle, children }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-[#edf0f4]">
+      <button type="button" onClick={onToggle} className="flex w-full items-center gap-2.5 bg-[#f7f7f4] px-3 py-2.5 text-left transition active:bg-[#edf0f4]">
+        <span className="text-base">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-[#0f1f3d]">{title}</span>
+          {subtitle && <span className="block truncate text-xs text-[#5b6472]">{subtitle}</span>}
+        </span>
+        <span className={`shrink-0 text-[#94a3b8] transition-transform ${open ? "rotate-180" : ""}`}>⌄</span>
+      </button>
+      {open && <div className="p-3">{children}</div>}
+    </div>
+  );
+}
+
+const inputClass = "mt-1 w-full rounded-xl border border-[#edf0f4] bg-white px-3 py-2 text-sm font-medium text-[#0f1f3d] outline-none transition focus:border-[#c9a227] focus:shadow-[0_0_0_3px_rgba(201,162,39,0.2)]";
+const labelClass = "text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]";
+
 function NuevaInspeccionForm({ puntos, onSave, onCancel }) {
   const [form, setForm] = useState(INSPECCION_VACIA);
   const [valoresPuntos, setValoresPuntos] = useState({});
   const [saving, setSaving] = useState(false);
-  const sugerencia = sugerirMuestreo(form.cantidad);
   const [clasificacion, setClasificacion] = useState("");
+  const [openSection, setOpenSection] = useState("identificacion");
+  const sugerencia = sugerirMuestreo(form.cantidad);
 
   function setField(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
   }
+  function toggle(section) {
+    setOpenSection((cur) => (cur === section ? null : section));
+  }
 
+  const puntosMarcados = Object.keys(valoresPuntos).filter((k) => valoresPuntos[k]).length;
   const hayNC = Object.values(valoresPuntos).includes("NC");
+  const resultado = hayNC ? "No Conforme" : "Conforme";
 
   async function handleSave() {
     setSaving(true);
-    const resultado = hayNC ? "No Conforme" : "Conforme";
     const puntosPayload = puntos.map((p) => ({ punto_control_id: p.id, valor: valoresPuntos[p.id] || null }));
     await onSave(
       { ...form, cantidad: form.cantidad || null, muestra: form.muestra || sugerencia?.muestra || null, resultado, clasificacion: hayNC ? clasificacion || "Menor" : null },
@@ -93,80 +121,121 @@ function NuevaInspeccionForm({ puntos, onSave, onCancel }) {
     setSaving(false);
   }
 
-  const inputClass = "mt-1 w-full rounded-xl border border-[#edf0f4] bg-white px-3 py-2 text-sm font-medium text-[#0f1f3d] outline-none transition focus:border-[#c9a227] focus:shadow-[0_0_0_3px_rgba(201,162,39,0.2)]";
-  const labelClass = "text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]";
-
   return (
-    <div className={`${cardClass} p-4`}>
-      <p className="mb-3 text-sm font-bold text-[#0f1f3d]">✍️ Nueva inspección</p>
-      <div className="grid grid-cols-2 gap-3">
-        <label className={labelClass}>
-          Hora
-          <input type="time" value={form.hora} onChange={(e) => setField("hora", e.target.value)} className={inputClass} />
-        </label>
-        <label className={labelClass}>
-          OC / Lote
-          <input value={form.oc_lote} onChange={(e) => setField("oc_lote", e.target.value)} className={inputClass} />
-        </label>
-        <label className={labelClass}>
-          Proveedor
-          <input value={form.proveedor} onChange={(e) => setField("proveedor", e.target.value)} className={inputClass} />
-        </label>
-        <label className={labelClass}>
-          MP a inspeccionar
-          <input value={form.producto_texto} onChange={(e) => setField("producto_texto", e.target.value)} className={inputClass} />
-        </label>
-        <label className={labelClass}>
-          Lote / Identificación
-          <input value={form.lote_identificacion} onChange={(e) => setField("lote_identificacion", e.target.value)} className={inputClass} />
-        </label>
-        <label className={labelClass}>
-          Cant.
-          <input type="number" min="0" value={form.cantidad} onChange={(e) => setField("cantidad", e.target.value)} className={inputClass} />
-        </label>
-        <label className={labelClass}>
-          Muestra
-          <input type="number" min="0" value={form.muestra} placeholder={sugerencia ? String(sugerencia.muestra) : ""} onChange={(e) => setField("muestra", e.target.value)} className={inputClass} />
-        </label>
-      </div>
-      {sugerencia && (
-        <p className="mt-2 rounded-lg bg-[#fdf7e6] px-2.5 py-1.5 text-[11px] font-medium text-[#96771a]">
-          Plan de muestreo: muestra {sugerencia.muestra} · Ac {sugerencia.ac} · Re {sugerencia.re}. 1 Mayor/Crítica → contener y ampliar a 100%.
-        </p>
-      )}
+    <div className={`${cardClass} p-3`}>
+      <p className="mb-3 px-1 text-sm font-bold text-[#0f1f3d]">✍️ Nueva inspección</p>
 
-      <p className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">Puntos de control</p>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl bg-[#f7f7f4] p-3 sm:grid-cols-3">
-        {puntos.map((p) => (
-          <div key={p.id} title={p.descripcion}>
-            <PuntoControlChip letra={p.letra} valor={valoresPuntos[p.id]} onChange={(v) => setValoresPuntos((cur) => ({ ...cur, [p.id]: v }))} />
+      <div className="space-y-2">
+        <AccordionSection
+          icon="📋"
+          title="Identificación"
+          subtitle={form.producto_texto || "Hora, OC/Lote, proveedor, MP, lote…"}
+          open={openSection === "identificacion"}
+          onToggle={() => toggle("identificacion")}
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <label className={labelClass}>
+              Hora
+              <input type="time" value={form.hora} onChange={(e) => setField("hora", e.target.value)} className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              OC / Lote
+              <input value={form.oc_lote} onChange={(e) => setField("oc_lote", e.target.value)} className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              Proveedor
+              <input value={form.proveedor} onChange={(e) => setField("proveedor", e.target.value)} className={inputClass} />
+            </label>
+            <label className={`${labelClass} col-span-2`}>
+              MP a inspeccionar
+              <input value={form.producto_texto} onChange={(e) => setField("producto_texto", e.target.value)} className={inputClass} />
+            </label>
+            <label className={`${labelClass} col-span-2`}>
+              Lote / Identificación
+              <input value={form.lote_identificacion} onChange={(e) => setField("lote_identificacion", e.target.value)} className={inputClass} />
+            </label>
           </div>
-        ))}
+        </AccordionSection>
+
+        <AccordionSection
+          icon="🔢"
+          title="Cantidad y muestra"
+          subtitle={form.cantidad ? `Cant. ${form.cantidad} · Muestra ${form.muestra || sugerencia?.muestra || "—"}` : "Tamaño de lote y tamaño de muestra"}
+          open={openSection === "cantidad"}
+          onToggle={() => toggle("cantidad")}
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <label className={labelClass}>
+              Cant.
+              <input type="number" min="0" value={form.cantidad} onChange={(e) => setField("cantidad", e.target.value)} className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              Muestra
+              <input type="number" min="0" value={form.muestra} placeholder={sugerencia ? String(sugerencia.muestra) : ""} onChange={(e) => setField("muestra", e.target.value)} className={inputClass} />
+            </label>
+          </div>
+          {sugerencia && (
+            <p className="mt-2 rounded-lg bg-[#fdf7e6] px-2.5 py-1.5 text-[11px] font-medium text-[#96771a]">
+              Plan de muestreo: muestra {sugerencia.muestra} · Ac {sugerencia.ac} · Re {sugerencia.re} (no conformidades menores). 1 Mayor/Crítica → contener y ampliar a 100%.
+            </p>
+          )}
+        </AccordionSection>
+
+        <AccordionSection
+          icon="✅"
+          title="Puntos de control"
+          subtitle={puntosMarcados > 0 ? `${puntosMarcados} de ${puntos.length} marcados · ${resultado}` : `${puntos.length} puntos (A-${puntos[puntos.length - 1]?.letra || "G"})`}
+          open={openSection === "puntos"}
+          onToggle={() => toggle("puntos")}
+        >
+          <div className="space-y-2">
+            {puntos.map((p) => (
+              <div key={p.id} className="flex items-start justify-between gap-2 border-b border-[#edf0f4] pb-2 last:border-0 last:pb-0">
+                <p className="min-w-0 flex-1 text-xs text-[#5b6472]"><span className="font-bold text-[#0f1f3d]">{p.letra}.</span> {p.descripcion}</p>
+                <PuntoControlChip letra="" valor={valoresPuntos[p.id]} onChange={(v) => setValoresPuntos((cur) => ({ ...cur, [p.id]: v }))} />
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 rounded-lg bg-[#f7f7f4] px-2.5 py-1.5 text-[11px] text-[#5b6472]">
+            <span className="font-bold text-[#0f1f3d]">Resultado: {resultado}.</span> La Matriz/plano/ficha técnica vigente establece la aceptación. Ante condición no contemplada: no asumir, documentar y escalar a Gestión de Calidad.
+          </p>
+        </AccordionSection>
+
+        <AccordionSection
+          icon="📝"
+          title="Resultado y observaciones"
+          subtitle={form.observacion || form.accion_reinspeccion ? "Con observación / acción capturada" : "Clasificación, observación, acción/reinspección"}
+          open={openSection === "resultado"}
+          onToggle={() => toggle("resultado")}
+        >
+          <div className={`mb-3 flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold ${resultado === "Conforme" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+            {resultado === "Conforme" ? "✅" : "⚠️"} Resultado: {resultado}
+          </div>
+          {hayNC && (
+            <label className={`${labelClass} mb-3 block text-red-600`}>
+              Clasificación de la NC
+              <select value={clasificacion} onChange={(e) => setClasificacion(e.target.value)} className={`${inputClass} border-red-200`}>
+                <option value="">Seleccionar…</option>
+                <option value="Menor">Menor</option>
+                <option value="Mayor">Mayor</option>
+                <option value="Crítico">Crítico</option>
+              </select>
+            </label>
+          )}
+          <label className={`${labelClass} block`}>
+            Observación / evidencia
+            <textarea value={form.observacion} onChange={(e) => setField("observacion", e.target.value)} rows={2} className={`${inputClass} resize-none`} />
+          </label>
+          <label className={`${labelClass} mt-3 block`}>
+            Acción / Reinspección
+            <textarea value={form.accion_reinspeccion} onChange={(e) => setField("accion_reinspeccion", e.target.value)} rows={2} className={`${inputClass} resize-none`} />
+          </label>
+          <p className="mt-2 text-[11px] text-[#94a3b8]">La foto de evidencia se agrega después de guardar, desde la lista de inspecciones.</p>
+        </AccordionSection>
       </div>
-
-      {hayNC && (
-        <label className={`${labelClass} mt-3 block text-red-600`}>
-          Clasificación de la NC
-          <select value={clasificacion} onChange={(e) => setClasificacion(e.target.value)} className={`${inputClass} border-red-200`}>
-            <option value="">Seleccionar…</option>
-            <option value="Menor">Menor</option>
-            <option value="Mayor">Mayor</option>
-            <option value="Crítico">Crítico</option>
-          </select>
-        </label>
-      )}
-
-      <label className={`${labelClass} mt-3 block`}>
-        Observación / evidencia
-        <textarea value={form.observacion} onChange={(e) => setField("observacion", e.target.value)} rows={2} className={`${inputClass} resize-none`} />
-      </label>
-      <label className={`${labelClass} mt-3 block`}>
-        Acción / Reinspección
-        <textarea value={form.accion_reinspeccion} onChange={(e) => setField("accion_reinspeccion", e.target.value)} rows={2} className={`${inputClass} resize-none`} />
-      </label>
 
       <div className="mt-4 flex gap-2">
-        <button type="button" onClick={handleSave} disabled={saving} className={btnPrimaryClass}>
+        <button type="button" onClick={handleSave} disabled={saving} className={`flex-1 sm:flex-none ${btnPrimaryClass}`}>
           {saving ? "Guardando…" : "Guardar inspección"}
         </button>
         <button type="button" onClick={onCancel} className={btnGhostClass}>Cancelar</button>
@@ -232,7 +301,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   const [inspecciones, setInspecciones] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [expandedInspeccionId, setExpandedInspeccionId] = useState(null);
-  const [cierreForm, setCierreForm] = useState({ dictamen: "", observacion_general: "", responsable_area_nombre: "" });
+  const [cierreForm, setCierreForm] = useState({ dictamen: "", observacion_general: "", responsable_area_nombre: "", firmado: false });
 
   async function loadRecorridos() {
     const result = await getRecorridos("Materia Prima");
@@ -282,10 +351,10 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   }
 
   async function handleCerrar() {
-    if (!cierreForm.dictamen) return;
+    if (!cierreForm.dictamen || !cierreForm.firmado) return;
     await cerrarRecorrido(selectedId, cierreForm, currentUser);
     await loadRecorridos();
-    setCierreForm({ dictamen: "", observacion_general: "", responsable_area_nombre: "" });
+    setCierreForm({ dictamen: "", observacion_general: "", responsable_area_nombre: "", firmado: false });
   }
 
   const recorridoActivo = recorridos.find((r) => r.id === selectedId);
@@ -363,7 +432,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-base font-bold text-[#0f1f3d]">{recorridoActivo?.folio}</p>
-            <p className="text-xs text-[#5b6472]">{recorridoActivo?.fecha} · Inspectora: {recorridoActivo?.inspectora_nombre || "—"} · {recorridoActivo?.jornada}</p>
+            <p className="text-xs text-[#5b6472]">{recorridoActivo?.fecha} · Inspectora: {recorridoActivo?.inspectora_nombre || "—"} · {recorridoActivo?.jornada} · Área: {recorridoActivo?.planta}</p>
           </div>
           {recorridoActivo?.dictamen && <span className={statusBadgeClass(recorridoActivo.dictamen)}>{recorridoActivo.dictamen}</span>}
         </div>
@@ -399,17 +468,30 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
       {canEdit && !recorridoActivo?.cerrado_at && (
         <div className={`${cardClass} p-4`}>
           <p className="mb-3 text-sm font-bold text-[#0f1f3d]">Cierre / dictamen del recorrido</p>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <select value={cierreForm.dictamen} onChange={(e) => setCierreForm((f) => ({ ...f, dictamen: e.target.value }))} className={inputClass}>
-              <option value="">Dictamen…</option>
-              <option value="Conforme">Conforme</option>
-              <option value="Conforme con observación">Conforme con observación</option>
-              <option value="Producto No Conforme">Producto No Conforme</option>
-            </select>
-            <input placeholder="Responsable de área" value={cierreForm.responsable_area_nombre} onChange={(e) => setCierreForm((f) => ({ ...f, responsable_area_nombre: e.target.value }))} className={inputClass} />
-            <button type="button" onClick={handleCerrar} disabled={!cierreForm.dictamen} className={btnPrimaryClass}>Cerrar recorrido</button>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className={labelClass}>
+              Dictamen
+              <select value={cierreForm.dictamen} onChange={(e) => setCierreForm((f) => ({ ...f, dictamen: e.target.value }))} className={inputClass}>
+                <option value="">Seleccionar…</option>
+                <option value="Conforme">Conforme</option>
+                <option value="Conforme con observación">Conforme con observación</option>
+                <option value="Producto No Conforme">Producto No Conforme</option>
+              </select>
+            </label>
+            <label className={labelClass}>
+              Responsable de área
+              <input value={cierreForm.responsable_area_nombre} onChange={(e) => setCierreForm((f) => ({ ...f, responsable_area_nombre: e.target.value }))} className={inputClass} />
+            </label>
           </div>
-          <textarea placeholder="Observación general / pendientes" value={cierreForm.observacion_general} onChange={(e) => setCierreForm((f) => ({ ...f, observacion_general: e.target.value }))} rows={2} className={`${inputClass} mt-2 w-full resize-none`} />
+          <label className={`${labelClass} mt-3 block`}>
+            Observación general / pendientes
+            <textarea value={cierreForm.observacion_general} onChange={(e) => setCierreForm((f) => ({ ...f, observacion_general: e.target.value }))} rows={2} className={`${inputClass} resize-none`} />
+          </label>
+          <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg bg-[#f7f7f4] p-2.5 text-xs font-medium text-[#0f1f3d]">
+            <input type="checkbox" checked={cierreForm.firmado} onChange={(e) => setCierreForm((f) => ({ ...f, firmado: e.target.checked }))} className="mt-0.5 h-4 w-4 shrink-0 accent-[#c9a227]" />
+            Firmo esta inspección como {currentUser?.nombre || currentUser?.usuario || "Inspectora"}
+          </label>
+          <button type="button" onClick={handleCerrar} disabled={!cierreForm.dictamen || !cierreForm.firmado} className={`mt-3 w-full sm:w-auto ${btnPrimaryClass}`}>Cerrar recorrido</button>
         </div>
       )}
 
