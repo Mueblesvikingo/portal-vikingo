@@ -21,13 +21,16 @@ export default function Topbar({
 }) {
   const { pathname } = useLocation();
 
-  const pageTitle =
-    pageTitles[pathname] ||
-    "Portal Estratégico Vikingo";
+  // En móvil no hay espacio para el nombre completo del portal sin empujar
+  // campana/mensajes/Salir a una segunda fila — pedido explícito de que este
+  // acortamiento sea SOLO en móvil; en escritorio la página "sin título
+  // propio" conserva el nombre completo (las páginas con pageTitle
+  // específico no cambian en ningún tamaño).
+  const specificTitle = pageTitles[pathname];
 
   return (
-    <header className="flex min-h-[64px] flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-gray-200 bg-white px-3 py-2 sm:min-h-[82px] sm:px-8 sm:py-0">
-      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+    <header className="flex min-h-[64px] flex-nowrap items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 py-2 sm:min-h-[82px] sm:gap-3 sm:px-8 sm:py-0">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <button
           type="button"
           onClick={onMenuClick}
@@ -42,12 +45,17 @@ export default function Topbar({
           </div>
 
           <h1 className="truncate text-xl font-black leading-tight text-[#0f172a] sm:mt-1 sm:text-2xl lg:text-4xl lg:leading-none">
-            {pageTitle}
+            {specificTitle || (
+              <>
+                <span className="sm:hidden">Portal</span>
+                <span className="hidden sm:inline">Portal Estratégico Vikingo</span>
+              </>
+            )}
           </h1>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-4">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-4">
         <NotificationBell currentUser={currentUser} />
         <MessagesPanel currentUser={currentUser} />
 
