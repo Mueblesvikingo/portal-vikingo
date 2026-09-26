@@ -108,6 +108,29 @@ export async function cerrarRecorrido(id, payload, actor) {
   }
 }
 
+// Borrado definitivo de un recorrido completo: las inspecciones y sus puntos
+// de control se van solos por el `on delete cascade` de las tablas, pero las
+// FOTOS de evidencia viven en Supabase Storage (no en una tabla) — el
+// cascade nunca las tocaría y quedarían huérfanas, así que se borran aquí
+// explícitamente antes de borrar el recorrido.
+export async function deleteRecorrido(id) {
+  try {
+    const { data: inspecciones } = await supabase.from("calidad_inspecciones").select("id").eq("recorrido_id", id);
+    const inspeccionIds = (inspecciones || []).map((i) => i.id);
+    if (inspeccionIds.length) {
+      const { data: evidencias } = await supabase.from("calidad_evidencias").select("path").in("inspeccion_id", inspeccionIds);
+      const paths = (evidencias || []).map((e) => e.path).filter(Boolean);
+      if (paths.length) await supabase.storage.from("calidad-evidencias").remove(paths);
+    }
+    const { error } = await supabase.from("calidad_recorridos").delete().eq("id", id);
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    console.error("Error inesperado al eliminar recorrido de calidad:", err);
+    return { ok: false, error: err };
+  }
+}
+
 export async function getInspecciones(recorridoId) {
   try {
     const { data, error } = await supabase

@@ -7,6 +7,7 @@ import {
   getInspecciones,
   createInspeccion,
   deleteInspeccion,
+  deleteRecorrido,
   sugerirMuestreo,
 } from "../../services/calidadService";
 import EvidenciaUploader from "./EvidenciaUploader";
@@ -350,6 +351,15 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
     loadInspecciones(selectedId);
   }
 
+  async function handleDeleteRecorrido(id, event) {
+    event?.stopPropagation();
+    if (!window.confirm("¿Eliminar este recorrido por completo? Se borran también sus inspecciones y fotos de evidencia. Esta acción no se puede deshacer.")) return;
+    const result = await deleteRecorrido(id);
+    if (!result.ok) { window.alert("No fue posible eliminar el recorrido."); return; }
+    if (selectedId === id) setSelectedId(null);
+    loadRecorridos();
+  }
+
   async function handleCerrar() {
     if (!cierreForm.dictamen || !cierreForm.firmado) return;
     await cerrarRecorrido(selectedId, cierreForm, currentUser);
@@ -401,19 +411,30 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
                 </div>
                 <div className="divide-y divide-[#edf0f4]">
                   {grupo.items.map((r) => (
-                    <button
+                    <div
                       key={r.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setSelectedId(r.id)}
-                      className="flex w-full items-center gap-3 p-4 text-left transition active:bg-[#f7f7f4]/60"
+                      className="flex w-full cursor-pointer items-center gap-3 p-4 text-left transition active:bg-[#f7f7f4]/60"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-[#0f1f3d]">{r.folio}</p>
                         <p className="truncate text-xs text-[#5b6472]">{r.fecha} · {r.inspectora_nombre || "—"} · {r.jornada}</p>
                       </div>
                       <span className={statusBadgeClass(r.dictamen || "Abierto")}>{r.dictamen || "Abierto"}</span>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteRecorrido(r.id, e)}
+                          className="shrink-0 rounded-lg p-1 text-red-400 transition hover:bg-red-50 hover:text-red-600"
+                          aria-label="Eliminar recorrido"
+                        >
+                          🗑️
+                        </button>
+                      )}
                       <span className="shrink-0 text-[#94a3b8]">›</span>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -426,7 +447,14 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
 
   return (
     <div className="space-y-3">
-      <button type="button" onClick={() => setSelectedId(null)} className={`${btnGhostClass} -ml-3`}>← Recorridos</button>
+      <div className="flex items-center justify-between">
+        <button type="button" onClick={() => setSelectedId(null)} className={`${btnGhostClass} -ml-3`}>← Recorridos</button>
+        {canEdit && (
+          <button type="button" onClick={() => handleDeleteRecorrido(selectedId)} className="text-xs font-medium text-red-500 hover:text-red-600">
+            🗑️ Eliminar recorrido
+          </button>
+        )}
+      </div>
 
       <div className={`${cardClass} p-4`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
