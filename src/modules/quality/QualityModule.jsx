@@ -7,6 +7,23 @@ import ConfiguracionView from "./ConfiguracionView";
 import BottomNav from "./BottomNav";
 import { cardClass } from "./coreliTheme";
 
+// El emoji de sierra (🪚, Unicode 13.0/2020) no lo renderizan muchos
+// dispositivos/fuentes — se veía en blanco en el bloque de Planta 1. Se
+// reemplaza por un ícono propio en SVG (siempre se ve igual, no depende de
+// la fuente de emoji del dispositivo).
+function IconoSierra({ className = "h-6 w-6" }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
+      <path d="M3.5 17.5L15 6" stroke="#96771a" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M15 6H21V9.5H18" stroke="#96771a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4.5 15L7 17.5" stroke="#96771a" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M7.5 11.5L10 14" stroke="#96771a" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M10.5 8.5L13 11" stroke="#96771a" strokeWidth="1.4" strokeLinecap="round" />
+      <circle cx="4" cy="18" r="1.4" fill="#96771a" />
+    </svg>
+  );
+}
+
 // Vista principal tipo grid (patrón adaptado de CORELI: bloques
 // seleccionables que abren su gestión en el mismo lugar, como cambiar de
 // pestaña, sin navegar a otra URL) — paleta, tarjetas y tipografía copiadas
@@ -14,7 +31,7 @@ import { cardClass } from "./coreliTheme";
 // módulo se usa casi siempre desde celular.
 const SECCIONES = [
   { key: "materia-prima", titulo: "Materia Prima", codigo: "F-GC-01U", icono: "📥", disponible: true },
-  { key: "planta-1", titulo: "Planta 1", codigo: "F-GC-02U", icono: "🪚", disponible: true },
+  { key: "planta-1", titulo: "Planta 1", codigo: "F-GC-02U", icono: <IconoSierra />, disponible: true },
   { key: "planta-2", titulo: "Planta 2", codigo: "F-GC-03U", icono: "🧵", disponible: true },
   { key: "planta-3", titulo: "Planta 3", codigo: "F-GC-04U", icono: "🛋️", disponible: false },
 ];
