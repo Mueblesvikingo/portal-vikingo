@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   getPuntosControl,
   crearInspeccionMP,
@@ -170,15 +171,28 @@ function calcularPeriodo(periodo, fechaRef) {
   return { desde, hasta, label: `Mes ${MES_LABEL[Number(fechaRef.slice(5, 7)) - 1]} ${fechaRef.slice(0, 4)}` };
 }
 
+// Devuelve pares {label, value} en vez de un solo string — en el recibo
+// impreso se renderizan como bloques separados (gap real), no como texto
+// corrido, aunque el Excel original los junte en una sola celda de texto.
 function construirEncabezadoImpresion(modo, registrosSel, periodoLabel) {
   const jornada = registrosSel[0]?.jornada || "07:00–17:00";
   if (modo === "una") {
     const r = registrosSel[0];
-    return `Fecha: ${ddmmyyyy(r.fecha)}    Inspectora: ${r.inspectora_nombre || "—"}    Jornada: ${jornada}    Área: Materia Prima`;
+    return [
+      { label: "Fecha", value: ddmmyyyy(r.fecha) },
+      { label: "Inspectora", value: r.inspectora_nombre || "—" },
+      { label: "Jornada", value: jornada },
+      { label: "Área", value: "Materia Prima" },
+    ];
   }
   const inspectoras = [...new Set(registrosSel.map((r) => r.inspectora_nombre).filter(Boolean))];
   const inspectoraLabel = inspectoras.length === 0 ? "—" : inspectoras.length === 1 ? inspectoras[0] : "Varias";
-  return `${periodoLabel}    Inspectora: ${inspectoraLabel}    Jornada: ${jornada}    Área: Materia Prima`;
+  return [
+    { label: "Periodo", value: periodoLabel },
+    { label: "Inspectora", value: inspectoraLabel },
+    { label: "Jornada", value: jornada },
+    { label: "Área", value: "Materia Prima" },
+  ];
 }
 
 function CampoTexto({ label, value }) {
@@ -577,10 +591,11 @@ function ImprimirModal({ registros, onCancel, onConfirmar }) {
   const puedeImprimir = modo === "una" ? !!registroUna : registrosPeriodo.length > 0;
 
   function confirmar() {
+    const incluirFotos = window.confirm("¿Deseas agregar las fotos de evidencia al PDF?");
     if (modo === "una") {
-      onConfirmar({ registros: [registroUna], encabezado: construirEncabezadoImpresion("una", [registroUna], "") });
+      onConfirmar({ registros: [registroUna], encabezado: construirEncabezadoImpresion("una", [registroUna], ""), incluirFotos });
     } else {
-      onConfirmar({ registros: registrosPeriodo, encabezado: construirEncabezadoImpresion("varias", registrosPeriodo, label) });
+      onConfirmar({ registros: registrosPeriodo, encabezado: construirEncabezadoImpresion("varias", registrosPeriodo, label), incluirFotos });
     }
   }
 
@@ -666,7 +681,9 @@ function ImprimirModal({ registros, onCancel, onConfirmar }) {
 // Reproduce el formato F-GC-01U tal como está en el Excel original (título,
 // encabezado, instrucciones, columnas, leyenda y criterio son texto fijo,
 // idéntico al archivo fuente) y llena las filas con las inspecciones
-// elegidas en ImprimirModal. Solo visible al imprimir (ver #gc-print-area).
+// elegidas en ImprimirModal. Se monta vía portal directo a document.body y
+// solo se hace visible en @media print (ver clase .gc-print-portal), para
+// que al imprimir no queden hojas en blanco por el alto del resto del portal.
 // Colores tomados directo del archivo Excel real (Interior.Color de cada
 // celda de encabezado en la hoja "MATERIA PRIMA" de FORMATOS DE INSPECCION.xlsx).
 const EXCEL_COLOR = {
@@ -680,7 +697,7 @@ const EXCEL_COLUMNAS = ["Hora", "OC / Lote", "Proveedor", "MP a inspeccionar", "
 const EXCEL_COL_ANCHOS = [4, 7, 7, 9, 9, 4, 4, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 6, 5, 17.5, 10];
 const EXCEL_LETRAS = ["A", "B", "C", "D", "E", "F", "G"];
 
-function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado }) {
+function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, incluirFotos }) {
   function valorPorLetra(insp, letra) {
     const punto = puntosCatalogo.find((p) => p.letra === letra);
     const pp = punto && (insp.calidad_inspeccion_puntos || []).find((x) => x.punto_control_id === punto.id);
@@ -700,7 +717,11 @@ function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado }) {
         FÁBRICA DE MUEBLES VIKINGO &nbsp;·&nbsp; GESTIÓN DE CALIDAD &nbsp;·&nbsp; Código: F-GC-01U &nbsp;·&nbsp; Versión: 00
       </p>
       <div className="px-3 py-1.5" style={{ background: EXCEL_COLOR.info }}>
-        <p className="text-xs">{tituloEncabezado}</p>
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+          {tituloEncabezado.map((campo) => (
+            <span key={campo.label}><span className="font-bold">{campo.label}:</span> {campo.value}</span>
+          ))}
+        </div>
         <p className="mt-1 text-[9px] italic">
           Una fila = una inspección realizada. Marcar puntos: C = Cumple, NC = No Cumple, NA = No aplica. Si existe NC, registrar clasificación, evidencia, acción y reinspección/liberación.
         </p>
@@ -773,6 +794,33 @@ function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado }) {
           </p>
         </div>
       ))}
+
+      {incluirFotos && (() => {
+        const fotos = registros.flatMap((r) => {
+          const insp = r.calidad_inspecciones?.[0];
+          return (insp?.calidad_evidencias || []).map((ev, i) => ({ ev, r, insp, indice: i + 1 }));
+        });
+        if (fotos.length === 0) {
+          return <p className="mt-3 px-2 text-[9px] italic">No hay fotos de evidencia registradas para esta selección.</p>;
+        }
+        return (
+          <div className="mt-3" style={{ pageBreakBefore: "always" }}>
+            <p className="px-2 py-1 text-[9px] font-bold text-white" style={{ background: EXCEL_COLOR.titulo }}>EVIDENCIA FOTOGRÁFICA</p>
+            <div className="mt-1 flex flex-wrap">
+              {fotos.map(({ ev, r, insp, indice }) => (
+                <div key={ev.id} className="gc-foto-box flex flex-col border border-black" style={{ width: "5.5in", height: "4.25in" }}>
+                  <div className="flex-1 overflow-hidden">
+                    <img src={ev.url} alt="Evidencia" className="h-full w-full object-contain" />
+                  </div>
+                  <p className="border-t border-black px-1 py-0.5 text-center text-[9px] font-semibold">
+                    {ddmmyyyy(r.fecha)} · {horaCorta(insp.hora)} · {insp.producto_texto || "MP"} — Evidencia {indice}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -795,8 +843,19 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
 
   useEffect(() => {
     if (!printJob) return;
-    const t = setTimeout(() => window.print(), 50);
-    return () => clearTimeout(t);
+    let cancelado = false;
+    async function irAImprimir() {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      if (printJob.incluirFotos) {
+        const imgs = Array.from(document.querySelectorAll(".gc-print-portal img"));
+        await Promise.all(
+          imgs.map((img) => (img.complete ? Promise.resolve() : new Promise((res) => { img.onload = res; img.onerror = res; })))
+        );
+      }
+      if (!cancelado) window.print();
+    }
+    irAImprimir();
+    return () => { cancelado = true; };
   }, [printJob]);
 
   useEffect(() => {
@@ -843,19 +902,20 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
       <style>{`
         @keyframes gcGoldPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(201,162,39,0.35); } 50% { box-shadow: 0 0 0 7px rgba(201,162,39,0.10); } }
         .gc-gold-pulse { animation: gcGoldPulse 2.8s ease-in-out infinite; }
+        .gc-print-portal { display: none; }
         @media print {
-          @page { size: letter landscape; margin: 10mm; }
-          body * { visibility: hidden; }
-          #gc-print-area, #gc-print-area * {
-            visibility: visible;
+          @page { size: 11in 8.5in; margin: 10mm; }
+          html, body { height: auto !important; }
+          #root { display: none !important; }
+          .gc-print-portal {
+            display: block !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
             color-adjust: exact;
           }
-          #gc-print-area { position: absolute; left: 0; top: 0; width: 100%; }
-          #gc-print-area table { page-break-inside: auto; }
-          #gc-print-area tr { page-break-inside: avoid; }
-          #gc-print-area thead { display: table-header-group; }
+          .gc-print-portal table { page-break-inside: auto; }
+          .gc-print-portal tr, .gc-print-portal .gc-foto-box { page-break-inside: avoid; }
+          .gc-print-portal thead { display: table-header-group; }
         }
       `}</style>
       <div className="min-w-0">
@@ -997,9 +1057,12 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
         />
       )}
 
-      <div id="gc-print-area" className="hidden print:block">
-        {printJob && <ReciboImprimible registros={printJob.registros} puntosCatalogo={puntos} tituloEncabezado={printJob.encabezado} />}
-      </div>
+      {printJob && createPortal(
+        <div className="gc-print-portal">
+          <ReciboImprimible registros={printJob.registros} puntosCatalogo={puntos} tituloEncabezado={printJob.encabezado} incluirFotos={printJob.incluirFotos} />
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
