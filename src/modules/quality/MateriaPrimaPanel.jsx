@@ -10,7 +10,7 @@ import {
 import EvidenciaUploader from "./EvidenciaUploader";
 import EvidenciaPicker from "./EvidenciaPicker";
 import HelpTip from "./HelpTip";
-import { cardClass, btnPrimaryClass, btnGhostClass, statusBadgeClass } from "./coreliTheme";
+import { cardClass, btnPrimaryClass, btnGhostClass, STATUS_STYLES } from "./coreliTheme";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -118,6 +118,23 @@ function AccordionSection({ icon, title, subtitle, help, open, onToggle, childre
 
 const inputClass = "mt-1 w-full rounded-xl border border-[#edf0f4] bg-white px-3 py-2 text-sm font-medium text-[#0f1f3d] outline-none transition focus:border-[#c9a227] focus:shadow-[0_0_0_3px_rgba(201,162,39,0.2)]";
 const labelClass = "text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]";
+
+// Etiqueta corta para la columna Dictamen de la tabla (el texto completo se
+// ve igual en el modal de detalle, aquí solo hay que caber en la columna).
+function dictamenCorto(d) {
+  if (d === "Conforme con observación") return "Con obs.";
+  if (d === "Producto No Conforme") return "No conforme";
+  return d || "—";
+}
+
+function CampoTexto({ label, value }) {
+  return (
+    <div>
+      <p className={labelClass}>{label}</p>
+      <p className="mt-0.5 text-sm text-[#0f1f3d]">{value || "—"}</p>
+    </div>
+  );
+}
 
 // Cada captura de Materia Prima es un registro completo y autosuficiente —
 // incluye su propio cierre/dictamen/firmas al final, en vez de depender de
@@ -329,79 +346,155 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
   );
 }
 
-function RegistroRow({ registro, currentUser, onDelete, onEvidenciaChange, canEdit, expanded, onToggle }) {
+// Fila compacta de la tabla — el detalle completo vive en DetalleInspeccionModal,
+// abierto con el botón "Ver" (pedido explícito: tabla de pocas columnas en vez
+// de la fila expandible anterior).
+function RegistroFila({ registro, onVer }) {
+  const insp = registro.calidad_inspecciones?.[0];
+  if (!insp) return null;
+  const [, mes, dia] = registro.fecha.split("-");
+
+  return (
+    <tr className="border-t border-[#edf0f4] first:border-0">
+      <td className="px-2 py-2 align-top">
+        <p className="text-xs font-semibold text-[#0f1f3d]">{dia}/{mes}</p>
+        <p className="text-[10px] text-[#94a3b8]">{insp.hora}</p>
+      </td>
+      <td className="px-2 py-2 align-top">
+        <p className="truncate text-xs font-medium text-[#0f1f3d]">{registro.inspectora_nombre || "—"}</p>
+        <p className="truncate text-[10px] text-[#5b6472]">{insp.producto_texto || "—"}</p>
+      </td>
+      <td className="px-2 py-2 align-top">
+        <span className={`inline-block rounded-lg border px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[registro.dictamen] || "border-[#edf0f4] bg-[#f7f7f4] text-[#0f1f3d]"}`}>
+          {dictamenCorto(registro.dictamen)}
+        </span>
+      </td>
+      <td className="px-2 py-2 text-right align-top">
+        <button
+          type="button"
+          onClick={() => onVer(registro)}
+          className="rounded-lg border border-[#edf0f4] bg-white px-2 py-1 text-[10px] font-semibold text-[#0f1f3d] shadow-[0_1px_2px_rgba(11,31,58,0.06)] transition active:scale-95"
+        >
+          👁 Ver
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+// Detalle de una recepción ya guardada — reutiliza el mismo formato de
+// secciones desplegables que NuevaInspeccionForm (pedido explícito: "que
+// abra la inspección completa con el formato que tiene al crearla"), pero
+// en modo lectura, más el botón de eliminar y la evidencia fotográfica.
+function DetalleInspeccionModal({ registro, puntosCatalogo, currentUser, canEdit, onClose, onDelete, onEvidenciaChange }) {
+  const [openSection, setOpenSection] = useState("identificacion");
   const insp = registro.calidad_inspecciones?.[0];
   if (!insp) return null;
   const esConforme = insp.resultado !== "No Conforme";
-  const puntosOrdenados = [...(insp.calidad_inspeccion_puntos || [])];
+  const puntosOrdenados = insp.calidad_inspeccion_puntos || [];
+
+  function toggle(section) {
+    setOpenSection((cur) => (cur === section ? null : section));
+  }
 
   return (
-    <div className="p-3.5">
-      <div role="button" tabIndex={0} onClick={onToggle} className="flex cursor-pointer items-start gap-3">
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-base ${esConforme ? "bg-green-50" : "bg-red-50"}`}>
-          {esConforme ? "✅" : "⚠️"}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[#0f1f3d]">{registro.fecha} · {insp.hora}</p>
-          <p className="text-xs text-[#5b6472]">Inspectora: {registro.inspectora_nombre || "—"} · {insp.producto_texto || "MP sin especificar"}</p>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className={`${cardClass} flex max-h-[92vh] w-full flex-col rounded-b-none sm:max-w-md sm:rounded-2xl`}>
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#edf0f4] px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-[#0f1f3d]">{registro.fecha} · {insp.hora}</p>
+            <p className="truncate text-xs text-[#5b6472]">Inspectora: {registro.inspectora_nombre || "—"}</p>
+          </div>
+          <button type="button" onClick={onClose} className="shrink-0 rounded-lg border border-[#edf0f4] px-2 py-1 text-xs font-semibold text-[#5b6472]">✕</button>
         </div>
-        <span className={`shrink-0 ${statusBadgeClass(registro.dictamen)}`}>{registro.dictamen}</span>
-        <span className={`shrink-0 text-[#94a3b8] transition-transform ${expanded ? "rotate-180" : ""}`}>⌄</span>
-      </div>
 
-      {expanded && (
-        <div className="mt-3 space-y-3 rounded-xl bg-[#f7f7f4] p-3 text-sm">
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">OC / Lote</p><p className="text-[#0f1f3d]">{insp.oc_lote || "—"}</p></div>
-            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Proveedor</p><p className="text-[#0f1f3d]">{insp.proveedor || "—"}</p></div>
-            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Lote / Identificación</p><p className="text-[#0f1f3d]">{insp.lote_identificacion || "—"}</p></div>
-            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Cant. / Muestra</p><p className="text-[#0f1f3d]">{insp.cantidad ?? "—"} / {insp.muestra ?? "—"}</p></div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <div className={`mb-3 flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold ${esConforme ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+            {esConforme ? "✅" : "⚠️"} Resultado: {insp.resultado}
           </div>
 
-          {puntosOrdenados.length > 0 && (
-            <div className="border-t border-[#edf0f4] pt-2">
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Puntos de control</p>
-              <div className="flex flex-wrap gap-1">
-                {puntosOrdenados.map((pp) => (
-                  <span key={pp.id} className={`rounded-lg border px-1.5 py-0.5 text-[10px] font-semibold ${pp.valor === "NC" ? "border-red-200 bg-red-50 text-red-600" : pp.valor === "C" ? "border-green-200 bg-green-50 text-green-700" : "border-[#edf0f4] bg-white text-[#5b6472]"}`}>
-                    {pp.valor}
-                  </span>
-                ))}
+          <div className="space-y-2">
+            <AccordionSection icon="📋" title="Identificación" open={openSection === "identificacion"} onToggle={() => toggle("identificacion")}>
+              <div className="grid grid-cols-2 gap-3">
+                <CampoTexto label="OC / Lote" value={insp.oc_lote} />
+                <CampoTexto label="Proveedor" value={insp.proveedor} />
+                <div className="col-span-2"><CampoTexto label="MP inspeccionada" value={insp.producto_texto} /></div>
+                <div className="col-span-2"><CampoTexto label="Lote / Identificación" value={insp.lote_identificacion} /></div>
               </div>
-            </div>
-          )}
+            </AccordionSection>
 
-          {(insp.observacion || insp.accion_reinspeccion) && (
-            <div className="border-t border-[#edf0f4] pt-2">
-              {insp.observacion && <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Observación</p><p className="text-[#0f1f3d]">{insp.observacion}</p></div>}
-              {insp.accion_reinspeccion && <div className="mt-1.5"><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Acción / Reinspección</p><p className="text-[#0f1f3d]">{insp.accion_reinspeccion}</p></div>}
-            </div>
-          )}
+            <AccordionSection
+              icon="🔢"
+              title="Cantidad y muestra"
+              subtitle={`Cant. ${insp.cantidad ?? "—"} · Muestra ${insp.muestra ?? "—"}`}
+              open={openSection === "cantidad"}
+              onToggle={() => toggle("cantidad")}
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <CampoTexto label="Cantidad" value={insp.cantidad} />
+                <CampoTexto label="Muestra" value={insp.muestra} />
+              </div>
+            </AccordionSection>
 
-          <div className="border-t border-[#edf0f4] pt-2">
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Cierre y firmas</p>
-            {registro.observacion_general && <p className="mb-1 text-[#0f1f3d]">{registro.observacion_general}</p>}
-            <p className="text-[#5b6472]">Inspectora: {registro.firma_inspectora || "—"}</p>
-            <p className="text-[#5b6472]">Supervisor de área: {registro.responsable_area_nombre || "—"}</p>
-            <p className="text-[#5b6472]">Gerente de Calidad: {registro.gerente_calidad_nombre || "—"}</p>
+            <AccordionSection
+              icon="✅"
+              title="Puntos de control"
+              subtitle={`${puntosOrdenados.length} punto(s) registrados`}
+              open={openSection === "puntos"}
+              onToggle={() => toggle("puntos")}
+            >
+              <div className="space-y-2">
+                {puntosOrdenados.map((pp) => {
+                  const punto = puntosCatalogo.find((p) => p.id === pp.punto_control_id);
+                  return (
+                    <div key={pp.id} className="flex items-start justify-between gap-2 border-b border-[#edf0f4] pb-2 last:border-0 last:pb-0">
+                      <p className="min-w-0 flex-1 text-xs text-[#5b6472]"><span className="font-bold text-[#0f1f3d]">{punto?.letra || "?"}.</span> {punto?.descripcion || "Punto de control"}</p>
+                      <span className={`shrink-0 rounded-lg border px-1.5 py-0.5 text-[10px] font-semibold ${pp.valor === "NC" ? "border-red-200 bg-red-50 text-red-600" : pp.valor === "C" ? "border-green-200 bg-green-50 text-green-700" : "border-[#edf0f4] bg-white text-[#5b6472]"}`}>
+                        {pp.valor || "—"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </AccordionSection>
+
+            <AccordionSection icon="📝" title="Resultado y observaciones" open={openSection === "resultado"} onToggle={() => toggle("resultado")}>
+              {insp.clasificacion && <div className="mb-3"><CampoTexto label="Clasificación de la NC" value={insp.clasificacion} /></div>}
+              <CampoTexto label="Observación / evidencia" value={insp.observacion} />
+              <div className="mt-3"><CampoTexto label="Acción / Reinspección" value={insp.accion_reinspeccion} /></div>
+              <div className="mt-3">
+                <p className={labelClass}>Evidencia fotográfica</p>
+                <div className="mt-1">
+                  <EvidenciaUploader
+                    inspeccionId={insp.id}
+                    evidencias={insp.calidad_evidencias || []}
+                    currentUser={currentUser}
+                    onChange={onEvidenciaChange}
+                    canEdit={canEdit}
+                  />
+                </div>
+              </div>
+            </AccordionSection>
+
+            <AccordionSection icon="🖊️" title="Cierre y firmas" subtitle={registro.dictamen} open={openSection === "cierre"} onToggle={() => toggle("cierre")}>
+              <CampoTexto label="Dictamen" value={registro.dictamen} />
+              <div className="mt-3"><CampoTexto label="Observación general / pendientes" value={registro.observacion_general} /></div>
+              <p className="mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">Firmas</p>
+              <div className="space-y-2">
+                <CampoTexto label="Inspectora" value={registro.firma_inspectora} />
+                <CampoTexto label="Supervisor de área" value={registro.responsable_area_nombre} />
+                <CampoTexto label="Gerente de Calidad" value={registro.gerente_calidad_nombre} />
+              </div>
+            </AccordionSection>
           </div>
-
-          <div className="border-t border-[#edf0f4] pt-2">
-            <EvidenciaUploader
-              inspeccionId={insp.id}
-              evidencias={insp.calidad_evidencias || []}
-              currentUser={currentUser}
-              onChange={onEvidenciaChange}
-              canEdit={canEdit}
-            />
-          </div>
-          {canEdit && (
-            <div className="flex justify-end border-t border-[#edf0f4] pt-2">
-              <button type="button" onClick={() => onDelete(registro.id)} className="text-xs font-medium text-red-500 hover:text-red-600">Eliminar recepción</button>
-            </div>
-          )}
         </div>
-      )}
+
+        {canEdit && (
+          <div className="flex shrink-0 justify-end border-t border-[#edf0f4] p-3">
+            <button type="button" onClick={() => onDelete(registro.id)} className="text-xs font-medium text-red-500 hover:text-red-600">Eliminar recepción</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -411,7 +504,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [expandedId, setExpandedId] = useState(null);
+  const [verId, setVerId] = useState(null);
   const [filtros, setFiltros] = useState(FILTROS_VACIO);
   const [showFiltros, setShowFiltros] = useState(false);
 
@@ -448,7 +541,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
     if (!window.confirm("¿Eliminar esta recepción por completo? Se borran también su inspección y fotos de evidencia. Esta acción no se puede deshacer.")) return;
     const result = await deleteRecorrido(id);
     if (!result.ok) { window.alert("No fue posible eliminar la recepción."); return; }
-    if (expandedId === id) setExpandedId(null);
+    if (verId === id) setVerId(null);
     loadRegistros();
   }
 
@@ -457,6 +550,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   const registrosFiltrados = aplicarFiltros(registros, filtros);
   const grupos = agruparPorMes(registrosFiltrados);
   const filtrosActivos = Object.values(filtros).filter(Boolean).length;
+  const verRegistro = registros.find((r) => r.id === verId) || null;
 
   return (
     <div className="space-y-3">
@@ -554,23 +648,34 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5b6472]">{grupo.label}</p>
                 <span className="shrink-0 text-[11px] font-semibold text-[#94a3b8]">{grupo.items.length}</span>
               </div>
-              <div className="divide-y divide-[#edf0f4]">
-                {grupo.items.map((r) => (
-                  <RegistroRow
-                    key={r.id}
-                    registro={r}
-                    currentUser={currentUser}
-                    onDelete={handleDelete}
-                    onEvidenciaChange={loadRegistros}
-                    canEdit={canEdit}
-                    expanded={expandedId === r.id}
-                    onToggle={() => setExpandedId((cur) => (cur === r.id ? null : r.id))}
-                  />
-                ))}
-              </div>
+              <table className="w-full table-fixed text-left">
+                <colgroup>
+                  <col className="w-[20%]" />
+                  <col className="w-[38%]" />
+                  <col className="w-[24%]" />
+                  <col className="w-[18%]" />
+                </colgroup>
+                <tbody>
+                  {grupo.items.map((r) => (
+                    <RegistroFila key={r.id} registro={r} onVer={(reg) => setVerId(reg.id)} />
+                  ))}
+                </tbody>
+              </table>
             </div>
           ))}
         </div>
+      )}
+
+      {verRegistro && (
+        <DetalleInspeccionModal
+          registro={verRegistro}
+          puntosCatalogo={puntos}
+          currentUser={currentUser}
+          canEdit={canEdit}
+          onClose={() => setVerId(null)}
+          onDelete={handleDelete}
+          onEvidenciaChange={loadRegistros}
+        />
       )}
     </div>
   );
