@@ -63,6 +63,29 @@ export async function getPuntosControl(planta, proceso = null) {
   }
 }
 
+// Planta 3: el mismo formato tiene DOS juegos de puntos de control distintos
+// según el proceso elegido (Corte y pegado de hule espuma = A-H; Tapicería /
+// Empaque = A-I, mismo juego repetido para ambos) — a diferencia de MP/
+// Planta 1/2 donde el juego de puntos es único. Trae TODOS los puntos de la
+// planta sin filtrar por proceso; el panel filtra en el cliente según el
+// proceso que la inspectora vaya seleccionando en el formulario.
+export async function getPuntosControlPorProceso(planta) {
+  try {
+    const { data, error } = await supabase
+      .from("calidad_puntos_control")
+      .select("*")
+      .eq("planta", planta)
+      .eq("activo", true)
+      .order("proceso")
+      .order("orden");
+    if (error) return { ok: false, error, data: [] };
+    return { ok: true, error: null, data: data || [] };
+  } catch (err) {
+    console.error("Error inesperado al leer puntos de control por proceso:", err);
+    return { ok: false, error: err, data: [] };
+  }
+}
+
 export async function getRecorridos(planta, { desde, hasta } = {}) {
   try {
     let query = supabase.from("calidad_recorridos").select("*").eq("planta", planta).order("fecha", { ascending: false }).order("created_at", { ascending: false });

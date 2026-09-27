@@ -369,17 +369,30 @@ export function ImprimirModal({ registros, area, nombreRegistroSingular, nombreR
 // elegidos en ImprimirModal. `formato` describe lo que cambia por planta —
 // ver FORMATO_MP en MateriaPrimaPanel.jsx / FORMATO_PLANTA1 en Planta1Panel.jsx.
 export function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, incluirFotos, formato }) {
-  const { tituloRecibo, subtitulo, instrucciones, columnas, colAnchos, letras, renderCeldasAntes, leyenda, criterio, nombreRegistro, identificarFoto } = formato;
+  const {
+    tituloRecibo, subtitulo, instrucciones, columnas, colAnchos, letras, renderCeldasAntes, leyenda, leyendaGrupos, criterio, nombreRegistro, identificarFoto,
+    // Casi todos los formatos comparten los mismos colores (extraídos del
+    // Excel real), pero Planta 3 usa un esquema propio en su hoja fuente —
+    // estos overrides opcionales permiten respetarlo sin tocar el resto.
+    colorTitulo = EXCEL_COLOR.titulo,
+    colorLeyendaTitulo = EXCEL_COLOR.sub,
+    colorLeyendaTexto = "#FFFFFF",
+    colorCierreTitulo = EXCEL_COLOR.encabezadoTabla,
+  } = formato;
 
+  // Algunos formatos (Planta 3) tienen más de un juego de puntos de control
+  // según el proceso elegido, con la misma letra significando algo distinto
+  // en cada uno — por eso se filtra también por insp.proceso. Los formatos
+  // con un solo juego (proceso = null en el catálogo) no se ven afectados.
   function valorPorLetra(insp, letra) {
-    const punto = puntosCatalogo.find((p) => p.letra === letra);
+    const punto = puntosCatalogo.find((p) => p.letra === letra && (p.proceso == null || p.proceso === insp.proceso));
     const pp = punto && (insp.calidad_inspeccion_puntos || []).find((x) => x.punto_control_id === punto.id);
     return pp?.valor || "";
   }
 
   return (
     <div className="text-black" style={{ fontFamily: "Arial, sans-serif" }}>
-      <div className="flex items-center gap-3 px-3 py-2" style={{ background: EXCEL_COLOR.titulo }}>
+      <div className="flex items-center gap-3 px-3 py-2" style={{ background: colorTitulo }}>
         <span className="shrink-0 rounded-md bg-white px-2 py-1">
           <img src={vikingoLogo} alt="Vikingo" className="h-6 w-auto object-contain" />
         </span>
@@ -431,18 +444,34 @@ export function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, 
         </tbody>
       </table>
 
-      <p className="mt-3 px-2 py-1 text-[9px] font-bold text-white" style={{ background: EXCEL_COLOR.sub }}>LEYENDA DE PUNTOS DE CONTROL</p>
-      <div className="grid grid-cols-2 gap-x-6 px-2 py-1.5 text-[9px]" style={{ background: EXCEL_COLOR.leyendaFondo }}>
-        {leyenda.map((par, i) => (
-          <Fragment key={i}>
-            <p>{par[0]}</p>
-            <p>{par[1] || ""}</p>
-          </Fragment>
-        ))}
-      </div>
+      <p className="mt-3 px-2 py-1 text-[9px] font-bold" style={{ background: colorLeyendaTitulo, color: colorLeyendaTexto }}>LEYENDA DE PUNTOS DE CONTROL</p>
+      {leyendaGrupos ? (
+        leyendaGrupos.map((grupo) => (
+          <div key={grupo.titulo}>
+            <p className="px-2 py-1 text-[9px] font-bold" style={{ background: grupo.color, color: grupo.colorTexto }}>{grupo.titulo}</p>
+            <div className="grid grid-cols-2 gap-x-6 px-2 py-1.5 text-[9px]" style={{ background: EXCEL_COLOR.leyendaFondo }}>
+              {grupo.pares.map((par, i) => (
+                <Fragment key={i}>
+                  <p>{par[0]}</p>
+                  <p>{par[1] || ""}</p>
+                </Fragment>
+              ))}
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="grid grid-cols-2 gap-x-6 px-2 py-1.5 text-[9px]" style={{ background: EXCEL_COLOR.leyendaFondo }}>
+          {leyenda.map((par, i) => (
+            <Fragment key={i}>
+              <p>{par[0]}</p>
+              <p>{par[1] || ""}</p>
+            </Fragment>
+          ))}
+        </div>
+      )}
       <p className="px-2 py-1.5 text-[9px]">{criterio}</p>
 
-      <p className="mt-3 px-2 py-1 text-[9px] font-bold text-white" style={{ background: EXCEL_COLOR.encabezadoTabla }}>CIERRE / DICTAMEN</p>
+      <p className="mt-3 px-2 py-1 text-[9px] font-bold text-white" style={{ background: colorCierreTitulo }}>CIERRE / DICTAMEN</p>
       <table className="w-full border-collapse text-[8px]">
         <colgroup>
           <col style={{ width: "13%" }} />
@@ -484,7 +513,7 @@ export function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, 
         }
         return (
           <div className="mt-3">
-            <p className="px-2 py-1 text-[9px] font-bold text-white" style={{ background: EXCEL_COLOR.titulo, pageBreakAfter: "avoid" }}>EVIDENCIA FOTOGRÁFICA</p>
+            <p className="px-2 py-1 text-[9px] font-bold text-white" style={{ background: colorTitulo, pageBreakAfter: "avoid" }}>EVIDENCIA FOTOGRÁFICA</p>
             <div className="mt-1 flex flex-wrap" style={{ gap: "8px" }}>
               {fotos.map(({ ev, r, insp, indice }) => (
                 <div key={ev.id} className="gc-foto-box flex flex-col border border-black" style={{ width: "calc(50% - 4px)", height: "3.5in" }}>
