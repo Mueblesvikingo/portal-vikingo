@@ -1,5 +1,8 @@
 import { useState } from "react";
 import MateriaPrimaPanel from "./MateriaPrimaPanel";
+import GuiasView from "./GuiasView";
+import ConfiguracionView from "./ConfiguracionView";
+import BottomNav from "./BottomNav";
 import { cardClass } from "./coreliTheme";
 
 // Vista principal tipo grid (patrón adaptado de CORELI: bloques
@@ -39,39 +42,57 @@ function SeccionTile({ seccion, onClick }) {
 }
 
 export default function QualityModule({ currentUser }) {
+  const [bottomTab, setBottomTab] = useState("inicio");
   const [activeSection, setActiveSection] = useState(null);
   const seccionActiva = SECCIONES.find((s) => s.key === activeSection);
 
-  return (
-    <section className="mx-auto max-w-6xl px-3 py-4 sm:px-4">
-      <header className="mb-4 flex items-center gap-3 rounded-2xl bg-[#0b1f3a] px-4 py-3.5 sm:px-5">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#b8931f]">
-          <span className="text-base">✅</span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">Gestión de Calidad</p>
-          <p className="text-lg font-bold text-white">{seccionActiva ? seccionActiva.titulo : "Formatos de inspección"}</p>
-        </div>
-        {seccionActiva && (
-          <button
-            type="button"
-            onClick={() => setActiveSection(null)}
-            className="shrink-0 rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10"
-          >
-            ← Volver
-          </button>
-        )}
-      </header>
+  function goInicio() {
+    setBottomTab("inicio");
+    setActiveSection(null);
+  }
 
-      {!seccionActiva ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {SECCIONES.map((s) => (
-            <SeccionTile key={s.key} seccion={s} onClick={setActiveSection} />
-          ))}
-        </div>
-      ) : seccionActiva.key === "materia-prima" ? (
-        <MateriaPrimaPanel currentUser={currentUser} />
-      ) : null}
+  return (
+    <section className="mx-auto max-w-6xl px-3 pb-20 pt-4 sm:px-4 lg:pb-4">
+      {bottomTab === "inicio" && (
+        <>
+          <header className="mb-4 flex items-center gap-3 rounded-2xl bg-[#0b1f3a] px-4 py-3.5 sm:px-5">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#b8931f]">
+              <span className="text-base">✅</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">Gestión de Calidad</p>
+              <p className="text-lg font-bold text-white">{seccionActiva ? seccionActiva.titulo : "Formatos de inspección"}</p>
+            </div>
+            {seccionActiva && (
+              <button
+                type="button"
+                onClick={() => setActiveSection(null)}
+                className="shrink-0 rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10"
+              >
+                ← Volver
+              </button>
+            )}
+          </header>
+
+          {!seccionActiva ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {SECCIONES.map((s) => (
+                <SeccionTile key={s.key} seccion={s} onClick={setActiveSection} />
+              ))}
+            </div>
+          ) : seccionActiva.key === "materia-prima" ? (
+            <MateriaPrimaPanel currentUser={currentUser} />
+          ) : null}
+        </>
+      )}
+
+      {bottomTab === "guias" && <GuiasView />}
+      {bottomTab === "config" && <ConfiguracionView />}
+
+      <BottomNav
+        active={bottomTab}
+        onChange={(tab) => (tab === "inicio" ? goInicio() : setBottomTab(tab))}
+      />
     </section>
   );
 }

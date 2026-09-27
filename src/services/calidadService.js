@@ -13,16 +13,16 @@ function actorFields(actor) {
 // aplica a no conformidades MENORES; 1 Mayor o Crítica siempre se contiene y
 // se amplía a inspección al 100% (eso lo decide la inspectora, no es un
 // número de esta tabla).
-const PLAN_MUESTREO = [
-  { max: 1, muestra: 1, ac: 0, re: 1 },
-  { max: 2, muestra: 2, ac: 0, re: 1 },
-  { max: 5, muestra: 2, ac: 0, re: 1 },
-  { max: 10, muestra: 3, ac: 0, re: 1 },
-  { max: 15, muestra: 4, ac: 1, re: 2 },
-  { max: 20, muestra: 5, ac: 1, re: 2 },
-  { max: 30, muestra: 6, ac: 1, re: 2 },
-  { max: 40, muestra: 8, ac: 2, re: 3 },
-  { max: 50, muestra: 10, ac: 2, re: 3 },
+export const PLAN_MUESTREO = [
+  { lote: "1", max: 1, muestra: 1, ac: 0, re: 1 },
+  { lote: "2", max: 2, muestra: 2, ac: 0, re: 1 },
+  { lote: "3 - 5", max: 5, muestra: 2, ac: 0, re: 1 },
+  { lote: "6 - 10", max: 10, muestra: 3, ac: 0, re: 1 },
+  { lote: "11 - 15", max: 15, muestra: 4, ac: 1, re: 2 },
+  { lote: "16 - 20", max: 20, muestra: 5, ac: 1, re: 2 },
+  { lote: "21 - 30", max: 30, muestra: 6, ac: 1, re: 2 },
+  { lote: "31 - 40", max: 40, muestra: 8, ac: 2, re: 3 },
+  { lote: "41 - 50", max: 50, muestra: 10, ac: 2, re: 3 },
 ];
 
 export function sugerirMuestreo(cantidadLote) {
