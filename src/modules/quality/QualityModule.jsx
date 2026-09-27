@@ -1,6 +1,7 @@
 import { useState } from "react";
 import MateriaPrimaPanel from "./MateriaPrimaPanel";
 import Planta1Panel from "./Planta1Panel";
+import Planta2Panel from "./Planta2Panel";
 import GuiasView from "./GuiasView";
 import ConfiguracionView from "./ConfiguracionView";
 import BottomNav from "./BottomNav";
@@ -14,7 +15,7 @@ import { cardClass } from "./coreliTheme";
 const SECCIONES = [
   { key: "materia-prima", titulo: "Materia Prima", codigo: "F-GC-01U", icono: "📥", disponible: true },
   { key: "planta-1", titulo: "Planta 1", codigo: "F-GC-02U", icono: "🪚", disponible: true },
-  { key: "planta-2", titulo: "Planta 2", codigo: "F-GC-03U", icono: "🧵", disponible: false },
+  { key: "planta-2", titulo: "Planta 2", codigo: "F-GC-03U", icono: "🧵", disponible: true },
   { key: "planta-3", titulo: "Planta 3", codigo: "F-GC-04U", icono: "🛋️", disponible: false },
 ];
 
@@ -85,6 +86,8 @@ export default function QualityModule({ currentUser }) {
             <MateriaPrimaPanel currentUser={currentUser} />
           ) : seccionActiva.key === "planta-1" ? (
             <Planta1Panel currentUser={currentUser} />
+          ) : seccionActiva.key === "planta-2" ? (
+            <Planta2Panel currentUser={currentUser} />
           ) : null}
         </>
       )}
