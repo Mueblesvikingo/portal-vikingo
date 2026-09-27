@@ -192,20 +192,22 @@ export async function createInspeccion(recorridoId, payload, puntos, actor) {
   }
 }
 
-// Materia Prima: a diferencia de Planta 1/2/3 (donde un recorrido SÍ agrupa
-// varias inspecciones bajo un cierre único al final de la jornada), aquí
-// cada captura es un registro autosuficiente — recepción + inspección +
-// cierre/firmas en un solo paso, porque puede haber varias recepciones el
-// mismo día (distintas entregas, distintas horas). Se identifica por fecha +
-// persona + hora, sin folio consecutivo por ahora.
-export async function crearInspeccionMP({ fecha, jornada, inspeccion, puntos, cierre }, actor) {
+// Registro único autosuficiente — recepción/inspección + cierre/firmas en un
+// solo paso, a diferencia del modelo antiguo de arriba (recorrido con varias
+// inspecciones bajo un cierre único). Se usa en Materia Prima y Planta 1:
+// puede haber varias entregas/OPs el mismo día, cada una su propio registro,
+// identificado por fecha + persona + hora, sin folio consecutivo.
+const FOLIO_PREFIJO = { "Materia Prima": "MP", "Planta 1": "P1", "Planta 2": "P2", "Planta 3": "P3" };
+
+export async function crearInspeccionUnica({ planta, fecha, jornada, inspeccion, puntos, cierre }, actor) {
   try {
     const { personaId, nombre } = actorFields(actor);
-    const folio = `MP-${fecha.replace(/-/g, "")}-${(inspeccion.hora || "").replace(":", "")}`;
+    const prefijo = FOLIO_PREFIJO[planta] || planta.replace(/\s+/g, "").slice(0, 4).toUpperCase();
+    const folio = `${prefijo}-${fecha.replace(/-/g, "")}-${(inspeccion.hora || "").replace(":", "")}`;
     const { data: recorrido, error: recorridoError } = await supabase
       .from("calidad_recorridos")
       .insert({
-        planta: "Materia Prima",
+        planta,
         folio,
         fecha,
         jornada: jornada || "07:00–17:00",
@@ -227,7 +229,11 @@ export async function crearInspeccionMP({ fecha, jornada, inspeccion, puntos, ci
       .insert({
         recorrido_id: recorrido.id,
         hora: inspeccion.hora || null,
+        proceso: inspeccion.proceso || null,
+        op: inspeccion.op || null,
         producto_texto: inspeccion.producto_texto || null,
+        terminacion: inspeccion.terminacion || null,
+        linea_operador: inspeccion.linea_operador || null,
         proveedor: inspeccion.proveedor || null,
         oc_lote: inspeccion.oc_lote || null,
         lote_identificacion: inspeccion.lote_identificacion || null,
@@ -259,20 +265,20 @@ export async function crearInspeccionMP({ fecha, jornada, inspeccion, puntos, ci
 
     return { ok: true, error: null, data: { ...recorrido, calidad_inspecciones: [insp] } };
   } catch (err) {
-    console.error("Error inesperado al crear inspección de materia prima:", err);
+    console.error("Error inesperado al crear inspección:", err);
     return { ok: false, error: err, data: null };
   }
 }
 
-// Lista de registros de Materia Prima ya combinados (un recorrido = una
-// inspección, con sus puntos de control y evidencias embebidas) para la
-// vista de lista/detalle de una sola pieza.
-export async function getInspeccionesMP({ desde, hasta } = {}) {
+// Lista de registros ya combinados (un recorrido = una inspección, con sus
+// puntos de control y evidencias embebidas) para la vista de lista/detalle
+// de una sola pieza.
+export async function getInspeccionesUnica(planta, { desde, hasta } = {}) {
   try {
     let query = supabase
       .from("calidad_recorridos")
       .select("*, calidad_inspecciones(*, calidad_inspeccion_puntos(*), calidad_evidencias(*))")
-      .eq("planta", "Materia Prima")
+      .eq("planta", planta)
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false });
     if (desde) query = query.gte("fecha", desde);
@@ -281,9 +287,18 @@ export async function getInspeccionesMP({ desde, hasta } = {}) {
     if (error) return { ok: false, error, data: [] };
     return { ok: true, error: null, data: data || [] };
   } catch (err) {
-    console.error("Error inesperado al leer inspecciones de materia prima:", err);
+    console.error("Error inesperado al leer inspecciones:", err);
     return { ok: false, error: err, data: [] };
   }
+}
+
+// Wrappers de Materia Prima — conservan la firma original para no tocar
+// MateriaPrimaPanel.jsx; mismo comportamiento de siempre (folio "MP-...").
+export async function crearInspeccionMP({ fecha, jornada, inspeccion, puntos, cierre }, actor) {
+  return crearInspeccionUnica({ planta: "Materia Prima", fecha, jornada, inspeccion, puntos, cierre }, actor);
+}
+export async function getInspeccionesMP({ desde, hasta } = {}) {
+  return getInspeccionesUnica("Materia Prima", { desde, hasta });
 }
 
 export async function deleteInspeccion(id) {

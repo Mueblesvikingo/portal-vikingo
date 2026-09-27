@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   getPuntosControl,
-  crearInspeccionMP,
-  getInspeccionesMP,
+  crearInspeccionUnica,
+  getInspeccionesUnica,
   deleteRecorrido,
   sugerirMuestreo,
   subirEvidencia,
@@ -19,37 +19,41 @@ import {
   PRINT_STYLE_BLOCK, ImprimirModal, ReciboImprimible, DetalleRegistroModal,
 } from "./shared";
 
-// Formato F-GC-01U tal como está en el Excel original (RECEPCIÓN DE MATERIA
-// PRIMA) — colores, columnas, leyenda y criterio extraídos directo del
+const PLANTA = "Planta 1";
+const PROCESOS = ["Corte de Madera", "Armado de Casco", "Habilitado"];
+
+// Formato F-GC-02U tal como está en el Excel original (FORMATO UNIFICADO –
+// PLANTA 1) — colores, columnas, leyenda y criterio extraídos directo del
 // archivo fuente. Ver ReciboImprimible en shared.jsx.
-const FORMATO_MP = {
-  tituloRecibo: "RECEPCIÓN DE MATERIA PRIMA",
-  subtitulo: "FÁBRICA DE MUEBLES VIKINGO  ·  GESTIÓN DE CALIDAD  ·  Código: F-GC-01U  ·  Versión: 00",
-  instrucciones: "Una fila = una inspección realizada. Marcar puntos: C = Cumple, NC = No Cumple, NA = No aplica. Si existe NC, registrar clasificación, evidencia, acción y reinspección/liberación.",
-  columnas: ["Hora", "OC / Lote", "Proveedor", "MP a inspeccionar", "Lote / Identificación", "Cant.", "Muestra", "A", "B", "C", "D", "E", "F", "G", "Resultado", "Clasif.", "Observación / evidencia", "Acción / Reinspección"],
-  colAnchos: [4, 7, 7, 9, 9, 4, 4, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 6, 5, 17.5, 10],
-  letras: ["A", "B", "C", "D", "E", "F", "G"],
+const FORMATO_PLANTA1 = {
+  tituloRecibo: "FORMATO UNIFICADO – PLANTA 1 | CORTE DE MADERA / ARMADO DE CASCO / HABILITADO",
+  subtitulo: "FÁBRICA DE MUEBLES VIKINGO  ·  GESTIÓN DE CALIDAD  ·  PLANTA 1 ASPEL-PROD  ·  Código: F-GC-02U  ·  Versión: 00",
+  instrucciones: "Una fila = una inspección realizada. En PROCESO seleccionar: Corte de Madera / Armado de Casco / Habilitado. Una fila = una OP inspeccionada. Marcar puntos: C = Cumple, NC = No Cumple, NA = No aplica. Si existe NC, registrar clasificación, evidencia, acción y reinspección/liberación.",
+  columnas: ["Hora", "Proceso", "OP", "Código", "Terminación", "Línea / Operador", "Cant.", "Muestra", "A", "B", "C", "D", "E", "F", "G", "H", "Resultado", "Clasif.", "Observación / evidencia", "Acción / Reinspección"],
+  colAnchos: [3, 9, 5, 7, 7, 8, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 5, 4, 18, 12],
+  letras: ["A", "B", "C", "D", "E", "F", "G", "H"],
   renderCeldasAntes: (insp) => [
-    { v: insp.oc_lote }, { v: insp.proveedor }, { v: insp.producto_texto }, { v: insp.lote_identificacion },
+    { v: insp.proceso }, { v: insp.op }, { v: insp.producto_texto }, { v: insp.terminacion }, { v: insp.linea_operador },
     { v: insp.cantidad, center: true }, { v: insp.muestra, center: true },
   ],
   leyenda: [
-    ["A = Identificación / material vs OC", "B = Cantidad / presentación"],
-    ["C = Dimensión / calibre / espesor", "D = Condición física / integridad"],
-    ["E = Humedad / contaminación", "F = Color / tono / apariencia"],
-    ["G = Criterio técnico específico", ""],
+    ["A = OP / código / componentes", "B = Dimensiones"],
+    ["C = Escuadra / geometría / nivel", "D = Cortes / uniones / fijaciones"],
+    ["E = Estabilidad estructural", "F = Resortes / bandastic / tensión"],
+    ["G = Sin filos / puntas / metal-metal", "H = Preparación sig. proceso"],
   ],
   criterio: "CRITERIO: La Matriz / plano / ficha técnica vigente establece la aceptación. Ante condición no contemplada: no asumir; documentar y escalar a Gestión de Calidad.",
-  nombreRegistro: "Recepción",
-  identificarFoto: (r, insp) => insp.producto_texto || "MP",
+  nombreRegistro: "Inspección",
+  identificarFoto: (r, insp) => `${insp.proceso || "Proceso"} · OP ${insp.op || "—"}`,
 };
 
 const FORM_VACIO = {
   hora: nowHHMM(),
-  oc_lote: "",
-  proveedor: "",
+  proceso: "",
+  op: "",
   producto_texto: "",
-  lote_identificacion: "",
+  terminacion: "",
+  linea_operador: "",
   cantidad: "",
   muestra: "",
   observacion: "",
@@ -57,20 +61,16 @@ const FORM_VACIO = {
 };
 const CIERRE_VACIO = { dictamen: "", observacion_general: "", responsable_area_nombre: "", gerente_calidad_nombre: "", firmado: false };
 
-// Filtros sobre texto libre (proveedor, MP, OC/Lote, inspectora) — no sobre
-// catálogos, porque Proveedores/Colaboradores/Productos aún no existen como
-// tablas propias. En cuanto se suban esos catálogos, "Proveedor" puede pasar
-// de texto libre a un select sin cambiar el resto de este filtro.
+// Igual que en Materia Prima: filtro de texto libre, no de catálogo (aún no
+// hay catálogo de procesos/operadores como tabla propia).
 const FILTROS_VACIO = { busqueda: "", dictamen: "", desde: "", hasta: "" };
-function camposBusquedaMP(r, insp) {
-  return [insp?.proveedor, insp?.producto_texto, insp?.oc_lote, insp?.lote_identificacion, r.inspectora_nombre];
+function camposBusquedaPlanta1(r, insp) {
+  return [insp?.proceso, insp?.op, insp?.producto_texto, insp?.terminacion, insp?.linea_operador, r.inspectora_nombre];
 }
 
-// Cada captura de Materia Prima es un registro completo y autosuficiente —
-// incluye su propio cierre/dictamen/firmas al final, en vez de depender de
-// un "recorrido" que agrupe varias inspecciones (eso sí aplica a Planta
-// 1/2/3, donde hay un recorrido físico por la planta; aquí puede haber
-// varias recepciones el mismo día — cada entrega es su propio registro).
+// Cada captura de Planta 1 es un registro completo y autosuficiente — igual
+// que Materia Prima: identificación + puntos de control + cierre/firmas en
+// un solo paso, porque puede haber varias OPs inspeccionadas el mismo día.
 function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
   const [form, setForm] = useState(FORM_VACIO);
   const [valoresPuntos, setValoresPuntos] = useState({});
@@ -108,14 +108,14 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
 
   return (
     <div className={`${cardClass} p-3`}>
-      <p className="mb-3 px-1 text-sm font-bold text-[#0f1f3d]">✍️ Nueva recepción</p>
+      <p className="mb-3 px-1 text-sm font-bold text-[#0f1f3d]">✍️ Nueva inspección</p>
 
       <div className="space-y-2">
         <AccordionSection
           icon="📋"
           title="Identificación"
-          help="Del formato F-GC-01U: seleccionar la MP a inspeccionar y registrar OC/Lote, proveedor y lote/identificación."
-          subtitle={form.producto_texto || "Hora, OC/Lote, proveedor, MP, lote…"}
+          help="Del formato F-GC-02U: seleccionar el Proceso (Corte de Madera / Armado de Casco / Habilitado) y registrar OP, código, terminación y línea/operador."
+          subtitle={form.op ? `OP ${form.op} · ${form.proceso || "—"}` : "Hora, proceso, OP, código, terminación, línea/operador…"}
           open={openSection === "identificacion"}
           onToggle={() => toggle("identificacion")}
         >
@@ -125,20 +125,27 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
               <input type="time" value={form.hora} onChange={(e) => setField("hora", e.target.value)} className={inputClass} />
             </label>
             <label className={labelClass}>
-              OC / Lote
-              <input value={form.oc_lote} onChange={(e) => setField("oc_lote", e.target.value)} className={inputClass} />
+              Proceso
+              <select value={form.proceso} onChange={(e) => setField("proceso", e.target.value)} className={inputClass}>
+                <option value="">Seleccionar…</option>
+                {PROCESOS.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
             </label>
             <label className={labelClass}>
-              Proveedor
-              <input value={form.proveedor} onChange={(e) => setField("proveedor", e.target.value)} className={inputClass} />
+              OP
+              <input value={form.op} onChange={(e) => setField("op", e.target.value)} className={inputClass} />
             </label>
-            <label className={`${labelClass} col-span-2`}>
-              MP a inspeccionar
+            <label className={labelClass}>
+              Código
               <input value={form.producto_texto} onChange={(e) => setField("producto_texto", e.target.value)} className={inputClass} />
             </label>
             <label className={`${labelClass} col-span-2`}>
-              Lote / Identificación
-              <input value={form.lote_identificacion} onChange={(e) => setField("lote_identificacion", e.target.value)} className={inputClass} />
+              Terminación
+              <input value={form.terminacion} onChange={(e) => setField("terminacion", e.target.value)} className={inputClass} />
+            </label>
+            <label className={`${labelClass} col-span-2`}>
+              Línea / Operador
+              <input value={form.linea_operador} onChange={(e) => setField("linea_operador", e.target.value)} className={inputClass} />
             </label>
           </div>
         </AccordionSection>
@@ -146,8 +153,8 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
         <AccordionSection
           icon="🔢"
           title="Cantidad y muestra"
-          help="Cant. = tamaño del lote recibido. Muestra = cuántas piezas revisar, según el Plan de Muestreo Ac/Re del formato (ver pestaña Guías si quieres consultar la tabla completa)."
-          subtitle={form.cantidad ? `Cant. ${form.cantidad} · Muestra ${form.muestra || sugerencia?.muestra || "—"}` : "Tamaño de lote y tamaño de muestra"}
+          help="Cant. = cantidad de piezas de la OP inspeccionada. Muestra = cuántas piezas revisar, según el Plan de Muestreo Ac/Re (ver pestaña Guías si quieres consultar la tabla completa)."
+          subtitle={form.cantidad ? `Cant. ${form.cantidad} · Muestra ${form.muestra || sugerencia?.muestra || "—"}` : "Tamaño de la OP y tamaño de muestra"}
           open={openSection === "cantidad"}
           onToggle={() => toggle("cantidad")}
         >
@@ -171,8 +178,8 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
         <AccordionSection
           icon="✅"
           title="Puntos de control"
-          help="Del formato F-GC-01U: marcar cada punto como C = Cumple, NC = No Cumple, o NA = No aplica. La Matriz/plano/ficha técnica vigente establece la aceptación de cada uno."
-          subtitle={puntosMarcados > 0 ? `${puntosMarcados} de ${puntos.length} marcados · ${resultado}` : `${puntos.length} puntos (A-${puntos[puntos.length - 1]?.letra || "G"})`}
+          help="Del formato F-GC-02U: marcar cada punto como C = Cumple, NC = No Cumple, o NA = No aplica. La Matriz/plano/ficha técnica vigente establece la aceptación de cada uno."
+          subtitle={puntosMarcados > 0 ? `${puntosMarcados} de ${puntos.length} marcados · ${resultado}` : `${puntos.length} puntos (A-${puntos[puntos.length - 1]?.letra || "H"})`}
           open={openSection === "puntos"}
           onToggle={() => toggle("puntos")}
         >
@@ -192,7 +199,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
         <AccordionSection
           icon="📝"
           title="Resultado y observaciones"
-          help="Del formato F-GC-01U: si existe una NC (No Cumple), registrar su clasificación, evidencia, acción y reinspección/liberación."
+          help="Del formato F-GC-02U: si existe una NC (No Cumple), registrar su clasificación, evidencia, acción y reinspección/liberación."
           subtitle={fotos.length > 0 ? `${fotos.length} foto(s) de evidencia` : (form.observacion || form.accion_reinspeccion ? "Con observación / acción capturada" : "Clasificación, observación, acción/reinspección, evidencia")}
           open={openSection === "resultado"}
           onToggle={() => toggle("resultado")}
@@ -230,7 +237,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
         <AccordionSection
           icon="🖊️"
           title="Cierre y firmas"
-          help="Del formato F-GC-01U (Cierre / dictamen): Conforme, Conforme con observación, o Producto No Conforme, más observación general/pendientes y las firmas de quien inspeccionó, el responsable de área y la fecha/hora de cierre."
+          help="Del formato F-GC-02U (Cierre / dictamen): Conforme, Conforme con observación, o Producto No Conforme, más observación general/pendientes y las firmas de quien inspeccionó, el responsable de área y la fecha/hora de cierre."
           subtitle={cierre.dictamen || "Dictamen, observación general y firmas"}
           open={openSection === "cierre"}
           onToggle={() => toggle("cierre")}
@@ -267,7 +274,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
 
       <div className="mt-4 flex gap-2">
         <button type="button" onClick={handleSave} disabled={saving || !puedeGuardar} className={`flex-1 sm:flex-none ${btnPrimaryClass}`}>
-          {saving ? "Guardando…" : "Guardar recepción"}
+          {saving ? "Guardando…" : "Guardar inspección"}
         </button>
         <button type="button" onClick={onCancel} className={btnGhostClass}>Cancelar</button>
       </div>
@@ -290,8 +297,8 @@ function RegistroFila({ registro, onVer }) {
         <p className="text-[10px] text-[#94a3b8]">{horaCorta(insp.hora)}</p>
       </td>
       <td className="px-2 py-2 align-top">
-        <p className="truncate text-xs font-medium text-[#0f1f3d]">{registro.inspectora_nombre || "—"}</p>
-        <p className="truncate text-[10px] text-[#5b6472]">{insp.producto_texto || "—"}</p>
+        <p className="truncate text-xs font-medium text-[#0f1f3d]">{insp.proceso || "—"}</p>
+        <p className="truncate text-[10px] text-[#5b6472]">OP {insp.op || "—"} · {insp.producto_texto || "—"}</p>
       </td>
       <td className="px-2 py-2 align-top">
         <span className={`inline-block rounded-lg border px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[registro.dictamen] || "border-[#edf0f4] bg-[#f7f7f4] text-[#0f1f3d]"}`}>
@@ -311,25 +318,24 @@ function RegistroFila({ registro, onVer }) {
   );
 }
 
-function renderIdentificacionMP(insp) {
+function renderIdentificacionPlanta1(insp) {
   return (
     <div className="grid grid-cols-2 gap-3">
-      <CampoTexto label="OC / Lote" value={insp.oc_lote} />
-      <CampoTexto label="Proveedor" value={insp.proveedor} />
-      <div className="col-span-2"><CampoTexto label="MP inspeccionada" value={insp.producto_texto} /></div>
-      <div className="col-span-2"><CampoTexto label="Lote / Identificación" value={insp.lote_identificacion} /></div>
+      <CampoTexto label="Proceso" value={insp.proceso} />
+      <CampoTexto label="OP" value={insp.op} />
+      <CampoTexto label="Código" value={insp.producto_texto} />
+      <CampoTexto label="Terminación" value={insp.terminacion} />
+      <div className="col-span-2"><CampoTexto label="Línea / Operador" value={insp.linea_operador} /></div>
     </div>
   );
 }
 
-export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
+export default function Planta1Panel({ currentUser, canEdit = true }) {
   const [puntos, setPuntos] = useState([]);
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [verId, setVerId] = useState(null);
-  // Por default el filtro arranca acotado a la semana actual (lunes a
-  // domingo) — "Limpiar filtros" sí quita esta acotación por completo.
   const [filtros, setFiltros] = useState(() => {
     const hoy = todayISO();
     return { ...FILTROS_VACIO, desde: inicioSemanaISO(hoy), hasta: finSemanaISO(hoy) };
@@ -339,7 +345,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   const [printJob, setPrintJob] = useState(null);
 
   async function loadRegistros() {
-    const result = await getInspeccionesMP();
+    const result = await getInspeccionesUnica(PLANTA);
     if (result.ok) setRegistros(result.data);
   }
 
@@ -363,7 +369,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   useEffect(() => {
     async function init() {
       setLoading(true);
-      const [puntosResult] = await Promise.all([getPuntosControl("Materia Prima"), loadRegistros()]);
+      const [puntosResult] = await Promise.all([getPuntosControl(PLANTA), loadRegistros()]);
       if (puntosResult.ok) setPuntos(puntosResult.data);
       setLoading(false);
     }
@@ -372,8 +378,8 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   }, []);
 
   async function handleGuardar({ inspeccion, puntos: puntosPayload, cierre, fotos }) {
-    const result = await crearInspeccionMP({ fecha: todayISO(), jornada: "07:00–17:00", inspeccion, puntos: puntosPayload, cierre }, currentUser);
-    if (!result.ok) { window.alert("No fue posible guardar la recepción."); return; }
+    const result = await crearInspeccionUnica({ planta: PLANTA, fecha: todayISO(), jornada: "07:00–17:00", inspeccion, puntos: puntosPayload, cierre }, currentUser);
+    if (!result.ok) { window.alert("No fue posible guardar la inspección."); return; }
     const inspeccionId = result.data?.calidad_inspecciones?.[0]?.id;
     if (inspeccionId && fotos?.length) {
       for (const foto of fotos) {
@@ -385,16 +391,16 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   }
 
   async function handleDelete(id) {
-    if (!window.confirm("¿Eliminar esta recepción por completo? Se borran también su inspección y fotos de evidencia. Esta acción no se puede deshacer.")) return;
+    if (!window.confirm("¿Eliminar esta inspección por completo? Se borran también sus puntos de control y fotos de evidencia. Esta acción no se puede deshacer.")) return;
     const result = await deleteRecorrido(id);
-    if (!result.ok) { window.alert("No fue posible eliminar la recepción."); return; }
+    if (!result.ok) { window.alert("No fue posible eliminar la inspección."); return; }
     if (verId === id) setVerId(null);
     loadRegistros();
   }
 
   if (loading) return <div className="py-10 text-center text-sm font-medium text-[#94a3b8]">Cargando…</div>;
 
-  const registrosFiltrados = aplicarFiltrosRegistros(registros, filtros, camposBusquedaMP);
+  const registrosFiltrados = aplicarFiltrosRegistros(registros, filtros, camposBusquedaPlanta1);
   const grupos = agruparPorMes(registrosFiltrados);
   const filtrosActivos = Object.values(filtros).filter(Boolean).length;
   const verRegistro = registros.find((r) => r.id === verId) || null;
@@ -408,8 +414,8 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
       `}</style>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
-          <h2 className="text-xl font-bold tracking-tight text-[#0f1f3d]">Recepciones de materia prima</h2>
-          <HelpTip>Cada recepción es un registro completo (identificación, puntos de control y su propio cierre/dictamen con firmas) — puede haber varias el mismo día, una por cada entrega que llegue. Se identifica por fecha, hora e inspectora, no por un folio consecutivo.</HelpTip>
+          <h2 className="text-xl font-bold tracking-tight text-[#0f1f3d]">Inspecciones de Planta 1</h2>
+          <HelpTip>Cada inspección es un registro completo (identificación, puntos de control y su propio cierre/dictamen con firmas) — puede haber varias OPs inspeccionadas el mismo día. Se identifica por fecha, hora e inspectora, no por un folio consecutivo.</HelpTip>
         </div>
         {filtrosActivos > 0 && (
           <p className="text-xs text-[#94a3b8]">Mostrando {registrosFiltrados.length} de {registros.length}</p>
@@ -423,7 +429,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
             onClick={() => setShowForm(true)}
             className="gc-gold-pulse flex-1 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-[#c9a227] bg-white px-2 py-2 text-xs font-semibold text-[#96771a] transition active:scale-[0.98] sm:text-sm"
           >
-            📥 + Nueva recepción
+            📥 + Nueva inspección
           </button>
         )}
         {registros.length > 0 && (
@@ -460,7 +466,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
               <input
                 value={filtros.busqueda}
                 onChange={(e) => setFiltros((f) => ({ ...f, busqueda: e.target.value }))}
-                placeholder="Proveedor, MP, OC/Lote, inspectora…"
+                placeholder="Proceso, OP, código, línea/operador, inspectora…"
                 className={inputClass}
               />
             </label>
@@ -493,10 +499,10 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
       )}
 
       {registros.length === 0 ? (
-        <div className={`${cardClass} py-10 text-center text-sm font-medium text-[#94a3b8]`}>Aún no hay recepciones registradas.</div>
+        <div className={`${cardClass} py-10 text-center text-sm font-medium text-[#94a3b8]`}>Aún no hay inspecciones registradas.</div>
       ) : registrosFiltrados.length === 0 ? (
         <div className={`${cardClass} py-10 text-center text-sm font-medium text-[#94a3b8]`}>
-          Ninguna recepción coincide con los filtros.{" "}
+          Ninguna inspección coincide con los filtros.{" "}
           <button type="button" onClick={() => setFiltros(FILTROS_VACIO)} className="font-semibold text-[#96771a] underline">Limpiar filtros</button>
         </div>
       ) : (
@@ -534,18 +540,18 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
           onClose={() => setVerId(null)}
           onDelete={handleDelete}
           onEvidenciaChange={loadRegistros}
-          renderIdentificacion={renderIdentificacionMP}
-          tituloEliminar="Eliminar recepción"
+          renderIdentificacion={renderIdentificacionPlanta1}
+          tituloEliminar="Eliminar inspección"
         />
       )}
 
       {showImprimir && (
         <ImprimirModal
           registros={registros}
-          area="Materia Prima"
-          nombreRegistroSingular="recepción"
-          nombreRegistroPlural="recepciones"
-          renderResumenItem={(r, insp) => `${insp?.producto_texto || "—"} · ${r.dictamen}`}
+          area="Planta 1"
+          nombreRegistroSingular="inspección"
+          nombreRegistroPlural="inspecciones"
+          renderResumenItem={(r, insp) => `${insp?.proceso || "—"} · OP ${insp?.op || "—"} · ${r.dictamen}`}
           onCancel={() => setShowImprimir(false)}
           onConfirmar={(job) => { setPrintJob(job); setShowImprimir(false); }}
         />
@@ -553,7 +559,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
 
       {printJob && createPortal(
         <div className="gc-print-portal">
-          <ReciboImprimible registros={printJob.registros} puntosCatalogo={puntos} tituloEncabezado={printJob.encabezado} incluirFotos={printJob.incluirFotos} formato={FORMATO_MP} />
+          <ReciboImprimible registros={printJob.registros} puntosCatalogo={puntos} tituloEncabezado={printJob.encabezado} incluirFotos={printJob.incluirFotos} formato={FORMATO_PLANTA1} />
         </div>,
         document.body
       )}
