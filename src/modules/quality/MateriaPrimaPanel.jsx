@@ -134,6 +134,52 @@ function dictamenCorto(d) {
   return d || "—";
 }
 
+function ddmmyyyy(iso) {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+// Rango de fechas para imprimir "varias inspecciones" — semana de lunes a
+// domingo (la recepción de MP no respeta un calendario laboral fijo).
+function inicioSemanaISO(fechaISO) {
+  const d = new Date(`${fechaISO}T00:00:00`);
+  const dia = d.getDay();
+  d.setDate(d.getDate() + (dia === 0 ? -6 : 1 - dia));
+  return d.toISOString().slice(0, 10);
+}
+function finSemanaISO(fechaISO) {
+  const d = new Date(`${inicioSemanaISO(fechaISO)}T00:00:00`);
+  d.setDate(d.getDate() + 6);
+  return d.toISOString().slice(0, 10);
+}
+function finMesISO(fechaISO) {
+  const [y, m] = fechaISO.split("-").map(Number);
+  return `${fechaISO.slice(0, 7)}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+}
+function calcularPeriodo(periodo, fechaRef) {
+  if (periodo === "dia") return { desde: fechaRef, hasta: fechaRef, label: `Día ${ddmmyyyy(fechaRef)}` };
+  if (periodo === "semana") {
+    const desde = inicioSemanaISO(fechaRef);
+    const hasta = finSemanaISO(fechaRef);
+    return { desde, hasta, label: `Semana ${ddmmyyyy(desde)} – ${ddmmyyyy(hasta)}` };
+  }
+  const desde = `${fechaRef.slice(0, 7)}-01`;
+  const hasta = finMesISO(fechaRef);
+  return { desde, hasta, label: `Mes ${MES_LABEL[Number(fechaRef.slice(5, 7)) - 1]} ${fechaRef.slice(0, 4)}` };
+}
+
+function construirEncabezadoImpresion(modo, registrosSel, periodoLabel) {
+  const jornada = registrosSel[0]?.jornada || "07:00–17:00";
+  if (modo === "una") {
+    const r = registrosSel[0];
+    return `Fecha: ${ddmmyyyy(r.fecha)}    Inspectora: ${r.inspectora_nombre || "—"}    Jornada: ${jornada}    Área: Materia Prima`;
+  }
+  const inspectoras = [...new Set(registrosSel.map((r) => r.inspectora_nombre).filter(Boolean))];
+  const inspectoraLabel = inspectoras.length === 0 ? "—" : inspectoras.length === 1 ? inspectoras[0] : "Varias";
+  return `${periodoLabel}    Inspectora: ${inspectoraLabel}    Jornada: ${jornada}    Área: Materia Prima`;
+}
+
 function CampoTexto({ label, value }) {
   return (
     <div>
@@ -506,6 +552,208 @@ function DetalleInspeccionModal({ registro, puntosCatalogo, currentUser, canEdit
   );
 }
 
+// Ventana para elegir qué imprimir: una inspección puntual, o varias dentro
+// de un período (día/semana/mes) — pedido explícito. La lista de candidatos
+// siempre usa TODOS los registros cargados (no el filtro de búsqueda activo
+// en pantalla), porque imprimir es una acción independiente de esa vista.
+function ImprimirModal({ registros, onCancel, onConfirmar }) {
+  const [modo, setModo] = useState("una");
+  const [unaId, setUnaId] = useState(null);
+  const [periodo, setPeriodo] = useState("dia");
+  const [fechaRef, setFechaRef] = useState(todayISO());
+
+  const registrosOrdenados = [...registros].sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
+  const { label, desde, hasta } = calcularPeriodo(periodo, fechaRef);
+  const registrosPeriodo = registros
+    .filter((r) => r.fecha >= desde && r.fecha <= hasta)
+    .sort((a, b) => {
+      if (a.fecha !== b.fecha) return a.fecha < b.fecha ? -1 : 1;
+      const ha = a.calidad_inspecciones?.[0]?.hora || "";
+      const hb = b.calidad_inspecciones?.[0]?.hora || "";
+      return ha < hb ? -1 : ha > hb ? 1 : 0;
+    });
+  const registroUna = registrosOrdenados.find((r) => r.id === unaId) || null;
+  const puedeImprimir = modo === "una" ? !!registroUna : registrosPeriodo.length > 0;
+
+  function confirmar() {
+    if (modo === "una") {
+      onConfirmar({ registros: [registroUna], encabezado: construirEncabezadoImpresion("una", [registroUna], "") });
+    } else {
+      onConfirmar({ registros: registrosPeriodo, encabezado: construirEncabezadoImpresion("varias", registrosPeriodo, label) });
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <div className={`${cardClass} flex max-h-[90vh] w-full flex-col rounded-b-none sm:max-w-md sm:rounded-2xl`}>
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#edf0f4] px-4 py-3">
+          <p className="text-sm font-bold text-[#0f1f3d]">Imprimir recepciones</p>
+          <button type="button" onClick={onCancel} className="rounded-lg border border-[#edf0f4] px-2 py-1 text-xs font-semibold text-[#5b6472]">✕</button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="mb-3 flex rounded-xl border border-[#edf0f4] p-1">
+            {[["una", "Una inspección"], ["varias", "Varias inspecciones"]].map(([key, texto]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setModo(key)}
+                className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${modo === key ? "bg-[#0b1f3a] text-white" : "text-[#5b6472]"}`}
+              >
+                {texto}
+              </button>
+            ))}
+          </div>
+
+          {modo === "una" ? (
+            registrosOrdenados.length === 0 ? (
+              <p className="py-6 text-center text-sm text-[#94a3b8]">No hay recepciones registradas.</p>
+            ) : (
+              <div className="max-h-64 space-y-1.5 overflow-y-auto">
+                {registrosOrdenados.map((r) => {
+                  const insp = r.calidad_inspecciones?.[0];
+                  const activo = unaId === r.id;
+                  return (
+                    <div
+                      key={r.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setUnaId(r.id)}
+                      className={`cursor-pointer rounded-xl border p-2.5 text-xs transition ${activo ? "border-[#c9a227] bg-[#fdf7e6]" : "border-[#edf0f4] bg-white"}`}
+                    >
+                      <p className="font-semibold text-[#0f1f3d]">{r.fecha} · {horaCorta(insp?.hora)} · {r.inspectora_nombre || "—"}</p>
+                      <p className="text-[#5b6472]">{insp?.producto_texto || "—"} · {r.dictamen}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : (
+            <div className="space-y-3">
+              <div className="flex rounded-xl border border-[#edf0f4] p-1">
+                {[["dia", "Día"], ["semana", "Semana"], ["mes", "Mes"]].map(([key, texto]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setPeriodo(key)}
+                    className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${periodo === key ? "bg-[#0b1f3a] text-white" : "text-[#5b6472]"}`}
+                  >
+                    {texto}
+                  </button>
+                ))}
+              </div>
+              <label className={`${labelClass} block`}>
+                Fecha de referencia
+                <input type="date" value={fechaRef} onChange={(e) => setFechaRef(e.target.value)} className={inputClass} />
+              </label>
+              <p className="rounded-lg bg-[#f7f7f4] px-2.5 py-1.5 text-xs font-medium text-[#5b6472]">
+                {label}: {registrosPeriodo.length} recepción(es) encontrada(s).
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex shrink-0 gap-2 border-t border-[#edf0f4] p-3">
+          <button type="button" onClick={confirmar} disabled={!puedeImprimir} className={`flex-1 ${btnPrimaryClass}`}>🖨️ Imprimir</button>
+          <button type="button" onClick={onCancel} className={btnGhostClass}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Reproduce el formato F-GC-01U tal como está en el Excel original (título,
+// encabezado, instrucciones, columnas, leyenda y criterio son texto fijo,
+// idéntico al archivo fuente) y llena las filas con las inspecciones
+// elegidas en ImprimirModal. Solo visible al imprimir (ver clase
+// "hidden print:block" en el contenedor que lo envuelve).
+const EXCEL_COLUMNAS = ["Hora", "OC / Lote", "Proveedor", "MP a inspeccionar", "Lote / Identificación", "Cant.", "Muestra", "A", "B", "C", "D", "E", "F", "G", "Resultado", "Clasif.", "Observación / evidencia", "Acción / Reinspección"];
+const EXCEL_LETRAS = ["A", "B", "C", "D", "E", "F", "G"];
+
+function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado }) {
+  function valorPorLetra(insp, letra) {
+    const punto = puntosCatalogo.find((p) => p.letra === letra);
+    const pp = punto && (insp.calidad_inspeccion_puntos || []).find((x) => x.punto_control_id === punto.id);
+    return pp?.valor || "";
+  }
+
+  return (
+    <div className="p-4 text-black" style={{ fontFamily: "Arial, sans-serif" }}>
+      <p className="text-center text-base font-bold">RECEPCIÓN DE MATERIA PRIMA</p>
+      <p className="text-center text-[10px]">FÁBRICA DE MUEBLES VIKINGO &nbsp;·&nbsp; GESTIÓN DE CALIDAD &nbsp;·&nbsp; Código: F-GC-01U &nbsp;·&nbsp; Versión: 00</p>
+      <p className="mt-2 text-xs">{tituloEncabezado}</p>
+      <p className="mt-1 text-[9px] italic">
+        Una fila = una inspección realizada. Marcar puntos: C = Cumple, NC = No Cumple, NA = No aplica. Si existe NC, registrar clasificación, evidencia, acción y reinspección/liberación.
+      </p>
+
+      <table className="mt-2 w-full border-collapse text-[8px]">
+        <thead>
+          <tr>
+            {EXCEL_COLUMNAS.map((h) => (
+              <th key={h} className="border border-black px-1 py-0.5 font-bold">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {registros.map((r) => {
+            const insp = r.calidad_inspecciones?.[0];
+            if (!insp) return null;
+            return (
+              <tr key={r.id}>
+                <td className="border border-black px-1 py-0.5">{horaCorta(insp.hora)}</td>
+                <td className="border border-black px-1 py-0.5">{insp.oc_lote}</td>
+                <td className="border border-black px-1 py-0.5">{insp.proveedor}</td>
+                <td className="border border-black px-1 py-0.5">{insp.producto_texto}</td>
+                <td className="border border-black px-1 py-0.5">{insp.lote_identificacion}</td>
+                <td className="border border-black px-1 py-0.5 text-center">{insp.cantidad}</td>
+                <td className="border border-black px-1 py-0.5 text-center">{insp.muestra}</td>
+                {EXCEL_LETRAS.map((l) => (
+                  <td key={l} className="border border-black px-1 py-0.5 text-center">{valorPorLetra(insp, l)}</td>
+                ))}
+                <td className="border border-black px-1 py-0.5">{insp.resultado}</td>
+                <td className="border border-black px-1 py-0.5">{insp.clasificacion || ""}</td>
+                <td className="border border-black px-1 py-0.5">{insp.observacion}</td>
+                <td className="border border-black px-1 py-0.5">{insp.accion_reinspeccion}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <p className="mt-3 text-[9px] font-bold">LEYENDA DE PUNTOS DE CONTROL</p>
+      <div className="grid grid-cols-2 gap-x-6 text-[9px]">
+        <p>A = Identificación / material vs OC</p><p>B = Cantidad / presentación</p>
+        <p>C = Dimensión / calibre / espesor</p><p>D = Condición física / integridad</p>
+        <p>E = Humedad / contaminación</p><p>F = Color / tono / apariencia</p>
+        <p>G = Criterio técnico específico</p><p></p>
+      </div>
+      <p className="mt-2 text-[9px]">
+        CRITERIO: La Matriz / plano / ficha técnica vigente establece la aceptación. Ante condición no contemplada: no asumir; documentar y escalar a Gestión de Calidad.
+      </p>
+
+      <p className="mt-3 text-[9px] font-bold">
+        {registros.length === 1 ? "CIERRE / DICTAMEN DEL RECORRIDO" : "CIERRE / DICTAMEN POR RECEPCIÓN"}
+      </p>
+      {registros.map((r) => (
+        <div key={r.id} className="mt-1 text-[9px]">
+          {registros.length > 1 && (
+            <p className="font-semibold">{ddmmyyyy(r.fecha)} · {horaCorta(r.calidad_inspecciones?.[0]?.hora)}</p>
+          )}
+          <p>
+            {["Conforme", "Conforme con observación", "Producto No Conforme"].map((d) => (
+              <span key={d} className="mr-3">{r.dictamen === d ? "☑" : "☐"} {d}</span>
+            ))}
+          </p>
+          <p>Observación general / pendientes: {r.observacion_general || "—"}</p>
+          <p>
+            Firma Inspectora: {r.firma_inspectora || "—"} &nbsp;&nbsp; Responsable de área: {r.responsable_area_nombre || "—"} &nbsp;&nbsp; Gerente de Calidad: {r.gerente_calidad_nombre || "—"}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   const [puntos, setPuntos] = useState([]);
   const [registros, setRegistros] = useState([]);
@@ -514,11 +762,19 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   const [verId, setVerId] = useState(null);
   const [filtros, setFiltros] = useState(FILTROS_VACIO);
   const [showFiltros, setShowFiltros] = useState(false);
+  const [showImprimir, setShowImprimir] = useState(false);
+  const [printJob, setPrintJob] = useState(null);
 
   async function loadRegistros() {
     const result = await getInspeccionesMP();
     if (result.ok) setRegistros(result.data);
   }
+
+  useEffect(() => {
+    if (!printJob) return;
+    const t = setTimeout(() => window.print(), 50);
+    return () => clearTimeout(t);
+  }, [printJob]);
 
   useEffect(() => {
     async function init() {
@@ -583,7 +839,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
           <button
             type="button"
             onClick={() => setShowForm(true)}
-            className="gc-gold-pulse flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border-2 border-[#c9a227] bg-white px-2 py-2 text-xs font-semibold text-[#96771a] transition active:scale-[0.98] sm:text-sm"
+            className="gc-gold-pulse flex-1 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-[#c9a227] bg-white px-2 py-2 text-xs font-semibold text-[#96771a] transition active:scale-[0.98] sm:text-sm"
           >
             📥 + Nueva recepción
           </button>
@@ -592,17 +848,16 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
           <button
             type="button"
             onClick={() => setShowFiltros((v) => !v)}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#edf0f4] bg-white px-2 py-2 text-xs font-semibold text-[#0f1f3d] transition active:scale-[0.98] sm:text-sm"
+            className="inline-flex w-20 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-xl border border-[#edf0f4] bg-white px-1.5 py-2 text-xs font-semibold text-[#0f1f3d] transition active:scale-[0.98]"
           >
             🔍 Filtros
             {filtrosActivos > 0 && <span className="rounded-full bg-[#c9a227] px-1.5 py-0.5 text-[10px] font-bold text-white">{filtrosActivos}</span>}
-            <span className={`text-[#94a3b8] transition-transform ${showFiltros ? "rotate-180" : ""}`}>⌄</span>
           </button>
         )}
         {registros.length > 0 && (
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => setShowImprimir(true)}
             title="Imprimir"
             className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#edf0f4] bg-white transition active:scale-95"
           >
@@ -701,6 +956,18 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
           onEvidenciaChange={loadRegistros}
         />
       )}
+
+      {showImprimir && (
+        <ImprimirModal
+          registros={registros}
+          onCancel={() => setShowImprimir(false)}
+          onConfirmar={(job) => { setPrintJob(job); setShowImprimir(false); }}
+        />
+      )}
+
+      <div className="hidden print:block">
+        {printJob && <ReciboImprimible registros={printJob.registros} puntosCatalogo={puntos} tituloEncabezado={printJob.encabezado} />}
+      </div>
     </div>
   );
 }
