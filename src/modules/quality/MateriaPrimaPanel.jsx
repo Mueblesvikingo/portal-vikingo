@@ -558,24 +558,35 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
         @keyframes gcGoldPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(201,162,39,0.35); } 50% { box-shadow: 0 0 0 7px rgba(201,162,39,0.10); } }
         .gc-gold-pulse { animation: gcGoldPulse 2.8s ease-in-out infinite; }
       `}</style>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <h2 className="text-xl font-bold tracking-tight text-[#0f1f3d]">Recepciones de materia prima</h2>
-            <HelpTip>Cada recepción es un registro completo (identificación, puntos de control y su propio cierre/dictamen con firmas) — puede haber varias el mismo día, una por cada entrega que llegue. Se identifica por fecha, hora e inspectora, no por un folio consecutivo.</HelpTip>
-          </div>
-          <p className="text-sm text-[#5b6472]">Recepción de Materia Prima · F-GC-01U</p>
-          {filtrosActivos > 0 && (
-            <p className="text-xs text-[#94a3b8]">Mostrando {registrosFiltrados.length} de {registros.length}</p>
-          )}
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <h2 className="text-xl font-bold tracking-tight text-[#0f1f3d]">Recepciones de materia prima</h2>
+          <HelpTip>Cada recepción es un registro completo (identificación, puntos de control y su propio cierre/dictamen con firmas) — puede haber varias el mismo día, una por cada entrega que llegue. Se identifica por fecha, hora e inspectora, no por un folio consecutivo.</HelpTip>
         </div>
+        {filtrosActivos > 0 && (
+          <p className="text-xs text-[#94a3b8]">Mostrando {registrosFiltrados.length} de {registros.length}</p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2">
         {canEdit && !showForm && (
           <button
             type="button"
             onClick={() => setShowForm(true)}
-            className="gc-gold-pulse inline-flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#c9a227] bg-white px-4 py-2.5 text-sm font-semibold text-[#96771a] transition active:scale-[0.98] sm:flex-none"
+            className="gc-gold-pulse flex-[2] inline-flex items-center justify-center gap-1.5 rounded-xl border-2 border-[#c9a227] bg-white px-2 py-2 text-xs font-semibold text-[#96771a] transition active:scale-[0.98] sm:text-sm"
           >
             📥 + Nueva recepción
+          </button>
+        )}
+        {registros.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowFiltros((v) => !v)}
+            className="flex-[1] inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#edf0f4] bg-white px-2 py-2 text-xs font-semibold text-[#0f1f3d] transition active:scale-[0.98] sm:text-sm"
+          >
+            🔍 Filtros
+            {filtrosActivos > 0 && <span className="rounded-full bg-[#c9a227] px-1.5 py-0.5 text-[10px] font-bold text-white">{filtrosActivos}</span>}
+            <span className={`text-[#94a3b8] transition-transform ${showFiltros ? "rotate-180" : ""}`}>⌄</span>
           </button>
         )}
       </div>
@@ -584,17 +595,9 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
         <NuevaInspeccionForm puntos={puntos} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
       )}
 
-      {registros.length > 0 && (
+      {registros.length > 0 && showFiltros && (
         <div className={`${cardClass} p-3`}>
-          <div role="button" tabIndex={0} onClick={() => setShowFiltros((v) => !v)} className="flex cursor-pointer items-center justify-between gap-2">
-            <span className="flex items-center gap-1.5 text-sm font-semibold text-[#0f1f3d]">
-              🔍 Filtros
-              {filtrosActivos > 0 && <span className="rounded-full bg-[#c9a227] px-1.5 py-0.5 text-[10px] font-bold text-white">{filtrosActivos}</span>}
-            </span>
-            <span className={`shrink-0 text-[#94a3b8] transition-transform ${showFiltros ? "rotate-180" : ""}`}>⌄</span>
-          </div>
-          {showFiltros && (
-            <div className="mt-3 space-y-2.5 border-t border-[#edf0f4] pt-3">
+          <div className="space-y-2.5">
               <label className={`${labelClass} block`}>
                 Buscar
                 <input
@@ -629,7 +632,6 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
                 </button>
               )}
             </div>
-          )}
         </div>
       )}
 
