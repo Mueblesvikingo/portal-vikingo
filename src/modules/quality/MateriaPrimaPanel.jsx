@@ -835,8 +835,8 @@ function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, incluir
           return <p className="mt-3 px-2 text-[9px] italic">No hay fotos de evidencia registradas para esta selección.</p>;
         }
         return (
-          <div className="mt-3" style={{ pageBreakBefore: "always" }}>
-            <p className="px-2 py-1 text-[9px] font-bold text-white" style={{ background: EXCEL_COLOR.titulo }}>EVIDENCIA FOTOGRÁFICA</p>
+          <div className="mt-3">
+            <p className="px-2 py-1 text-[9px] font-bold text-white" style={{ background: EXCEL_COLOR.titulo, pageBreakAfter: "avoid" }}>EVIDENCIA FOTOGRÁFICA</p>
             <div className="mt-1 flex flex-wrap" style={{ gap: "8px" }}>
               {fotos.map(({ ev, r, insp, indice }) => (
                 <div key={ev.id} className="gc-foto-box flex flex-col border border-black" style={{ width: "calc(50% - 4px)", height: "3.5in" }}>
