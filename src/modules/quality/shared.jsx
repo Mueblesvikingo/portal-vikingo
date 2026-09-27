@@ -509,7 +509,32 @@ export function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, 
 // el botón de eliminar y la evidencia fotográfica. `renderIdentificacion` y
 // `renderCantidadMuestra` dejan que cada panel arme sus propios campos
 // (difieren por planta); Puntos/Resultado/Cierre son 100% genéricos.
-export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, canEdit, onClose, onDelete, onEvidenciaChange, renderIdentificacion, renderCantidadMuestra, tituloEliminar = "Eliminar registro" }) {
+function NombreFirma({ nombre, fecha }) {
+  return (
+    <span className="text-[11px] font-bold text-slate-700">
+      {nombre}
+      {fecha && <span className="font-medium text-slate-400"> · {new Date(fecha).toLocaleDateString("es-MX")}</span>}
+    </span>
+  );
+}
+
+function BotonRecordatorio({ onEnviar }) {
+  const [estado, setEstado] = useState("idle"); // idle | enviando | enviado
+  if (estado === "enviado") return <span className="text-[10px] font-semibold text-emerald-600">Enviado ✓</span>;
+  return (
+    <button
+      type="button"
+      title="Enviar recordatorio"
+      disabled={estado === "enviando"}
+      onClick={async () => { setEstado("enviando"); await onEnviar(); setEstado("enviado"); }}
+      className="rounded-full border border-[#edf0f4] bg-white px-1.5 py-0.5 text-[11px] transition active:scale-90 disabled:opacity-50"
+    >
+      🔔
+    </button>
+  );
+}
+
+export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, canEdit, onClose, onDelete, onEvidenciaChange, renderIdentificacion, renderCantidadMuestra, tituloEliminar = "Eliminar registro", gerenteCalidadPersonaId, onFirmarResponsable, onFirmarGerente, onEnviarRecordatorio }) {
   const [openSection, setOpenSection] = useState("identificacion");
   const insp = registro.calidad_inspecciones?.[0];
   if (!insp) return null;
@@ -603,18 +628,38 @@ export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, ca
               <div className="grid gap-2 sm:grid-cols-3">
                 <FirmaCard rol="Inspectora" firmado={!!registro.firma_inspectora}>
                   {registro.firma_inspectora
-                    ? <span className="text-[11px] font-bold text-slate-700">{registro.firma_inspectora}</span>
+                    ? <NombreFirma nombre={registro.firma_inspectora} />
                     : <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>}
                 </FirmaCard>
+
                 <FirmaCard rol="Supervisor de área" firmado={!!registro.responsable_area_nombre}>
-                  {registro.responsable_area_nombre
-                    ? <span className="text-[11px] font-bold text-slate-700">{registro.responsable_area_nombre}</span>
-                    : <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>}
+                  {registro.responsable_area_nombre ? (
+                    <NombreFirma nombre={registro.responsable_area_nombre} fecha={registro.responsable_area_firmado_at} />
+                  ) : Number(currentUser?.persona_id) === Number(registro.responsable_area_persona_id) ? (
+                    <button type="button" onClick={() => onFirmarResponsable(registro)} className="mt-0.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Firmar</button>
+                  ) : (
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>
+                      {canEdit && registro.responsable_area_persona_id && (
+                        <BotonRecordatorio onEnviar={() => onEnviarRecordatorio(registro.responsable_area_persona_id, registro)} />
+                      )}
+                    </div>
+                  )}
                 </FirmaCard>
+
                 <FirmaCard rol="Gerente de Calidad" firmado={!!registro.gerente_calidad_nombre}>
-                  {registro.gerente_calidad_nombre
-                    ? <span className="text-[11px] font-bold text-slate-700">{registro.gerente_calidad_nombre}</span>
-                    : <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>}
+                  {registro.gerente_calidad_nombre ? (
+                    <NombreFirma nombre={registro.gerente_calidad_nombre} fecha={registro.gerente_calidad_firmado_at} />
+                  ) : Number(currentUser?.persona_id) === gerenteCalidadPersonaId ? (
+                    <button type="button" onClick={() => onFirmarGerente(registro)} className="mt-0.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Firmar</button>
+                  ) : (
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>
+                      {canEdit && (
+                        <BotonRecordatorio onEnviar={() => onEnviarRecordatorio(gerenteCalidadPersonaId, registro)} />
+                      )}
+                    </div>
+                  )}
                 </FirmaCard>
               </div>
             </AccordionSection>

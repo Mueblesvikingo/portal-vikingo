@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getPendingRecordatorios, markRecordatorioVisto } from "../services/pmoService";
 import { getFichasFirmadasPendientesAviso, marcarFirmaAvisoVisto } from "../services/auditoriasService";
 import { getPendingAccionNotificaciones, marcarNotificacionVista } from "../services/accionesService";
+import { getPendingCalidadRecordatorios, markCalidadRecordatorioVisto } from "../services/calidadService";
 
 const POLL_INTERVAL_MS = 30000;
 
@@ -28,6 +29,7 @@ export default function NotificationBell({ currentUser }) {
   const [recordatorios, setRecordatorios] = useState([]);
   const [firmas, setFirmas] = useState([]);
   const [accionNotifs, setAccionNotifs] = useState([]);
+  const [calidadRecordatorios, setCalidadRecordatorios] = useState([]);
   const [open, setOpen] = useState(false);
   const [dismissing, setDismissing] = useState(null);
   const containerRef = useRef(null);
@@ -63,6 +65,18 @@ export default function NotificationBell({ currentUser }) {
     async function poll() {
       const result = await getPendingAccionNotificaciones(personaId);
       if (!cancelled) setAccionNotifs(result || []);
+    }
+    poll();
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [personaId]);
+
+  useEffect(() => {
+    if (!personaId) { setCalidadRecordatorios([]); return undefined; }
+    let cancelled = false;
+    async function poll() {
+      const result = await getPendingCalidadRecordatorios(personaId);
+      if (!cancelled) setCalidadRecordatorios(result.ok ? result.data : []);
     }
     poll();
     const interval = setInterval(poll, POLL_INTERVAL_MS);
@@ -107,6 +121,14 @@ export default function NotificationBell({ currentUser }) {
       mensaje: item.mensaje,
       when: item.created_at,
     })),
+    ...calidadRecordatorios.map((item) => ({
+      kind: "calidad",
+      id: item.id,
+      titulo: item.calidad_recorridos?.planta ? `Gestión de Calidad · ${item.calidad_recorridos.planta}` : "Gestión de Calidad",
+      mensaje: item.mensaje,
+      from: item.created_by_nombre,
+      when: item.created_at,
+    })),
   ];
 
   async function handleDismiss(item) {
@@ -121,6 +143,11 @@ export default function NotificationBell({ currentUser }) {
       await marcarNotificacionVista(item.id, { accionId: item.accionId, personaId, tipo: item.tipo });
       setDismissing(null);
       setAccionNotifs((current) => current.filter((a) => a.id !== item.id));
+    } else if (item.kind === "calidad") {
+      const result = await markCalidadRecordatorioVisto(item.id);
+      setDismissing(null);
+      if (!result?.ok) return;
+      setCalidadRecordatorios((current) => current.filter((r) => r.id !== item.id));
     } else {
       const result = await markRecordatorioVisto(item.id);
       setDismissing(null);

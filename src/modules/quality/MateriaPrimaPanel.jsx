@@ -7,6 +7,12 @@ import {
   deleteRecorrido,
   sugerirMuestreo,
   subirEvidencia,
+  getPersonasActivas,
+  firmarComoResponsableArea,
+  firmarComoGerenteCalidad,
+  createCalidadRecordatorio,
+  GERENTE_CALIDAD_PERSONA_ID,
+  GERENTE_CALIDAD_NOMBRE,
 } from "../../services/calidadService";
 import EvidenciaPicker from "./EvidenciaPicker";
 import HelpTip from "./HelpTip";
@@ -55,7 +61,7 @@ const FORM_VACIO = {
   observacion: "",
   accion_reinspeccion: "",
 };
-const CIERRE_VACIO = { dictamen: "", observacion_general: "", responsable_area_nombre: "", gerente_calidad_nombre: "", firmado: false };
+const CIERRE_VACIO = { dictamen: "", observacion_general: "", responsable_area_persona_id: "", firmado: false };
 
 // Filtros sobre texto libre (proveedor, MP, OC/Lote, inspectora) — no sobre
 // catálogos, porque Proveedores/Colaboradores/Productos aún no existen como
@@ -71,7 +77,7 @@ function camposBusquedaMP(r, insp) {
 // un "recorrido" que agrupe varias inspecciones (eso sí aplica a Planta
 // 1/2/3, donde hay un recorrido físico por la planta; aquí puede haber
 // varias recepciones el mismo día — cada entrega es su propio registro).
-function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
+function NuevaInspeccionForm({ puntos, personas, currentUser, onSave, onCancel }) {
   const [form, setForm] = useState(FORM_VACIO);
   const [valoresPuntos, setValoresPuntos] = useState({});
   const [cierre, setCierre] = useState(CIERRE_VACIO);
@@ -92,7 +98,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
   const puntosMarcados = Object.keys(valoresPuntos).filter((k) => valoresPuntos[k]).length;
   const hayNC = Object.values(valoresPuntos).includes("NC");
   const resultado = hayNC ? "No Conforme" : "Conforme";
-  const puedeGuardar = cierre.dictamen && cierre.firmado;
+  const puedeGuardar = cierre.dictamen && cierre.firmado && cierre.responsable_area_persona_id;
 
   async function handleSave() {
     setSaving(true);
@@ -257,21 +263,20 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
                 {cierre.firmado ? <span className="font-bold text-slate-700">{nombreInspectora}</span> : `Firmar como ${nombreInspectora}`}
               </label>
             </FirmaCard>
-            <FirmaCard rol="Supervisor de área" firmado={!!cierre.responsable_area_nombre}>
-              <input
-                value={cierre.responsable_area_nombre}
-                onChange={(e) => setCierre((c) => ({ ...c, responsable_area_nombre: e.target.value }))}
-                placeholder="Nombre de quien da el visto"
-                className="w-full bg-transparent text-[11px] font-bold text-slate-700 outline-none placeholder:font-medium placeholder:text-slate-400"
-              />
+            <FirmaCard rol="Supervisor de área" firmado={false}>
+              <select
+                value={cierre.responsable_area_persona_id}
+                onChange={(e) => setCierre((c) => ({ ...c, responsable_area_persona_id: e.target.value ? Number(e.target.value) : "" }))}
+                className="w-full bg-transparent text-[11px] font-bold text-slate-700 outline-none"
+              >
+                <option value="">Asignar a…</option>
+                {personas.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+              <p className="mt-1 text-[10px] font-medium text-slate-400">Firmará al revisar el registro.</p>
             </FirmaCard>
-            <FirmaCard rol="Gerente de Calidad" firmado={!!cierre.gerente_calidad_nombre}>
-              <input
-                value={cierre.gerente_calidad_nombre}
-                onChange={(e) => setCierre((c) => ({ ...c, gerente_calidad_nombre: e.target.value }))}
-                placeholder="Nombre de quien da el visto"
-                className="w-full bg-transparent text-[11px] font-bold text-slate-700 outline-none placeholder:font-medium placeholder:text-slate-400"
-              />
+            <FirmaCard rol="Gerente de Calidad" firmado={false}>
+              <p className="text-[11px] font-bold text-slate-700">{GERENTE_CALIDAD_NOMBRE}</p>
+              <p className="mt-1 text-[10px] font-medium text-slate-400">Firmará al revisar el registro.</p>
             </FirmaCard>
           </div>
         </AccordionSection>
@@ -283,7 +288,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
         </button>
         <button type="button" onClick={onCancel} className={btnGhostClass}>Cancelar</button>
       </div>
-      {!puedeGuardar && <p className="mt-2 text-[11px] text-[#94a3b8]">Falta el dictamen y la firma de la inspectora para poder guardar.</p>}
+      {!puedeGuardar && <p className="mt-2 text-[11px] text-[#94a3b8]">Falta el dictamen, la firma de la inspectora, o asignar el supervisor de área.</p>}
     </div>
   );
 }
@@ -336,6 +341,7 @@ function renderIdentificacionMP(insp) {
 
 export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   const [puntos, setPuntos] = useState([]);
+  const [personas, setPersonas] = useState([]);
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -375,8 +381,9 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   useEffect(() => {
     async function init() {
       setLoading(true);
-      const [puntosResult] = await Promise.all([getPuntosControl("Materia Prima"), loadRegistros()]);
+      const [puntosResult, personasResult] = await Promise.all([getPuntosControl("Materia Prima"), getPersonasActivas(), loadRegistros()]);
       if (puntosResult.ok) setPuntos(puntosResult.data);
+      if (personasResult.ok) setPersonas(personasResult.data);
       setLoading(false);
     }
     init();
@@ -402,6 +409,24 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
     if (!result.ok) { window.alert("No fue posible eliminar la recepción."); return; }
     if (verId === id) setVerId(null);
     loadRegistros();
+  }
+
+  async function handleFirmarResponsable(registro) {
+    const result = await firmarComoResponsableArea(registro.id, currentUser);
+    if (!result.ok) { window.alert(typeof result.error === "string" ? result.error : "No fue posible firmar."); return; }
+    loadRegistros();
+  }
+
+  async function handleFirmarGerente(registro) {
+    const result = await firmarComoGerenteCalidad(registro.id, currentUser);
+    if (!result.ok) { window.alert(typeof result.error === "string" ? result.error : "No fue posible firmar."); return; }
+    loadRegistros();
+  }
+
+  async function handleEnviarRecordatorio(destinatarioPersonaId, registro) {
+    const insp = registro.calidad_inspecciones?.[0];
+    const mensaje = `Tienes una firma pendiente en Gestión de Calidad · Materia Prima — recepción del ${registro.fecha}${insp?.producto_texto ? " · " + insp.producto_texto : ""}.`;
+    await createCalidadRecordatorio({ recorridoId: registro.id, destinatarioPersonaId, mensaje }, currentUser);
   }
 
   if (loading) return <div className="py-10 text-center text-sm font-medium text-[#94a3b8]">Cargando…</div>;
@@ -461,7 +486,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
       </div>
 
       {showForm && (
-        <NuevaInspeccionForm puntos={puntos} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
+        <NuevaInspeccionForm puntos={puntos} personas={personas} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
       )}
 
       {registros.length > 0 && showFiltros && (
@@ -548,6 +573,10 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
           onEvidenciaChange={loadRegistros}
           renderIdentificacion={renderIdentificacionMP}
           tituloEliminar="Eliminar recepción"
+          gerenteCalidadPersonaId={GERENTE_CALIDAD_PERSONA_ID}
+          onFirmarResponsable={handleFirmarResponsable}
+          onFirmarGerente={handleFirmarGerente}
+          onEnviarRecordatorio={handleEnviarRecordatorio}
         />
       )}
 

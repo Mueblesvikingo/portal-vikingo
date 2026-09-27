@@ -7,6 +7,23 @@ function actorFields(actor) {
   };
 }
 
+// Beatriz Ruiz Carreón (persona_id 11) es la Gerente de Calidad — una sola
+// persona, no un rol compartido por varias — mismo patrón que
+// COORDINADOR_SIG_PERSONA_ID / PM_PERSONA_ID en auditoriasService.js/pmoService.js.
+export const GERENTE_CALIDAD_PERSONA_ID = 11;
+export const GERENTE_CALIDAD_NOMBRE = "Ruiz Carreón Beatriz";
+
+export async function getPersonasActivas() {
+  try {
+    const { data, error } = await supabase.from("personas").select("id, nombre").eq("activo", true).order("nombre");
+    if (error) return { ok: false, error, data: [] };
+    return { ok: true, error: null, data: data || [] };
+  } catch (err) {
+    console.error("Error inesperado al leer personas:", err);
+    return { ok: false, error: err, data: [] };
+  }
+}
+
 // Plan de muestreo interno Vikingo (Ac/Re por tamaño de lote, hasta 50 piezas
 // por OP) — misma tabla del PDF compartido, para sugerir Muestra/Ac/Re
 // automáticamente y que la inspectora no tenga que consultarlo a mano. Ac/Re
@@ -216,8 +233,13 @@ export async function crearInspeccionUnica({ planta, fecha, jornada, inspeccion,
         dictamen: cierre.dictamen,
         observacion_general: cierre.observacion_general || null,
         firma_inspectora: nombre,
-        responsable_area_nombre: cierre.responsable_area_nombre || null,
-        gerente_calidad_nombre: cierre.gerente_calidad_nombre || null,
+        // Supervisor de área y Gerente de Calidad ya NO se capturan como
+        // texto libre al crear el registro: aquí solo se asigna QUIÉN debe
+        // firmar (persona_id) — la firma real (nombre + fecha) se guarda
+        // después, cuando esa persona entra y presiona "Firmar" (ver
+        // firmarComoResponsableArea / firmarComoGerenteCalidad).
+        responsable_area_persona_id: cierre.responsable_area_persona_id || null,
+        gerente_calidad_persona_id: GERENTE_CALIDAD_PERSONA_ID,
         cerrado_at: new Date().toISOString(),
       })
       .select("*")
@@ -267,6 +289,101 @@ export async function crearInspeccionUnica({ planta, fecha, jornada, inspeccion,
   } catch (err) {
     console.error("Error inesperado al crear inspección:", err);
     return { ok: false, error: err, data: null };
+  }
+}
+
+// Firmas reales — el servidor vuelve a validar quién puede firmar cada rol
+// (nunca confía en lo que mande el cliente), igual que
+// firmarFichaComoAuditado en auditoriasService.js.
+export async function firmarComoResponsableArea(recorridoId, actor) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    const { data: recorrido, error: findErr } = await supabase
+      .from("calidad_recorridos")
+      .select("responsable_area_persona_id")
+      .eq("id", recorridoId)
+      .maybeSingle();
+    if (findErr) return { ok: false, error: findErr, data: null };
+    if (!recorrido || Number(recorrido.responsable_area_persona_id) !== personaId) {
+      return { ok: false, error: "Solo el supervisor de área asignado a este registro puede firmar aquí.", data: null };
+    }
+    const { data, error } = await supabase
+      .from("calidad_recorridos")
+      .update({ responsable_area_nombre: nombre, responsable_area_firmado_at: new Date().toISOString() })
+      .eq("id", recorridoId)
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al firmar como supervisor de área:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function firmarComoGerenteCalidad(recorridoId, actor) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    if (personaId !== GERENTE_CALIDAD_PERSONA_ID) {
+      return { ok: false, error: "Solo la Gerente de Calidad puede firmar aquí.", data: null };
+    }
+    const { data, error } = await supabase
+      .from("calidad_recorridos")
+      .update({ gerente_calidad_nombre: nombre, gerente_calidad_firmado_at: new Date().toISOString() })
+      .eq("id", recorridoId)
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al firmar como Gerente de Calidad:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+// Recordatorios de firma pendiente — mismo esquema y flujo que
+// pmo_recordatorios/createRecordatorio (pmoService.js): se muestran en la
+// misma campanita de notificaciones (NotificationBell.jsx).
+export async function createCalidadRecordatorio({ recorridoId, destinatarioPersonaId, mensaje }, actor) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    const { data, error } = await supabase
+      .from("calidad_recordatorios")
+      .insert({ recorrido_id: recorridoId, destinatario_persona_id: destinatarioPersonaId, mensaje, created_by_persona_id: personaId, created_by_nombre: nombre })
+      .select("*")
+      .single();
+    if (error) return { ok: false, error, data: null };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al crear recordatorio de calidad:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+export async function getPendingCalidadRecordatorios(personaId) {
+  try {
+    const { data, error } = await supabase
+      .from("calidad_recordatorios")
+      .select("*, calidad_recorridos(fecha, planta, folio)")
+      .eq("destinatario_persona_id", personaId)
+      .eq("visto", false)
+      .order("created_at", { ascending: false });
+    if (error) return { ok: false, error, data: [] };
+    return { ok: true, error: null, data: data || [] };
+  } catch (err) {
+    console.error("Error inesperado al leer recordatorios de calidad:", err);
+    return { ok: false, error: err, data: [] };
+  }
+}
+
+export async function markCalidadRecordatorioVisto(id) {
+  try {
+    const { error } = await supabase.from("calidad_recordatorios").update({ visto: true, visto_at: new Date().toISOString() }).eq("id", id);
+    if (error) return { ok: false, error };
+    return { ok: true, error: null };
+  } catch (err) {
+    console.error("Error inesperado al marcar recordatorio de calidad como visto:", err);
+    return { ok: false, error: err };
   }
 }
 
