@@ -12,6 +12,7 @@ import EvidenciaPicker from "./EvidenciaPicker";
 import HelpTip from "./HelpTip";
 import { cardClass, btnPrimaryClass, btnGhostClass, STATUS_STYLES } from "./coreliTheme";
 import imprimirIcon from "../../assets/calidad-imprimir-icon.jpg";
+import vikingoLogo from "../../assets/vikingo-logo.png";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -422,7 +423,7 @@ function RegistroFila({ registro, onVer }) {
           {dictamenCorto(registro.dictamen)}
         </span>
       </td>
-      <td className="gc-no-print px-2 py-2 text-right align-top">
+      <td className="px-2 py-2 text-right align-top">
         <button
           type="button"
           onClick={() => onVer(registro)}
@@ -665,9 +666,18 @@ function ImprimirModal({ registros, onCancel, onConfirmar }) {
 // Reproduce el formato F-GC-01U tal como está en el Excel original (título,
 // encabezado, instrucciones, columnas, leyenda y criterio son texto fijo,
 // idéntico al archivo fuente) y llena las filas con las inspecciones
-// elegidas en ImprimirModal. Solo visible al imprimir (ver clase
-// "hidden print:block" en el contenedor que lo envuelve).
+// elegidas en ImprimirModal. Solo visible al imprimir (ver #gc-print-area).
+// Colores tomados directo del archivo Excel real (Interior.Color de cada
+// celda de encabezado en la hoja "MATERIA PRIMA" de FORMATOS DE INSPECCION.xlsx).
+const EXCEL_COLOR = {
+  titulo: "#2F3E46",
+  sub: "#52796F",
+  info: "#F1F5F3",
+  encabezadoTabla: "#D97706",
+  leyendaFondo: "#F8FAF9",
+};
 const EXCEL_COLUMNAS = ["Hora", "OC / Lote", "Proveedor", "MP a inspeccionar", "Lote / Identificación", "Cant.", "Muestra", "A", "B", "C", "D", "E", "F", "G", "Resultado", "Clasif.", "Observación / evidencia", "Acción / Reinspección"];
+const EXCEL_COL_ANCHOS = [4, 7, 7, 9, 9, 4, 4, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 6, 5, 17.5, 10];
 const EXCEL_LETRAS = ["A", "B", "C", "D", "E", "F", "G"];
 
 function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado }) {
@@ -678,19 +688,32 @@ function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado }) {
   }
 
   return (
-    <div className="p-4 text-black" style={{ fontFamily: "Arial, sans-serif" }}>
-      <p className="text-center text-base font-bold">RECEPCIÓN DE MATERIA PRIMA</p>
-      <p className="text-center text-[10px]">FÁBRICA DE MUEBLES VIKINGO &nbsp;·&nbsp; GESTIÓN DE CALIDAD &nbsp;·&nbsp; Código: F-GC-01U &nbsp;·&nbsp; Versión: 00</p>
-      <p className="mt-2 text-xs">{tituloEncabezado}</p>
-      <p className="mt-1 text-[9px] italic">
-        Una fila = una inspección realizada. Marcar puntos: C = Cumple, NC = No Cumple, NA = No aplica. Si existe NC, registrar clasificación, evidencia, acción y reinspección/liberación.
+    <div className="text-black" style={{ fontFamily: "Arial, sans-serif" }}>
+      <div className="flex items-center gap-3 px-3 py-2" style={{ background: EXCEL_COLOR.titulo }}>
+        <span className="shrink-0 rounded-md bg-white px-2 py-1">
+          <img src={vikingoLogo} alt="Vikingo" className="h-6 w-auto object-contain" />
+        </span>
+        <p className="flex-1 text-center text-base font-bold text-white">RECEPCIÓN DE MATERIA PRIMA</p>
+        <span className="w-[52px] shrink-0" />
+      </div>
+      <p className="px-3 py-1 text-center text-[10px] font-bold text-white" style={{ background: EXCEL_COLOR.sub }}>
+        FÁBRICA DE MUEBLES VIKINGO &nbsp;·&nbsp; GESTIÓN DE CALIDAD &nbsp;·&nbsp; Código: F-GC-01U &nbsp;·&nbsp; Versión: 00
       </p>
+      <div className="px-3 py-1.5" style={{ background: EXCEL_COLOR.info }}>
+        <p className="text-xs">{tituloEncabezado}</p>
+        <p className="mt-1 text-[9px] italic">
+          Una fila = una inspección realizada. Marcar puntos: C = Cumple, NC = No Cumple, NA = No aplica. Si existe NC, registrar clasificación, evidencia, acción y reinspección/liberación.
+        </p>
+      </div>
 
       <table className="mt-2 w-full border-collapse text-[8px]">
+        <colgroup>
+          {EXCEL_COL_ANCHOS.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
+        </colgroup>
         <thead>
-          <tr>
+          <tr style={{ background: EXCEL_COLOR.encabezadoTabla }}>
             {EXCEL_COLUMNAS.map((h) => (
-              <th key={h} className="border border-black px-1 py-0.5 font-bold">{h}</th>
+              <th key={h} className="border border-black px-1 py-1 font-bold text-white">{h}</th>
             ))}
           </tr>
         </thead>
@@ -720,22 +743,22 @@ function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado }) {
         </tbody>
       </table>
 
-      <p className="mt-3 text-[9px] font-bold">LEYENDA DE PUNTOS DE CONTROL</p>
-      <div className="grid grid-cols-2 gap-x-6 text-[9px]">
+      <p className="mt-3 px-2 py-1 text-[9px] font-bold text-white" style={{ background: EXCEL_COLOR.sub }}>LEYENDA DE PUNTOS DE CONTROL</p>
+      <div className="grid grid-cols-2 gap-x-6 px-2 py-1.5 text-[9px]" style={{ background: EXCEL_COLOR.leyendaFondo }}>
         <p>A = Identificación / material vs OC</p><p>B = Cantidad / presentación</p>
         <p>C = Dimensión / calibre / espesor</p><p>D = Condición física / integridad</p>
         <p>E = Humedad / contaminación</p><p>F = Color / tono / apariencia</p>
         <p>G = Criterio técnico específico</p><p></p>
       </div>
-      <p className="mt-2 text-[9px]">
+      <p className="px-2 py-1.5 text-[9px]">
         CRITERIO: La Matriz / plano / ficha técnica vigente establece la aceptación. Ante condición no contemplada: no asumir; documentar y escalar a Gestión de Calidad.
       </p>
 
-      <p className="mt-3 text-[9px] font-bold">
+      <p className="mt-3 px-2 py-1 text-[9px] font-bold text-white" style={{ background: EXCEL_COLOR.encabezadoTabla }}>
         {registros.length === 1 ? "CIERRE / DICTAMEN DEL RECORRIDO" : "CIERRE / DICTAMEN POR RECEPCIÓN"}
       </p>
       {registros.map((r) => (
-        <div key={r.id} className="mt-1 text-[9px]">
+        <div key={r.id} className="mt-1 px-2 py-1 text-[9px]">
           {registros.length > 1 && (
             <p className="font-semibold">{ddmmyyyy(r.fecha)} · {horaCorta(r.calidad_inspecciones?.[0]?.hora)}</p>
           )}
@@ -821,7 +844,18 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
         @keyframes gcGoldPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(201,162,39,0.35); } 50% { box-shadow: 0 0 0 7px rgba(201,162,39,0.10); } }
         .gc-gold-pulse { animation: gcGoldPulse 2.8s ease-in-out infinite; }
         @media print {
-          .gc-no-print { display: none !important; }
+          @page { size: letter landscape; margin: 10mm; }
+          body * { visibility: hidden; }
+          #gc-print-area, #gc-print-area * {
+            visibility: visible;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            color-adjust: exact;
+          }
+          #gc-print-area { position: absolute; left: 0; top: 0; width: 100%; }
+          #gc-print-area table { page-break-inside: auto; }
+          #gc-print-area tr { page-break-inside: avoid; }
+          #gc-print-area thead { display: table-header-group; }
         }
       `}</style>
       <div className="min-w-0">
@@ -834,7 +868,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
         )}
       </div>
 
-      <div className="gc-no-print flex items-center gap-2">
+      <div className="flex items-center gap-2">
         {canEdit && !showForm && (
           <button
             type="button"
@@ -867,13 +901,11 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
       </div>
 
       {showForm && (
-        <div className="gc-no-print">
-          <NuevaInspeccionForm puntos={puntos} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
-        </div>
+        <NuevaInspeccionForm puntos={puntos} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
       )}
 
       {registros.length > 0 && showFiltros && (
-        <div className={`${cardClass} gc-no-print p-3`}>
+        <div className={`${cardClass} p-3`}>
           <div className="space-y-2.5">
               <label className={`${labelClass} block`}>
                 Buscar
@@ -965,7 +997,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
         />
       )}
 
-      <div className="hidden print:block">
+      <div id="gc-print-area" className="hidden print:block">
         {printJob && <ReciboImprimible registros={printJob.registros} puntosCatalogo={puntos} tituloEncabezado={printJob.encabezado} />}
       </div>
     </div>
