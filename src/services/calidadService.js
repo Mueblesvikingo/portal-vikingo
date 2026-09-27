@@ -192,6 +192,100 @@ export async function createInspeccion(recorridoId, payload, puntos, actor) {
   }
 }
 
+// Materia Prima: a diferencia de Planta 1/2/3 (donde un recorrido SÍ agrupa
+// varias inspecciones bajo un cierre único al final de la jornada), aquí
+// cada captura es un registro autosuficiente — recepción + inspección +
+// cierre/firmas en un solo paso, porque puede haber varias recepciones el
+// mismo día (distintas entregas, distintas horas). Se identifica por fecha +
+// persona + hora, sin folio consecutivo por ahora.
+export async function crearInspeccionMP({ fecha, jornada, inspeccion, puntos, cierre }, actor) {
+  try {
+    const { personaId, nombre } = actorFields(actor);
+    const folio = `MP-${fecha.replace(/-/g, "")}-${(inspeccion.hora || "").replace(":", "")}`;
+    const { data: recorrido, error: recorridoError } = await supabase
+      .from("calidad_recorridos")
+      .insert({
+        planta: "Materia Prima",
+        folio,
+        fecha,
+        jornada: jornada || "07:00–17:00",
+        inspectora_persona_id: personaId,
+        inspectora_nombre: nombre,
+        dictamen: cierre.dictamen,
+        observacion_general: cierre.observacion_general || null,
+        firma_inspectora: nombre,
+        responsable_area_nombre: cierre.responsable_area_nombre || null,
+        gerente_calidad_nombre: cierre.gerente_calidad_nombre || null,
+        cerrado_at: new Date().toISOString(),
+      })
+      .select("*")
+      .single();
+    if (recorridoError) return { ok: false, error: recorridoError, data: null };
+
+    const { data: insp, error: inspError } = await supabase
+      .from("calidad_inspecciones")
+      .insert({
+        recorrido_id: recorrido.id,
+        hora: inspeccion.hora || null,
+        producto_texto: inspeccion.producto_texto || null,
+        proveedor: inspeccion.proveedor || null,
+        oc_lote: inspeccion.oc_lote || null,
+        lote_identificacion: inspeccion.lote_identificacion || null,
+        cantidad: inspeccion.cantidad || null,
+        muestra: inspeccion.muestra || null,
+        resultado: inspeccion.resultado || null,
+        clasificacion: inspeccion.clasificacion || null,
+        observacion: inspeccion.observacion || null,
+        accion_reinspeccion: inspeccion.accion_reinspeccion || null,
+        created_by_persona_id: personaId,
+        created_by_nombre: nombre,
+      })
+      .select("*")
+      .single();
+    if (inspError) {
+      // El recorrido quedaría huérfano (sin inspección) si esto falla — se
+      // revierte para no dejar un registro a medias.
+      await supabase.from("calidad_recorridos").delete().eq("id", recorrido.id);
+      return { ok: false, error: inspError, data: null };
+    }
+
+    if (puntos?.length) {
+      const rows = puntos.filter((p) => p.valor).map((p) => ({ inspeccion_id: insp.id, punto_control_id: p.punto_control_id, valor: p.valor }));
+      if (rows.length) {
+        const { error: puntosError } = await supabase.from("calidad_inspeccion_puntos").insert(rows);
+        if (puntosError) console.error("Error al guardar puntos de control:", puntosError);
+      }
+    }
+
+    return { ok: true, error: null, data: { ...recorrido, calidad_inspecciones: [insp] } };
+  } catch (err) {
+    console.error("Error inesperado al crear inspección de materia prima:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
+// Lista de registros de Materia Prima ya combinados (un recorrido = una
+// inspección, con sus puntos de control y evidencias embebidas) para la
+// vista de lista/detalle de una sola pieza.
+export async function getInspeccionesMP({ desde, hasta } = {}) {
+  try {
+    let query = supabase
+      .from("calidad_recorridos")
+      .select("*, calidad_inspecciones(*, calidad_inspeccion_puntos(*), calidad_evidencias(*))")
+      .eq("planta", "Materia Prima")
+      .order("fecha", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (desde) query = query.gte("fecha", desde);
+    if (hasta) query = query.lte("fecha", hasta);
+    const { data, error } = await query;
+    if (error) return { ok: false, error, data: [] };
+    return { ok: true, error: null, data: data || [] };
+  } catch (err) {
+    console.error("Error inesperado al leer inspecciones de materia prima:", err);
+    return { ok: false, error: err, data: [] };
+  }
+}
+
 export async function deleteInspeccion(id) {
   try {
     const { error } = await supabase.from("calidad_inspecciones").delete().eq("id", id);

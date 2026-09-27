@@ -1,18 +1,14 @@
 import { useEffect, useState } from "react";
 import {
   getPuntosControl,
-  getRecorridos,
-  createRecorrido,
-  cerrarRecorrido,
-  getInspecciones,
-  createInspeccion,
-  deleteInspeccion,
+  crearInspeccionMP,
+  getInspeccionesMP,
   deleteRecorrido,
   sugerirMuestreo,
 } from "../../services/calidadService";
 import EvidenciaUploader from "./EvidenciaUploader";
 import HelpTip from "./HelpTip";
-import { cardClass, btnPrimaryClass, btnSecondaryClass, btnGhostClass, statusBadgeClass } from "./coreliTheme";
+import { cardClass, btnPrimaryClass, btnGhostClass, statusBadgeClass } from "./coreliTheme";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -21,9 +17,9 @@ function nowHHMM() {
   return new Date().toTimeString().slice(0, 5);
 }
 const MES_LABEL = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-function agruparPorMes(recorridos) {
+function agruparPorMes(registros) {
   const grupos = new Map();
-  for (const r of recorridos) {
+  for (const r of registros) {
     const [anio, mes] = r.fecha.split("-").map(Number);
     const key = `${anio}-${mes}`;
     if (!grupos.has(key)) grupos.set(key, { label: `${MES_LABEL[mes - 1]} ${anio}`, items: [] });
@@ -32,7 +28,7 @@ function agruparPorMes(recorridos) {
   return Array.from(grupos.values());
 }
 
-const INSPECCION_VACIA = {
+const FORM_VACIO = {
   hora: nowHHMM(),
   oc_lote: "",
   proveedor: "",
@@ -43,6 +39,7 @@ const INSPECCION_VACIA = {
   observacion: "",
   accion_reinspeccion: "",
 };
+const CIERRE_VACIO = { dictamen: "", observacion_general: "", responsable_area_nombre: "", gerente_calidad_nombre: "", firmado: false };
 
 function PuntoControlChip({ letra, valor, onChange }) {
   const opciones = [
@@ -52,15 +49,16 @@ function PuntoControlChip({ letra, valor, onChange }) {
   ];
   return (
     <div className="flex items-center gap-1">
-      <span className="w-4 text-[11px] font-bold text-[#94a3b8]">{letra}</span>
+      {letra && <span className="w-4 text-[11px] font-bold text-[#94a3b8]">{letra}</span>}
       {opciones.map((o) => {
         const active = valor === o.key;
         return (
           <button
             key={o.key}
             type="button"
-            onClick={() => onChange(active ? null : o.key)}
-            className={`rounded-lg border px-1.5 py-0.5 text-[10px] font-semibold transition active:scale-95 ${active ? o.active : o.idle}`}
+            onClick={() => onChange && onChange(active ? null : o.key)}
+            disabled={!onChange}
+            className={`rounded-lg border px-1.5 py-0.5 text-[10px] font-semibold transition active:scale-95 ${active ? o.active : o.idle} ${!onChange ? "opacity-40" : ""}`}
           >
             {o.label}
           </button>
@@ -70,10 +68,9 @@ function PuntoControlChip({ letra, valor, onChange }) {
   );
 }
 
-// Sección desplegable — para ir llenando la inspección por partes en vez de
-// un formulario largo de un jalón (pedido explícito, pensado para celular).
-// Solo una sección abierta a la vez, misma regla que ya se usa para el
-// detalle de inspecciones en la lista.
+// Sección desplegable — para ir llenando el registro por partes en vez de un
+// formulario largo de un jalón (pedido explícito, pensado para celular).
+// Solo una sección abierta a la vez.
 function AccordionSection({ icon, title, subtitle, open, onToggle, children }) {
   return (
     <div className="overflow-hidden rounded-xl border border-[#edf0f4]">
@@ -93,13 +90,20 @@ function AccordionSection({ icon, title, subtitle, open, onToggle, children }) {
 const inputClass = "mt-1 w-full rounded-xl border border-[#edf0f4] bg-white px-3 py-2 text-sm font-medium text-[#0f1f3d] outline-none transition focus:border-[#c9a227] focus:shadow-[0_0_0_3px_rgba(201,162,39,0.2)]";
 const labelClass = "text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]";
 
-function NuevaInspeccionForm({ puntos, onSave, onCancel }) {
-  const [form, setForm] = useState(INSPECCION_VACIA);
+// Cada captura de Materia Prima es un registro completo y autosuficiente —
+// incluye su propio cierre/dictamen/firmas al final, en vez de depender de
+// un "recorrido" que agrupe varias inspecciones (eso sí aplica a Planta
+// 1/2/3, donde hay un recorrido físico por la planta; aquí puede haber
+// varias recepciones el mismo día — cada entrega es su propio registro).
+function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
+  const [form, setForm] = useState(FORM_VACIO);
   const [valoresPuntos, setValoresPuntos] = useState({});
+  const [cierre, setCierre] = useState(CIERRE_VACIO);
   const [saving, setSaving] = useState(false);
   const [clasificacion, setClasificacion] = useState("");
   const [openSection, setOpenSection] = useState("identificacion");
   const sugerencia = sugerirMuestreo(form.cantidad);
+  const nombreInspectora = currentUser?.nombre || currentUser?.usuario || "Inspectora";
 
   function setField(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -111,20 +115,22 @@ function NuevaInspeccionForm({ puntos, onSave, onCancel }) {
   const puntosMarcados = Object.keys(valoresPuntos).filter((k) => valoresPuntos[k]).length;
   const hayNC = Object.values(valoresPuntos).includes("NC");
   const resultado = hayNC ? "No Conforme" : "Conforme";
+  const puedeGuardar = cierre.dictamen && cierre.firmado;
 
   async function handleSave() {
     setSaving(true);
     const puntosPayload = puntos.map((p) => ({ punto_control_id: p.id, valor: valoresPuntos[p.id] || null }));
-    await onSave(
-      { ...form, cantidad: form.cantidad || null, muestra: form.muestra || sugerencia?.muestra || null, resultado, clasificacion: hayNC ? clasificacion || "Menor" : null },
-      puntosPayload
-    );
+    await onSave({
+      inspeccion: { ...form, cantidad: form.cantidad || null, muestra: form.muestra || sugerencia?.muestra || null, resultado, clasificacion: hayNC ? clasificacion || "Menor" : null },
+      puntos: puntosPayload,
+      cierre,
+    });
     setSaving(false);
   }
 
   return (
     <div className={`${cardClass} p-3`}>
-      <p className="mb-3 px-1 text-sm font-bold text-[#0f1f3d]">✍️ Nueva inspección</p>
+      <p className="mb-3 px-1 text-sm font-bold text-[#0f1f3d]">✍️ Nueva recepción</p>
 
       <div className="space-y-2">
         <AccordionSection
@@ -193,7 +199,7 @@ function NuevaInspeccionForm({ puntos, onSave, onCancel }) {
             {puntos.map((p) => (
               <div key={p.id} className="flex items-start justify-between gap-2 border-b border-[#edf0f4] pb-2 last:border-0 last:pb-0">
                 <p className="min-w-0 flex-1 text-xs text-[#5b6472]"><span className="font-bold text-[#0f1f3d]">{p.letra}.</span> {p.descripcion}</p>
-                <PuntoControlChip letra="" valor={valoresPuntos[p.id]} onChange={(v) => setValoresPuntos((cur) => ({ ...cur, [p.id]: v }))} />
+                <PuntoControlChip valor={valoresPuntos[p.id]} onChange={(v) => setValoresPuntos((cur) => ({ ...cur, [p.id]: v }))} />
               </div>
             ))}
           </div>
@@ -231,22 +237,62 @@ function NuevaInspeccionForm({ puntos, onSave, onCancel }) {
             Acción / Reinspección
             <textarea value={form.accion_reinspeccion} onChange={(e) => setField("accion_reinspeccion", e.target.value)} rows={2} className={`${inputClass} resize-none`} />
           </label>
-          <p className="mt-2 text-[11px] text-[#94a3b8]">La foto de evidencia se agrega después de guardar, desde la lista de inspecciones.</p>
+          <p className="mt-2 text-[11px] text-[#94a3b8]">La foto de evidencia se agrega después de guardar, desde la lista.</p>
+        </AccordionSection>
+
+        <AccordionSection
+          icon="🖊️"
+          title="Cierre y firmas"
+          subtitle={cierre.dictamen || "Dictamen, observación general y firmas"}
+          open={openSection === "cierre"}
+          onToggle={() => toggle("cierre")}
+        >
+          <label className={`${labelClass} block`}>
+            Dictamen
+            <select value={cierre.dictamen} onChange={(e) => setCierre((c) => ({ ...c, dictamen: e.target.value }))} className={inputClass}>
+              <option value="">Seleccionar…</option>
+              <option value="Conforme">Conforme</option>
+              <option value="Conforme con observación">Conforme con observación</option>
+              <option value="Producto No Conforme">Producto No Conforme</option>
+            </select>
+          </label>
+          <label className={`${labelClass} mt-3 block`}>
+            Observación general / pendientes
+            <textarea value={cierre.observacion_general} onChange={(e) => setCierre((c) => ({ ...c, observacion_general: e.target.value }))} rows={2} className={`${inputClass} resize-none`} />
+          </label>
+
+          <p className="mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">Firmas</p>
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg bg-[#f7f7f4] p-2.5 text-xs font-medium text-[#0f1f3d]">
+            <input type="checkbox" checked={cierre.firmado} onChange={(e) => setCierre((c) => ({ ...c, firmado: e.target.checked }))} className="mt-0.5 h-4 w-4 shrink-0 accent-[#c9a227]" />
+            Firmo esta inspección como {nombreInspectora} (Inspectora)
+          </label>
+          <label className={`${labelClass} mt-2 block`}>
+            Supervisor de área
+            <input value={cierre.responsable_area_nombre} onChange={(e) => setCierre((c) => ({ ...c, responsable_area_nombre: e.target.value }))} placeholder="Nombre de quien da el visto" className={inputClass} />
+          </label>
+          <label className={`${labelClass} mt-3 block`}>
+            Gerente de Calidad
+            <input value={cierre.gerente_calidad_nombre} onChange={(e) => setCierre((c) => ({ ...c, gerente_calidad_nombre: e.target.value }))} placeholder="Nombre de quien da el visto" className={inputClass} />
+          </label>
         </AccordionSection>
       </div>
 
       <div className="mt-4 flex gap-2">
-        <button type="button" onClick={handleSave} disabled={saving} className={`flex-1 sm:flex-none ${btnPrimaryClass}`}>
-          {saving ? "Guardando…" : "Guardar inspección"}
+        <button type="button" onClick={handleSave} disabled={saving || !puedeGuardar} className={`flex-1 sm:flex-none ${btnPrimaryClass}`}>
+          {saving ? "Guardando…" : "Guardar recepción"}
         </button>
         <button type="button" onClick={onCancel} className={btnGhostClass}>Cancelar</button>
       </div>
+      {!puedeGuardar && <p className="mt-2 text-[11px] text-[#94a3b8]">Falta el dictamen y la firma de la inspectora para poder guardar.</p>}
     </div>
   );
 }
 
-function InspeccionRow({ inspeccion, currentUser, onDelete, onEvidenciaChange, canEdit, expanded, onToggle }) {
-  const esConforme = inspeccion.resultado !== "No Conforme";
+function RegistroRow({ registro, currentUser, onDelete, onEvidenciaChange, canEdit, expanded, onToggle }) {
+  const insp = registro.calidad_inspecciones?.[0];
+  if (!insp) return null;
+  const esConforme = insp.resultado !== "No Conforme";
+  const puntosOrdenados = [...(insp.calidad_inspeccion_puntos || [])];
 
   return (
     <div className="p-3.5">
@@ -255,29 +301,54 @@ function InspeccionRow({ inspeccion, currentUser, onDelete, onEvidenciaChange, c
           {esConforme ? "✅" : "⚠️"}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[#0f1f3d]">{inspeccion.producto_texto || "Sin especificar"}</p>
-          <p className="text-xs text-[#5b6472]">{inspeccion.hora} · {inspeccion.proveedor || "—"} · Lote {inspeccion.lote_identificacion || "—"}</p>
+          <p className="text-sm font-semibold text-[#0f1f3d]">{registro.fecha} · {insp.hora}</p>
+          <p className="text-xs text-[#5b6472]">Inspectora: {registro.inspectora_nombre || "—"} · {insp.producto_texto || "MP sin especificar"}</p>
         </div>
-        <span className={`shrink-0 ${statusBadgeClass(inspeccion.clasificacion || inspeccion.resultado)}`}>{inspeccion.clasificacion || inspeccion.resultado}</span>
+        <span className={`shrink-0 ${statusBadgeClass(registro.dictamen)}`}>{registro.dictamen}</span>
         <span className={`shrink-0 text-[#94a3b8] transition-transform ${expanded ? "rotate-180" : ""}`}>⌄</span>
       </div>
 
       {expanded && (
-        <div className="mt-3 space-y-2 rounded-xl bg-[#f7f7f4] p-3 text-sm">
+        <div className="mt-3 space-y-3 rounded-xl bg-[#f7f7f4] p-3 text-sm">
           <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">OC / Lote</p><p className="text-[#0f1f3d]">{inspeccion.oc_lote || "—"}</p></div>
-            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Cant. / Muestra</p><p className="text-[#0f1f3d]">{inspeccion.cantidad ?? "—"} / {inspeccion.muestra ?? "—"}</p></div>
+            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">OC / Lote</p><p className="text-[#0f1f3d]">{insp.oc_lote || "—"}</p></div>
+            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Proveedor</p><p className="text-[#0f1f3d]">{insp.proveedor || "—"}</p></div>
+            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Lote / Identificación</p><p className="text-[#0f1f3d]">{insp.lote_identificacion || "—"}</p></div>
+            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Cant. / Muestra</p><p className="text-[#0f1f3d]">{insp.cantidad ?? "—"} / {insp.muestra ?? "—"}</p></div>
           </div>
-          {inspeccion.observacion && (
-            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Observación</p><p className="text-[#0f1f3d]">{inspeccion.observacion}</p></div>
+
+          {puntosOrdenados.length > 0 && (
+            <div className="border-t border-[#edf0f4] pt-2">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Puntos de control</p>
+              <div className="flex flex-wrap gap-1">
+                {puntosOrdenados.map((pp) => (
+                  <span key={pp.id} className={`rounded-lg border px-1.5 py-0.5 text-[10px] font-semibold ${pp.valor === "NC" ? "border-red-200 bg-red-50 text-red-600" : pp.valor === "C" ? "border-green-200 bg-green-50 text-green-700" : "border-[#edf0f4] bg-white text-[#5b6472]"}`}>
+                    {pp.valor}
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
-          {inspeccion.accion_reinspeccion && (
-            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Acción / Reinspección</p><p className="text-[#0f1f3d]">{inspeccion.accion_reinspeccion}</p></div>
+
+          {(insp.observacion || insp.accion_reinspeccion) && (
+            <div className="border-t border-[#edf0f4] pt-2">
+              {insp.observacion && <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Observación</p><p className="text-[#0f1f3d]">{insp.observacion}</p></div>}
+              {insp.accion_reinspeccion && <div className="mt-1.5"><p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Acción / Reinspección</p><p className="text-[#0f1f3d]">{insp.accion_reinspeccion}</p></div>}
+            </div>
           )}
+
+          <div className="border-t border-[#edf0f4] pt-2">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">Cierre y firmas</p>
+            {registro.observacion_general && <p className="mb-1 text-[#0f1f3d]">{registro.observacion_general}</p>}
+            <p className="text-[#5b6472]">Inspectora: {registro.firma_inspectora || "—"}</p>
+            <p className="text-[#5b6472]">Supervisor de área: {registro.responsable_area_nombre || "—"}</p>
+            <p className="text-[#5b6472]">Gerente de Calidad: {registro.gerente_calidad_nombre || "—"}</p>
+          </div>
+
           <div className="border-t border-[#edf0f4] pt-2">
             <EvidenciaUploader
-              inspeccionId={inspeccion.id}
-              evidencias={inspeccion.calidad_evidencias || []}
+              inspeccionId={insp.id}
+              evidencias={insp.calidad_evidencias || []}
               currentUser={currentUser}
               onChange={onEvidenciaChange}
               canEdit={canEdit}
@@ -285,7 +356,7 @@ function InspeccionRow({ inspeccion, currentUser, onDelete, onEvidenciaChange, c
           </div>
           {canEdit && (
             <div className="flex justify-end border-t border-[#edf0f4] pt-2">
-              <button type="button" onClick={() => onDelete(inspeccion.id)} className="text-xs font-medium text-red-500 hover:text-red-600">Eliminar inspección</button>
+              <button type="button" onClick={() => onDelete(registro.id)} className="text-xs font-medium text-red-500 hover:text-red-600">Eliminar recepción</button>
             </div>
           )}
         </div>
@@ -296,28 +367,20 @@ function InspeccionRow({ inspeccion, currentUser, onDelete, onEvidenciaChange, c
 
 export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   const [puntos, setPuntos] = useState([]);
-  const [recorridos, setRecorridos] = useState([]);
+  const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState(null);
-  const [inspecciones, setInspecciones] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [expandedInspeccionId, setExpandedInspeccionId] = useState(null);
-  const [cierreForm, setCierreForm] = useState({ dictamen: "", observacion_general: "", responsable_area_nombre: "", firmado: false });
+  const [expandedId, setExpandedId] = useState(null);
 
-  async function loadRecorridos() {
-    const result = await getRecorridos("Materia Prima");
-    if (result.ok) setRecorridos(result.data);
-  }
-
-  async function loadInspecciones(recorridoId) {
-    const result = await getInspecciones(recorridoId);
-    if (result.ok) setInspecciones(result.data);
+  async function loadRegistros() {
+    const result = await getInspeccionesMP();
+    if (result.ok) setRegistros(result.data);
   }
 
   useEffect(() => {
     async function init() {
       setLoading(true);
-      const [puntosResult] = await Promise.all([getPuntosControl("Materia Prima"), loadRecorridos()]);
+      const [puntosResult] = await Promise.all([getPuntosControl("Materia Prima"), loadRegistros()]);
       if (puntosResult.ok) setPuntos(puntosResult.data);
       setLoading(false);
     }
@@ -325,208 +388,80 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    setExpandedInspeccionId(null);
-    if (selectedId) loadInspecciones(selectedId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
-
-  async function handleNuevoRecorrido() {
-    const result = await createRecorrido("Materia Prima", { fecha: todayISO() }, currentUser);
-    if (result.ok) {
-      await loadRecorridos();
-      setSelectedId(result.data.id);
-    }
-  }
-
-  async function handleGuardarInspeccion(payload, puntosPayload) {
-    await createInspeccion(selectedId, payload, puntosPayload, currentUser);
+  async function handleGuardar({ inspeccion, puntos: puntosPayload, cierre }) {
+    const result = await crearInspeccionMP({ fecha: todayISO(), jornada: "07:00–17:00", inspeccion, puntos: puntosPayload, cierre }, currentUser);
+    if (!result.ok) { window.alert("No fue posible guardar la recepción."); return; }
     setShowForm(false);
-    loadInspecciones(selectedId);
+    loadRegistros();
   }
 
-  async function handleDeleteInspeccion(id) {
-    if (!window.confirm("¿Eliminar esta inspección?")) return;
-    await deleteInspeccion(id);
-    loadInspecciones(selectedId);
-  }
-
-  async function handleDeleteRecorrido(id, event) {
-    event?.stopPropagation();
-    if (!window.confirm("¿Eliminar esta recepción por completo? Se borran también sus inspecciones y fotos de evidencia. Esta acción no se puede deshacer.")) return;
+  async function handleDelete(id) {
+    if (!window.confirm("¿Eliminar esta recepción por completo? Se borran también su inspección y fotos de evidencia. Esta acción no se puede deshacer.")) return;
     const result = await deleteRecorrido(id);
     if (!result.ok) { window.alert("No fue posible eliminar la recepción."); return; }
-    if (selectedId === id) setSelectedId(null);
-    loadRecorridos();
+    if (expandedId === id) setExpandedId(null);
+    loadRegistros();
   }
-
-  async function handleCerrar() {
-    if (!cierreForm.dictamen || !cierreForm.firmado) return;
-    await cerrarRecorrido(selectedId, cierreForm, currentUser);
-    await loadRecorridos();
-    setCierreForm({ dictamen: "", observacion_general: "", responsable_area_nombre: "", firmado: false });
-  }
-
-  const recorridoActivo = recorridos.find((r) => r.id === selectedId);
-  const inputClass = "rounded-xl border border-[#edf0f4] bg-white px-3 py-2 text-sm font-medium text-[#0f1f3d] outline-none transition focus:border-[#c9a227]";
 
   if (loading) return <div className="py-10 text-center text-sm font-medium text-[#94a3b8]">Cargando…</div>;
 
-  if (!selectedId) {
-    const grupos = agruparPorMes(recorridos);
-    return (
-      <div className="space-y-3">
-        <style>{`
-          @keyframes gcGoldPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(201,162,39,0.35); } 50% { box-shadow: 0 0 0 7px rgba(201,162,39,0.10); } }
-          .gc-gold-pulse { animation: gcGoldPulse 2.8s ease-in-out infinite; }
-        `}</style>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <h2 className="text-xl font-bold tracking-tight text-[#0f1f3d]">Recepciones de materia prima</h2>
-              <HelpTip>Una recepción agrupa todas las inspecciones de materia prima hechas en una jornada (a diferencia de las plantas de producción, aquí no es un recorrido físico sino la revisión de lo que llega). Se cierra con un dictamen (Conforme / Con observación / No conforme) y la firma de la inspectora.</HelpTip>
-            </div>
-            <p className="text-sm text-[#5b6472]">Recepción de Materia Prima · F-GC-01U</p>
-          </div>
-          {canEdit && (
-            <button
-              type="button"
-              onClick={handleNuevoRecorrido}
-              className="gc-gold-pulse inline-flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#c9a227] bg-white px-4 py-2.5 text-sm font-semibold text-[#96771a] transition active:scale-[0.98] sm:flex-none"
-            >
-              📥 + Nueva recepción
-            </button>
-          )}
-        </div>
-
-        {recorridos.length === 0 ? (
-          <div className={`${cardClass} py-10 text-center text-sm font-medium text-[#94a3b8]`}>Aún no hay recepciones registradas.</div>
-        ) : (
-          <div className="space-y-3">
-            {grupos.map((grupo) => (
-              <div key={grupo.label} className={`${cardClass} overflow-hidden`}>
-                <div className="flex items-center justify-between gap-2 bg-[#f7f7f4] px-4 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5b6472]">{grupo.label}</p>
-                  <span className="shrink-0 text-[11px] font-semibold text-[#94a3b8]">{grupo.items.length}</span>
-                </div>
-                <div className="divide-y divide-[#edf0f4]">
-                  {grupo.items.map((r) => (
-                    <div
-                      key={r.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedId(r.id)}
-                      className="flex w-full cursor-pointer items-start gap-3 p-4 text-left transition active:bg-[#f7f7f4]/60"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-[#0f1f3d]">{r.folio}</p>
-                        <p className="text-xs text-[#5b6472]">{r.fecha} · {r.inspectora_nombre || "—"} · {r.jornada}</p>
-                      </div>
-                      <span className={`shrink-0 ${statusBadgeClass(r.dictamen || "Abierto")}`}>{r.dictamen || "Abierto"}</span>
-                      {canEdit && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteRecorrido(r.id, e)}
-                          className="shrink-0 rounded-lg p-1 text-red-400 transition hover:bg-red-50 hover:text-red-600"
-                          aria-label="Eliminar recepción"
-                        >
-                          🗑️
-                        </button>
-                      )}
-                      <span className="shrink-0 text-[#94a3b8]">›</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
+  const grupos = agruparPorMes(registros);
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <button type="button" onClick={() => setSelectedId(null)} className={`${btnGhostClass} -ml-3`}>← Recepciones</button>
-        {canEdit && (
-          <button type="button" onClick={() => handleDeleteRecorrido(selectedId)} className="text-xs font-medium text-red-500 hover:text-red-600">
-            🗑️ Eliminar recepción
+      <style>{`
+        @keyframes gcGoldPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(201,162,39,0.35); } 50% { box-shadow: 0 0 0 7px rgba(201,162,39,0.10); } }
+        .gc-gold-pulse { animation: gcGoldPulse 2.8s ease-in-out infinite; }
+      `}</style>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h2 className="text-xl font-bold tracking-tight text-[#0f1f3d]">Recepciones de materia prima</h2>
+            <HelpTip>Cada recepción es un registro completo (identificación, puntos de control y su propio cierre/dictamen con firmas) — puede haber varias el mismo día, una por cada entrega que llegue. Se identifica por fecha, hora e inspectora, no por un folio consecutivo.</HelpTip>
+          </div>
+          <p className="text-sm text-[#5b6472]">Recepción de Materia Prima · F-GC-01U</p>
+        </div>
+        {canEdit && !showForm && (
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="gc-gold-pulse inline-flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#c9a227] bg-white px-4 py-2.5 text-sm font-semibold text-[#96771a] transition active:scale-[0.98] sm:flex-none"
+          >
+            📥 + Nueva recepción
           </button>
         )}
       </div>
 
-      <div className={`${cardClass} p-4`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-base font-bold text-[#0f1f3d]">{recorridoActivo?.folio}</p>
-            <p className="text-xs text-[#5b6472]">{recorridoActivo?.fecha} · Inspectora: {recorridoActivo?.inspectora_nombre || "—"} · {recorridoActivo?.jornada} · Área: {recorridoActivo?.planta}</p>
-          </div>
-          {recorridoActivo?.dictamen && <span className={statusBadgeClass(recorridoActivo.dictamen)}>{recorridoActivo.dictamen}</span>}
-        </div>
-      </div>
+      {showForm && (
+        <NuevaInspeccionForm puntos={puntos} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
+      )}
 
-      {inspecciones.length > 0 && (
-        <div className={`${cardClass} divide-y divide-[#edf0f4] overflow-hidden`}>
-          {inspecciones.map((insp) => (
-            <InspeccionRow
-              key={insp.id}
-              inspeccion={insp}
-              currentUser={currentUser}
-              onDelete={handleDeleteInspeccion}
-              onEvidenciaChange={() => loadInspecciones(selectedId)}
-              canEdit={canEdit && !recorridoActivo?.cerrado_at}
-              expanded={expandedInspeccionId === insp.id}
-              onToggle={() => setExpandedInspeccionId((cur) => (cur === insp.id ? null : insp.id))}
-            />
+      {registros.length === 0 ? (
+        <div className={`${cardClass} py-10 text-center text-sm font-medium text-[#94a3b8]`}>Aún no hay recepciones registradas.</div>
+      ) : (
+        <div className="space-y-3">
+          {grupos.map((grupo) => (
+            <div key={grupo.label} className={`${cardClass} overflow-hidden`}>
+              <div className="flex items-center justify-between gap-2 bg-[#f7f7f4] px-4 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5b6472]">{grupo.label}</p>
+                <span className="shrink-0 text-[11px] font-semibold text-[#94a3b8]">{grupo.items.length}</span>
+              </div>
+              <div className="divide-y divide-[#edf0f4]">
+                {grupo.items.map((r) => (
+                  <RegistroRow
+                    key={r.id}
+                    registro={r}
+                    currentUser={currentUser}
+                    onDelete={handleDelete}
+                    onEvidenciaChange={loadRegistros}
+                    canEdit={canEdit}
+                    expanded={expandedId === r.id}
+                    onToggle={() => setExpandedId((cur) => (cur === r.id ? null : r.id))}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
-        </div>
-      )}
-
-      {canEdit && !recorridoActivo?.cerrado_at && (
-        showForm ? (
-          <NuevaInspeccionForm puntos={puntos} onSave={handleGuardarInspeccion} onCancel={() => setShowForm(false)} />
-        ) : (
-          <button type="button" onClick={() => setShowForm(true)} className={`w-full ${btnSecondaryClass} border-dashed`}>
-            + Agregar inspección
-          </button>
-        )
-      )}
-
-      {canEdit && !recorridoActivo?.cerrado_at && (
-        <div className={`${cardClass} p-4`}>
-          <p className="mb-3 text-sm font-bold text-[#0f1f3d]">Cierre / dictamen de la recepción</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className={labelClass}>
-              Dictamen
-              <select value={cierreForm.dictamen} onChange={(e) => setCierreForm((f) => ({ ...f, dictamen: e.target.value }))} className={inputClass}>
-                <option value="">Seleccionar…</option>
-                <option value="Conforme">Conforme</option>
-                <option value="Conforme con observación">Conforme con observación</option>
-                <option value="Producto No Conforme">Producto No Conforme</option>
-              </select>
-            </label>
-            <label className={labelClass}>
-              Responsable de área
-              <input value={cierreForm.responsable_area_nombre} onChange={(e) => setCierreForm((f) => ({ ...f, responsable_area_nombre: e.target.value }))} className={inputClass} />
-            </label>
-          </div>
-          <label className={`${labelClass} mt-3 block`}>
-            Observación general / pendientes
-            <textarea value={cierreForm.observacion_general} onChange={(e) => setCierreForm((f) => ({ ...f, observacion_general: e.target.value }))} rows={2} className={`${inputClass} resize-none`} />
-          </label>
-          <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg bg-[#f7f7f4] p-2.5 text-xs font-medium text-[#0f1f3d]">
-            <input type="checkbox" checked={cierreForm.firmado} onChange={(e) => setCierreForm((f) => ({ ...f, firmado: e.target.checked }))} className="mt-0.5 h-4 w-4 shrink-0 accent-[#c9a227]" />
-            Firmo esta inspección como {currentUser?.nombre || currentUser?.usuario || "Inspectora"}
-          </label>
-          <button type="button" onClick={handleCerrar} disabled={!cierreForm.dictamen || !cierreForm.firmado} className={`mt-3 w-full sm:w-auto ${btnPrimaryClass}`}>Cerrar recepción</button>
-        </div>
-      )}
-
-      {recorridoActivo?.cerrado_at && (
-        <div className={`${cardClass} p-4 text-sm text-[#5b6472]`}>
-          Cerrado el {new Date(recorridoActivo.cerrado_at).toLocaleString("es-MX")} · Firma: {recorridoActivo.firma_inspectora || "—"} · Responsable de área: {recorridoActivo.responsable_area_nombre || "—"}
-          {recorridoActivo.observacion_general && <p className="mt-1">{recorridoActivo.observacion_general}</p>}
         </div>
       )}
     </div>
