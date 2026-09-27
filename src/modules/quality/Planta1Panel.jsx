@@ -15,7 +15,7 @@ import imprimirIcon from "../../assets/calidad-imprimir-icon.jpg";
 import {
   todayISO, nowHHMM, agruparPorMes, horaCorta, dictamenCorto,
   inicioSemanaISO, finSemanaISO, aplicarFiltrosRegistros,
-  PuntoControlChip, AccordionSection, CampoTexto, inputClass, labelClass,
+  PuntoControlChip, AccordionSection, CampoTexto, FirmaCard, inputClass, labelClass,
   PRINT_STYLE_BLOCK, ImprimirModal, ReciboImprimible, DetalleRegistroModal,
 } from "./shared";
 
@@ -257,18 +257,30 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
           </label>
 
           <p className="mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">Firmas</p>
-          <label className="flex cursor-pointer items-start gap-2 rounded-lg bg-[#f7f7f4] p-2.5 text-xs font-medium text-[#0f1f3d]">
-            <input type="checkbox" checked={cierre.firmado} onChange={(e) => setCierre((c) => ({ ...c, firmado: e.target.checked }))} className="mt-0.5 h-4 w-4 shrink-0 accent-[#c9a227]" />
-            Firmo esta inspección como {nombreInspectora} (Inspectora)
-          </label>
-          <label className={`${labelClass} mt-2 block`}>
-            Supervisor de área
-            <input value={cierre.responsable_area_nombre} onChange={(e) => setCierre((c) => ({ ...c, responsable_area_nombre: e.target.value }))} placeholder="Nombre de quien da el visto" className={inputClass} />
-          </label>
-          <label className={`${labelClass} mt-3 block`}>
-            Gerente de Calidad
-            <input value={cierre.gerente_calidad_nombre} onChange={(e) => setCierre((c) => ({ ...c, gerente_calidad_nombre: e.target.value }))} placeholder="Nombre de quien da el visto" className={inputClass} />
-          </label>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <FirmaCard rol="Inspectora" firmado={cierre.firmado}>
+              <label className="flex cursor-pointer items-start gap-2 text-[11px] font-medium text-slate-700">
+                <input type="checkbox" checked={cierre.firmado} onChange={(e) => setCierre((c) => ({ ...c, firmado: e.target.checked }))} className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600" />
+                {cierre.firmado ? <span className="font-bold text-slate-700">{nombreInspectora}</span> : `Firmar como ${nombreInspectora}`}
+              </label>
+            </FirmaCard>
+            <FirmaCard rol="Supervisor de área" firmado={!!cierre.responsable_area_nombre}>
+              <input
+                value={cierre.responsable_area_nombre}
+                onChange={(e) => setCierre((c) => ({ ...c, responsable_area_nombre: e.target.value }))}
+                placeholder="Nombre de quien da el visto"
+                className="w-full bg-transparent text-[11px] font-bold text-slate-700 outline-none placeholder:font-medium placeholder:text-slate-400"
+              />
+            </FirmaCard>
+            <FirmaCard rol="Gerente de Calidad" firmado={!!cierre.gerente_calidad_nombre}>
+              <input
+                value={cierre.gerente_calidad_nombre}
+                onChange={(e) => setCierre((c) => ({ ...c, gerente_calidad_nombre: e.target.value }))}
+                placeholder="Nombre de quien da el visto"
+                className="w-full bg-transparent text-[11px] font-bold text-slate-700 outline-none placeholder:font-medium placeholder:text-slate-400"
+              />
+            </FirmaCard>
+          </div>
         </AccordionSection>
       </div>
 

@@ -180,6 +180,26 @@ export function CampoTexto({ label, value }) {
   );
 }
 
+// Misma tarjeta de firma que Planes de Auditoría (AuditoriaFichaPanel.jsx /
+// SigDiagnosisModule.jsx): rol en mayúsculas + pastilla Firmado/Pendiente
+// (verde/ámbar), cuerpo libre por `children` (aquí no hay un botón "Firmar"
+// de otro usuario — las 3 firmas se capturan juntas al guardar el registro).
+export function FirmaCard({ rol, firmado, children }) {
+  return (
+    <div className={`rounded-2xl border p-3 ${firmado ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-slate-50/60"}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{rol}</div>
+        {firmado ? (
+          <span className="rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-black text-emerald-700">✓ Firmado</span>
+        ) : (
+          <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[9px] font-black text-amber-700">Pendiente</span>
+        )}
+      </div>
+      <div className="mt-1">{children}</div>
+    </div>
+  );
+}
+
 // CSS de impresión — aísla el recibo del resto del portal (topbar, sidebar,
 // controles del módulo) montándolo vía portal directo a document.body y
 // ocultando #root solo en @media print, para no dejar hojas en blanco por el
@@ -580,10 +600,22 @@ export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, ca
               <CampoTexto label="Dictamen" value={registro.dictamen} />
               <div className="mt-3"><CampoTexto label="Observación general / pendientes" value={registro.observacion_general} /></div>
               <p className="mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">Firmas</p>
-              <div className="space-y-2">
-                <CampoTexto label="Inspectora" value={registro.firma_inspectora} />
-                <CampoTexto label="Supervisor de área" value={registro.responsable_area_nombre} />
-                <CampoTexto label="Gerente de Calidad" value={registro.gerente_calidad_nombre} />
+              <div className="grid gap-2 sm:grid-cols-3">
+                <FirmaCard rol="Inspectora" firmado={!!registro.firma_inspectora}>
+                  {registro.firma_inspectora
+                    ? <span className="text-[11px] font-bold text-slate-700">{registro.firma_inspectora}</span>
+                    : <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>}
+                </FirmaCard>
+                <FirmaCard rol="Supervisor de área" firmado={!!registro.responsable_area_nombre}>
+                  {registro.responsable_area_nombre
+                    ? <span className="text-[11px] font-bold text-slate-700">{registro.responsable_area_nombre}</span>
+                    : <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>}
+                </FirmaCard>
+                <FirmaCard rol="Gerente de Calidad" firmado={!!registro.gerente_calidad_nombre}>
+                  {registro.gerente_calidad_nombre
+                    ? <span className="text-[11px] font-bold text-slate-700">{registro.gerente_calidad_nombre}</span>
+                    : <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>}
+                </FirmaCard>
               </div>
             </AccordionSection>
           </div>
