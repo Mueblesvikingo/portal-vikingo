@@ -576,6 +576,7 @@ function ImprimirModal({ registros, onCancel, onConfirmar }) {
   const [unaId, setUnaId] = useState(null);
   const [periodo, setPeriodo] = useState("dia");
   const [fechaRef, setFechaRef] = useState(todayISO());
+  const [pasoFotos, setPasoFotos] = useState(false);
 
   const registrosOrdenados = [...registros].sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
   const { label, desde, hasta } = calcularPeriodo(periodo, fechaRef);
@@ -590,8 +591,7 @@ function ImprimirModal({ registros, onCancel, onConfirmar }) {
   const registroUna = registrosOrdenados.find((r) => r.id === unaId) || null;
   const puedeImprimir = modo === "una" ? !!registroUna : registrosPeriodo.length > 0;
 
-  function confirmar() {
-    const incluirFotos = window.confirm("¿Deseas agregar las fotos de evidencia al PDF?");
+  function finalizar(incluirFotos) {
     if (modo === "una") {
       onConfirmar({ registros: [registroUna], encabezado: construirEncabezadoImpresion("una", [registroUna], ""), incluirFotos });
     } else {
@@ -608,70 +608,89 @@ function ImprimirModal({ registros, onCancel, onConfirmar }) {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <div className="mb-3 flex rounded-xl border border-[#edf0f4] p-1">
-            {[["una", "Una inspección"], ["varias", "Varias inspecciones"]].map(([key, texto]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setModo(key)}
-                className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${modo === key ? "bg-[#0b1f3a] text-white" : "text-[#5b6472]"}`}
-              >
-                {texto}
-              </button>
-            ))}
-          </div>
-
-          {modo === "una" ? (
-            registrosOrdenados.length === 0 ? (
-              <p className="py-6 text-center text-sm text-[#94a3b8]">No hay recepciones registradas.</p>
-            ) : (
-              <div className="max-h-64 space-y-1.5 overflow-y-auto">
-                {registrosOrdenados.map((r) => {
-                  const insp = r.calidad_inspecciones?.[0];
-                  const activo = unaId === r.id;
-                  return (
-                    <div
-                      key={r.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setUnaId(r.id)}
-                      className={`cursor-pointer rounded-xl border p-2.5 text-xs transition ${activo ? "border-[#c9a227] bg-[#fdf7e6]" : "border-[#edf0f4] bg-white"}`}
-                    >
-                      <p className="font-semibold text-[#0f1f3d]">{r.fecha} · {horaCorta(insp?.hora)} · {r.inspectora_nombre || "—"}</p>
-                      <p className="text-[#5b6472]">{insp?.producto_texto || "—"} · {r.dictamen}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            )
+          {pasoFotos ? (
+            <div className="flex flex-col items-center justify-center gap-1.5 py-10 text-center">
+              <p className="text-3xl">📷</p>
+              <p className="text-sm font-semibold text-[#0f1f3d]">¿Agregar fotos de evidencia al PDF?</p>
+              <p className="max-w-[22rem] text-xs text-[#5b6472]">Se incluirán a tamaño 1/4 de carta, con la fecha, hora y MP de cada recepción.</p>
+            </div>
           ) : (
-            <div className="space-y-3">
-              <div className="flex rounded-xl border border-[#edf0f4] p-1">
-                {[["dia", "Día"], ["semana", "Semana"], ["mes", "Mes"]].map(([key, texto]) => (
+            <>
+              <div className="mb-3 flex rounded-xl border border-[#edf0f4] p-1">
+                {[["una", "Una inspección"], ["varias", "Varias inspecciones"]].map(([key, texto]) => (
                   <button
                     key={key}
                     type="button"
-                    onClick={() => setPeriodo(key)}
-                    className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${periodo === key ? "bg-[#0b1f3a] text-white" : "text-[#5b6472]"}`}
+                    onClick={() => setModo(key)}
+                    className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${modo === key ? "bg-[#0b1f3a] text-white" : "text-[#5b6472]"}`}
                   >
                     {texto}
                   </button>
                 ))}
               </div>
-              <label className={`${labelClass} block`}>
-                Fecha de referencia
-                <input type="date" value={fechaRef} onChange={(e) => setFechaRef(e.target.value)} className={inputClass} />
-              </label>
-              <p className="rounded-lg bg-[#f7f7f4] px-2.5 py-1.5 text-xs font-medium text-[#5b6472]">
-                {label}: {registrosPeriodo.length} recepción(es) encontrada(s).
-              </p>
-            </div>
+
+              {modo === "una" ? (
+                registrosOrdenados.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-[#94a3b8]">No hay recepciones registradas.</p>
+                ) : (
+                  <div className="max-h-64 space-y-1.5 overflow-y-auto">
+                    {registrosOrdenados.map((r) => {
+                      const insp = r.calidad_inspecciones?.[0];
+                      const activo = unaId === r.id;
+                      return (
+                        <div
+                          key={r.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setUnaId(r.id)}
+                          className={`cursor-pointer rounded-xl border p-2.5 text-xs transition ${activo ? "border-[#c9a227] bg-[#fdf7e6]" : "border-[#edf0f4] bg-white"}`}
+                        >
+                          <p className="font-semibold text-[#0f1f3d]">{r.fecha} · {horaCorta(insp?.hora)} · {r.inspectora_nombre || "—"}</p>
+                          <p className="text-[#5b6472]">{insp?.producto_texto || "—"} · {r.dictamen}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex rounded-xl border border-[#edf0f4] p-1">
+                    {[["dia", "Día"], ["semana", "Semana"], ["mes", "Mes"]].map(([key, texto]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setPeriodo(key)}
+                        className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${periodo === key ? "bg-[#0b1f3a] text-white" : "text-[#5b6472]"}`}
+                      >
+                        {texto}
+                      </button>
+                    ))}
+                  </div>
+                  <label className={`${labelClass} block`}>
+                    Fecha de referencia
+                    <input type="date" value={fechaRef} onChange={(e) => setFechaRef(e.target.value)} className={inputClass} />
+                  </label>
+                  <p className="rounded-lg bg-[#f7f7f4] px-2.5 py-1.5 text-xs font-medium text-[#5b6472]">
+                    {label}: {registrosPeriodo.length} recepción(es) encontrada(s).
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
 
         <div className="flex shrink-0 gap-2 border-t border-[#edf0f4] p-3">
-          <button type="button" onClick={confirmar} disabled={!puedeImprimir} className={`flex-1 ${btnPrimaryClass}`}>🖨️ Imprimir</button>
-          <button type="button" onClick={onCancel} className={btnGhostClass}>Cancelar</button>
+          {pasoFotos ? (
+            <>
+              <button type="button" onClick={() => finalizar(true)} className={`flex-1 ${btnPrimaryClass}`}>Sí, incluir fotos</button>
+              <button type="button" onClick={() => finalizar(false)} className={btnGhostClass}>No</button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={() => setPasoFotos(true)} disabled={!puedeImprimir} className={`flex-1 ${btnPrimaryClass}`}>🖨️ Imprimir</button>
+              <button type="button" onClick={onCancel} className={btnGhostClass}>Cancelar</button>
+            </>
+          )}
         </div>
       </div>
     </div>
