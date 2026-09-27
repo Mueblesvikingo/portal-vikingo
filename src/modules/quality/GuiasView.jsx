@@ -20,23 +20,29 @@ function PlanMuestreoDetalle() {
       <p className="text-sm text-[#5b6472]">
         Aplica a no conformidades <span className="font-semibold text-[#0f1f3d]">menores</span>. Con 1 sola no conformidad <span className="font-semibold text-red-600">Mayor o Crítica</span>: contener y ampliar la inspección al 100% del lote.
       </p>
-      <div className="overflow-x-auto rounded-xl border border-[#edf0f4]">
-        <table className="w-full min-w-[360px] text-left text-xs">
+      <div className="rounded-xl border border-[#edf0f4]">
+        <table className="w-full table-fixed text-left text-xs">
+          <colgroup>
+            <col className="w-[34%]" />
+            <col className="w-[24%]" />
+            <col className="w-[21%]" />
+            <col className="w-[21%]" />
+          </colgroup>
           <thead>
-            <tr className="bg-[#f7f7f4] text-[10px] font-semibold uppercase tracking-wide text-[#5b6472]">
-              <th className="px-3 py-2">Lote / OP</th>
-              <th className="px-3 py-2 text-center">Muestra</th>
-              <th className="px-3 py-2 text-center">Ac</th>
-              <th className="px-3 py-2 text-center">Re</th>
+            <tr className="bg-[#f7f7f4] text-[9px] font-semibold uppercase tracking-wide text-[#5b6472] sm:text-[10px]">
+              <th className="px-1.5 py-2 sm:px-3">Lote / OP</th>
+              <th className="px-1 py-2 text-center sm:px-3">Muestra</th>
+              <th className="px-1 py-2 text-center sm:px-3">Ac</th>
+              <th className="px-1 py-2 text-center sm:px-3">Re</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#edf0f4]">
             {PLAN_MUESTREO.map((fila) => (
               <tr key={fila.lote}>
-                <td className="px-3 py-1.5 font-medium text-[#0f1f3d]">{fila.lote}</td>
-                <td className="px-3 py-1.5 text-center text-[#0f1f3d]">{fila.muestra}</td>
-                <td className="px-3 py-1.5 text-center text-green-700">{fila.ac}</td>
-                <td className="px-3 py-1.5 text-center text-red-600">{fila.re}</td>
+                <td className="px-1.5 py-1.5 font-medium text-[#0f1f3d] sm:px-3">{fila.lote}</td>
+                <td className="px-1 py-1.5 text-center text-[#0f1f3d] sm:px-3">{fila.muestra}</td>
+                <td className="px-1 py-1.5 text-center text-green-700 sm:px-3">{fila.ac}</td>
+                <td className="px-1 py-1.5 text-center text-red-600 sm:px-3">{fila.re}</td>
               </tr>
             ))}
           </tbody>
