@@ -11,6 +11,7 @@ import EvidenciaUploader from "./EvidenciaUploader";
 import EvidenciaPicker from "./EvidenciaPicker";
 import HelpTip from "./HelpTip";
 import { cardClass, btnPrimaryClass, btnGhostClass, STATUS_STYLES } from "./coreliTheme";
+import imprimirIcon from "../../assets/calidad-imprimir-icon.jpg";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -121,6 +122,12 @@ const labelClass = "text-[11px] font-semibold uppercase tracking-wide text-[#94a
 
 // Etiqueta corta para la columna Dictamen de la tabla (el texto completo se
 // ve igual en el modal de detalle, aquí solo hay que caber en la columna).
+// La columna "hora" en Supabase es tipo `time` y regresa "HH:MM:SS" — en
+// pantalla solo queremos "HH:MM".
+function horaCorta(hora) {
+  return (hora || "").slice(0, 5);
+}
+
 function dictamenCorto(d) {
   if (d === "Conforme con observación") return "Con obs.";
   if (d === "Producto No Conforme") return "No conforme";
@@ -358,7 +365,7 @@ function RegistroFila({ registro, onVer }) {
     <tr className="border-t border-[#edf0f4] first:border-0">
       <td className="px-2 py-2 align-top">
         <p className="text-xs font-semibold text-[#0f1f3d]">{dia}/{mes}</p>
-        <p className="text-[10px] text-[#94a3b8]">{insp.hora}</p>
+        <p className="text-[10px] text-[#94a3b8]">{horaCorta(insp.hora)}</p>
       </td>
       <td className="px-2 py-2 align-top">
         <p className="truncate text-xs font-medium text-[#0f1f3d]">{registro.inspectora_nombre || "—"}</p>
@@ -369,7 +376,7 @@ function RegistroFila({ registro, onVer }) {
           {dictamenCorto(registro.dictamen)}
         </span>
       </td>
-      <td className="px-2 py-2 text-right align-top">
+      <td className="gc-no-print px-2 py-2 text-right align-top">
         <button
           type="button"
           onClick={() => onVer(registro)}
@@ -402,7 +409,7 @@ function DetalleInspeccionModal({ registro, puntosCatalogo, currentUser, canEdit
       <div onClick={(e) => e.stopPropagation()} className={`${cardClass} flex max-h-[92vh] w-full flex-col rounded-b-none sm:max-w-md sm:rounded-2xl`}>
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#edf0f4] px-4 py-3">
           <div className="min-w-0">
-            <p className="text-sm font-bold text-[#0f1f3d]">{registro.fecha} · {insp.hora}</p>
+            <p className="text-sm font-bold text-[#0f1f3d]">{registro.fecha} · {horaCorta(insp.hora)}</p>
             <p className="truncate text-xs text-[#5b6472]">Inspectora: {registro.inspectora_nombre || "—"}</p>
           </div>
           <button type="button" onClick={onClose} className="shrink-0 rounded-lg border border-[#edf0f4] px-2 py-1 text-xs font-semibold text-[#5b6472]">✕</button>
@@ -557,6 +564,9 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
       <style>{`
         @keyframes gcGoldPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(201,162,39,0.35); } 50% { box-shadow: 0 0 0 7px rgba(201,162,39,0.10); } }
         .gc-gold-pulse { animation: gcGoldPulse 2.8s ease-in-out infinite; }
+        @media print {
+          .gc-no-print { display: none !important; }
+        }
       `}</style>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -568,12 +578,12 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="gc-no-print flex items-center gap-2">
         {canEdit && !showForm && (
           <button
             type="button"
             onClick={() => setShowForm(true)}
-            className="gc-gold-pulse flex-[2] inline-flex items-center justify-center gap-1.5 rounded-xl border-2 border-[#c9a227] bg-white px-2 py-2 text-xs font-semibold text-[#96771a] transition active:scale-[0.98] sm:text-sm"
+            className="gc-gold-pulse flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border-2 border-[#c9a227] bg-white px-2 py-2 text-xs font-semibold text-[#96771a] transition active:scale-[0.98] sm:text-sm"
           >
             📥 + Nueva recepción
           </button>
@@ -582,21 +592,33 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
           <button
             type="button"
             onClick={() => setShowFiltros((v) => !v)}
-            className="flex-[1] inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#edf0f4] bg-white px-2 py-2 text-xs font-semibold text-[#0f1f3d] transition active:scale-[0.98] sm:text-sm"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#edf0f4] bg-white px-2 py-2 text-xs font-semibold text-[#0f1f3d] transition active:scale-[0.98] sm:text-sm"
           >
             🔍 Filtros
             {filtrosActivos > 0 && <span className="rounded-full bg-[#c9a227] px-1.5 py-0.5 text-[10px] font-bold text-white">{filtrosActivos}</span>}
             <span className={`text-[#94a3b8] transition-transform ${showFiltros ? "rotate-180" : ""}`}>⌄</span>
           </button>
         )}
+        {registros.length > 0 && (
+          <button
+            type="button"
+            onClick={() => window.print()}
+            title="Imprimir"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#edf0f4] bg-white transition active:scale-95"
+          >
+            <img src={imprimirIcon} alt="Imprimir" className="h-6 w-6 object-contain" />
+          </button>
+        )}
       </div>
 
       {showForm && (
-        <NuevaInspeccionForm puntos={puntos} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
+        <div className="gc-no-print">
+          <NuevaInspeccionForm puntos={puntos} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
+        </div>
       )}
 
       {registros.length > 0 && showFiltros && (
-        <div className={`${cardClass} p-3`}>
+        <div className={`${cardClass} gc-no-print p-3`}>
           <div className="space-y-2.5">
               <label className={`${labelClass} block`}>
                 Buscar
