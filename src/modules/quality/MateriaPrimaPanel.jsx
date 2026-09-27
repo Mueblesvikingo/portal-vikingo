@@ -43,6 +43,26 @@ const FORM_VACIO = {
 };
 const CIERRE_VACIO = { dictamen: "", observacion_general: "", responsable_area_nombre: "", gerente_calidad_nombre: "", firmado: false };
 
+// Filtros sobre texto libre (proveedor, MP, OC/Lote, inspectora) — no sobre
+// catálogos, porque Proveedores/Colaboradores/Productos aún no existen como
+// tablas propias. En cuanto se suban esos catálogos, "Proveedor" puede pasar
+// de texto libre a un select sin cambiar el resto de este filtro.
+const FILTROS_VACIO = { busqueda: "", dictamen: "", desde: "", hasta: "" };
+function aplicarFiltros(registros, filtros) {
+  const q = filtros.busqueda.trim().toLowerCase();
+  return registros.filter((r) => {
+    if (filtros.dictamen && r.dictamen !== filtros.dictamen) return false;
+    if (filtros.desde && r.fecha < filtros.desde) return false;
+    if (filtros.hasta && r.fecha > filtros.hasta) return false;
+    if (q) {
+      const insp = r.calidad_inspecciones?.[0];
+      const campos = [insp?.proveedor, insp?.producto_texto, insp?.oc_lote, insp?.lote_identificacion, r.inspectora_nombre];
+      if (!campos.some((c) => (c || "").toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
+}
+
 function PuntoControlChip({ letra, valor, onChange }) {
   const opciones = [
     { key: "C", label: "C", active: "border-green-500 bg-green-500 text-white", idle: "border-green-200 text-green-700 bg-white" },
@@ -392,6 +412,8 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
+  const [filtros, setFiltros] = useState(FILTROS_VACIO);
+  const [showFiltros, setShowFiltros] = useState(false);
 
   async function loadRegistros() {
     const result = await getInspeccionesMP();
@@ -432,7 +454,9 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
 
   if (loading) return <div className="py-10 text-center text-sm font-medium text-[#94a3b8]">Cargando…</div>;
 
-  const grupos = agruparPorMes(registros);
+  const registrosFiltrados = aplicarFiltros(registros, filtros);
+  const grupos = agruparPorMes(registrosFiltrados);
+  const filtrosActivos = Object.values(filtros).filter(Boolean).length;
 
   return (
     <div className="space-y-3">
@@ -447,6 +471,9 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
             <HelpTip>Cada recepción es un registro completo (identificación, puntos de control y su propio cierre/dictamen con firmas) — puede haber varias el mismo día, una por cada entrega que llegue. Se identifica por fecha, hora e inspectora, no por un folio consecutivo.</HelpTip>
           </div>
           <p className="text-sm text-[#5b6472]">Recepción de Materia Prima · F-GC-01U</p>
+          {filtrosActivos > 0 && (
+            <p className="text-xs text-[#94a3b8]">Mostrando {registrosFiltrados.length} de {registros.length}</p>
+          )}
         </div>
         {canEdit && !showForm && (
           <button
@@ -463,8 +490,62 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
         <NuevaInspeccionForm puntos={puntos} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
       )}
 
+      {registros.length > 0 && (
+        <div className={`${cardClass} p-3`}>
+          <div role="button" tabIndex={0} onClick={() => setShowFiltros((v) => !v)} className="flex cursor-pointer items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-[#0f1f3d]">
+              🔍 Filtros
+              {filtrosActivos > 0 && <span className="rounded-full bg-[#c9a227] px-1.5 py-0.5 text-[10px] font-bold text-white">{filtrosActivos}</span>}
+            </span>
+            <span className={`shrink-0 text-[#94a3b8] transition-transform ${showFiltros ? "rotate-180" : ""}`}>⌄</span>
+          </div>
+          {showFiltros && (
+            <div className="mt-3 space-y-2.5 border-t border-[#edf0f4] pt-3">
+              <label className={`${labelClass} block`}>
+                Buscar
+                <input
+                  value={filtros.busqueda}
+                  onChange={(e) => setFiltros((f) => ({ ...f, busqueda: e.target.value }))}
+                  placeholder="Proveedor, MP, OC/Lote, inspectora…"
+                  className={inputClass}
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-2.5">
+                <label className={labelClass}>
+                  Desde
+                  <input type="date" value={filtros.desde} onChange={(e) => setFiltros((f) => ({ ...f, desde: e.target.value }))} className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  Hasta
+                  <input type="date" value={filtros.hasta} onChange={(e) => setFiltros((f) => ({ ...f, hasta: e.target.value }))} className={inputClass} />
+                </label>
+              </div>
+              <label className={`${labelClass} block`}>
+                Dictamen
+                <select value={filtros.dictamen} onChange={(e) => setFiltros((f) => ({ ...f, dictamen: e.target.value }))} className={inputClass}>
+                  <option value="">Todos</option>
+                  <option value="Conforme">Conforme</option>
+                  <option value="Conforme con observación">Conforme con observación</option>
+                  <option value="Producto No Conforme">Producto No Conforme</option>
+                </select>
+              </label>
+              {filtrosActivos > 0 && (
+                <button type="button" onClick={() => setFiltros(FILTROS_VACIO)} className="text-xs font-medium text-red-500 hover:text-red-600">
+                  Limpiar filtros
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {registros.length === 0 ? (
         <div className={`${cardClass} py-10 text-center text-sm font-medium text-[#94a3b8]`}>Aún no hay recepciones registradas.</div>
+      ) : registrosFiltrados.length === 0 ? (
+        <div className={`${cardClass} py-10 text-center text-sm font-medium text-[#94a3b8]`}>
+          Ninguna recepción coincide con los filtros.{" "}
+          <button type="button" onClick={() => setFiltros(FILTROS_VACIO)} className="font-semibold text-[#96771a] underline">Limpiar filtros</button>
+        </div>
       ) : (
         <div className="space-y-3">
           {grupos.map((grupo) => (
