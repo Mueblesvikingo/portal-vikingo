@@ -5,8 +5,10 @@ import {
   getInspeccionesMP,
   deleteRecorrido,
   sugerirMuestreo,
+  subirEvidencia,
 } from "../../services/calidadService";
 import EvidenciaUploader from "./EvidenciaUploader";
+import EvidenciaPicker from "./EvidenciaPicker";
 import HelpTip from "./HelpTip";
 import { cardClass, btnPrimaryClass, btnGhostClass, statusBadgeClass } from "./coreliTheme";
 
@@ -99,6 +101,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
   const [form, setForm] = useState(FORM_VACIO);
   const [valoresPuntos, setValoresPuntos] = useState({});
   const [cierre, setCierre] = useState(CIERRE_VACIO);
+  const [fotos, setFotos] = useState([]);
   const [saving, setSaving] = useState(false);
   const [clasificacion, setClasificacion] = useState("");
   const [openSection, setOpenSection] = useState("identificacion");
@@ -124,6 +127,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
       inspeccion: { ...form, cantidad: form.cantidad || null, muestra: form.muestra || sugerencia?.muestra || null, resultado, clasificacion: hayNC ? clasificacion || "Menor" : null },
       puntos: puntosPayload,
       cierre,
+      fotos,
     });
     setSaving(false);
   }
@@ -211,7 +215,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
         <AccordionSection
           icon="📝"
           title="Resultado y observaciones"
-          subtitle={form.observacion || form.accion_reinspeccion ? "Con observación / acción capturada" : "Clasificación, observación, acción/reinspección"}
+          subtitle={fotos.length > 0 ? `${fotos.length} foto(s) de evidencia` : (form.observacion || form.accion_reinspeccion ? "Con observación / acción capturada" : "Clasificación, observación, acción/reinspección, evidencia")}
           open={openSection === "resultado"}
           onToggle={() => toggle("resultado")}
         >
@@ -237,7 +241,12 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
             Acción / Reinspección
             <textarea value={form.accion_reinspeccion} onChange={(e) => setField("accion_reinspeccion", e.target.value)} rows={2} className={`${inputClass} resize-none`} />
           </label>
-          <p className="mt-2 text-[11px] text-[#94a3b8]">La foto de evidencia se agrega después de guardar, desde la lista.</p>
+          <label className={`${labelClass} mt-3 block`}>
+            Evidencia fotográfica
+            <span className="mt-1 block normal-case">
+              <EvidenciaPicker fotos={fotos} onChange={setFotos} />
+            </span>
+          </label>
         </AccordionSection>
 
         <AccordionSection
@@ -388,9 +397,15 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleGuardar({ inspeccion, puntos: puntosPayload, cierre }) {
+  async function handleGuardar({ inspeccion, puntos: puntosPayload, cierre, fotos }) {
     const result = await crearInspeccionMP({ fecha: todayISO(), jornada: "07:00–17:00", inspeccion, puntos: puntosPayload, cierre }, currentUser);
     if (!result.ok) { window.alert("No fue posible guardar la recepción."); return; }
+    const inspeccionId = result.data?.calidad_inspecciones?.[0]?.id;
+    if (inspeccionId && fotos?.length) {
+      for (const foto of fotos) {
+        await subirEvidencia(inspeccionId, foto.blob, currentUser);
+      }
+    }
     setShowForm(false);
     loadRegistros();
   }
