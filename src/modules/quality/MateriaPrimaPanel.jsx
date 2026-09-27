@@ -862,7 +862,12 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [verId, setVerId] = useState(null);
-  const [filtros, setFiltros] = useState(FILTROS_VACIO);
+  // Por default el filtro arranca acotado a la semana actual (lunes a
+  // domingo) — "Limpiar filtros" sí quita esta acotación por completo.
+  const [filtros, setFiltros] = useState(() => {
+    const hoy = todayISO();
+    return { ...FILTROS_VACIO, desde: inicioSemanaISO(hoy), hasta: finSemanaISO(hoy) };
+  });
   const [showFiltros, setShowFiltros] = useState(false);
   const [showImprimir, setShowImprimir] = useState(false);
   const [printJob, setPrintJob] = useState(null);
