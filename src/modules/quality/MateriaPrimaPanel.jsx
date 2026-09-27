@@ -794,25 +794,37 @@ function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, incluir
         CRITERIO: La Matriz / plano / ficha técnica vigente establece la aceptación. Ante condición no contemplada: no asumir; documentar y escalar a Gestión de Calidad.
       </p>
 
-      <p className="mt-3 px-2 py-1 text-[9px] font-bold text-white" style={{ background: EXCEL_COLOR.encabezadoTabla }}>
-        {registros.length === 1 ? "CIERRE / DICTAMEN DEL RECORRIDO" : "CIERRE / DICTAMEN POR RECEPCIÓN"}
-      </p>
-      {registros.map((r) => (
-        <div key={r.id} className="mt-1 px-2 py-1 text-[9px]">
-          {registros.length > 1 && (
-            <p className="font-semibold">{ddmmyyyy(r.fecha)} · {horaCorta(r.calidad_inspecciones?.[0]?.hora)}</p>
-          )}
-          <p>
-            {["Conforme", "Conforme con observación", "Producto No Conforme"].map((d) => (
-              <span key={d} className="mr-3">{r.dictamen === d ? "☑" : "☐"} {d}</span>
-            ))}
-          </p>
-          <p>Observación general / pendientes: {r.observacion_general || "—"}</p>
-          <p>
-            Firma Inspectora: {r.firma_inspectora || "—"} &nbsp;&nbsp; Responsable de área: {r.responsable_area_nombre || "—"} &nbsp;&nbsp; Gerente de Calidad: {r.gerente_calidad_nombre || "—"}
-          </p>
-        </div>
-      ))}
+      <p className="mt-3 px-2 py-1 text-[9px] font-bold text-white" style={{ background: EXCEL_COLOR.encabezadoTabla }}>CIERRE / DICTAMEN</p>
+      <table className="w-full border-collapse text-[8px]">
+        <colgroup>
+          <col style={{ width: "13%" }} />
+          <col style={{ width: "17%" }} />
+          <col style={{ width: "40%" }} />
+          <col style={{ width: "30%" }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="border border-black px-1 py-1 font-bold" style={{ background: EXCEL_COLOR.leyendaFondo }}>Recepción</th>
+            <th className="border border-black px-1 py-1 font-bold" style={{ background: EXCEL_COLOR.leyendaFondo }}>Dictamen</th>
+            <th className="border border-black px-1 py-1 font-bold" style={{ background: EXCEL_COLOR.leyendaFondo }}>Observación general / pendientes</th>
+            <th className="border border-black px-1 py-1 font-bold" style={{ background: EXCEL_COLOR.leyendaFondo }}>Firmas</th>
+          </tr>
+        </thead>
+        <tbody>
+          {registros.map((r) => (
+            <tr key={r.id}>
+              <td className="border border-black px-1 py-1">{ddmmyyyy(r.fecha)} · {horaCorta(r.calidad_inspecciones?.[0]?.hora)}</td>
+              <td className="border border-black px-1 py-1">☑ {r.dictamen || "—"}</td>
+              <td className="border border-black px-1 py-1">{r.observacion_general || "—"}</td>
+              <td className="border border-black px-1 py-1">
+                Inspectora: {r.firma_inspectora || "—"}<br />
+                Resp. área: {r.responsable_area_nombre || "—"}<br />
+                Gerente Calidad: {r.gerente_calidad_nombre || "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       {incluirFotos && (() => {
         const fotos = registros.flatMap((r) => {
@@ -825,9 +837,9 @@ function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, incluir
         return (
           <div className="mt-3" style={{ pageBreakBefore: "always" }}>
             <p className="px-2 py-1 text-[9px] font-bold text-white" style={{ background: EXCEL_COLOR.titulo }}>EVIDENCIA FOTOGRÁFICA</p>
-            <div className="mt-1 flex flex-wrap">
+            <div className="mt-1 flex flex-wrap" style={{ gap: "8px" }}>
               {fotos.map(({ ev, r, insp, indice }) => (
-                <div key={ev.id} className="gc-foto-box flex flex-col border border-black" style={{ width: "5.5in", height: "4.25in" }}>
+                <div key={ev.id} className="gc-foto-box flex flex-col border border-black" style={{ width: "calc(50% - 4px)", height: "3.5in" }}>
                   <div className="flex-1 overflow-hidden">
                     <img src={ev.url} alt="Evidencia" className="h-full w-full object-contain" />
                   </div>
@@ -923,7 +935,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
         .gc-gold-pulse { animation: gcGoldPulse 2.8s ease-in-out infinite; }
         .gc-print-portal { display: none; }
         @media print {
-          @page { size: 11in 8.5in; margin: 10mm; }
+          @page { size: letter landscape; margin: 10mm; }
           html, body { height: auto !important; }
           #root { display: none !important; }
           .gc-print-portal {
