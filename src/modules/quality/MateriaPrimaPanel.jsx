@@ -73,17 +73,24 @@ function PuntoControlChip({ letra, valor, onChange }) {
 // Sección desplegable — para ir llenando el registro por partes en vez de un
 // formulario largo de un jalón (pedido explícito, pensado para celular).
 // Solo una sección abierta a la vez.
-function AccordionSection({ icon, title, subtitle, open, onToggle, children }) {
+function AccordionSection({ icon, title, subtitle, help, open, onToggle, children }) {
   return (
     <div className="overflow-hidden rounded-xl border border-[#edf0f4]">
-      <button type="button" onClick={onToggle} className="flex w-full items-center gap-2.5 bg-[#f7f7f4] px-3 py-2.5 text-left transition active:bg-[#edf0f4]">
+      <div role="button" tabIndex={0} onClick={onToggle} className="flex w-full cursor-pointer items-center gap-2.5 bg-[#f7f7f4] px-3 py-2.5 text-left transition active:bg-[#edf0f4]">
         <span className="text-base">{icon}</span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-[#0f1f3d]">{title}</span>
+          <span className="flex items-center gap-1.5">
+            <span className="block text-sm font-semibold text-[#0f1f3d]">{title}</span>
+            {help && (
+              <span onClick={(e) => e.stopPropagation()}>
+                <HelpTip>{help}</HelpTip>
+              </span>
+            )}
+          </span>
           {subtitle && <span className="block text-xs text-[#5b6472]">{subtitle}</span>}
         </span>
         <span className={`shrink-0 text-[#94a3b8] transition-transform ${open ? "rotate-180" : ""}`}>⌄</span>
-      </button>
+      </div>
       {open && <div className="p-3">{children}</div>}
     </div>
   );
@@ -140,6 +147,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
         <AccordionSection
           icon="📋"
           title="Identificación"
+          help="Del formato F-GC-01U: seleccionar la MP a inspeccionar y registrar OC/Lote, proveedor y lote/identificación."
           subtitle={form.producto_texto || "Hora, OC/Lote, proveedor, MP, lote…"}
           open={openSection === "identificacion"}
           onToggle={() => toggle("identificacion")}
@@ -171,6 +179,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
         <AccordionSection
           icon="🔢"
           title="Cantidad y muestra"
+          help="Cant. = tamaño del lote recibido. Muestra = cuántas piezas revisar, según el Plan de Muestreo Ac/Re del formato (ver pestaña Guías si quieres consultar la tabla completa)."
           subtitle={form.cantidad ? `Cant. ${form.cantidad} · Muestra ${form.muestra || sugerencia?.muestra || "—"}` : "Tamaño de lote y tamaño de muestra"}
           open={openSection === "cantidad"}
           onToggle={() => toggle("cantidad")}
@@ -195,6 +204,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
         <AccordionSection
           icon="✅"
           title="Puntos de control"
+          help="Del formato F-GC-01U: marcar cada punto como C = Cumple, NC = No Cumple, o NA = No aplica. La Matriz/plano/ficha técnica vigente establece la aceptación de cada uno."
           subtitle={puntosMarcados > 0 ? `${puntosMarcados} de ${puntos.length} marcados · ${resultado}` : `${puntos.length} puntos (A-${puntos[puntos.length - 1]?.letra || "G"})`}
           open={openSection === "puntos"}
           onToggle={() => toggle("puntos")}
@@ -215,6 +225,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
         <AccordionSection
           icon="📝"
           title="Resultado y observaciones"
+          help="Del formato F-GC-01U: si existe una NC (No Cumple), registrar su clasificación, evidencia, acción y reinspección/liberación."
           subtitle={fotos.length > 0 ? `${fotos.length} foto(s) de evidencia` : (form.observacion || form.accion_reinspeccion ? "Con observación / acción capturada" : "Clasificación, observación, acción/reinspección, evidencia")}
           open={openSection === "resultado"}
           onToggle={() => toggle("resultado")}
@@ -252,6 +263,7 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
         <AccordionSection
           icon="🖊️"
           title="Cierre y firmas"
+          help="Del formato F-GC-01U (Cierre / dictamen): Conforme, Conforme con observación, o Producto No Conforme, más observación general/pendientes y las firmas de quien inspeccionó, el responsable de área y la fecha/hora de cierre."
           subtitle={cierre.dictamen || "Dictamen, observación general y firmas"}
           open={openSection === "cierre"}
           onToggle={() => toggle("cierre")}
