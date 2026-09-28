@@ -3,6 +3,7 @@ import MateriaPrimaPanel from "./MateriaPrimaPanel";
 import Planta1Panel from "./Planta1Panel";
 import Planta2Panel from "./Planta2Panel";
 import Planta3Panel from "./Planta3Panel";
+import ProductoTerminadoPanel from "./ProductoTerminadoPanel";
 import GuiasView from "./GuiasView";
 import ConfiguracionView from "./ConfiguracionView";
 import BottomNav from "./BottomNav";
@@ -35,6 +36,7 @@ const SECCIONES = [
   { key: "planta-1", titulo: "Planta 1", codigo: "F-GC-02U", icono: <IconoSierra />, disponible: true },
   { key: "planta-2", titulo: "Planta 2", codigo: "F-GC-03U", icono: "🧵", disponible: true },
   { key: "planta-3", titulo: "Planta 3", codigo: "F-GC-04U", icono: "🛋️", disponible: true },
+  { key: "producto-terminado", titulo: "Producto Terminado", codigo: "F-GC-05", icono: "📦", disponible: true },
 ];
 
 function SeccionTile({ seccion, onClick }) {
@@ -108,6 +110,8 @@ export default function QualityModule({ currentUser }) {
             <Planta2Panel currentUser={currentUser} />
           ) : seccionActiva.key === "planta-3" ? (
             <Planta3Panel currentUser={currentUser} />
+          ) : seccionActiva.key === "producto-terminado" ? (
+            <ProductoTerminadoPanel currentUser={currentUser} />
           ) : null}
         </>
       )}

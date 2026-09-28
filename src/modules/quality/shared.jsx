@@ -378,6 +378,25 @@ export function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, 
     colorLeyendaTitulo = EXCEL_COLOR.sub,
     colorLeyendaTexto = "#FFFFFF",
     colorCierreTitulo = EXCEL_COLOR.encabezadoTabla,
+    // Las 4 columnas finales (Resultado/Clasif./Observación/Acción) y la
+    // columna Firmas del cierre son iguales en Materia Prima/Planta 1/2/3 —
+    // Producto Terminado (F-GC-05) no las tiene igual (esos datos van en su
+    // propia "tablaExtra" de reinspección/liberación, y solo firma la
+    // inspectora), así que ambas son configurables con estos defaults.
+    columnasFinales = [
+      { render: (insp) => insp.resultado },
+      { render: (insp) => insp.clasificacion || "" },
+      { render: (insp) => insp.observacion },
+      { render: (insp) => insp.accion_reinspeccion },
+    ],
+    renderFirmas = (r) => (
+      <>
+        Inspectora: {r.firma_inspectora || "—"}<br />
+        Resp. área: {r.responsable_area_nombre || "—"}<br />
+        Gerente Calidad: {r.gerente_calidad_nombre || "—"}
+      </>
+    ),
+    tablaExtra,
   } = formato;
 
   // Algunos formatos (Planta 3) tienen más de un juego de puntos de control
@@ -434,15 +453,45 @@ export function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, 
                 {letras.map((l) => (
                   <td key={l} className="border border-black px-1 py-0.5 text-center">{valorPorLetra(insp, l)}</td>
                 ))}
-                <td className="border border-black px-1 py-0.5">{insp.resultado}</td>
-                <td className="border border-black px-1 py-0.5">{insp.clasificacion || ""}</td>
-                <td className="border border-black px-1 py-0.5">{insp.observacion}</td>
-                <td className="border border-black px-1 py-0.5">{insp.accion_reinspeccion}</td>
+                {columnasFinales.map((col, i) => (
+                  <td key={i} className="border border-black px-1 py-0.5">{col.render(insp)}</td>
+                ))}
               </tr>
             );
           })}
         </tbody>
       </table>
+
+      {tablaExtra && (
+        <>
+          <p className="mt-3 px-2 py-1 text-[9px] font-bold" style={{ background: tablaExtra.color, color: tablaExtra.colorTexto }}>{tablaExtra.titulo}</p>
+          <table className="w-full border-collapse text-[8px]">
+            <colgroup>
+              {tablaExtra.columnas.map((c, i) => <col key={i} style={{ width: `${100 / tablaExtra.columnas.length}%` }} />)}
+            </colgroup>
+            <thead>
+              <tr>
+                {tablaExtra.columnas.map((h) => (
+                  <th key={h} className="border border-black px-1 py-1 font-bold" style={{ background: EXCEL_COLOR.leyendaFondo }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {registros.map((r) => {
+                const insp = r.calidad_inspecciones?.[0];
+                if (!insp) return null;
+                return (
+                  <tr key={r.id}>
+                    {tablaExtra.renderFila(r, insp).map((v, i) => (
+                      <td key={i} className="border border-black px-1 py-0.5">{v}</td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
 
       <p className="mt-3 px-2 py-1 text-[9px] font-bold" style={{ background: colorLeyendaTitulo, color: colorLeyendaTexto }}>LEYENDA DE PUNTOS DE CONTROL</p>
       {leyendaGrupos ? (
@@ -493,11 +542,7 @@ export function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, 
               <td className="border border-black px-1 py-1">{ddmmyyyy(r.fecha)} · {horaCorta(r.calidad_inspecciones?.[0]?.hora)}</td>
               <td className="border border-black px-1 py-1">☑ {r.dictamen || "—"}</td>
               <td className="border border-black px-1 py-1">{r.observacion_general || "—"}</td>
-              <td className="border border-black px-1 py-1">
-                Inspectora: {r.firma_inspectora || "—"}<br />
-                Resp. área: {r.responsable_area_nombre || "—"}<br />
-                Gerente Calidad: {r.gerente_calidad_nombre || "—"}
-              </td>
+              <td className="border border-black px-1 py-1">{renderFirmas(r)}</td>
             </tr>
           ))}
         </tbody>
@@ -563,7 +608,7 @@ function BotonRecordatorio({ onEnviar }) {
   );
 }
 
-export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, canEdit, onClose, onDelete, onEvidenciaChange, renderIdentificacion, renderCantidadMuestra, tituloEliminar = "Eliminar registro", gerenteCalidadPersonaId, onFirmarResponsable, onFirmarGerente, onEnviarRecordatorio }) {
+export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, canEdit, onClose, onDelete, onEvidenciaChange, renderIdentificacion, renderCantidadMuestra, tituloEliminar = "Eliminar registro", gerenteCalidadPersonaId, onFirmarResponsable, onFirmarGerente, onEnviarRecordatorio, mostrarFirmasArea = true }) {
   const [openSection, setOpenSection] = useState("identificacion");
   const insp = registro.calidad_inspecciones?.[0];
   if (!insp) return null;
@@ -654,42 +699,46 @@ export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, ca
               <CampoTexto label="Dictamen" value={registro.dictamen} />
               <div className="mt-3"><CampoTexto label="Observación general / pendientes" value={registro.observacion_general} /></div>
               <p className="mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">Firmas</p>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className={`grid gap-2 ${mostrarFirmasArea ? "sm:grid-cols-3" : ""}`}>
                 <FirmaCard rol="Inspectora" firmado={!!registro.firma_inspectora}>
                   {registro.firma_inspectora
                     ? <NombreFirma nombre={registro.firma_inspectora} />
                     : <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>}
                 </FirmaCard>
 
-                <FirmaCard rol="Supervisor de área" firmado={!!registro.responsable_area_nombre}>
-                  {registro.responsable_area_nombre ? (
-                    <NombreFirma nombre={registro.responsable_area_nombre} fecha={registro.responsable_area_firmado_at} />
-                  ) : Number(currentUser?.persona_id) === Number(registro.responsable_area_persona_id) ? (
-                    <button type="button" onClick={() => onFirmarResponsable(registro)} className="mt-0.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Firmar</button>
-                  ) : (
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>
-                      {canEdit && registro.responsable_area_persona_id && (
-                        <BotonRecordatorio onEnviar={() => onEnviarRecordatorio(registro.responsable_area_persona_id, registro)} />
+                {mostrarFirmasArea && (
+                  <>
+                    <FirmaCard rol="Supervisor de área" firmado={!!registro.responsable_area_nombre}>
+                      {registro.responsable_area_nombre ? (
+                        <NombreFirma nombre={registro.responsable_area_nombre} fecha={registro.responsable_area_firmado_at} />
+                      ) : Number(currentUser?.persona_id) === Number(registro.responsable_area_persona_id) ? (
+                        <button type="button" onClick={() => onFirmarResponsable(registro)} className="mt-0.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Firmar</button>
+                      ) : (
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>
+                          {canEdit && registro.responsable_area_persona_id && (
+                            <BotonRecordatorio onEnviar={() => onEnviarRecordatorio(registro.responsable_area_persona_id, registro)} />
+                          )}
+                        </div>
                       )}
-                    </div>
-                  )}
-                </FirmaCard>
+                    </FirmaCard>
 
-                <FirmaCard rol="Gerente de Calidad" firmado={!!registro.gerente_calidad_nombre}>
-                  {registro.gerente_calidad_nombre ? (
-                    <NombreFirma nombre={registro.gerente_calidad_nombre} fecha={registro.gerente_calidad_firmado_at} />
-                  ) : Number(currentUser?.persona_id) === gerenteCalidadPersonaId ? (
-                    <button type="button" onClick={() => onFirmarGerente(registro)} className="mt-0.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Firmar</button>
-                  ) : (
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>
-                      {canEdit && (
-                        <BotonRecordatorio onEnviar={() => onEnviarRecordatorio(gerenteCalidadPersonaId, registro)} />
+                    <FirmaCard rol="Gerente de Calidad" firmado={!!registro.gerente_calidad_nombre}>
+                      {registro.gerente_calidad_nombre ? (
+                        <NombreFirma nombre={registro.gerente_calidad_nombre} fecha={registro.gerente_calidad_firmado_at} />
+                      ) : Number(currentUser?.persona_id) === gerenteCalidadPersonaId ? (
+                        <button type="button" onClick={() => onFirmarGerente(registro)} className="mt-0.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white">Firmar</button>
+                      ) : (
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[11px] font-medium text-slate-400">Sin firmar</span>
+                          {canEdit && (
+                            <BotonRecordatorio onEnviar={() => onEnviarRecordatorio(gerenteCalidadPersonaId, registro)} />
+                          )}
+                        </div>
                       )}
-                    </div>
-                  )}
-                </FirmaCard>
+                    </FirmaCard>
+                  </>
+                )}
               </div>
             </AccordionSection>
           </div>

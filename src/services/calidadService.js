@@ -288,6 +288,16 @@ export async function crearInspeccionUnica({ planta, fecha, jornada, inspeccion,
         clasificacion: inspeccion.clasificacion || null,
         observacion: inspeccion.observacion || null,
         accion_reinspeccion: inspeccion.accion_reinspeccion || null,
+        // Propios de Inspección y Liberación de Producto Terminado (F-GC-05)
+        // — nulos para el resto de los formatos.
+        modelo: inspeccion.modelo || null,
+        cliente_destino: inspeccion.cliente_destino || null,
+        ac: inspeccion.ac || null,
+        re: inspeccion.re || null,
+        nc_menor: inspeccion.nc_menor || null,
+        nc_mayor_critico: inspeccion.nc_mayor_critico || null,
+        resultado_reinspeccion: inspeccion.resultado_reinspeccion || null,
+        hora_liberacion: inspeccion.hora_liberacion || null,
         created_by_persona_id: personaId,
         created_by_nombre: nombre,
       })
