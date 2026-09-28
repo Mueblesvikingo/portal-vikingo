@@ -122,12 +122,18 @@ export default function CartaPView() {
 
       <SelectorPeriodoSPC periodo={periodo} setPeriodo={setPeriodo} fechaRef={fechaRef} setFechaRef={setFechaRef} />
 
+      {/* min-h fijo para que al cambiar de planta/período no "parpadee" la
+          pantalla — sin esto, el mensaje de Cargando (una línea) colapsaba
+          el layout y luego saltaba de golpe al alto real de la gráfica. */}
+      <div className="min-h-[320px]">
       {loading ? (
-        <p className="py-6 text-center text-sm text-[#94a3b8]">Cargando…</p>
+        <div className="flex h-[320px] items-center justify-center">
+          <p className="text-sm font-medium text-[#94a3b8]">Cargando…</p>
+        </div>
       ) : datos.puntos.length === 0 ? (
         <p className="rounded-xl bg-[#f7f7f4] px-3 py-6 text-center text-sm text-[#5b6472]">Sin inspecciones registradas en {planta} ({label}).</p>
       ) : (
-        <>
+        <div className="space-y-3">
           <p className="text-xs text-[#5b6472]">
             {label} — {datos.totalDias} día(s) con inspección · {datos.totalN} puntos evaluados · <span className="font-semibold">p̄ = {pBarraPct}%</span> de NC en promedio.
           </p>
@@ -176,8 +182,9 @@ export default function CartaPView() {
           ) : (
             <p className="rounded-xl bg-[#f7f7f4] px-3 py-2.5 text-center text-xs text-[#5b6472]">Proceso bajo control: ningún día se sale de sus límites.</p>
           )}
-        </>
+        </div>
       )}
+      </div>
     </div>
   );
 }
