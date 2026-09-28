@@ -29,6 +29,22 @@ export function agruparPorMes(registros) {
   return Array.from(grupos.values());
 }
 
+// El historial se agrupa por semana (lunes a domingo) en vez de por mes —
+// una tabla por semana, cada una con su propia identificación ("Semana
+// DD/MM – DD/MM"), apiladas de la más reciente a la más antigua. Los
+// registros ya llegan ordenados desc por fecha, así que el primer registro
+// de cada semana nueva define el orden de inserción del Map.
+export function agruparPorSemana(registros) {
+  const grupos = new Map();
+  for (const r of registros) {
+    const inicio = inicioSemanaISO(r.fecha);
+    const fin = finSemanaISO(r.fecha);
+    if (!grupos.has(inicio)) grupos.set(inicio, { label: `Semana ${ddmmyyyy(inicio)} – ${ddmmyyyy(fin)}`, items: [] });
+    grupos.get(inicio).items.push(r);
+  }
+  return Array.from(grupos.values());
+}
+
 // La columna "hora" en Supabase es tipo `time` y regresa "HH:MM:SS" — en
 // pantalla solo queremos "HH:MM".
 export function horaCorta(hora) {

@@ -19,7 +19,7 @@ import HelpTip from "./HelpTip";
 import { cardClass, btnPrimaryClass, btnGhostClass, STATUS_STYLES } from "./coreliTheme";
 import imprimirIcon from "../../assets/calidad-imprimir-icon.jpg";
 import {
-  todayISO, nowHHMM, agruparPorMes, horaCorta, dictamenCorto,
+  todayISO, nowHHMM, agruparPorSemana, horaCorta, dictamenCorto,
   inicioSemanaISO, finSemanaISO, aplicarFiltrosRegistros,
   PuntoControlChip, AccordionSection, CampoTexto, FirmaCard, inputClass, labelClass,
   PRINT_STYLE_BLOCK, ImprimirModal, ReciboImprimible, DetalleRegistroModal,
@@ -438,7 +438,7 @@ export default function Planta1Panel({ currentUser, canEdit = true }) {
   if (loading) return <div className="py-10 text-center text-sm font-medium text-[#94a3b8]">Cargando…</div>;
 
   const registrosFiltrados = aplicarFiltrosRegistros(registros, filtros, camposBusquedaPlanta1);
-  const grupos = agruparPorMes(registrosFiltrados);
+  const grupos = agruparPorSemana(registrosFiltrados);
   const filtrosActivos = Object.values(filtros).filter(Boolean).length;
   const verRegistro = registros.find((r) => r.id === verId) || null;
 
