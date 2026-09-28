@@ -117,18 +117,21 @@ export default function ParetoView() {
 
       <SelectorPeriodoSPC periodo={periodo} setPeriodo={setPeriodo} fechaRef={fechaRef} setFechaRef={setFechaRef} />
 
-      {/* min-h fijo para que al cambiar de planta/período no "parpadee" la
-          pantalla — sin esto, el mensaje de Cargando (una línea) colapsaba
-          el layout y luego saltaba de golpe al alto real de la gráfica. */}
+      {/* Si ya había una gráfica cargada, se queda visible (atenuada, con
+          "Actualizando…") mientras llega la nueva — así al cambiar de planta
+          o período la gráfica anterior NUNCA se desmonta de golpe, que era
+          la causa real del parpadeo (un min-h por sí solo no lo evitaba: el
+          árbol de recharts se destruía y volvía a montar en cada cambio).
+          El bloque "Cargando" a pantalla completa solo aparece en la
+          primerísima carga, cuando todavía no hay nada que mostrar. */}
       <div className="min-h-[320px]">
-      {loading ? (
-        <div className="flex h-[320px] items-center justify-center">
-          <p className="text-sm font-medium text-[#94a3b8]">Cargando…</p>
-        </div>
-      ) : filas.length === 0 ? (
-        <p className="rounded-xl bg-[#f7f7f4] px-3 py-6 text-center text-sm text-[#5b6472]">Sin no conformidades registradas en {planta} ({label}).</p>
-      ) : (
-        <div className="space-y-3">
+      {filas.length > 0 ? (
+        <div className={`relative space-y-3 transition-opacity ${loading ? "opacity-50" : ""}`}>
+          {loading && (
+            <div className="absolute inset-0 z-10 flex items-start justify-center pt-2">
+              <p className="rounded-full border border-[#edf0f4] bg-white px-3 py-1 text-[11px] font-semibold text-[#5b6472] shadow-sm">Actualizando…</p>
+            </div>
+          )}
           <p className="text-xs text-[#5b6472]">
             {label} — {totalNC} no conformidad(es) en {totalInspecciones} inspección(es) — {filas.length} punto(s) distinto(s) con NC.
           </p>
@@ -164,6 +167,12 @@ export default function ParetoView() {
             ))}
           </div>
         </div>
+      ) : loading ? (
+        <div className="flex h-[320px] items-center justify-center">
+          <p className="text-sm font-medium text-[#94a3b8]">Cargando…</p>
+        </div>
+      ) : (
+        <p className="rounded-xl bg-[#f7f7f4] px-3 py-6 text-center text-sm text-[#5b6472]">Sin no conformidades registradas en {planta} ({label}).</p>
       )}
       </div>
     </div>
