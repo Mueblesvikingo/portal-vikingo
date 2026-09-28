@@ -45,20 +45,20 @@ function SeccionTile({ seccion, onClick }) {
       type="button"
       onClick={() => seccion.disponible && onClick(seccion.key)}
       disabled={!seccion.disponible}
-      className={`flex flex-col items-center p-4 transition ${cardClass} ${
+      className={`flex flex-col items-center p-2.5 transition ${cardClass} ${
         seccion.disponible ? "active:scale-[0.98] hover:border-[#f0d885] hover:shadow-[0_8px_16px_-4px_rgba(11,31,58,0.12),0_24px_48px_-12px_rgba(11,31,58,0.18)]" : "opacity-50"
       }`}
     >
-      <span className={`flex h-12 w-12 items-center justify-center rounded-xl text-2xl ${seccion.disponible ? "bg-[#fdf7e6]" : "bg-[#f7f7f4]"}`}>
+      <span className={`flex h-9 w-9 items-center justify-center rounded-lg text-lg ${seccion.disponible ? "bg-[#fdf7e6]" : "bg-[#f7f7f4]"}`}>
         {seccion.icono}
       </span>
-      <p className="mt-2.5 text-sm font-semibold text-[#0f1f3d]">{seccion.titulo}</p>
-      <p className="text-xs text-[#5b6472]">{seccion.codigo}</p>
-      <span className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-        seccion.disponible ? "border border-green-200 bg-green-50 text-green-700" : "border border-[#edf0f4] bg-[#f7f7f4] text-[#5b6472]"
-      }`}>
-        {seccion.disponible ? "Disponible" : "Próximamente"}
-      </span>
+      <p className="mt-1.5 text-center text-xs font-semibold leading-tight text-[#0f1f3d]">{seccion.titulo}</p>
+      <p className="text-[10px] text-[#5b6472]">{seccion.codigo}</p>
+      {!seccion.disponible && (
+        <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-[#edf0f4] bg-[#f7f7f4] px-2 py-0.5 text-[9px] font-medium text-[#5b6472]">
+          Próximamente
+        </span>
+      )}
     </button>
   );
 }
@@ -77,19 +77,19 @@ export default function QualityModule({ currentUser }) {
     <section className="mx-auto max-w-6xl px-3 pb-20 pt-4 sm:px-4 lg:pb-4">
       {bottomTab === "inicio" && (
         <>
-          <header className="mb-4 flex items-center gap-3 rounded-2xl bg-[#0b1f3a] px-4 py-3.5 sm:px-5">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#b8931f]">
-              <span className="text-base">✅</span>
+          <header className="mb-2.5 flex items-center gap-2.5 rounded-xl bg-[#0b1f3a] px-3 py-2 sm:px-4">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#b8931f]">
+              <span className="text-sm">✅</span>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">Gestión de Calidad</p>
-              <p className="text-lg font-bold text-white">{seccionActiva ? seccionActiva.titulo : "Formatos de inspección"}</p>
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-white/50">Gestión de Calidad</p>
+              <p className="truncate text-sm font-bold text-white">{seccionActiva ? seccionActiva.titulo : "Formatos de inspección"}</p>
             </div>
             {seccionActiva && (
               <button
                 type="button"
                 onClick={() => setActiveSection(null)}
-                className="shrink-0 rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10"
+                className="shrink-0 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/80 transition hover:bg-white/10"
               >
                 ← Volver
               </button>
@@ -97,7 +97,7 @@ export default function QualityModule({ currentUser }) {
           </header>
 
           {!seccionActiva ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               {SECCIONES.map((s) => (
                 <SeccionTile key={s.key} seccion={s} onClick={setActiveSection} />
               ))}
