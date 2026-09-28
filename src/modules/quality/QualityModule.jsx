@@ -7,6 +7,7 @@ import ProductoTerminadoPanel from "./ProductoTerminadoPanel";
 import GuiasView from "./GuiasView";
 import ConfiguracionView from "./ConfiguracionView";
 import ParetoView from "./ParetoView";
+import CartaPView from "./CartaPView";
 import BottomNav from "./BottomNav";
 import { cardClass } from "./coreliTheme";
 
@@ -46,6 +47,7 @@ const SECCIONES = [
 // mismo más adelante.
 const HERRAMIENTAS = [
   { key: "pareto", titulo: "Pareto", codigo: "SPC", icono: "📈", disponible: true },
+  { key: "carta-p", titulo: "Carta p", codigo: "SPC", icono: "🎯", disponible: true },
 ];
 
 function SeccionTile({ seccion, onClick }) {
@@ -143,6 +145,8 @@ export default function QualityModule({ currentUser }) {
             <ProductoTerminadoPanel currentUser={currentUser} />
           ) : herramientaActiva?.key === "pareto" ? (
             <ParetoView />
+          ) : herramientaActiva?.key === "carta-p" ? (
+            <CartaPView />
           ) : null}
         </>
       )}
