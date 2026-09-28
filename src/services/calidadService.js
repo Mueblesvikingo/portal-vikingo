@@ -49,6 +49,35 @@ export async function createProveedor(nombre) {
   }
 }
 
+// Catálogo de colaboradores operativos (Configuración > Colaboradores) —
+// cargado desde la nómina real, solo personal de piso (se omite a propósito
+// administrativos, gerencias, supervisores y jefes).
+export async function getColaboradores() {
+  try {
+    const { data, error } = await supabase.from("calidad_colaboradores").select("*").eq("activo", true).order("nombre");
+    if (error) return { ok: false, error, data: [] };
+    return { ok: true, error: null, data: data || [] };
+  } catch (err) {
+    console.error("Error inesperado al leer colaboradores:", err);
+    return { ok: false, error: err, data: [] };
+  }
+}
+
+export async function createColaborador({ numero_empleado, nombre, area, puesto }) {
+  try {
+    const { data, error } = await supabase
+      .from("calidad_colaboradores")
+      .insert({ numero_empleado: numero_empleado || null, nombre: nombre.trim(), area: area?.trim() || null, puesto: puesto?.trim() || null })
+      .select()
+      .single();
+    if (error) return { ok: false, error };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al crear colaborador:", err);
+    return { ok: false, error: err };
+  }
+}
+
 // Plan de muestreo interno Vikingo (Ac/Re por tamaño de lote, hasta 50 piezas
 // por OP) — misma tabla del PDF compartido, para sugerir Muestra/Ac/Re
 // automáticamente y que la inspectora no tenga que consultarlo a mano. Ac/Re
