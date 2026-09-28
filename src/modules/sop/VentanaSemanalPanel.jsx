@@ -69,8 +69,11 @@ function formatFecha(date) {
   return date.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+// No usar date.toISOString() aquí (ver comentario en sopHelpers.toISODate):
+// convierte a UTC antes de cortar la fecha y corre el día hacia adelante
+// desde media tarde en zonas detrás de UTC (México).
 function toISODate(date) {
-  return date.toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 // Reemplaza, mientras está activa la "Vista semanal" del módulo, el

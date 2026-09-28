@@ -11,8 +11,15 @@ import vikingoLogo from "../../assets/vikingo-logo.png";
 // original de cada formato. Los campos concretos (columnas, leyenda,
 // colores del formato) SÍ difieren por planta y viven en cada panel.
 
+// OJO: no usar new Date().toISOString() aquí — convierte a UTC antes de
+// cortar la fecha, así que en cualquier zona horaria detrás de UTC (México,
+// UTC-6) desde ~las 18:00 locales ya devuelve la fecha de MAÑANA (bug real:
+// el filtro por defecto de la semana se armaba con el lunes equivocado, y
+// una inspección capturada de noche se guardaba con la fecha del día
+// siguiente). Se arma la fecha ISO a mano con los componentes en hora local.
 export function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 export function nowHHMM() {
   return new Date().toTimeString().slice(0, 5);

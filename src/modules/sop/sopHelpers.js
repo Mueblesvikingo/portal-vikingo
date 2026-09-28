@@ -135,8 +135,13 @@ export function formatFechaCorta(date) {
   return date.toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
 }
 
+// No usar date.toISOString() aquí: convierte a UTC antes de cortar la
+// fecha, y los Date que arma getProximoLunes() conservan la hora actual
+// (no medianoche) — en una zona horaria detrás de UTC (México) eso corre la
+// fecha un día hacia adelante desde media tarde en adelante. Se arma la
+// fecha ISO con los componentes en hora local para evitarlo.
 export function toISODate(date) {
-  return date.toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 // Rango [lunes, domingo] de la semana de referencia, en ISO — útil para
