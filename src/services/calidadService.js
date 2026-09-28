@@ -24,6 +24,31 @@ export async function getPersonasActivas() {
   }
 }
 
+// Catálogo de proveedores de Materia Prima (Configuración > Proveedores).
+export async function getProveedores() {
+  try {
+    const { data, error } = await supabase.from("calidad_proveedores").select("*").eq("activo", true).order("nombre");
+    if (error) return { ok: false, error, data: [] };
+    return { ok: true, error: null, data: data || [] };
+  } catch (err) {
+    console.error("Error inesperado al leer proveedores:", err);
+    return { ok: false, error: err, data: [] };
+  }
+}
+
+export async function createProveedor(nombre) {
+  try {
+    const { data: max } = await supabase.from("calidad_proveedores").select("clave").order("clave", { ascending: false }).limit(1).maybeSingle();
+    const siguienteClave = (max?.clave || 0) + 1;
+    const { data, error } = await supabase.from("calidad_proveedores").insert({ nombre: nombre.trim(), clave: siguienteClave }).select().single();
+    if (error) return { ok: false, error };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al crear proveedor:", err);
+    return { ok: false, error: err };
+  }
+}
+
 // Plan de muestreo interno Vikingo (Ac/Re por tamaño de lote, hasta 50 piezas
 // por OP) — misma tabla del PDF compartido, para sugerir Muestra/Ac/Re
 // automáticamente y que la inspectora no tenga que consultarlo a mano. Ac/Re
