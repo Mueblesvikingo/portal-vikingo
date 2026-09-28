@@ -50,6 +50,15 @@ const CAMPOS_POR_PESTANA = {
 function getProximoLunes() {
   const hoy = new Date();
   const dia = hoy.getDay(); // 0=domingo ... 1=lunes ... 6=sábado
+  // En sábado o domingo el filtro debe caer en la semana que acaba de
+  // trabajarse (lunes a viernes recién terminado), no en la próxima —
+  // mismo criterio que sopHelpers.getProximoLunes (función duplicada aquí).
+  if (dia === 0 || dia === 6) {
+    const diasDesdeLunes = dia === 0 ? 6 : 5;
+    const lunes = new Date(hoy);
+    lunes.setDate(hoy.getDate() - diasDesdeLunes);
+    return lunes;
+  }
   const diasHastaLunes = dia === 1 ? 7 : ((8 - dia) % 7) || 7;
   const lunes = new Date(hoy);
   lunes.setDate(hoy.getDate() + diasHastaLunes);
