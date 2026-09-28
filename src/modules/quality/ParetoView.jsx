@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
 import { getInspeccionesUnica, getPuntosControl, getPuntosControlPorProceso } from "../../services/calidadService";
 import { cardClass } from "./coreliTheme";
+import { calcularPeriodo, todayISO, SelectorPeriodoSPC } from "./shared";
 
 // Pareto de no conformidades por punto de control — cuenta cuántas veces
 // cada punto (letra) salió NC entre todas las inspecciones ya guardadas de
@@ -63,10 +64,14 @@ function ParetoTooltip({ active, payload }) {
 
 export default function ParetoView() {
   const [planta, setPlanta] = useState("Materia Prima");
+  const [periodo, setPeriodo] = useState("mes");
+  const [fechaRef, setFechaRef] = useState(todayISO());
   const [loading, setLoading] = useState(true);
   const [filas, setFilas] = useState([]);
   const [totalInspecciones, setTotalInspecciones] = useState(0);
   const [totalNC, setTotalNC] = useState(0);
+
+  const { desde, hasta, label } = calcularPeriodo(periodo, fechaRef);
 
   useEffect(() => {
     let cancelado = false;
@@ -74,7 +79,7 @@ export default function ParetoView() {
       setLoading(true);
       const [puntosResult, registrosResult] = await Promise.all([
         planta === "Planta 3" ? getPuntosControlPorProceso(planta) : getPuntosControl(planta),
-        getInspeccionesUnica(planta),
+        getInspeccionesUnica(planta, { desde, hasta }),
       ]);
       if (cancelado) return;
       const puntos = puntosResult.ok ? puntosResult.data : [];
@@ -91,7 +96,7 @@ export default function ParetoView() {
     }
     cargar();
     return () => { cancelado = true; };
-  }, [planta]);
+  }, [planta, desde, hasta]);
 
   return (
     <div className="space-y-3">
@@ -110,14 +115,16 @@ export default function ParetoView() {
         ))}
       </div>
 
+      <SelectorPeriodoSPC periodo={periodo} setPeriodo={setPeriodo} fechaRef={fechaRef} setFechaRef={setFechaRef} />
+
       {loading ? (
         <p className="py-6 text-center text-sm text-[#94a3b8]">Cargando…</p>
       ) : filas.length === 0 ? (
-        <p className="rounded-xl bg-[#f7f7f4] px-3 py-6 text-center text-sm text-[#5b6472]">Sin no conformidades registradas en {planta}.</p>
+        <p className="rounded-xl bg-[#f7f7f4] px-3 py-6 text-center text-sm text-[#5b6472]">Sin no conformidades registradas en {planta} ({label}).</p>
       ) : (
         <>
           <p className="text-xs text-[#5b6472]">
-            {totalNC} no conformidad(es) en {totalInspecciones} inspección(es) — {filas.length} punto(s) distinto(s) con NC.
+            {label} — {totalNC} no conformidad(es) en {totalInspecciones} inspección(es) — {filas.length} punto(s) distinto(s) con NC.
           </p>
 
           <div className={`${cardClass} p-3`}>

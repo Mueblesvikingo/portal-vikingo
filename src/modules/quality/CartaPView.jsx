@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
 import { getInspeccionesUnica } from "../../services/calidadService";
 import { cardClass } from "./coreliTheme";
+import { calcularPeriodo, todayISO, SelectorPeriodoSPC } from "./shared";
 
 // Carta de control p — complemento del Pareto: mientras el Pareto dice DONDE
 // se concentran las no conformidades, esta dice CUANDO el proceso se sale de
@@ -78,14 +79,18 @@ function CartaPTooltip({ active, payload }) {
 
 export default function CartaPView() {
   const [planta, setPlanta] = useState("Materia Prima");
+  const [periodo, setPeriodo] = useState("mes");
+  const [fechaRef, setFechaRef] = useState(todayISO());
   const [loading, setLoading] = useState(true);
   const [datos, setDatos] = useState({ puntos: [], pBarra: 0, totalN: 0, totalNC: 0, totalDias: 0 });
+
+  const { desde, hasta, label } = calcularPeriodo(periodo, fechaRef);
 
   useEffect(() => {
     let cancelado = false;
     async function cargar() {
       setLoading(true);
-      const result = await getInspeccionesUnica(planta);
+      const result = await getInspeccionesUnica(planta, { desde, hasta });
       if (cancelado) return;
       const registros = result.ok ? result.data : [];
       setDatos(calcularCartaP(registros));
@@ -93,7 +98,7 @@ export default function CartaPView() {
     }
     cargar();
     return () => { cancelado = true; };
-  }, [planta]);
+  }, [planta, desde, hasta]);
 
   const fueraDeControl = datos.puntos.filter((p) => p.fueraControl);
   const pBarraPct = Math.round(datos.pBarra * 1000) / 10;
@@ -115,14 +120,16 @@ export default function CartaPView() {
         ))}
       </div>
 
+      <SelectorPeriodoSPC periodo={periodo} setPeriodo={setPeriodo} fechaRef={fechaRef} setFechaRef={setFechaRef} />
+
       {loading ? (
         <p className="py-6 text-center text-sm text-[#94a3b8]">Cargando…</p>
       ) : datos.puntos.length === 0 ? (
-        <p className="rounded-xl bg-[#f7f7f4] px-3 py-6 text-center text-sm text-[#5b6472]">Sin inspecciones registradas en {planta}.</p>
+        <p className="rounded-xl bg-[#f7f7f4] px-3 py-6 text-center text-sm text-[#5b6472]">Sin inspecciones registradas en {planta} ({label}).</p>
       ) : (
         <>
           <p className="text-xs text-[#5b6472]">
-            {datos.totalDias} día(s) con inspección · {datos.totalN} puntos evaluados · <span className="font-semibold">p̄ = {pBarraPct}%</span> de NC en promedio.
+            {label} — {datos.totalDias} día(s) con inspección · {datos.totalN} puntos evaluados · <span className="font-semibold">p̄ = {pBarraPct}%</span> de NC en promedio.
           </p>
 
           <div className={`${cardClass} p-3`}>

@@ -9,6 +9,7 @@ import ConfiguracionView from "./ConfiguracionView";
 import ParetoView from "./ParetoView";
 import CartaPView from "./CartaPView";
 import BottomNav from "./BottomNav";
+import HelpTip from "./HelpTip";
 import { cardClass } from "./coreliTheme";
 
 // El emoji de sierra (🪚, Unicode 13.0/2020) no lo renderizan muchos
@@ -46,8 +47,22 @@ const SECCIONES = [
 // ahora solo Pareto; el resto (histograma, X-bar/R, etc.) se agrega aquí
 // mismo más adelante.
 const HERRAMIENTAS = [
-  { key: "pareto", titulo: "Pareto", codigo: "SPC", icono: "📈", disponible: true },
-  { key: "carta-p", titulo: "Carta p", codigo: "SPC", icono: "🎯", disponible: true },
+  {
+    key: "pareto",
+    titulo: "Pareto",
+    codigo: "SPC",
+    icono: "📈",
+    disponible: true,
+    ayuda: "Cuenta cuántas veces salió \"No conforme\" cada punto de control y los ordena de mayor a menor, con el % acumulado. Sirve para ver en qué 2 o 3 puntos se concentran la mayoría de los defectos (regla 80/20) y atacar esos primero.",
+  },
+  {
+    key: "carta-p",
+    titulo: "Carta p",
+    codigo: "SPC",
+    icono: "🎯",
+    disponible: true,
+    ayuda: "Muestra el % de puntos No Conformes de cada día, comparado contra sus límites de control (UCL/LCL). Sirve para detectar si el proceso está estable, o si un día se sale de control — algo cambió ese día y conviene investigar qué fue.",
+  },
 ];
 
 function SeccionTile({ seccion, onClick }) {
@@ -92,11 +107,14 @@ export default function QualityModule({ currentUser }) {
         <>
           <header className={`mb-2.5 flex items-center gap-2.5 rounded-xl px-3 py-2 sm:px-4 ${herramientaActiva ? "bg-[#6b1e2f]" : "bg-[#0b1f3a]"}`}>
             <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${herramientaActiva ? "bg-[#c9a227]" : "bg-[#b8931f]"}`}>
-              <span className="text-sm">{herramientaActiva ? "📈" : "✅"}</span>
+              <span className="text-sm">{herramientaActiva ? herramientaActiva.icono : "✅"}</span>
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[9px] font-semibold uppercase tracking-wide text-white/50">{herramientaActiva ? "Control Estadístico de Procesos" : "Gestión de Calidad"}</p>
-              <p className="truncate text-sm font-bold text-white">{activa ? activa.titulo : "Formatos de inspección"}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="truncate text-sm font-bold text-white">{activa ? activa.titulo : "Formatos de inspección"}</p>
+                {herramientaActiva?.ayuda && <HelpTip>{herramientaActiva.ayuda}</HelpTip>}
+              </div>
             </div>
             {activa && (
               <button

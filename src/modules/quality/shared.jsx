@@ -97,6 +97,37 @@ export function calcularPeriodo(periodo, fechaRef) {
   return { desde, hasta, label: `Mes ${MES_LABEL[Number(fechaRef.slice(5, 7)) - 1]} ${fechaRef.slice(0, 4)}` };
 }
 
+// Selector de rango compacto para las herramientas SPC (Pareto, Carta p, ...)
+// — mismo concepto de período (día/semana/mes) + fecha de referencia que ya
+// usa ImprimirModal, en versión chica para vivir en una sola fila junto al
+// selector de planta en vez de dentro de un modal.
+export function SelectorPeriodoSPC({ periodo, setPeriodo, fechaRef, setFechaRef }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex rounded-lg border border-[#edf0f4] bg-white p-0.5">
+        {[["dia", "Día"], ["semana", "Semana"], ["mes", "Mes"]].map(([key, texto]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setPeriodo(key)}
+            className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition ${
+              periodo === key ? "bg-[#0b1f3a] text-white" : "text-[#5b6472]"
+            }`}
+          >
+            {texto}
+          </button>
+        ))}
+      </div>
+      <input
+        type="date"
+        value={fechaRef}
+        onChange={(e) => setFechaRef(e.target.value)}
+        className="rounded-lg border border-[#edf0f4] bg-white px-2 py-1 text-[11px] font-medium text-[#0f1f3d]"
+      />
+    </div>
+  );
+}
+
 // Filtro genérico sobre texto libre — cada panel decide qué campos entran a
 // la búsqueda (proveedor/OC-lote en Materia Prima, proceso/OP en Planta 1…).
 export function aplicarFiltrosRegistros(registros, filtros, extraerCamposBusqueda) {
