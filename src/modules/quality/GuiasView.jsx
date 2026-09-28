@@ -1,23 +1,17 @@
 import { useState } from "react";
 import { PLAN_MUESTREO } from "../../services/calidadService";
 import { cardClass } from "./coreliTheme";
-import ParetoView from "./ParetoView";
 
 // Tarjetas de guía/capacitación — arrancamos con contenido real ya existente
 // en el sistema (el Plan de Muestreo Ac/Re) en vez de inventar artículos;
-// más adelante se agregan más tarjetas aquí mismo.
+// más adelante se agregan más tarjetas aquí mismo. El Pareto de no
+// conformidades vive en Inicio (bloque SPC), no aquí.
 const GUIAS = [
   {
     key: "plan-muestreo",
     icono: "📊",
     titulo: "Plan de muestreo Ac/Re",
     resumen: "Cuántas piezas revisar según el tamaño del lote, y cuándo aceptar o rechazar.",
-  },
-  {
-    key: "pareto",
-    icono: "📈",
-    titulo: "Pareto de no conformidades",
-    resumen: "Qué puntos de control fallan más por formato, para priorizar dónde actuar primero.",
   },
 ];
 
@@ -83,12 +77,7 @@ export default function GuiasView() {
                 </div>
                 <span className={`shrink-0 text-[#94a3b8] transition-transform ${abiertaAqui ? "rotate-180" : ""}`}>⌄</span>
               </button>
-              {abiertaAqui && (
-                <div className="border-t border-[#edf0f4] p-4">
-                  {g.key === "plan-muestreo" && <PlanMuestreoDetalle />}
-                  {g.key === "pareto" && <ParetoView />}
-                </div>
-              )}
+              {abiertaAqui && <div className="border-t border-[#edf0f4] p-4">{g.key === "plan-muestreo" && <PlanMuestreoDetalle />}</div>}
             </div>
           );
         })}

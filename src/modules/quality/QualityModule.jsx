@@ -6,6 +6,7 @@ import Planta3Panel from "./Planta3Panel";
 import ProductoTerminadoPanel from "./ProductoTerminadoPanel";
 import GuiasView from "./GuiasView";
 import ConfiguracionView from "./ConfiguracionView";
+import ParetoView from "./ParetoView";
 import BottomNav from "./BottomNav";
 import { cardClass } from "./coreliTheme";
 
@@ -39,6 +40,14 @@ const SECCIONES = [
   { key: "producto-terminado", titulo: "Producto Terminado", codigo: "F-GC-05", icono: "📦", disponible: true },
 ];
 
+// Herramientas de Control Estadístico de Procesos (SPC) — viven aparte de
+// los formatos de inspección, con su propio bloque color vino debajo. Por
+// ahora solo Pareto; el resto (histograma, X-bar/R, etc.) se agrega aquí
+// mismo más adelante.
+const HERRAMIENTAS = [
+  { key: "pareto", titulo: "Pareto", codigo: "SPC", icono: "📈", disponible: true },
+];
+
 function SeccionTile({ seccion, onClick }) {
   return (
     <button
@@ -67,6 +76,8 @@ export default function QualityModule({ currentUser }) {
   const [bottomTab, setBottomTab] = useState("inicio");
   const [activeSection, setActiveSection] = useState(null);
   const seccionActiva = SECCIONES.find((s) => s.key === activeSection);
+  const herramientaActiva = HERRAMIENTAS.find((h) => h.key === activeSection);
+  const activa = seccionActiva || herramientaActiva;
 
   function goInicio() {
     setBottomTab("inicio");
@@ -77,15 +88,15 @@ export default function QualityModule({ currentUser }) {
     <section className="mx-auto max-w-6xl px-3 pb-20 pt-4 sm:px-4 lg:pb-4">
       {bottomTab === "inicio" && (
         <>
-          <header className="mb-2.5 flex items-center gap-2.5 rounded-xl bg-[#0b1f3a] px-3 py-2 sm:px-4">
-            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#b8931f]">
-              <span className="text-sm">✅</span>
+          <header className={`mb-2.5 flex items-center gap-2.5 rounded-xl px-3 py-2 sm:px-4 ${herramientaActiva ? "bg-[#6b1e2f]" : "bg-[#0b1f3a]"}`}>
+            <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${herramientaActiva ? "bg-[#c9a227]" : "bg-[#b8931f]"}`}>
+              <span className="text-sm">{herramientaActiva ? "📈" : "✅"}</span>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[9px] font-semibold uppercase tracking-wide text-white/50">Gestión de Calidad</p>
-              <p className="truncate text-sm font-bold text-white">{seccionActiva ? seccionActiva.titulo : "Formatos de inspección"}</p>
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-white/50">{herramientaActiva ? "Control Estadístico de Procesos" : "Gestión de Calidad"}</p>
+              <p className="truncate text-sm font-bold text-white">{activa ? activa.titulo : "Formatos de inspección"}</p>
             </div>
-            {seccionActiva && (
+            {activa && (
               <button
                 type="button"
                 onClick={() => setActiveSection(null)}
@@ -96,22 +107,42 @@ export default function QualityModule({ currentUser }) {
             )}
           </header>
 
-          {!seccionActiva ? (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {SECCIONES.map((s) => (
-                <SeccionTile key={s.key} seccion={s} onClick={setActiveSection} />
-              ))}
-            </div>
-          ) : seccionActiva.key === "materia-prima" ? (
+          {!activa ? (
+            <>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {SECCIONES.map((s) => (
+                  <SeccionTile key={s.key} seccion={s} onClick={setActiveSection} />
+                ))}
+              </div>
+
+              <header className="mb-2.5 mt-3 flex items-center gap-2.5 rounded-xl bg-[#6b1e2f] px-3 py-2 sm:px-4">
+                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#c9a227]">
+                  <span className="text-sm">📈</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-white/50">Control Estadístico de Procesos</p>
+                  <p className="truncate text-sm font-bold text-white">Herramientas SPC</p>
+                </div>
+              </header>
+
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {HERRAMIENTAS.map((h) => (
+                  <SeccionTile key={h.key} seccion={h} onClick={setActiveSection} />
+                ))}
+              </div>
+            </>
+          ) : seccionActiva?.key === "materia-prima" ? (
             <MateriaPrimaPanel currentUser={currentUser} />
-          ) : seccionActiva.key === "planta-1" ? (
+          ) : seccionActiva?.key === "planta-1" ? (
             <Planta1Panel currentUser={currentUser} />
-          ) : seccionActiva.key === "planta-2" ? (
+          ) : seccionActiva?.key === "planta-2" ? (
             <Planta2Panel currentUser={currentUser} />
-          ) : seccionActiva.key === "planta-3" ? (
+          ) : seccionActiva?.key === "planta-3" ? (
             <Planta3Panel currentUser={currentUser} />
-          ) : seccionActiva.key === "producto-terminado" ? (
+          ) : seccionActiva?.key === "producto-terminado" ? (
             <ProductoTerminadoPanel currentUser={currentUser} />
+          ) : herramientaActiva?.key === "pareto" ? (
+            <ParetoView />
           ) : null}
         </>
       )}
