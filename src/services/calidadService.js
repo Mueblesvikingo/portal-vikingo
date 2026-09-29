@@ -78,6 +78,33 @@ export async function createColaborador({ numero_empleado, nombre, area, puesto 
   }
 }
 
+// Catálogo de productos terminados (Configuración > Productos).
+export async function getProductos() {
+  try {
+    const { data, error } = await supabase.from("calidad_productos").select("*").eq("activo", true).order("codigo");
+    if (error) return { ok: false, error, data: [] };
+    return { ok: true, error: null, data: data || [] };
+  } catch (err) {
+    console.error("Error inesperado al leer productos:", err);
+    return { ok: false, error: err, data: [] };
+  }
+}
+
+export async function createProducto({ codigo, nombre }) {
+  try {
+    const { data, error } = await supabase
+      .from("calidad_productos")
+      .insert({ codigo: codigo || null, nombre: nombre.trim() })
+      .select()
+      .single();
+    if (error) return { ok: false, error };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al crear producto:", err);
+    return { ok: false, error: err };
+  }
+}
+
 // Plan de muestreo interno Vikingo (Ac/Re por tamaño de lote, hasta 50 piezas
 // por OP) — misma tabla del PDF compartido, para sugerir Muestra/Ac/Re
 // automáticamente y que la inspectora no tenga que consultarlo a mano. Ac/Re
