@@ -98,32 +98,51 @@ export function calcularPeriodo(periodo, fechaRef) {
 }
 
 // Selector de rango compacto para las herramientas SPC (Pareto, Carta p, ...)
-// — mismo concepto de período (día/semana/mes) + fecha de referencia que ya
-// usa ImprimirModal, en versión chica para vivir en una sola fila junto al
-// selector de planta en vez de dentro de un modal.
-export function SelectorPeriodoSPC({ periodo, setPeriodo, fechaRef, setFechaRef }) {
+// — Día/Semana/Mes son atajos de un solo toque (rellenan Desde/Hasta a partir
+// de hoy, usando calcularPeriodo), y Desde/Hasta quedan siempre editables a
+// mano para un rango a la medida. Los dos campos van en su propia fila,
+// cada uno a la mitad (min-w-0 evita que un <input type="date"> nativo
+// empuje su celda y provoque salto de línea en pantallas angostas).
+export function SelectorPeriodoSPC({ desde, hasta, onChange }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="flex rounded-lg border border-[#edf0f4] bg-white p-0.5">
+    <div className="space-y-1.5">
+      <div className="flex gap-1 rounded-lg border border-[#edf0f4] bg-white p-0.5">
         {[["dia", "Día"], ["semana", "Semana"], ["mes", "Mes"]].map(([key, texto]) => (
           <button
             key={key}
             type="button"
-            onClick={() => setPeriodo(key)}
-            className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition ${
-              periodo === key ? "bg-[#0b1f3a] text-white" : "text-[#5b6472]"
-            }`}
+            onClick={() => {
+              const r = calcularPeriodo(key, todayISO());
+              onChange({ desde: r.desde, hasta: r.hasta });
+            }}
+            className="flex-1 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#5b6472] transition hover:bg-[#f7f7f4]"
           >
             {texto}
           </button>
         ))}
       </div>
-      <input
-        type="date"
-        value={fechaRef}
-        onChange={(e) => setFechaRef(e.target.value)}
-        className="rounded-lg border border-[#edf0f4] bg-white px-2 py-1 text-[11px] font-medium text-[#0f1f3d]"
-      />
+      <div className="flex gap-1.5">
+        <label className="min-w-0 flex-1">
+          <span className="block text-[9px] font-semibold uppercase tracking-wide text-[#94a3b8]">Desde</span>
+          <input
+            type="date"
+            value={desde}
+            max={hasta}
+            onChange={(e) => onChange({ desde: e.target.value, hasta })}
+            className="w-full min-w-0 rounded-lg border border-[#edf0f4] bg-white px-1.5 py-1 text-[11px] font-medium text-[#0f1f3d]"
+          />
+        </label>
+        <label className="min-w-0 flex-1">
+          <span className="block text-[9px] font-semibold uppercase tracking-wide text-[#94a3b8]">Hasta</span>
+          <input
+            type="date"
+            value={hasta}
+            min={desde}
+            onChange={(e) => onChange({ desde, hasta: e.target.value })}
+            className="w-full min-w-0 rounded-lg border border-[#edf0f4] bg-white px-1.5 py-1 text-[11px] font-medium text-[#0f1f3d]"
+          />
+        </label>
+      </div>
     </div>
   );
 }

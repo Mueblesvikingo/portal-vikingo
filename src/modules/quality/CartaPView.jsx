@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
 import { getInspeccionesUnica } from "../../services/calidadService";
 import { cardClass } from "./coreliTheme";
-import { calcularPeriodo, todayISO, SelectorPeriodoSPC } from "./shared";
+import { calcularPeriodo, todayISO, ddmmyyyy, SelectorPeriodoSPC } from "./shared";
 
 // Carta de control p — complemento del Pareto: mientras el Pareto dice DONDE
 // se concentran las no conformidades, esta dice CUANDO el proceso se sale de
@@ -79,12 +79,14 @@ function CartaPTooltip({ active, payload }) {
 
 export default function CartaPView() {
   const [planta, setPlanta] = useState("Materia Prima");
-  const [periodo, setPeriodo] = useState("mes");
-  const [fechaRef, setFechaRef] = useState(todayISO());
+  const [rango, setRango] = useState(() => {
+    const r = calcularPeriodo("mes", todayISO());
+    return { desde: r.desde, hasta: r.hasta };
+  });
+  const { desde, hasta } = rango;
+  const label = `${ddmmyyyy(desde)} – ${ddmmyyyy(hasta)}`;
   const [loading, setLoading] = useState(true);
   const [datos, setDatos] = useState({ puntos: [], pBarra: 0, totalN: 0, totalNC: 0, totalDias: 0 });
-
-  const { desde, hasta, label } = calcularPeriodo(periodo, fechaRef);
 
   useEffect(() => {
     let cancelado = false;
@@ -120,7 +122,7 @@ export default function CartaPView() {
         ))}
       </div>
 
-      <SelectorPeriodoSPC periodo={periodo} setPeriodo={setPeriodo} fechaRef={fechaRef} setFechaRef={setFechaRef} />
+      <SelectorPeriodoSPC desde={desde} hasta={hasta} onChange={setRango} />
 
       {/* Si ya había una gráfica cargada, se queda visible (atenuada, con
           "Actualizando…") mientras llega la nueva — así al cambiar de planta

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
 import { getInspeccionesUnica, getPuntosControl, getPuntosControlPorProceso } from "../../services/calidadService";
 import { cardClass } from "./coreliTheme";
-import { calcularPeriodo, todayISO, SelectorPeriodoSPC } from "./shared";
+import { calcularPeriodo, todayISO, ddmmyyyy, SelectorPeriodoSPC } from "./shared";
 
 // Pareto de no conformidades por punto de control — cuenta cuántas veces
 // cada punto (letra) salió NC entre todas las inspecciones ya guardadas de
@@ -64,14 +64,16 @@ function ParetoTooltip({ active, payload }) {
 
 export default function ParetoView() {
   const [planta, setPlanta] = useState("Materia Prima");
-  const [periodo, setPeriodo] = useState("mes");
-  const [fechaRef, setFechaRef] = useState(todayISO());
+  const [rango, setRango] = useState(() => {
+    const r = calcularPeriodo("mes", todayISO());
+    return { desde: r.desde, hasta: r.hasta };
+  });
+  const { desde, hasta } = rango;
+  const label = `${ddmmyyyy(desde)} – ${ddmmyyyy(hasta)}`;
   const [loading, setLoading] = useState(true);
   const [filas, setFilas] = useState([]);
   const [totalInspecciones, setTotalInspecciones] = useState(0);
   const [totalNC, setTotalNC] = useState(0);
-
-  const { desde, hasta, label } = calcularPeriodo(periodo, fechaRef);
 
   useEffect(() => {
     let cancelado = false;
@@ -115,7 +117,7 @@ export default function ParetoView() {
         ))}
       </div>
 
-      <SelectorPeriodoSPC periodo={periodo} setPeriodo={setPeriodo} fechaRef={fechaRef} setFechaRef={setFechaRef} />
+      <SelectorPeriodoSPC desde={desde} hasta={hasta} onChange={setRango} />
 
       {/* Si ya había una gráfica cargada, se queda visible (atenuada, con
           "Actualizando…") mientras llega la nueva — así al cambiar de planta
