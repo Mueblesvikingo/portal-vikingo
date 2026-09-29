@@ -120,6 +120,39 @@ export async function deactivateProducto(id) {
   return { ok: !error, error };
 }
 
+// Catálogo de clientes (Configuración > Clientes) — destino real de cada
+// producto en Producto Terminado (cliente_destino).
+export async function getClientes() {
+  try {
+    const { data, error } = await supabase.from("calidad_clientes").select("*").eq("activo", true).order("nombre");
+    if (error) return { ok: false, error, data: [] };
+    return { ok: true, error: null, data: data || [] };
+  } catch (err) {
+    console.error("Error inesperado al leer clientes:", err);
+    return { ok: false, error: err, data: [] };
+  }
+}
+
+export async function createCliente({ folio, nombre }) {
+  try {
+    const { data, error } = await supabase
+      .from("calidad_clientes")
+      .insert({ folio: folio || null, nombre: nombre.trim() })
+      .select()
+      .single();
+    if (error) return { ok: false, error };
+    return { ok: true, error: null, data };
+  } catch (err) {
+    console.error("Error inesperado al crear cliente:", err);
+    return { ok: false, error: err };
+  }
+}
+
+export async function deactivateCliente(id) {
+  const { error } = await supabase.from("calidad_clientes").update({ activo: false }).eq("id", id);
+  return { ok: !error, error };
+}
+
 // Plan de muestreo interno Vikingo (Ac/Re por tamaño de lote, hasta 50 piezas
 // por OP) — misma tabla del PDF compartido, para sugerir Muestra/Ac/Re
 // automáticamente y que la inspectora no tenga que consultarlo a mano. Ac/Re

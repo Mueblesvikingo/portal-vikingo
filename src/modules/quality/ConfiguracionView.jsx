@@ -2,13 +2,15 @@ import { useState } from "react";
 import ProveedoresPanel from "./ProveedoresPanel";
 import ColaboradoresPanel from "./ColaboradoresPanel";
 import ProductosPanel from "./ProductosPanel";
+import ClientesPanel from "./ClientesPanel";
 
-// Catálogos del módulo (proveedores, colaboradores, productos) — los 3 ya
-// son reales.
+// Catálogos del módulo (proveedores, colaboradores, productos, clientes) —
+// los 4 ya son reales.
 const CATALOGOS = [
   { key: "proveedores", icono: "🚚", titulo: "Proveedores", detalle: "Para inspecciones de Materia Prima", disponible: true },
   { key: "colaboradores", icono: "👥", titulo: "Colaboradores", detalle: "Personal operativo (piso)", disponible: true },
   { key: "productos", icono: "📦", titulo: "Productos", detalle: "Catálogo de productos terminados", disponible: true },
+  { key: "clientes", icono: "🏬", titulo: "Clientes", detalle: "Destino en Producto Terminado", disponible: true },
 ];
 
 export default function ConfiguracionView() {
@@ -17,6 +19,7 @@ export default function ConfiguracionView() {
   if (activo === "proveedores") return <ProveedoresPanel onBack={() => setActivo(null)} />;
   if (activo === "colaboradores") return <ColaboradoresPanel onBack={() => setActivo(null)} />;
   if (activo === "productos") return <ProductosPanel onBack={() => setActivo(null)} />;
+  if (activo === "clientes") return <ClientesPanel onBack={() => setActivo(null)} />;
 
   return (
     <div className="space-y-3">
