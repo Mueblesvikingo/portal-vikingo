@@ -88,7 +88,11 @@ const STRATEGIC_TEAM_ROLES = ["PM", "Coordinador SIG", "Analista de Procesos", "
 // sin importar si el usuario es de rol restringido o no. Igual que el resto
 // de permisos, se puede dar acceso puntual desde Catálogo Organizacional →
 // Usuarios → Permisos (override por usuario o por rol).
-const STRATEGIC_TEAM_ONLY_MODULES = ["decision-center"];
+// "calidad" se agregó a pedido explícito del usuario (29-sep-2026): ya
+// terminó la etapa de "solo Coordinador SIG lo ve" (ver historial) y ahora
+// es visible para todo el equipo estratégico — las inspectoras/gerencia de
+// Calidad conservan su acceso aparte, vía MODULES_VISIBLE_FOR_OPERATIVE_ROLES.
+const STRATEGIC_TEAM_ONLY_MODULES = ["decision-center", "calidad"];
 
 // Módulo S&OP: visible para el equipo estratégico (por rol) más un grupo
 // puntual de gerencias que participan en el ciclo (Hugo Terrones, Beatriz
@@ -193,19 +197,8 @@ function getRolesFieldValue(user, moduleKey, field) {
   return values.some(Boolean);
 }
 
-// TEMPORAL (pedido explícito del usuario, 25-sep-2026): mientras se sigue
-// puliendo Gestión de Calidad, solo el Coordinador SIG debe verlo — ni las
-// inspectoras para quienes se construyó, ni el resto del equipo estratégico.
-// Quitar este bloque (y el `return` que lo usa en defaultVisible) para
-// restaurar la visibilidad normal cuando esté listo.
-const CALIDAD_WIP_ROLES = ["Coordinador SIG"];
-
 function defaultVisible(user, moduleKey) {
   if (MODULES_HIDDEN_BY_DEFAULT.includes(moduleKey)) return false;
-
-  if (moduleKey === "calidad") {
-    return getApplicableRoles(user).some((role) => CALIDAD_WIP_ROLES.includes(role));
-  }
 
   if (isOperativeRole(user)) {
     return MODULES_VISIBLE_FOR_OPERATIVE_ROLES.includes(moduleKey);
