@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getProveedores, createProveedor } from "../../services/calidadService";
+import { getProveedores, createProveedor, deactivateProveedor } from "../../services/calidadService";
 import { cardClass, btnPrimaryClass, btnGhostClass } from "./coreliTheme";
 
 // Catálogo real de proveedores de Materia Prima — reemplaza el marcador de
@@ -35,6 +35,12 @@ export default function ProveedoresPanel({ onBack }) {
       setShowForm(false);
       cargar();
     }
+  }
+
+  async function handleQuitar(p) {
+    if (!window.confirm(`¿Quitar "${p.nombre}" de proveedores?`)) return;
+    const result = await deactivateProveedor(p.id);
+    if (result.ok) cargar();
   }
 
   return (
@@ -74,11 +80,13 @@ export default function ProveedoresPanel({ onBack }) {
             <colgroup>
               <col className="w-14" />
               <col />
+              <col className="w-8" />
             </colgroup>
             <thead>
               <tr className="bg-[#f7f7f4] text-[9px] font-semibold uppercase tracking-wide text-[#5b6472]">
                 <th className="px-2.5 py-2">Clave</th>
                 <th className="px-2.5 py-2">Nombre</th>
+                <th className="px-1 py-2"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#edf0f4]">
@@ -86,6 +94,9 @@ export default function ProveedoresPanel({ onBack }) {
                 <tr key={p.id}>
                   <td className="px-2.5 py-1.5 text-[#5b6472]">{p.clave ?? "—"}</td>
                   <td className="px-2.5 py-1.5 font-medium text-[#0f1f3d]">{p.nombre}</td>
+                  <td className="px-1 py-1.5 text-center">
+                    <button type="button" onClick={() => handleQuitar(p)} title="Quitar" className="text-[#c9c9c9] transition hover:text-red-500 active:text-red-600">✕</button>
+                  </td>
                 </tr>
               ))}
             </tbody>

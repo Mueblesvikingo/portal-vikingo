@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getColaboradores, createColaborador } from "../../services/calidadService";
+import { getColaboradores, createColaborador, deactivateColaborador } from "../../services/calidadService";
 import { cardClass, btnPrimaryClass, btnGhostClass } from "./coreliTheme";
 
 const FORM_VACIO = { numero_empleado: "", nombre: "", area: "", puesto: "" };
@@ -42,6 +42,12 @@ export default function ColaboradoresPanel({ onBack }) {
     }
   }
 
+  async function handleQuitar(c) {
+    if (!window.confirm(`¿Quitar "${c.nombre}" de colaboradores?`)) return;
+    const result = await deactivateColaborador(c.id);
+    if (result.ok) cargar();
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
@@ -82,6 +88,7 @@ export default function ColaboradoresPanel({ onBack }) {
               <col />
               <col className="w-28" />
               <col className="w-32" />
+              <col className="w-8" />
             </colgroup>
             <thead>
               <tr className="bg-[#f7f7f4] text-[9px] font-semibold uppercase tracking-wide text-[#5b6472]">
@@ -89,6 +96,7 @@ export default function ColaboradoresPanel({ onBack }) {
                 <th className="px-2.5 py-2">Nombre</th>
                 <th className="px-2.5 py-2">Área</th>
                 <th className="px-2.5 py-2">Puesto</th>
+                <th className="px-1 py-2"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#edf0f4]">
@@ -98,6 +106,9 @@ export default function ColaboradoresPanel({ onBack }) {
                   <td className="truncate px-2.5 py-1.5 font-medium text-[#0f1f3d]">{c.nombre}</td>
                   <td className="truncate px-2.5 py-1.5 text-[#5b6472]">{c.area || "—"}</td>
                   <td className="truncate px-2.5 py-1.5 text-[#5b6472]">{c.puesto || "—"}</td>
+                  <td className="px-1 py-1.5 text-center">
+                    <button type="button" onClick={() => handleQuitar(c)} title="Quitar" className="text-[#c9c9c9] transition hover:text-red-500 active:text-red-600">✕</button>
+                  </td>
                 </tr>
               ))}
             </tbody>

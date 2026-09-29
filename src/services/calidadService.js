@@ -105,6 +105,21 @@ export async function createProducto({ codigo, nombre }) {
   }
 }
 
+// "Quitar" en los 3 catálogos de Configuración = baja lógica (activo=false),
+// no borrado físico — mismo criterio que el resto del portal (ej. personas).
+export async function deactivateProveedor(id) {
+  const { error } = await supabase.from("calidad_proveedores").update({ activo: false }).eq("id", id);
+  return { ok: !error, error };
+}
+export async function deactivateColaborador(id) {
+  const { error } = await supabase.from("calidad_colaboradores").update({ activo: false }).eq("id", id);
+  return { ok: !error, error };
+}
+export async function deactivateProducto(id) {
+  const { error } = await supabase.from("calidad_productos").update({ activo: false }).eq("id", id);
+  return { ok: !error, error };
+}
+
 // Plan de muestreo interno Vikingo (Ac/Re por tamaño de lote, hasta 50 piezas
 // por OP) — misma tabla del PDF compartido, para sugerir Muestra/Ac/Re
 // automáticamente y que la inspectora no tenga que consultarlo a mano. Ac/Re
