@@ -1247,10 +1247,20 @@ export default function AccionDetailPanel({
                     {herramienta === "Ishikawa" && <Ishikawa analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} currentUser={currentUser} />}
                     {herramienta === "5W2H" && <CincoW2H analisis={analisisActual} onSave={handleSaveAnalisis} canEdit={canEdit} currentUser={currentUser} />}
                   </div>
-                ) : subTab === "aprobada" ? (
+                ) : subTab === "plan" ? (
                   <div className="space-y-3">
                     {causaRaizBlock}
                     {prioridadFechaBlock}
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo</p>
+                        <HelpTip>Cada renglón es una acción concreta con su propio responsable, fecha y horas estimadas — arma el plan aquí antes de mandarlo a Dirección (bloque "Aprobada", el siguiente).</HelpTip>
+                      </div>
+                      <div className="mt-2"><PlanResponsablesTable {...planTableProps} /></div>
+                    </div>
+                  </div>
+                ) : subTab === "aprobada" ? (
+                  <div className="space-y-3">
                     <EtapaDecisionBlock
                       etapaLabel="Aprobada"
                       checkLabel="Aprobar"
@@ -1260,16 +1270,16 @@ export default function AccionDetailPanel({
                       onDecidir={() => handleDecidirEtapa("Aprobada")}
                       onAgregarObservacion={(texto) => handleAgregarObservacionEtapa("Aprobada", texto)}
                     />
-                    <div className="border-t border-slate-100 pt-2.5">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo</p>
-                        <HelpTip>Cada renglón es una acción concreta con su propio responsable, fecha y horas estimadas — arma el plan aquí antes de que Dirección apruebe (bloque "Aprobada", arriba).</HelpTip>
-                      </div>
-                      <div className="mt-2"><PlanResponsablesTable {...planTableProps} /></div>
-                    </div>
                   </div>
                 ) : subTab === "ejecucion" ? (
                   <div className="space-y-3">
+                    {/* Prioridad/Fecha compromiso viven en "Plan de acción"
+                        para los tipos que tienen esa etapa (Correctiva/
+                        Mejora/Preventiva) — para el resto (Acuerdo
+                        Directivo, Proyecto Estratégico, Operativa,
+                        Corrección), que no la tienen, se capturan aquí para
+                        no perder dónde editarlas. */}
+                    {!etapas.includes("Plan de acción") && prioridadFechaBlock}
                     <div className="border-t-0 pt-0">
                       <div className="flex items-center gap-1.5">
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo</p>

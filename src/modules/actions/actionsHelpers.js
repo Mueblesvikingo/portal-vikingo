@@ -136,6 +136,7 @@ export function subTabParaEtapa(etapa) {
   if (etapa === "Registrada") return "detalle";
   if (etapa === "En análisis") return "causa";
   if (etapa === "Cerrada") return "linea_tiempo";
+  if (etapa === "Plan de acción") return "plan";
   if (etapa === "Aprobada") return "aprobada";
   if (etapa === "En ejecución") return "ejecucion";
   if (etapa === "En validación") return "validacion";
