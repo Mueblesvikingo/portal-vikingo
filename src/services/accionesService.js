@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import { getUsuarios } from "./organizationCatalogService";
 import { isStrategicTeamMember } from "./permissionsService";
+import { recomputeCierreNCDesdeRecorrido } from "./operationalPerformanceService";
 
 function actorFields(actor) {
   return {
@@ -113,6 +114,13 @@ export async function createAccion(payload, actor) {
       usuario_nombre: nombre,
     }]);
 
+    // Esta acción nació de una NC detectada en una inspección de Calidad —
+    // avisa al KPI "% Cierre de no conformidades" del área de esa planta
+    // (ver operationalPerformanceService.js). No bloquea el alta si falla.
+    if (data.origen_tabla === "calidad_recorridos" && data.origen_id) {
+      await recomputeCierreNCDesdeRecorrido(data.origen_id, data.created_at, actor);
+    }
+
     return { ok: true, error: null, data };
   } catch (err) {
     console.error("Error inesperado al crear acción:", err);
@@ -152,6 +160,13 @@ export async function updateAccion(id, updates, { actor, previous } = {}) {
           usuario_nombre: nombre,
         }));
       await logHistorialEntries(entries);
+    }
+
+    // Si esta acción nació de una NC de Calidad y su estado cambió (llegó o
+    // salió de "Cerrada"), recalcula el KPI de esa área — el mes que cuenta
+    // es el de cuando se detectó la NC (previous.created_at), no el de hoy.
+    if (updates.estado && previous?.origen_tabla === "calidad_recorridos" && previous?.origen_id) {
+      await recomputeCierreNCDesdeRecorrido(previous.origen_id, previous.created_at, actor);
     }
 
     return { ok: true, error: null, data };

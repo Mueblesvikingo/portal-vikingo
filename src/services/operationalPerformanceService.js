@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { getRecorridoPlanta } from "./calidadService";
 
 function actorFields(actor) {
   return {
@@ -18,6 +19,20 @@ async function logHistorialEntries(entries) {
 }
 
 export const AREAS_OPERATIVAS = ["Corte y costura de tela", "Carpintería y armado de madera", "Tapicería"];
+
+// Traduce la "planta" de Gestión de Calidad (Materia Prima/Planta 1/2/3/
+// Producto Terminado) al área de Desempeño Operativo cuyo supervisor debe
+// responder por sus no conformidades — mismo criterio ya usado para elegir
+// el ícono de cada planta en QualityModule.jsx (Planta 1 = carpintería,
+// Planta 2 = costura, Planta 3 = tapicería). Materia Prima y Producto
+// Terminado no tienen área/supervisor propio en este módulo, así que sus NC
+// no alimentan ningún KPI de área (confirmado explícitamente por el usuario,
+// 30-sep-2026) — quedan fuera de PLANTA_A_AREA_OPERATIVA a propósito.
+export const PLANTA_A_AREA_OPERATIVA = {
+  "Planta 1": "Carpintería y armado de madera",
+  "Planta 2": "Corte y costura de tela",
+  "Planta 3": "Tapicería",
+};
 
 // TableroTab/ResultadosTab/ProcesoChartsTab (compartidos con Desempeño
 // Organizacional) agrupan por `kpi.ambito === "operativo"` cuando el
@@ -375,4 +390,109 @@ export async function getHistorialByKpiIds(kpiIds) {
     console.error("Error inesperado al cargar historial de desempeño operativo:", err);
     return [];
   }
+}
+
+// --- Puente Gestión de Calidad → KPI "% Cierre de no conformidades" -------
+// Cada NC detectada en una inspección genera una acción en Acciones de
+// Mejora (origen_tabla = "calidad_recorridos", ver shared.jsx de Calidad).
+// Este bloque cuenta, por área y mes, cuántas de esas acciones ya llegaron a
+// "Cerrada" contra el total detectado ese mes, y lo guarda como el Real del
+// KPI del área — sin capturar nada a mano. Se llama desde accionesService.js
+// justo al crear una de esas acciones (abre la NC) y al cambiar su estado
+// (por si llega o sale de "Cerrada").
+
+const NC_KPI_NOMBRE = "% Cierre de no conformidades";
+
+async function getOrCreateNCKpi(area, actor) {
+  try {
+    const { data: existing, error } = await supabase
+      .from("desempeno_operativo_kpis")
+      .select("*")
+      .eq("area", area)
+      .eq("nombre_indicador", NC_KPI_NOMBRE)
+      .maybeSingle();
+    if (error) { console.error("Error al buscar el KPI de cierre de NC:", error); return null; }
+    if (existing) return withAmbito(existing);
+
+    const result = await createKpi(
+      {
+        area,
+        nombre_indicador: NC_KPI_NOMBRE,
+        objetivo_estrategico: "Resolver a tiempo las no conformidades detectadas en Gestión de Calidad.",
+        formula_texto: "No conformidades cerradas el mes en que se detectaron / total de no conformidades detectadas ese mes × 100",
+        fuente_datos: "Gestión de Calidad → Acciones de Mejora (automático)",
+        periodicidad: "Mensual",
+        unidad_medida: "porcentaje",
+      },
+      actor
+    );
+    if (!result?.ok) { console.error("Error al crear el KPI de cierre de NC:", result?.error); return null; }
+    // `sentido` no se manda explícito: la columna ya trae 'Mayor es mejor'
+    // como default en Supabase, igual que el resto de los KPIs creados a
+    // mano desde "+ Agregar KPI" (createKpi tampoco lo manda).
+    return result.data;
+  } catch (err) {
+    console.error("Error inesperado al obtener/crear el KPI de cierre de NC:", err);
+    return null;
+  }
+}
+
+// Recalcula con datos en vivo — nunca hace falta un "backfill" aparte: la
+// primera vez que corre para un área/mes ya cuenta correctamente todo lo que
+// existía antes de este cambio, porque no lleva un contador incremental.
+async function recomputeCierreNC(area, anio, mes, actor) {
+  try {
+    const kpi = await getOrCreateNCKpi(area, actor);
+    if (!kpi) return;
+
+    const plantas = Object.entries(PLANTA_A_AREA_OPERATIVA)
+      .filter(([, a]) => a === area)
+      .map(([planta]) => planta);
+    if (!plantas.length) return;
+
+    const { data: recorridos, error: recorridosError } = await supabase
+      .from("calidad_recorridos")
+      .select("id")
+      .in("planta", plantas);
+    if (recorridosError) { console.error("Error al leer recorridos para el KPI de cierre de NC:", recorridosError); return; }
+    const recorridoIds = (recorridos || []).map((r) => r.id);
+    if (!recorridoIds.length) return;
+
+    const desde = `${anio}-${String(mes).padStart(2, "0")}-01T00:00:00`;
+    const hastaFecha = mes === 12 ? new Date(anio + 1, 0, 1) : new Date(anio, mes, 1);
+    const hasta = hastaFecha.toISOString();
+
+    const { data: accionesDelMes, error: accionesError } = await supabase
+      .from("acciones")
+      .select("estado")
+      .eq("origen_tabla", "calidad_recorridos")
+      .in("origen_id", recorridoIds)
+      .gte("created_at", desde)
+      .lt("created_at", hasta);
+    if (accionesError) { console.error("Error al leer acciones para el KPI de cierre de NC:", accionesError); return; }
+
+    const total = (accionesDelMes || []).length;
+    if (!total) return;
+    const cerradas = (accionesDelMes || []).filter((a) => a.estado === "Cerrada").length;
+    const valor = Number((cerradas / total).toFixed(4));
+
+    const previousValor = await fetchExistingReal(kpi.id, anio, mes, null);
+    if (String(previousValor ?? "") === String(valor)) return;
+    await upsertResultado({ kpiId: kpi.id, anio, mes, semana: null, tipo: "real", valor }, { actor, previousValor });
+  } catch (err) {
+    console.error("Error inesperado al recalcular el KPI de cierre de NC:", err);
+  }
+}
+
+// Punto de entrada usado por accionesService.js: dado el id del recorrido de
+// Calidad que originó la acción (origen_id) y la fecha en que esa acción se
+// creó (define a qué mes pertenece la NC), resuelve la planta → área y
+// dispara el recálculo. No hace nada si la planta no tiene área asignada
+// (Materia Prima / Producto Terminado).
+export async function recomputeCierreNCDesdeRecorrido(recorridoId, fechaCreacion, actor) {
+  const planta = await getRecorridoPlanta(recorridoId);
+  const area = PLANTA_A_AREA_OPERATIVA[planta];
+  if (!area) return;
+  const fecha = new Date(fechaCreacion || new Date());
+  await recomputeCierreNC(area, fecha.getFullYear(), fecha.getMonth() + 1, actor);
 }
