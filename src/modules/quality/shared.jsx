@@ -735,7 +735,7 @@ export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, ca
             <button
               type="button"
               onClick={onVolverAAccion}
-              className="flex w-fit items-center gap-1 rounded-lg border border-[#edf0f4] bg-[#f7f7f4] px-2 py-1 text-[10px] font-bold text-[#5b6472] transition hover:bg-[#edf0f4]"
+              className="flex w-fit items-center gap-1 rounded-lg border border-[#c9a227] bg-[#fdf7e6] px-2.5 py-1 text-[10px] font-black text-[#96771a] transition hover:bg-[#f8ecc0]"
             >
               ← Volver a la acción
             </button>
