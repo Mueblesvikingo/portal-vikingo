@@ -571,15 +571,16 @@ export default function AccionDetailPanel({
   currentUser, initialSubTab, onUpdate, onDeactivate, onClose, onCreateProyecto, onEnviarPlanResponsables, onProgramarJunta, onNavigateToAccion,
 }) {
   const navigate = useNavigate();
-  const [subTab, setSubTab] = useState(initialSubTab || subTabParaEtapa(accion.estado));
+  // Al abrir el detalle se ve solo la línea de tiempo — pedido explícito del
+  // usuario para que lo primero que se lea sea el flujo completo, no el
+  // contenido de una sola etapa. El contenido de abajo solo aparece cuando
+  // se toca un bloque a propósito, salvo que se pida una pestaña concreta
+  // desde afuera (ej. el botón "Ver" de la Tabla, al hacer clic en un bloque
+  // de una línea de tiempo miniatura).
+  const [subTab, setSubTab] = useState(initialSubTab || null);
 
-  // Si se abre el detalle pidiendo una pestaña concreta (ej. desde el botón
-  // "Ver" de la Tabla, al hacer clic en un bloque de la línea de tiempo),
-  // saltar directo ahí. Si no piden una en concreto (o se navega a otra
-  // acción con "Corrección de origen"/derivadas), aterrizar en la sección
-  // de la etapa en la que esa acción realmente está — no siempre "Registrada".
   useEffect(() => {
-    setSubTab(initialSubTab || subTabParaEtapa(accion.estado));
+    setSubTab(initialSubTab || null);
   }, [accion.id, initialSubTab]);
   const [analisisList, setAnalisisList] = useState([]);
   const [herramienta, setHerramienta] = useState(HERRAMIENTAS_MVP[0]);
@@ -933,7 +934,11 @@ export default function AccionDetailPanel({
                             className="flex w-[132px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border-2 px-2.5 py-3 text-center transition hover:opacity-80"
                             style={{
                               borderColor: subTab === etapaSubTab ? color : alcanzada ? color : `${color}30`,
-                              background: alcanzada ? `${color}16` : "#fff",
+                              // Ya trabajada (etapa pasada) se resalta con un
+                              // relleno notoriamente más fuerte que la etapa
+                              // actual (en curso) — pedido explícito para que
+                              // se distinga de un vistazo qué ya quedó atrás.
+                              background: isPast ? `${color}33` : isCurrent ? `${color}16` : "#fff",
                               boxShadow: subTab === etapaSubTab ? `0 0 0 2px ${color}40` : "none",
                             }}
                           >
@@ -961,9 +966,16 @@ export default function AccionDetailPanel({
               </div>
             </div>
 
-            {/* El contenido de aquí abajo lo elige el bloque de la línea de
-                tiempo que se haya clicado arriba — Historial/Comentarios/
-                Adjuntos se movieron a "Ver detalle", ya no compiten aquí. */}
+            {/* Al abrir el detalle no hay ningún bloque seleccionado — se ve
+                solo el flujo completo. El contenido de aquí abajo lo elige
+                el bloque de la línea de tiempo que se haya clicado arriba —
+                Historial/Comentarios/Adjuntos se movieron a "Ver detalle",
+                ya no compiten aquí. */}
+            {!subTab ? (
+              <p className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-center text-[11px] font-bold text-slate-300">
+                Toca un bloque del flujo para ver su contenido.
+              </p>
+            ) : (
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="max-h-[45vh] overflow-auto p-3">
                 {loadingSub ? (
@@ -1370,6 +1382,7 @@ export default function AccionDetailPanel({
                 ) : null}
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>
