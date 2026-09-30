@@ -1,17 +1,36 @@
 import { useEffect, useRef, useState } from "react";
 import { TIPOS_ACCION, NIVELES_ACCION } from "./actionsHelpers";
 
-// Mismos estilos de campo/botón que usa el formulario de "+ Nueva
-// recepción/inspección" en Calidad (ver src/modules/quality/shared.jsx:
-// inputClass/labelClass, y coreliTheme.js: btnPrimaryClass/btnGhostClass) —
-// copiados aquí en vez de importados entre módulos, mismo criterio de
-// autocontención que ya explica el comentario de InvolucradosSelect más
-// abajo. El fondo gris plano (bg-slate-50/border-slate-200) que traía antes
-// esta ventana se reemplaza por blanco con borde clarísimo y foco dorado.
+// Mismos estilos de campo/botón/tarjeta que usa Calidad (ver
+// src/modules/quality/shared.jsx: inputClass/labelClass/AccordionSection, y
+// coreliTheme.js: cardClass/btnPrimaryClass/btnGhostClass) — copiados aquí en
+// vez de importados entre módulos, mismo criterio de autocontención que ya
+// explica el comentario de InvolucradosSelect más abajo.
+const cardClass = "rounded-2xl border border-[#edf0f4] bg-white shadow-[0_1px_1px_rgba(11,31,58,0.04),0_4px_12px_-2px_rgba(11,31,58,0.07)]";
 const inputClass = "mt-1 w-full rounded-xl border border-[#edf0f4] bg-white px-3 py-2 text-sm font-medium text-[#0f1f3d] outline-none transition focus:border-[#c9a227] focus:shadow-[0_0_0_3px_rgba(201,162,39,0.2)]";
 const labelClass = "block text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]";
-const btnPrimaryClass = "inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-[#c9a227] to-[#b8931f] px-3 py-1.5 text-[11px] font-semibold text-[#0b1f3a] shadow-[0_1px_2px_rgba(11,31,58,0.08),0_2px_6px_-1px_rgba(11,31,58,0.12)] transition active:scale-[0.98]";
-const btnGhostClass = "inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-medium text-[#5b6472] transition hover:bg-[#f7f7f4]";
+const btnPrimaryClass = "inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#c9a227] to-[#b8931f] px-4 py-2.5 text-sm font-semibold text-[#0b1f3a] shadow-[0_1px_2px_rgba(11,31,58,0.08),0_2px_6px_-1px_rgba(11,31,58,0.12)] transition active:scale-[0.98]";
+const btnGhostClass = "inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[#5b6472] transition hover:bg-[#f7f7f4]";
+
+// Sección desplegable — mismo componente que usa Calidad en sus formularios
+// de captura y detalle (AccordionSection, shared.jsx) para ir llenando el
+// registro por partes en vez de un formulario largo de un jalón, pensado
+// para celular. Solo una sección abierta a la vez.
+function AccordionSection({ icon, title, subtitle, open, onToggle, children }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-[#edf0f4]">
+      <div role="button" tabIndex={0} onClick={onToggle} className="flex w-full cursor-pointer items-center gap-2.5 bg-[#f7f7f4] px-3 py-2.5 text-left transition active:bg-[#edf0f4]">
+        <span className="text-base">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-[#0f1f3d]">{title}</span>
+          {subtitle && <span className="block truncate text-xs text-[#5b6472]">{subtitle}</span>}
+        </span>
+        <span className={`shrink-0 text-[#94a3b8] transition-transform ${open ? "rotate-180" : ""}`}>⌄</span>
+      </div>
+      {open && <div className="p-3">{children}</div>}
+    </div>
+  );
+}
 
 const initialDraft = {
   tipo: TIPOS_ACCION[0],
@@ -90,6 +109,11 @@ export default function NuevaAccionModal({ procesos, subprocesos, personas, acci
   const [draft, setDraft] = useState(() => (prefill ? { ...initialDraft, ...prefill } : initialDraft));
   const [involucradosIds, setInvolucradosIds] = useState([]);
   const [error, setError] = useState("");
+  const [openSection, setOpenSection] = useState("situacion");
+
+  function toggleSection(section) {
+    setOpenSection((cur) => (cur === section ? null : section));
+  }
 
   function toggleInvolucrado(id) {
     setInvolucradosIds((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
@@ -149,90 +173,119 @@ export default function NuevaAccionModal({ procesos, subprocesos, personas, acci
     });
   }
 
+  const tituloCorto = draft.titulo ? (draft.titulo.length > 48 ? `${draft.titulo.slice(0, 48)}…` : draft.titulo) : "Aún sin capturar";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-[#edf0f4] bg-white shadow-2xl">
-        <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <div className={`${cardClass} flex max-h-[92vh] w-full flex-col overflow-hidden rounded-b-none sm:max-w-lg sm:rounded-2xl`}>
+        <div className="flex shrink-0 items-center justify-between gap-2 bg-[#001225] px-4 py-3 text-white">
           <div>
             <p className="text-xs font-black uppercase tracking-widest">Nueva acción</p>
             <p className="text-[10px] font-bold text-white/60">Registrar en Acciones de Mejora</p>
           </div>
-          <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
+          <button type="button" onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
         </div>
 
-        <div className="max-h-[75vh] space-y-3 overflow-auto p-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className={labelClass}>
-              Tipo
-              <select value={draft.tipo} onChange={(e) => update("tipo", e.target.value)} className={inputClass}>
-                {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </label>
-            <label className={labelClass}>
-              Nivel
-              <select value={draft.nivel} onChange={(e) => update("nivel", e.target.value)} className={inputClass}>
-                {NIVELES_ACCION.map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </label>
-          </div>
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+          <AccordionSection
+            icon="📋"
+            title="Clasificación"
+            subtitle={`${draft.tipo} · ${draft.nivel}`}
+            open={openSection === "clasificacion"}
+            onToggle={() => toggleSection("clasificacion")}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className={labelClass}>
+                Tipo
+                <select value={draft.tipo} onChange={(e) => update("tipo", e.target.value)} className={inputClass}>
+                  {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+              <label className={labelClass}>
+                Nivel
+                <select value={draft.nivel} onChange={(e) => update("nivel", e.target.value)} className={inputClass}>
+                  {NIVELES_ACCION.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </label>
+            </div>
+          </AccordionSection>
 
-          <label className={labelClass}>
-            Problema / situación detectada
-            <input value={draft.titulo} onChange={(e) => update("titulo", e.target.value)} placeholder="Ej. Se detectó una desviación en el reporte de producción" className={inputClass} />
-          </label>
+          <AccordionSection
+            icon="📝"
+            title="Situación"
+            subtitle={tituloCorto}
+            open={openSection === "situacion"}
+            onToggle={() => toggleSection("situacion")}
+          >
+            <div className="space-y-3">
+              <label className={labelClass}>
+                Problema / situación detectada
+                <input value={draft.titulo} onChange={(e) => update("titulo", e.target.value)} placeholder="Ej. Se detectó una desviación en el reporte de producción" className={inputClass} />
+              </label>
+              <label className={labelClass}>
+                Descripción
+                <textarea value={draft.descripcion} onChange={(e) => update("descripcion", e.target.value)} rows={2} placeholder="Contexto: qué pasó, dónde, cuándo se detectó" className={inputClass} />
+              </label>
+            </div>
+          </AccordionSection>
 
-          <label className={labelClass}>
-            Descripción
-            <textarea value={draft.descripcion} onChange={(e) => update("descripcion", e.target.value)} rows={2} placeholder="Contexto: qué pasó, dónde, cuándo se detectó" className={inputClass} />
-          </label>
+          <AccordionSection
+            icon="🏭"
+            title="Ubicación y equipo"
+            subtitle={`${procesoSeleccionado?.nombre || "Sin proceso"} · ${involucradosIds.length} involucrado(s)`}
+            open={openSection === "ubicacion"}
+            onToggle={() => toggleSection("ubicacion")}
+          >
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className={labelClass}>
+                  Proceso
+                  <select value={draft.procesoId} onChange={(e) => handleProcesoChange(e.target.value)} className={inputClass}>
+                    <option value="">Sin proceso</option>
+                    {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  </select>
+                </label>
+                <label className={labelClass}>
+                  Área / subproceso
+                  <input
+                    value={draft.subprocesoTexto}
+                    onChange={(e) => update("subprocesoTexto", e.target.value)}
+                    list="areas-subproceso-sugeridas"
+                    placeholder={procesoSeleccionado ? "Escribe el área específica..." : "Elige primero un proceso"}
+                    className={inputClass}
+                  />
+                  <datalist id="areas-subproceso-sugeridas">
+                    {areasDisponibles.map((s) => <option key={s.id} value={s.nombre.trim()} />)}
+                  </datalist>
+                </label>
+              </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className={labelClass}>
-              Proceso
-              <select value={draft.procesoId} onChange={(e) => handleProcesoChange(e.target.value)} className={inputClass}>
-                <option value="">Sin proceso</option>
-                {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-              </select>
-            </label>
-            <label className={labelClass}>
-              Área / subproceso
-              <input
-                value={draft.subprocesoTexto}
-                onChange={(e) => update("subprocesoTexto", e.target.value)}
-                list="areas-subproceso-sugeridas"
-                placeholder={procesoSeleccionado ? "Escribe el área específica..." : "Elige primero un proceso"}
-                className={inputClass}
-              />
-              <datalist id="areas-subproceso-sugeridas">
-                {areasDisponibles.map((s) => <option key={s.id} value={s.nombre.trim()} />)}
-              </datalist>
-            </label>
-          </div>
+              <label className={labelClass}>
+                Involucrados (les llega notificación de esta acción)
+                <InvolucradosSelect personas={personas || []} selectedIds={involucradosIds} onToggle={toggleInvolucrado} />
+              </label>
+              <p className="-mt-1 text-xs font-medium text-[#94a3b8]">El equipo estratégico (PM, Coordinador SIG, Analista de Procesos, Director General) se entera automáticamente, aunque no lo elijas aquí.</p>
 
-          <label className={labelClass}>
-            Involucrados (les llega notificación de esta acción)
-            <InvolucradosSelect personas={personas || []} selectedIds={involucradosIds} onToggle={toggleInvolucrado} />
-          </label>
-          <p className="-mt-1 text-xs font-medium text-[#94a3b8]">El equipo estratégico (PM, Coordinador SIG, Analista de Procesos, Director General) se entera automáticamente, aunque no lo elijas aquí.</p>
+              {draft.tipo === "Acción Correctiva" && correcciones.length > 0 && (
+                <label className={labelClass}>
+                  ¿Corrección de origen? (opcional)
+                  <select value={draft.correccionOrigenId} onChange={(e) => update("correccionOrigenId", e.target.value)} className={inputClass}>
+                    <option value="">Sin ligar a una corrección</option>
+                    {correcciones.map((c) => <option key={c.id} value={c.id}>{c.codigo} — {c.titulo}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
+          </AccordionSection>
 
-          {draft.tipo === "Acción Correctiva" && correcciones.length > 0 && (
-            <label className={labelClass}>
-              ¿Corrección de origen? (opcional)
-              <select value={draft.correccionOrigenId} onChange={(e) => update("correccionOrigenId", e.target.value)} className={inputClass}>
-                <option value="">Sin ligar a una corrección</option>
-                {correcciones.map((c) => <option key={c.id} value={c.id}>{c.codigo} — {c.titulo}</option>)}
-              </select>
-            </label>
-          )}
-
-          <p className="text-xs font-medium text-[#94a3b8]">Responsable, prioridad y fecha compromiso se definen después, en "Plan de acción" — una vez identificada la causa.</p>
+          <p className="px-1 text-xs font-medium text-[#94a3b8]">Responsable, prioridad y fecha compromiso se definen después, en "Plan de acción" — una vez identificada la causa.</p>
 
           {error && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{error}</div>}
+        </div>
 
-          <div className="flex justify-end gap-2 border-t border-[#edf0f4] pt-3">
-            <button type="button" onClick={onClose} className={btnGhostClass}>Cancelar</button>
-            <button type="button" onClick={handleSave} className={btnPrimaryClass}>Guardar</button>
-          </div>
+        <div className="flex shrink-0 justify-end gap-2 border-t border-[#edf0f4] p-3">
+          <button type="button" onClick={onClose} className={btnGhostClass}>Cancelar</button>
+          <button type="button" onClick={handleSave} className={btnPrimaryClass}>Guardar</button>
         </div>
       </div>
     </div>
