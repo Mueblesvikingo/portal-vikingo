@@ -396,15 +396,15 @@ export default function ActionsModule({ currentUser }) {
   ];
 
   // Tarjetas de Inicio, mismo estilo que los formatos de inspección de
-  // Calidad (icono en chip, título, subtítulo chico) — "Nueva" abre el
-  // modal directo (no navega a un panel), Abiertas/Historial sí abren panel.
+  // Calidad (icono en chip, título, subtítulo chico) — cada una abre su
+  // panel. "Nueva" no es tarjeta: es el botón pulsante dorado (ver más
+  // abajo, mismo estilo que "+ Nueva ..." de cada formato de Calidad),
+  // porque es la acción principal de la pantalla, no una sección a navegar.
   const INICIO_TILES = [
-    { key: "nueva", titulo: "Nueva", subtitulo: "Reportar situación", icono: "📝" },
     { key: "abiertas", titulo: "Abiertas", subtitulo: `${accionesAbiertas.length} activa(s)`, icono: "🗂️" },
     { key: "historial", titulo: "Historial", subtitulo: `${accionesHistorial.length} cerrada(s)`, icono: "📜" },
   ];
   function handleTileClick(key) {
-    if (key === "nueva") { setCreating(true); return; }
     setSeccionActiva(key);
   }
 
@@ -592,16 +592,42 @@ export default function ActionsModule({ currentUser }) {
         </div>
       ) : (
         <div className="space-y-3">
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-[#001225]">Acciones de Mejora</h2>
-            <p className="text-sm text-slate-500">Reporta, analiza y da seguimiento a las mejoras de tu proceso.</p>
-          </div>
+          {/* Mismo formato de encabezado que "Formatos de inspección" /
+              "Herramientas SPC" en Calidad: chip de ícono + etiqueta chica +
+              título, sobre una barra de color. */}
+          <header className="flex items-center gap-2.5 rounded-xl bg-[#001225] px-3 py-2 sm:px-4">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#c9a227]">
+              <span className="text-sm">🎯</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-white/50">Centro de Gestión</p>
+              <p className="truncate text-sm font-bold text-white">Acciones de Mejora</p>
+            </div>
+          </header>
+
           {esOperativo && (
             <div className="rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-2.5 text-[10px] font-bold text-sky-800">
               📝 Aquí registras una situación o problema que detectaste. Tu reporte llega al líder del proceso y al equipo estratégico — este espacio no es un buzón de quejas, es el punto de partida de una acción de mejora real.
             </div>
           )}
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+
+          {/* Mismo botón (y animación de pulso dorado) que "+ Nueva
+              recepción/inspección" en cada formato de Calidad — es la
+              acción principal de la pantalla, por eso no es una tarjeta más
+              del grid de abajo. */}
+          <style>{`
+            @keyframes gcGoldPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(201,162,39,0.35); } 50% { box-shadow: 0 0 0 7px rgba(201,162,39,0.10); } }
+            .gc-gold-pulse { animation: gcGoldPulse 2.8s ease-in-out infinite; }
+          `}</style>
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="gc-gold-pulse flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-[#c9a227] bg-white px-2 py-2.5 text-sm font-semibold text-[#96771a] transition active:scale-[0.98]"
+          >
+            📝 + Nueva situación / acción
+          </button>
+
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {INICIO_TILES.map((t) => (
               <button
                 key={t.key}
