@@ -715,7 +715,7 @@ export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, ca
           ].filter(Boolean).join(" "),
           tipo: "Corrección",
           nivel: "Operativa",
-          origenModulo: "Gestión de Calidad",
+          origenModulo: "Gestión de Calidad · Inspección",
           origenTabla: "calidad_recorridos",
           origenId: registro.id,
         },

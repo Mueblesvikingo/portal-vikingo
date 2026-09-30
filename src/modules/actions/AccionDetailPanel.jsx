@@ -976,6 +976,12 @@ export default function AccionDetailPanel({
                         <EditableText value={accion.descripcion} canEdit={canEdit} onSave={(v) => onUpdate({ descripcion: v })} placeholder="Sin descripción" multiline />
                       </div>
 
+                      {accion.origen_modulo && accion.origen_modulo !== "Manual" && accion.origen_tabla !== "acciones" && (
+                        <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-500">
+                          <span className="text-slate-400">🔗 Generada desde:</span> {accion.origen_modulo}
+                        </div>
+                      )}
+
                       {(correccionOrigen || derivadas.length > 0) && (
                         <div className="mt-2 space-y-1">
                           {correccionOrigen && (

@@ -203,6 +203,12 @@ export default function NuevaAccionModal({ procesos, subprocesos, personas, acci
         </div>
 
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+          {prefill?.origenModulo && (
+            <p className="rounded-lg border border-[#edf0f4] bg-[#f7f7f4] px-2.5 py-1.5 text-[10px] font-bold text-[#5b6472]">
+              <span className="text-[#94a3b8]">🔗 Generada desde:</span> {prefill.origenModulo}
+            </p>
+          )}
+
           <AccordionSection
             icon="📋"
             title="Clasificación"

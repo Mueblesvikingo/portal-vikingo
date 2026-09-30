@@ -435,7 +435,12 @@ export default function Planta3Panel({ currentUser, canEdit = true }) {
       }
     }
     setShowForm(false);
-    loadRegistros();
+    await loadRegistros();
+    // Antes había que ir a Historial y abrir "Ver" para encontrar el botón
+    // "Generar Acción de Mejora" de una NC recién capturada — ahora, si la
+    // inspección salió No Conforme, su propio detalle se abre solo al
+    // guardar (ese botón ya vive en DetalleRegistroModal).
+    if (inspeccion.resultado === "No Conforme") setVerId(result.data.id);
   }
 
   async function handleDelete(id) {

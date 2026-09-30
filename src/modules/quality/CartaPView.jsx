@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
 import { getInspeccionesUnica } from "../../services/calidadService";
 import { cardClass } from "./coreliTheme";
@@ -78,6 +79,7 @@ function CartaPTooltip({ active, payload }) {
 }
 
 export default function CartaPView() {
+  const navigate = useNavigate();
   const [planta, setPlanta] = useState("Materia Prima");
   const [rango, setRango] = useState(() => {
     const r = calcularPeriodo("mes", todayISO());
@@ -104,6 +106,27 @@ export default function CartaPView() {
 
   const fueraDeControl = datos.puntos.filter((p) => p.fueraControl);
   const pBarraPct = Math.round(datos.pBarra * 1000) / 10;
+
+  // Mismo puente Calidad → Acciones de Mejora que ya usa DetalleRegistroModal
+  // (shared.jsx), aplicado aquí a un día fuera de control (patrón detectado
+  // por la carta, no un incidente puntual): nace directo como Acción
+  // Correctiva en nivel Táctica. Sin origen_id — el cálculo es agregado por
+  // día, no un registro puntual al que ligarse.
+  function handleGenerarAccion(dia) {
+    navigate("/acciones", {
+      state: {
+        prefillNuevaAccion: {
+          titulo: `Proceso fuera de control en ${planta} — ${dia.label}`,
+          descripcion: `Carta de control p de ${planta} (${label}): el ${dia.label} el proceso salió fuera de control con ${dia.pPct}% de no conformidad (límite esperado ${dia.lclPct}%–${dia.uclPct}%, promedio del período p̄=${pBarraPct}%).`,
+          tipo: "Acción Correctiva",
+          nivel: "Táctica",
+          origenModulo: "Gestión de Calidad · Carta P",
+          origenTabla: "calidad_carta_p",
+          origenId: null,
+        },
+      },
+    });
+  }
 
   return (
     <div className="space-y-3">
@@ -175,12 +198,19 @@ export default function CartaPView() {
             <div className="space-y-1.5">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-red-600">Días fuera de control</p>
               {fueraDeControl.map((f) => (
-                <div key={f.fecha} className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs">
+                <div key={f.fecha} className="flex flex-wrap items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs">
                   <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-red-100 text-[10px] font-bold text-red-700">!</span>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-[#0f1f3d]">{f.label} — {f.pPct}% de NC</p>
                     <p className="text-[10px] text-[#94a3b8]">Límite esperado ese día: {f.lclPct}% – {f.uclPct}%</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerarAccion(f)}
+                    className="shrink-0 rounded-lg bg-red-600 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white transition hover:bg-red-700"
+                  >
+                    Generar AC →
+                  </button>
                 </div>
               ))}
             </div>

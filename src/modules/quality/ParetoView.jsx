@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
 import { getInspeccionesUnica, getPuntosControl, getPuntosControlPorProceso } from "../../services/calidadService";
 import { cardClass } from "./coreliTheme";
@@ -63,6 +64,7 @@ function ParetoTooltip({ active, payload }) {
 }
 
 export default function ParetoView() {
+  const navigate = useNavigate();
   const [planta, setPlanta] = useState("Materia Prima");
   const [rango, setRango] = useState(() => {
     const r = calcularPeriodo("mes", todayISO());
@@ -99,6 +101,28 @@ export default function ParetoView() {
     cargar();
     return () => { cancelado = true; };
   }, [planta, desde, hasta]);
+
+  // Mismo puente Calidad → Acciones de Mejora que ya usa DetalleRegistroModal
+  // (shared.jsx), aplicado aquí a un patrón repetido en vez de un incidente
+  // puntual: por eso nace directo como Acción Correctiva (no Corrección) y
+  // en nivel Táctica (afecta a toda la planta en el período, no un caso
+  // aislado). Sin origen_id — el Pareto es un cálculo agregado, no un
+  // registro puntual al que ligarse.
+  function handleGenerarAccion(fila) {
+    navigate("/acciones", {
+      state: {
+        prefillNuevaAccion: {
+          titulo: `No conformidad recurrente en ${planta} — Punto ${fila.letra}`,
+          descripcion: `Pareto de ${planta} (${label}): el punto ${fila.letra}. ${fila.descripcion}${fila.proceso ? ` (${fila.proceso})` : ""} concentra ${fila.count} no conformidad(es), ${fila.pctAcumulado}% acumulado del período.`,
+          tipo: "Acción Correctiva",
+          nivel: "Táctica",
+          origenModulo: "Gestión de Calidad · Pareto",
+          origenTabla: "calidad_pareto",
+          origenId: null,
+        },
+      },
+    });
+  }
 
   return (
     <div className="space-y-3">
@@ -156,7 +180,7 @@ export default function ParetoView() {
 
           <div className="space-y-1.5">
             {filas.map((f, i) => (
-              <div key={f.id} className="flex items-center gap-2 rounded-lg border border-[#edf0f4] bg-white px-2.5 py-1.5 text-xs">
+              <div key={f.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-[#edf0f4] bg-white px-2.5 py-1.5 text-xs">
                 <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#f7f7f4] text-[10px] font-bold text-[#5b6472]">{i + 1}</span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-[#0f1f3d]">
@@ -165,6 +189,13 @@ export default function ParetoView() {
                 </div>
                 <span className="shrink-0 font-bold text-red-600">{f.count}</span>
                 <span className="shrink-0 text-[10px] text-[#94a3b8]">{f.pctAcumulado}% ac.</span>
+                <button
+                  type="button"
+                  onClick={() => handleGenerarAccion(f)}
+                  className="shrink-0 rounded-lg bg-red-600 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white transition hover:bg-red-700"
+                >
+                  Generar AC →
+                </button>
               </div>
             ))}
           </div>
