@@ -1,4 +1,4 @@
-import { TIPOS_ACCION, ESTADO_BADGE, isVencida, formatDate } from "./actionsHelpers";
+import { TIPOS_ACCION, TIPO_COLOR, ESTADO_BADGE, isVencida, formatDate } from "./actionsHelpers";
 
 // Mismo estilo del historial de inspecciones de Calidad (ver
 // src/modules/quality/MateriaPrimaPanel.jsx: cardClass + encabezado gris
@@ -63,9 +63,9 @@ export default function TablaLimpia({ acciones, procesosById, personasById, onSe
     <div className="space-y-3">
       {grupos.map((grupo) => (
         <div key={grupo.tipo} className={cardClass}>
-          <div className="flex items-center justify-between gap-2 bg-[#f7f7f4] px-4 py-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5b6472]">{grupo.tipo}</p>
-            <span className="shrink-0 text-[11px] font-semibold text-[#94a3b8]">{grupo.items.length}</span>
+          <div className="flex items-center justify-between gap-2 px-4 py-2" style={{ background: `${TIPO_COLOR[grupo.tipo] || "#94a3b8"}22` }}>
+            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: TIPO_COLOR[grupo.tipo] || "#5b6472" }}>{grupo.tipo}</p>
+            <span className="shrink-0 text-[11px] font-semibold" style={{ color: TIPO_COLOR[grupo.tipo] || "#94a3b8" }}>{grupo.items.length}</span>
           </div>
           <table className="w-full table-fixed text-left">
             <colgroup>

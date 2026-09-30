@@ -843,18 +843,21 @@ export default function AccionDetailPanel({
     setNuevoAdjunto({ nombre: "", url: "" });
   }
 
+  // Ventana completa (no un modal flotando sobre la app) — pedido explícito
+  // del usuario: "Ver" debe sentirse como entrar a su propia pantalla, no
+  // como un recuadro encima de lo demás. Cubre todo el viewport, sin bordes
+  // ni esquinas redondeadas ni fondo oscurecido alrededor.
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-b-none border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
-        <div className="flex shrink-0 items-center justify-between bg-[#001225] px-4 py-3 text-white">
-          <div>
-            <p className="text-[10px] font-bold text-slate-300">{accion.codigo}</p>
-            <p className="text-sm font-black uppercase tracking-widest">Detalle de acción</p>
-          </div>
-          <button type="button" onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      <div className="flex shrink-0 items-center justify-between bg-[#001225] px-4 py-3 text-white">
+        <div>
+          <p className="text-[10px] font-bold text-slate-300">{accion.codigo}</p>
+          <p className="text-sm font-black uppercase tracking-widest">Detalle de acción</p>
         </div>
+        <button type="button" onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
+      </div>
 
-        <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-4">
+      <div className="mx-auto min-h-0 w-full max-w-5xl flex-1 overflow-auto p-3 sm:p-4">
           <div className="space-y-3">
             {/* El encabezado y la línea de tiempo solo se ven cuando no hay
                 ningún bloque abierto — al tocar uno, su contenido toma toda
@@ -1417,6 +1420,6 @@ export default function AccionDetailPanel({
           </div>
         </div>
       </div>
-    </div>
   );
 }
+
