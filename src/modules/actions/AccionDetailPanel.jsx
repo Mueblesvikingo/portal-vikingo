@@ -36,6 +36,7 @@ import {
 import CincoPorques from "./analisisCausa/CincoPorques";
 import Ishikawa from "./analisisCausa/Ishikawa";
 import CincoW2H from "./analisisCausa/CincoW2H";
+import HelpTip from "./HelpTip";
 
 function EditableText({ value, onSave, canEdit, className = "", placeholder = "", multiline = false }) {
   const [editing, setEditing] = useState(false);
@@ -843,17 +844,17 @@ export default function AccionDetailPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-b-none border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
+        <div className="flex shrink-0 items-center justify-between bg-[#001225] px-4 py-3 text-white">
           <div>
             <p className="text-[10px] font-bold text-slate-300">{accion.codigo}</p>
             <p className="text-sm font-black uppercase tracking-widest">Detalle de acción</p>
           </div>
-          <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
+          <button type="button" onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
         </div>
 
-        <div className="flex-1 overflow-auto p-4">
+        <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-4">
           <div className="space-y-3">
             {/* Encabezado compacto, siempre visible. Los campos descriptivos
                 (título, nivel, tipo, proceso...) viven en el bloque
@@ -882,6 +883,14 @@ export default function AccionDetailPanel({
                 real hay que usar la palomita ✓ de la esquina, explícita y
                 separada del clic de navegar. */}
             <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="mb-2 flex items-center gap-1.5">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Flujo del proceso</p>
+                <HelpTip>
+                  Toca cualquier bloque para ver su información — no cambia nada, solo lo muestra abajo.
+                  <br /><br />
+                  La palomita ✓ en la esquina de un bloque es lo único que <strong>avanza</strong> la acción a esa etapa; siempre pide confirmación antes de moverla.
+                </HelpTip>
+              </div>
               <div className="overflow-x-auto pb-1">
                 <div className="flex items-stretch" style={{ minWidth: `${etapas.length * 148}px` }}>
                   {etapas.map((etapa, index) => {
@@ -1146,8 +1155,10 @@ export default function AccionDetailPanel({
                 ) : subTab === "causa" ? (
                   <div className="space-y-3">
                     <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-2.5 py-2">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Responsable de participar en el análisis</p>
-                      <p className="mt-0.5 text-[9px] font-semibold text-slate-400">Útil cuando dos áreas tienen versiones distintas de la causa (ej. RH y Producción) — a quien asignes aquí se le habilita editar este análisis.</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Responsable de participar en el análisis</p>
+                        <HelpTip>Útil cuando dos áreas tienen versiones distintas de la causa (ej. RH y Producción) — a quien asignes aquí se le habilita editar este análisis.</HelpTip>
+                      </div>
                       <div className="mt-1 max-w-xs">
                         {(() => {
                           const idsAsignados = Array.isArray(accion.analisis_responsable_persona_id) ? accion.analisis_responsable_persona_id : [];
@@ -1235,16 +1246,20 @@ export default function AccionDetailPanel({
                       onAgregarObservacion={(texto) => handleAgregarObservacionEtapa("Aprobada", texto)}
                     />
                     <div className="border-t border-slate-100 pt-2.5">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo: una fila por persona</p>
-                      <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">Cada renglón es una acción concreta con su propio responsable, fecha y horas estimadas — arma el plan aquí antes de que Dirección apruebe (bloque "Aprobada" en la línea de tiempo, arriba).</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo</p>
+                        <HelpTip>Cada renglón es una acción concreta con su propio responsable, fecha y horas estimadas — arma el plan aquí antes de que Dirección apruebe (bloque "Aprobada", arriba).</HelpTip>
+                      </div>
                       <div className="mt-2"><PlanResponsablesTable {...planTableProps} /></div>
                     </div>
                   </div>
                 ) : subTab === "ejecucion" ? (
                   <div className="space-y-3">
                     <div className="border-t-0 pt-0">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo: una fila por persona</p>
-                      <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">Pueden ser varias personas — al enviarlas, todas bajan juntas a Balance de Carga con un clic.</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Reparte el trabajo</p>
+                        <HelpTip>Pueden ser varias personas — al enviarlas, todas bajan juntas a Balance de Carga con un clic.</HelpTip>
+                      </div>
                       <div className="mt-2"><PlanResponsablesTable {...planTableProps} /></div>
                     </div>
 
@@ -1253,8 +1268,8 @@ export default function AccionDetailPanel({
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Envía a ejecución real</p>
                         <p className="mt-0.5 text-[9px] font-semibold leading-tight text-slate-400">
                           {yaAprobada
-                            ? "Dirección ya aprobó — manda todas las filas pendientes a Balance de Carga, o arma un proyecto en el Tablero PMO."
-                            : "Disponible en cuanto Dirección apruebe la acción (bloque \"Aprobada\" en la línea de tiempo, arriba)."}
+                            ? "Dirección ya aprobó — manda las filas pendientes a Balance de Carga, o arma un proyecto en el Tablero PMO."
+                            : "Disponible en cuanto Dirección apruebe (bloque \"Aprobada\", arriba)."}
                         </p>
                         <div className="mt-1.5 flex flex-wrap gap-2">
                           <button
@@ -1290,7 +1305,7 @@ export default function AccionDetailPanel({
 
                     <details className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px]">
                       <summary className="cursor-pointer select-none text-[9px] font-black uppercase tracking-widest text-slate-400">Enlace de ejecución (opcional)</summary>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <div>
                           <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Texto</p>
                           <EditableText value={accion.enlace_ejecucion_texto} canEdit={canEdit} onSave={(v) => onUpdate({ enlace_ejecucion_texto: v })} placeholder="Ej. Planner — Tablero Calidad" className="text-slate-700" />
@@ -1328,7 +1343,7 @@ export default function AccionDetailPanel({
                   <div className="space-y-3">
                     {causaRaizBlock}
                     {accion.requiere_verificacion_eficacia ? (
-                      <div className="grid grid-cols-2 gap-2 rounded-xl border border-cyan-100 bg-cyan-50/60 p-2.5">
+                      <div className="grid grid-cols-1 gap-2 rounded-xl border border-cyan-100 bg-cyan-50/60 p-2.5 sm:grid-cols-2">
                         <div>
                           <p className="text-[9px] font-black uppercase tracking-widest text-cyan-700">Resultado</p>
                           <EditableSelect
@@ -1361,7 +1376,10 @@ export default function AccionDetailPanel({
                   </div>
                 ) : subTab === "linea_tiempo" ? (
                   <div className="space-y-3">
-                    <p className="text-[9px] font-semibold text-slate-400">El avance por etapas ya se ve arriba, siempre visible. Aquí queda el detalle de quién y cuándo movió cada una.</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Quién y cuándo movió cada etapa</p>
+                      <HelpTip>El avance por etapas ya se ve arriba, siempre visible — aquí queda el registro de quién y cuándo movió cada una.</HelpTip>
+                    </div>
                     <div className="space-y-1.5">
                       {historial.filter((h) => h.campo === "estado" || h.campo === "creado").length === 0 ? (
                         <p className="py-6 text-center text-[11px] font-bold text-slate-300">Sin recorrido registrado todavía.</p>
