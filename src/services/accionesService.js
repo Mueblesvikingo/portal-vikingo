@@ -408,6 +408,32 @@ export async function removePlanResponsable(id) {
 
 // --- Involucrados y notificaciones del flujo ------------------------------
 
+// IDs de acciones en las que esta persona quedó como involucrada (elegida a
+// mano al crearla, o por ser equipo estratégico — ver notificarNuevaAccion).
+// Usado para que el alcance "mis acciones" de ActionsModule.jsx incluya no
+// solo lo que la persona creó/le asignaron/su proceso, sino también lo que
+// le marcaron para enterarse — hoy le llegaba la notificación pero, si no
+// era además creador/responsable/dueño de proceso, no la encontraba después
+// en su propia lista de "Abiertas".
+export async function getInvolucradoAccionIds(personaId) {
+  if (!personaId) return [];
+  try {
+    const { data, error } = await supabase
+      .from("accion_involucrados")
+      .select("accion_id")
+      .eq("persona_id", personaId);
+
+    if (error) {
+      console.error("Error al cargar acciones donde la persona está involucrada:", error);
+      return [];
+    }
+    return (data || []).map((row) => row.accion_id);
+  } catch (err) {
+    console.error("Error inesperado al cargar acciones donde la persona está involucrada:", err);
+    return [];
+  }
+}
+
 export async function getInvolucrados(accionId) {
   try {
     const { data, error } = await supabase

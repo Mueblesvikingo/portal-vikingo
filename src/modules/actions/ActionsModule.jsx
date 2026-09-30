@@ -9,6 +9,7 @@ import {
   notificarNuevaAccion,
   notificarInvolucrados,
   updatePlanResponsable,
+  getInvolucradoAccionIds,
 } from "../../services/accionesService";
 import { getMacroprocesos } from "../../services/performanceService";
 import { getPersonas } from "../../services/organizationCatalogService";
@@ -37,6 +38,12 @@ export default function ActionsModule({ currentUser }) {
   const [personas, setPersonas] = useState([]);
   const [objetivos, setObjetivos] = useState([]);
   const [loading, setLoading] = useState(true);
+  // IDs de acciones donde currentUser quedó como involucrado (elegido a mano
+  // al crearse, o por ser equipo estratégico) — ver getInvolucradoAccionIds.
+  // Sin esto, alguien tagueado como involucrado recibía la notificación pero,
+  // si no era además creador/responsable/dueño del proceso, no la volvía a
+  // encontrar en su propia lista de "Abiertas".
+  const [involucradoAccionIds, setInvolucradoAccionIds] = useState(new Set());
   // Un líder de proceso debe sentir este módulo como su propio gestor: entra
   // viendo SUS acciones (las que creó, en las que es responsable, o de un
   // proceso suyo aunque otro la haya levantado), no el total de toda la
@@ -62,13 +69,14 @@ export default function ActionsModule({ currentUser }) {
 
   async function loadAll() {
     setLoading(true);
-    const [accionesData, tiposData, procesosData, subprocesosData, personasData, objetivosData] = await Promise.all([
+    const [accionesData, tiposData, procesosData, subprocesosData, personasData, objetivosData, involucradoIdsData] = await Promise.all([
       getAcciones(),
       getTiposFlujo(),
       getMacroprocesos(),
       getSubprocesosCatalog(),
       getPersonas().catch((err) => { console.error("Error al cargar personas:", err); return []; }),
       getObjetivos(),
+      getInvolucradoAccionIds(currentUser?.persona_id),
     ]);
     setAcciones(accionesData);
     setTiposFlujo(tiposData);
@@ -76,6 +84,7 @@ export default function ActionsModule({ currentUser }) {
     setSubprocesos(subprocesosData);
     setPersonas(personasData.filter((p) => p.activo !== false && (!p.tipo || p.tipo === "persona")));
     setObjetivos(objetivosData.filter((o) => o.codigo !== "GLOBAL"));
+    setInvolucradoAccionIds(new Set(involucradoIdsData));
     setLoading(false);
   }
 
@@ -113,8 +122,10 @@ export default function ActionsModule({ currentUser }) {
   const objetivosById = useMemo(() => Object.fromEntries(objetivos.map((o) => [o.id, o])), [objetivos]);
 
   const misAcciones = useMemo(
-    () => acciones.filter((a) => esParticipanteAccion(currentUser, a, a.proceso_id ? procesosById[a.proceso_id] : null)),
-    [acciones, procesosById, currentUser]
+    () => acciones.filter((a) =>
+      esParticipanteAccion(currentUser, a, a.proceso_id ? procesosById[a.proceso_id] : null) || involucradoAccionIds.has(a.id)
+    ),
+    [acciones, procesosById, currentUser, involucradoAccionIds]
   );
 
   // Base para "Abiertas" (tabla limpia por tipo) e "Historial" (cerradas).
