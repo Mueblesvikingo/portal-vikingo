@@ -856,6 +856,12 @@ export default function AccionDetailPanel({
 
         <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-4">
           <div className="space-y-3">
+            {/* El encabezado y la línea de tiempo solo se ven cuando no hay
+                ningún bloque abierto — al tocar uno, su contenido toma toda
+                la pantalla (ver más abajo) para que se vea limpio, sin los
+                demás bloques compitiendo por espacio. */}
+            {!subTab && (
+            <>
             {/* Encabezado compacto, siempre visible. Los campos descriptivos
                 (título, nivel, tipo, proceso...) viven en el bloque
                 "Registrada" de la línea de tiempo, no aquí. */}
@@ -974,19 +980,25 @@ export default function AccionDetailPanel({
                 </div>
               </div>
             </div>
+            </>
+            )}
 
-            {/* Al abrir el detalle no hay ningún bloque seleccionado — se ve
-                solo el flujo completo. El contenido de aquí abajo lo elige
-                el bloque de la línea de tiempo que se haya clicado arriba —
-                Historial/Comentarios/Adjuntos se movieron a "Ver detalle",
-                ya no compiten aquí. */}
-            {!subTab ? (
-              <p className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-center text-[11px] font-bold text-slate-300">
-                Toca un bloque del flujo para ver su contenido.
-              </p>
-            ) : (
+            {/* Al tocar un bloque del flujo, su contenido toma toda la
+                pantalla — se oculta el encabezado y los demás bloques
+                (arriba) para que se vea limpio, solo esta etapa. El botón
+                "← Volver al flujo" regresa a la vista completa. */}
+            {subTab && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setSubTab(null)}
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-500 transition hover:bg-slate-50"
+              >
+                ← Volver al flujo
+              </button>
+              <p className="truncate text-[10px] font-bold text-slate-400">{accion.titulo}</p>
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="max-h-[45vh] overflow-auto p-3">
+              <div className="p-3">
                 {loadingSub ? (
                   <div className="py-8 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
                 ) : subTab === "detalle" ? (
@@ -1399,6 +1411,7 @@ export default function AccionDetailPanel({
                   </div>
                 ) : null}
               </div>
+            </div>
             </div>
             )}
           </div>
