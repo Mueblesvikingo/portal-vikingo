@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { TIPOS_ACCION, NIVELES_ACCION } from "./actionsHelpers";
 
+// Mismos estilos de campo/botón que usa el formulario de "+ Nueva
+// recepción/inspección" en Calidad (ver src/modules/quality/shared.jsx:
+// inputClass/labelClass, y coreliTheme.js: btnPrimaryClass/btnGhostClass) —
+// copiados aquí en vez de importados entre módulos, mismo criterio de
+// autocontención que ya explica el comentario de InvolucradosSelect más
+// abajo. El fondo gris plano (bg-slate-50/border-slate-200) que traía antes
+// esta ventana se reemplaza por blanco con borde clarísimo y foco dorado.
+const inputClass = "mt-1 w-full rounded-xl border border-[#edf0f4] bg-white px-3 py-2 text-sm font-medium text-[#0f1f3d] outline-none transition focus:border-[#c9a227] focus:shadow-[0_0_0_3px_rgba(201,162,39,0.2)]";
+const labelClass = "block text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]";
+const btnPrimaryClass = "inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-[#c9a227] to-[#b8931f] px-3 py-1.5 text-[11px] font-semibold text-[#0b1f3a] shadow-[0_1px_2px_rgba(11,31,58,0.08),0_2px_6px_-1px_rgba(11,31,58,0.12)] transition active:scale-[0.98]";
+const btnGhostClass = "inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-medium text-[#5b6472] transition hover:bg-[#f7f7f4]";
+
 const initialDraft = {
   tipo: TIPOS_ACCION[0],
   nivel: "Operativa",
@@ -35,24 +47,24 @@ function InvolucradosSelect({ personas, selectedIds, onToggle }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="mt-1 flex h-10 w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-left text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+        className="mt-1 flex h-10 w-full items-center justify-between rounded-xl border border-[#edf0f4] bg-white px-3 text-left text-sm font-medium text-[#0f1f3d] outline-none transition focus:border-[#c9a227]"
       >
         <span className="truncate">{seleccionadas.length ? `${seleccionadas.length} seleccionado${seleccionadas.length > 1 ? "s" : ""}` : "Elige a quién avisar"}</span>
-        <span className="shrink-0 text-slate-400">{open ? "▲" : "▼"}</span>
+        <span className="shrink-0 text-[#94a3b8]">{open ? "▲" : "▼"}</span>
       </button>
 
       {seleccionadas.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {seleccionadas.map((p) => (
-            <span key={p.id} className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-white">{p.nombre}</span>
+            <span key={p.id} className="rounded-full bg-[#0f1f3d] px-2 py-0.5 text-[10px] font-bold text-white">{p.nombre}</span>
           ))}
         </div>
       )}
 
       {open && (
-        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-[#edf0f4] bg-white p-1.5 shadow-xl">
           {personas.map((p) => (
-            <label key={p.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-bold normal-case tracking-normal text-slate-700 hover:bg-slate-50">
+            <label key={p.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-[#0f1f3d] hover:bg-[#f7f7f4]">
               <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => onToggle(p.id)} />
               {p.nombre}
             </label>
@@ -138,58 +150,58 @@ export default function NuevaAccionModal({ procesos, subprocesos, personas, acci
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-[#edf0f4] bg-white shadow-2xl">
         <div className="flex items-center justify-between bg-[#001225] px-4 py-3 text-white">
           <div>
             <p className="text-xs font-black uppercase tracking-widest">Nueva acción</p>
-            <p className="text-[10px] font-bold text-slate-300">Registrar en Acciones de Mejora</p>
+            <p className="text-[10px] font-bold text-white/60">Registrar en Acciones de Mejora</p>
           </div>
           <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
         </div>
 
         <div className="max-h-[75vh] space-y-3 overflow-auto p-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <label className={labelClass}>
               Tipo
-              <select value={draft.tipo} onChange={(e) => update("tipo", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              <select value={draft.tipo} onChange={(e) => update("tipo", e.target.value)} className={inputClass}>
                 {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </label>
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <label className={labelClass}>
               Nivel
-              <select value={draft.nivel} onChange={(e) => update("nivel", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              <select value={draft.nivel} onChange={(e) => update("nivel", e.target.value)} className={inputClass}>
                 {NIVELES_ACCION.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </label>
           </div>
 
-          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <label className={labelClass}>
             Problema / situación detectada
-            <input value={draft.titulo} onChange={(e) => update("titulo", e.target.value)} placeholder="Ej. Se detectó una desviación en el reporte de producción" className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+            <input value={draft.titulo} onChange={(e) => update("titulo", e.target.value)} placeholder="Ej. Se detectó una desviación en el reporte de producción" className={inputClass} />
           </label>
 
-          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <label className={labelClass}>
             Descripción
-            <textarea value={draft.descripcion} onChange={(e) => update("descripcion", e.target.value)} rows={2} placeholder="Contexto: qué pasó, dónde, cuándo se detectó" className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none" />
+            <textarea value={draft.descripcion} onChange={(e) => update("descripcion", e.target.value)} rows={2} placeholder="Contexto: qué pasó, dónde, cuándo se detectó" className={inputClass} />
           </label>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <label className={labelClass}>
               Proceso
-              <select value={draft.procesoId} onChange={(e) => handleProcesoChange(e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              <select value={draft.procesoId} onChange={(e) => handleProcesoChange(e.target.value)} className={inputClass}>
                 <option value="">Sin proceso</option>
                 {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
               </select>
             </label>
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <label className={labelClass}>
               Área / subproceso
               <input
                 value={draft.subprocesoTexto}
                 onChange={(e) => update("subprocesoTexto", e.target.value)}
                 list="areas-subproceso-sugeridas"
                 placeholder={procesoSeleccionado ? "Escribe el área específica..." : "Elige primero un proceso"}
-                className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none"
+                className={inputClass}
               />
               <datalist id="areas-subproceso-sugeridas">
                 {areasDisponibles.map((s) => <option key={s.id} value={s.nombre.trim()} />)}
@@ -197,29 +209,29 @@ export default function NuevaAccionModal({ procesos, subprocesos, personas, acci
             </label>
           </div>
 
-          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <label className={labelClass}>
             Involucrados (les llega notificación de esta acción)
             <InvolucradosSelect personas={personas || []} selectedIds={involucradosIds} onToggle={toggleInvolucrado} />
           </label>
-          <p className="-mt-1 text-[10px] font-semibold text-slate-400">El equipo estratégico (PM, Coordinador SIG, Analista de Procesos, Director General) se entera automáticamente, aunque no lo elijas aquí.</p>
+          <p className="-mt-1 text-xs font-medium text-[#94a3b8]">El equipo estratégico (PM, Coordinador SIG, Analista de Procesos, Director General) se entera automáticamente, aunque no lo elijas aquí.</p>
 
           {draft.tipo === "Acción Correctiva" && correcciones.length > 0 && (
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <label className={labelClass}>
               ¿Corrección de origen? (opcional)
-              <select value={draft.correccionOrigenId} onChange={(e) => update("correccionOrigenId", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold normal-case tracking-normal text-slate-700 outline-none">
+              <select value={draft.correccionOrigenId} onChange={(e) => update("correccionOrigenId", e.target.value)} className={inputClass}>
                 <option value="">Sin ligar a una corrección</option>
                 {correcciones.map((c) => <option key={c.id} value={c.id}>{c.codigo} — {c.titulo}</option>)}
               </select>
             </label>
           )}
 
-          <p className="text-[10px] font-semibold text-slate-400">Responsable, prioridad y fecha compromiso se definen después, en "Plan de acción" — una vez identificada la causa.</p>
+          <p className="text-xs font-medium text-[#94a3b8]">Responsable, prioridad y fecha compromiso se definen después, en "Plan de acción" — una vez identificada la causa.</p>
 
-          {error && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{error}</div>}
+          {error && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{error}</div>}
 
-          <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
-            <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500">Cancelar</button>
-            <button type="button" onClick={handleSave} className="rounded-lg bg-[#001225] px-3 py-1.5 text-[10px] font-black text-white">Guardar</button>
+          <div className="flex justify-end gap-2 border-t border-[#edf0f4] pt-3">
+            <button type="button" onClick={onClose} className={btnGhostClass}>Cancelar</button>
+            <button type="button" onClick={handleSave} className={btnPrimaryClass}>Guardar</button>
           </div>
         </div>
       </div>
