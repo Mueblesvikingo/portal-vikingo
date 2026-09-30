@@ -23,6 +23,7 @@ import KanbanTab from "./KanbanTab";
 import TablaTab from "./TablaTab";
 import AccionDetailPanel from "./AccionDetailPanel";
 import NuevaAccionModal from "./NuevaAccionModal";
+import BottomNav from "./BottomNav";
 
 export default function ActionsModule({ currentUser }) {
   const location = useLocation();
@@ -54,15 +55,15 @@ export default function ActionsModule({ currentUser }) {
   const [initialSubTab, setInitialSubTab] = useState(null);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
-  // La guía de 4 pasos ayuda mucho la primera vez, pero satura la vista en
-  // cada visita posterior — se recuerda en localStorage si ya se ocultó, y
-  // queda siempre a un clic de volver a abrirse.
-  const [guiaAbierta, setGuiaAbierta] = useState(() => {
-    try { return localStorage.getItem("acciones_guia_oculta") !== "1"; } catch { return true; }
-  });
-  function cerrarGuia() {
-    setGuiaAbierta(false);
-    try { localStorage.setItem("acciones_guia_oculta", "1"); } catch { /* localStorage no disponible */ }
+  // Estructura tipo Calidad: barra inferior con Inicio/Guías, e "Inicio"
+  // arranca en un grid de tarjetas (Nueva/Abiertas/Historial) en vez de ir
+  // directo al tablero — cada tarjeta abre su propio panel, como los
+  // formatos de inspección. seccionActiva solo aplica dentro de "inicio".
+  const [bottomTab, setBottomTab] = useState("inicio");
+  const [seccionActiva, setSeccionActiva] = useState(null);
+  function irInicio() {
+    setBottomTab("inicio");
+    setSeccionActiva(null);
   }
 
   async function loadAll() {
@@ -107,15 +108,23 @@ export default function ActionsModule({ currentUser }) {
     [acciones, procesosById, currentUser]
   );
 
+  // Base para "Abiertas" (Dashboard/Tablero/Tabla) e "Historial" (cerradas)
+  // — Historial no pasa por filtroNivel/Tipo/Estado, es una lista simple.
+  const baseAcciones = useMemo(
+    () => ((esOperativo || scope === "mias") ? misAcciones : acciones),
+    [esOperativo, scope, misAcciones, acciones]
+  );
+  const accionesAbiertas = useMemo(() => baseAcciones.filter((a) => a.estado !== "Cerrada"), [baseAcciones]);
+  const accionesHistorial = useMemo(() => baseAcciones.filter((a) => a.estado === "Cerrada"), [baseAcciones]);
+
   const filteredAcciones = useMemo(() => {
-    const base = (esOperativo || scope === "mias") ? misAcciones : acciones;
-    return base.filter((a) => {
+    return accionesAbiertas.filter((a) => {
       if (filtroNivel !== "all" && a.nivel !== filtroNivel) return false;
       if (filtroTipo !== "all" && a.tipo !== filtroTipo) return false;
       if (filtroEstado !== "all" && a.estado !== filtroEstado) return false;
       return true;
     });
-  }, [acciones, misAcciones, scope, esOperativo, filtroNivel, filtroTipo, filtroEstado]);
+  }, [accionesAbiertas, filtroNivel, filtroTipo, filtroEstado]);
 
   async function handleCreateAccion({ involucradosIds, ...payload }) {
     const flujo = getFlujoConfig(tiposFlujo, payload.tipo);
@@ -355,193 +364,262 @@ export default function ActionsModule({ currentUser }) {
   const selectedAccion = acciones.find((a) => a.id === selectedAccionId) || null;
 
   const tabs = [
-    { key: "dashboard", label: "Inicio" },
+    { key: "dashboard", label: "Resumen" },
     { key: "kanban", label: "Tablero" },
     { key: "tabla", label: "Tabla" },
   ];
 
-  // Guía de 4 pasos, siempre visible arriba del módulo — pensada para que
-  // un líder de proceso que nunca lo ha usado entienda de un vistazo qué
-  // hacer y qué sigue, sin tener que preguntar. Mismo orden que ya impone
-  // el flujo real (ver AccionDetailPanel.jsx: Análisis de causa → Plan de
-  // acción → aprobación del Director → conversión).
+  // Guía de 4 pasos — antes vivía como banner en Inicio (con opción de
+  // ocultar en localStorage); ahora que Inicio es el grid de tarjetas, la
+  // guía se mudó a su propio destino en la barra inferior. Mismo orden que
+  // ya impone el flujo real (ver AccionDetailPanel.jsx: Análisis de causa →
+  // Plan de acción → aprobación del Director → conversión).
   const PASOS_GUIA = [
-    { n: "1", icono: "📝", titulo: "Reporta el problema", detalle: "Cualquiera puede registrar una situación con \"+ Registrar situación / Acción\"." },
+    { n: "1", icono: "📝", titulo: "Reporta el problema", detalle: "Cualquiera puede registrar una situación desde la tarjeta \"Nueva\"." },
     { n: "2", icono: "🔍", titulo: "Analiza la causa", detalle: "Tú, como líder, usas 5 Porqués / Ishikawa / 5W2H." },
     { n: "3", icono: "✅", titulo: "Dirección aprueba", detalle: "Con la causa raíz clara, el Director autoriza la acción." },
     { n: "4", icono: "🚀", titulo: "Se ejecuta", detalle: "Se convierte en asignación o proyecto, y se le da seguimiento." },
   ];
 
+  // Tarjetas de Inicio, mismo estilo que los formatos de inspección de
+  // Calidad (icono en chip, título, subtítulo chico) — "Nueva" abre el
+  // modal directo (no navega a un panel), Abiertas/Historial sí abren panel.
+  const INICIO_TILES = [
+    { key: "nueva", titulo: "Nueva", subtitulo: "Reportar situación", icono: "📝" },
+    { key: "abiertas", titulo: "Abiertas", subtitulo: `${accionesAbiertas.length} activa(s)`, icono: "🗂️" },
+    { key: "historial", titulo: "Historial", subtitulo: `${accionesHistorial.length} cerrada(s)`, icono: "📜" },
+  ];
+  function handleTileClick(key) {
+    if (key === "nueva") { setCreating(true); return; }
+    setSeccionActiva(key);
+  }
+
+  const enInicioTiles = bottomTab === "inicio" && !seccionActiva;
+
   return (
-    <section className="space-y-2.5">
-      {esOperativo ? (
-        // Alcance deliberadamente distinto al de un líder de proceso: aquí
-        // solo se reporta la situación detectada — nada de análisis de causa
-        // ni seguimiento del caso. Se deja explícito para que el módulo no
-        // se perciba como un buzón de quejas abierto.
-        <div className="rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-2.5 text-[10px] font-bold text-sky-800">
-          📝 Aquí registras una situación o problema que detectaste. Tu reporte llega al líder del proceso y al equipo estratégico, quienes hacen el análisis y le dan seguimiento — este espacio no es un buzón de quejas, es el punto de partida de una acción de mejora real.
-        </div>
-      ) : guiaAbierta ? (
-        <div className="rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-2.5">
-          <button type="button" onClick={cerrarGuia} className="mb-2 flex w-full items-center justify-between text-left">
-            <span className="text-[10px] font-black uppercase tracking-widest text-sky-700">¿Cómo funciona este módulo?</span>
-            <span className="text-[10px] font-black text-sky-400">Ocultar ×</span>
-          </button>
-          <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
-            {PASOS_GUIA.map((paso) => (
-              <div key={paso.n} className="flex items-start gap-2 rounded-xl bg-white/70 px-2.5 py-1.5">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#001225] text-[9px] font-black text-white">{paso.n}</span>
-                <div className="min-w-0">
-                  <p className="text-[10.5px] font-black text-slate-800">{paso.icono} {paso.titulo}</p>
-                  <p className="text-[9px] font-semibold leading-tight text-slate-500">{paso.detalle}</p>
-                </div>
+    <section className="space-y-2.5 pb-24 lg:pb-2">
+      {bottomTab === "guias" ? (
+        <div className="space-y-2">
+          <h2 className="text-lg font-bold tracking-tight text-[#001225]">Guías</h2>
+          {esOperativo ? (
+            // Alcance deliberadamente distinto al de un líder de proceso:
+            // aquí solo se reporta la situación detectada — nada de análisis
+            // de causa ni seguimiento del caso. Se deja explícito para que
+            // el módulo no se perciba como un buzón de quejas abierto.
+            <div className="rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-2.5 text-[10px] font-bold text-sky-800">
+              📝 Aquí registras una situación o problema que detectaste. Tu reporte llega al líder del proceso y al equipo estratégico, quienes hacen el análisis y le dan seguimiento — este espacio no es un buzón de quejas, es el punto de partida de una acción de mejora real.
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-2.5">
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-sky-700">¿Cómo funciona este módulo?</p>
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {PASOS_GUIA.map((paso) => (
+                  <div key={paso.n} className="flex items-start gap-2 rounded-xl bg-white/70 px-2.5 py-1.5">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#001225] text-[9px] font-black text-white">{paso.n}</span>
+                    <div className="min-w-0">
+                      <p className="text-[10.5px] font-black text-slate-800">{paso.icono} {paso.titulo}</p>
+                      <p className="text-[9px] font-semibold leading-tight text-slate-500">{paso.detalle}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <button type="button" onClick={() => setGuiaAbierta(true)} className="text-[9px] font-black uppercase tracking-widest text-sky-600 hover:underline">
-          ¿Cómo funciona este módulo? ▾
-        </button>
-      )}
-
-      <div className="flex flex-wrap items-center gap-1.5">
-        {esOperativo ? (
-          <span className="rounded-lg border border-[#edf0f4] bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">Mis reportes</span>
-        ) : (
-          <div className="flex rounded-lg border border-[#edf0f4] bg-white p-0.5">
-            <button
-              type="button"
-              onClick={() => setScope("mias")}
-              className={`rounded-md px-2.5 py-1 text-[9px] font-black uppercase tracking-widest transition ${scope === "mias" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              Mis acciones
-            </button>
-            <button
-              type="button"
-              onClick={() => setScope("todas")}
-              className={`rounded-md px-2.5 py-1 text-[9px] font-black uppercase tracking-widest transition ${scope === "todas" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              Todas
-            </button>
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => setFiltrosAbiertos((v) => !v)}
-          className={`flex h-6 items-center gap-1 rounded-lg border px-2 text-[9px] font-black uppercase tracking-widest transition ${filtrosAbiertos || filtrosActivos > 0 ? "border-[#c9a227] bg-[#fdf7e6] text-[#96771a]" : "border-[#edf0f4] bg-white text-slate-500 hover:bg-slate-50"}`}
-        >
-          Filtros{filtrosActivos > 0 ? ` (${filtrosActivos})` : ""} {filtrosAbiertos ? "▲" : "▼"}
-        </button>
-        <span className="ml-auto rounded-full border border-[#edf0f4] bg-white px-2 py-0.5 text-[9px] font-black text-slate-500">
-          {filteredAcciones.length} {scope === "mias" ? "mías" : "en total"}
-        </span>
-      </div>
-
-      {filtrosAbiertos && (
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#edf0f4] bg-white px-3 py-2 shadow-sm">
-          <label className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-indigo-600">
-            Nivel:
-            <select value={filtroNivel} onChange={(e) => setFiltroNivel(e.target.value)} className="h-6 rounded-md border border-indigo-200 bg-white px-1.5 text-[10px] font-bold normal-case tracking-normal text-indigo-700 outline-none">
-              <option value="all">Todos</option>
-              {NIVELES_ACCION.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-teal-600">
-            Tipo:
-            <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="h-6 rounded-md border border-teal-200 bg-white px-1.5 text-[10px] font-bold normal-case tracking-normal text-teal-700 outline-none">
-              <option value="all">Todos</option>
-              {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-amber-700">
-            Estado:
-            <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="h-6 rounded-md border border-amber-200 bg-white px-1.5 text-[10px] font-bold normal-case tracking-normal text-amber-700 outline-none">
-              <option value="all">Todos</option>
-              {ESTADOS_ACCION.map((e) => <option key={e} value={e}>{e}</option>)}
-            </select>
-          </label>
-          {filtrosActivos > 0 && (
-            <button
-              type="button"
-              onClick={() => { setFiltroNivel("all"); setFiltroTipo("all"); setFiltroEstado("all"); }}
-              className="text-[9px] font-black text-slate-400 underline hover:text-red-500"
-            >
-              Limpiar
-            </button>
+            </div>
           )}
         </div>
-      )}
+      ) : seccionActiva === "abiertas" ? (
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setSeccionActiva(null)} className="shrink-0 rounded-lg border border-[#edf0f4] bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">← Volver</button>
+            <h2 className="text-[12px] font-black uppercase tracking-tight text-[#001225]">Abiertas</h2>
+          </div>
 
-      <div className="overflow-hidden rounded-2xl border border-[#edf0f4] bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-2 bg-[#001225] px-3 py-1.5 text-white">
-          <h2 className="truncate text-[11px] font-black uppercase tracking-tight">{scope === "mias" ? "Mis Acciones de Mejora" : "Acciones de Mejora"}</h2>
-          <div className="flex shrink-0 gap-0.5 rounded-lg bg-white/10 p-0.5">
-            {tabs.map((tab) => (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {esOperativo ? (
+              <span className="rounded-lg border border-[#edf0f4] bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">Mis reportes</span>
+            ) : (
+              <div className="flex rounded-lg border border-[#edf0f4] bg-white p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setScope("mias")}
+                  className={`rounded-md px-2.5 py-1 text-[9px] font-black uppercase tracking-widest transition ${scope === "mias" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Mis acciones
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScope("todas")}
+                  className={`rounded-md px-2.5 py-1 text-[9px] font-black uppercase tracking-widest transition ${scope === "todas" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Todas
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setFiltrosAbiertos((v) => !v)}
+              className={`flex h-6 items-center gap-1 rounded-lg border px-2 text-[9px] font-black uppercase tracking-widest transition ${filtrosAbiertos || filtrosActivos > 0 ? "border-[#c9a227] bg-[#fdf7e6] text-[#96771a]" : "border-[#edf0f4] bg-white text-slate-500 hover:bg-slate-50"}`}
+            >
+              Filtros{filtrosActivos > 0 ? ` (${filtrosActivos})` : ""} {filtrosAbiertos ? "▲" : "▼"}
+            </button>
+            <span className="ml-auto rounded-full border border-[#edf0f4] bg-white px-2 py-0.5 text-[9px] font-black text-slate-500">
+              {filteredAcciones.length} {scope === "mias" ? "mías" : "en total"}
+            </span>
+          </div>
+
+          {filtrosAbiertos && (
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#edf0f4] bg-white px-3 py-2 shadow-sm">
+              <label className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-indigo-600">
+                Nivel:
+                <select value={filtroNivel} onChange={(e) => setFiltroNivel(e.target.value)} className="h-6 rounded-md border border-indigo-200 bg-white px-1.5 text-[10px] font-bold normal-case tracking-normal text-indigo-700 outline-none">
+                  <option value="all">Todos</option>
+                  {NIVELES_ACCION.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-teal-600">
+                Tipo:
+                <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="h-6 rounded-md border border-teal-200 bg-white px-1.5 text-[10px] font-bold normal-case tracking-normal text-teal-700 outline-none">
+                  <option value="all">Todos</option>
+                  {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-amber-700">
+                Estado:
+                <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="h-6 rounded-md border border-amber-200 bg-white px-1.5 text-[10px] font-bold normal-case tracking-normal text-amber-700 outline-none">
+                  <option value="all">Todos</option>
+                  {ESTADOS_ACCION.filter((e) => e !== "Cerrada").map((e) => <option key={e} value={e}>{e}</option>)}
+                </select>
+              </label>
+              {filtrosActivos > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setFiltroNivel("all"); setFiltroTipo("all"); setFiltroEstado("all"); }}
+                  className="text-[9px] font-black text-slate-400 underline hover:text-red-500"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="overflow-hidden rounded-2xl border border-[#edf0f4] bg-white shadow-sm">
+            <div className="flex items-center justify-between gap-2 bg-[#001225] px-3 py-1.5 text-white">
+              <h2 className="truncate text-[11px] font-black uppercase tracking-tight">{scope === "mias" ? "Mis Acciones de Mejora" : "Acciones de Mejora"}</h2>
+              <div className="flex shrink-0 gap-0.5 rounded-lg bg-white/10 p-0.5">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`rounded-md px-2 py-1 text-[9px] font-black uppercase tracking-widest transition ${activeTab === tab.key ? "bg-white text-[#001225]" : "text-white/70 hover:bg-white/10"}`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {message && (
+              <div className="mx-3 mt-3 flex items-center justify-between gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">
+                <span>{message}</span>
+                <button type="button" onClick={() => setMessage("")} className="shrink-0 text-red-400 hover:text-red-600">×</button>
+              </div>
+            )}
+
+            <div className="p-3">
+              {loading ? (
+                <div className="py-10 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
+              ) : activeTab === "dashboard" ? (
+                <DashboardTab acciones={filteredAcciones} procesosById={procesosById} scope={scope} onSelectAccion={setSelectedAccionId} />
+              ) : activeTab === "kanban" ? (
+                <KanbanTab
+                  acciones={filteredAcciones}
+                  tiposFlujo={tiposFlujo}
+                  personasById={personasById}
+                  procesosById={procesosById}
+                  currentUser={currentUser}
+                  onUpdateAccion={handleUpdateAccion}
+                  onSelectAccion={setSelectedAccionId}
+                />
+              ) : (
+                <TablaTab
+                  acciones={filteredAcciones}
+                  personas={personas}
+                  personasById={personasById}
+                  procesosById={procesosById}
+                  currentUser={currentUser}
+                  tiposFlujo={tiposFlujo}
+                  onSelectAccion={handleSelectAccion}
+                  onCreateAssignment={handleCrearAsignacion}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      ) : seccionActiva === "historial" ? (
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setSeccionActiva(null)} className="shrink-0 rounded-lg border border-[#edf0f4] bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">← Volver</button>
+            <h2 className="text-[12px] font-black uppercase tracking-tight text-[#001225]">Historial — acciones cerradas</h2>
+          </div>
+          {loading ? (
+            <div className="py-10 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
+          ) : (
+            <TablaTab
+              acciones={accionesHistorial}
+              personas={personas}
+              personasById={personasById}
+              procesosById={procesosById}
+              currentUser={currentUser}
+              tiposFlujo={tiposFlujo}
+              onSelectAccion={handleSelectAccion}
+              onCreateAssignment={handleCrearAsignacion}
+            />
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight text-[#001225]">Acciones de Mejora</h2>
+            <p className="text-sm text-slate-500">Reporta, analiza y da seguimiento a las mejoras de tu proceso.</p>
+          </div>
+          {esOperativo && (
+            <div className="rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-2.5 text-[10px] font-bold text-sky-800">
+              📝 Aquí registras una situación o problema que detectaste. Tu reporte llega al líder del proceso y al equipo estratégico — este espacio no es un buzón de quejas, es el punto de partida de una acción de mejora real.
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            {INICIO_TILES.map((t) => (
               <button
-                key={tab.key}
+                key={t.key}
                 type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={`rounded-md px-2 py-1 text-[9px] font-black uppercase tracking-widest transition ${activeTab === tab.key ? "bg-white text-[#001225]" : "text-white/70 hover:bg-white/10"}`}
+                onClick={() => handleTileClick(t.key)}
+                className="flex flex-col items-center rounded-2xl border border-[#edf0f4] bg-white p-2.5 shadow-[0_1px_1px_rgba(11,31,58,0.04),0_4px_12px_-2px_rgba(11,31,58,0.07)] transition active:scale-[0.98] hover:border-[#f0d885]"
               >
-                {tab.label}
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#fdf7e6] text-lg">{t.icono}</span>
+                <p className="mt-1.5 text-center text-xs font-semibold leading-tight text-[#001225]">{t.titulo}</p>
+                <p className="text-[10px] text-slate-500">{t.subtitulo}</p>
               </button>
             ))}
           </div>
         </div>
+      )}
 
-        {message && (
-          <div className="mx-3 mt-3 flex items-center justify-between gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">
-            <span>{message}</span>
-            <button type="button" onClick={() => setMessage("")} className="shrink-0 text-red-400 hover:text-red-600">×</button>
-          </div>
-        )}
+      <BottomNav active={bottomTab} onChange={(tab) => { setBottomTab(tab); setSeccionActiva(null); }} />
 
-        <div className="p-3">
-            {loading ? (
-              <div className="py-10 text-center text-[11px] font-bold text-slate-300">Cargando…</div>
-            ) : activeTab === "dashboard" ? (
-              <DashboardTab acciones={filteredAcciones} procesosById={procesosById} scope={scope} onSelectAccion={setSelectedAccionId} />
-            ) : activeTab === "kanban" ? (
-              <KanbanTab
-                acciones={filteredAcciones}
-                tiposFlujo={tiposFlujo}
-                personasById={personasById}
-                procesosById={procesosById}
-                currentUser={currentUser}
-                onUpdateAccion={handleUpdateAccion}
-                onSelectAccion={setSelectedAccionId}
-              />
-            ) : (
-              <TablaTab
-                acciones={filteredAcciones}
-                personas={personas}
-                personasById={personasById}
-                procesosById={procesosById}
-                currentUser={currentUser}
-                tiposFlujo={tiposFlujo}
-                onSelectAccion={handleSelectAccion}
-                onCreateAssignment={handleCrearAsignacion}
-              />
-            )}
-          </div>
-        </div>
-
-      {/* FAB — antes era un botón ancho dentro de la barra de herramientas
-          ("+ Registrar situación / Acción"); en celular competía con el
-          scope y los filtros por la misma fila angosta. Como botón flotante
-          queda siempre a un toque del pulgar sin importar qué pestaña esté
-          abierta, sin necesitar una barra inferior completa (este módulo no
-          tiene 3 destinos reales que ofrecer como Calidad). */}
-      <button
-        type="button"
-        onClick={() => setCreating(true)}
-        aria-label="Registrar situación o acción"
-        className="fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#c9a227] text-2xl font-black text-[#001225] shadow-[0_4px_10px_rgba(201,162,39,0.45)] transition hover:bg-[#b8931f] active:scale-95"
-      >
-        +
-      </button>
+      {/* FAB — se oculta solo en el grid de tarjetas de Inicio (ahí ya está
+          la tarjeta "Nueva" mismo destino), y se muestra en cualquier otra
+          pantalla (Abiertas, Historial, Guías) para que crear una acción
+          siempre esté a un toque, sin tener que volver primero a Inicio. */}
+      {!enInicioTiles && (
+        <button
+          type="button"
+          onClick={() => setCreating(true)}
+          aria-label="Registrar situación o acción"
+          className="fixed bottom-20 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#c9a227] text-2xl font-black text-[#001225] shadow-[0_4px_10px_rgba(201,162,39,0.45)] transition hover:bg-[#b8931f] active:scale-95 lg:bottom-5"
+        >
+          +
+        </button>
+      )}
 
       {creating && (
         <NuevaAccionModal
