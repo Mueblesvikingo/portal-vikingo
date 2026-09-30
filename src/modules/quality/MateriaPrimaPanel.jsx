@@ -339,13 +339,20 @@ function renderIdentificacionMP(insp) {
   );
 }
 
-export default function MateriaPrimaPanel({ currentUser, canEdit = true }) {
+export default function MateriaPrimaPanel({ currentUser, canEdit = true, initialVerId = null }) {
   const [puntos, setPuntos] = useState([]);
   const [personas, setPersonas] = useState([]);
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [verId, setVerId] = useState(null);
+
+  // Llegada desde "Ver informe" en Acciones de Mejora (ver QualityModule.jsx,
+  // que ya resolvió que este recorrido pertenece a esta planta) — abre el
+  // detalle directo, sin que el usuario tenga que buscarlo en la tabla.
+  useEffect(() => {
+    if (initialVerId) setVerId(initialVerId);
+  }, [initialVerId]);
   // Por default el filtro arranca acotado a la semana actual (lunes a
   // domingo) — "Limpiar filtros" sí quita esta acotación por completo.
   const [filtros, setFiltros] = useState(() => {

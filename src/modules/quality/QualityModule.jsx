@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { getRecorridoPlanta } from "../../services/calidadService";
 import MateriaPrimaPanel from "./MateriaPrimaPanel";
 import Planta1Panel from "./Planta1Panel";
 import Planta2Panel from "./Planta2Panel";
@@ -43,6 +45,18 @@ const SECCIONES = [
   { key: "planta-3", titulo: "Planta 3", codigo: "F-GC-04U", icono: "🛋️", disponible: true },
   { key: "producto-terminado", titulo: "Producto Terminado", codigo: "F-GC-05", icono: "📦", disponible: true },
 ];
+
+// Puente inverso Acciones de Mejora → Calidad ("Ver informe" en el detalle
+// de una acción cuyo origen es una inspección puntual, ver AccionDetailPanel):
+// el nombre de planta guardado en calidad_recorridos no coincide 1:1 con el
+// texto de SECCIONES, así que se traduce aquí a la pestaña correspondiente.
+const PLANTA_A_SECCION = {
+  "Materia Prima": "materia-prima",
+  "Planta 1": "planta-1",
+  "Planta 2": "planta-2",
+  "Planta 3": "planta-3",
+  "Producto Terminado": "producto-terminado",
+};
 
 // Herramientas de Control Estadístico de Procesos (SPC) — viven aparte de
 // los formatos de inspección, con su propio bloque color vino debajo. Por
@@ -92,15 +106,40 @@ function SeccionTile({ seccion, onClick }) {
 }
 
 export default function QualityModule({ currentUser }) {
+  const location = useLocation();
   const [bottomTab, setBottomTab] = useState("inicio");
   const [activeSection, setActiveSection] = useState(null);
+  // Id del recorrido a abrir automáticamente al llegar desde el botón "Ver
+  // informe" de Acciones de Mejora (ver AccionDetailPanel.jsx) — se limpia
+  // al salir de esa planta para no reabrir el mismo detalle si se vuelve a
+  // entrar después sin venir de ese botón.
+  const [pendingVerId, setPendingVerId] = useState(null);
   const seccionActiva = SECCIONES.find((s) => s.key === activeSection);
   const herramientaActiva = HERRAMIENTAS.find((h) => h.key === activeSection);
   const activa = seccionActiva || herramientaActiva;
 
+  useEffect(() => {
+    const id = location.state?.verInspeccionId;
+    if (!id) return;
+    let cancelado = false;
+    async function abrir() {
+      const planta = await getRecorridoPlanta(id);
+      if (cancelado || !planta) return;
+      const seccionKey = PLANTA_A_SECCION[planta];
+      if (!seccionKey) return;
+      setBottomTab("inicio");
+      setActiveSection(seccionKey);
+      setPendingVerId(id);
+    }
+    abrir();
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
+
   function goInicio() {
     setBottomTab("inicio");
     setActiveSection(null);
+    setPendingVerId(null);
   }
 
   return (
@@ -121,7 +160,7 @@ export default function QualityModule({ currentUser }) {
             {activa && (
               <button
                 type="button"
-                onClick={() => setActiveSection(null)}
+                onClick={() => { setActiveSection(null); setPendingVerId(null); }}
                 className="shrink-0 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/80 transition hover:bg-white/10"
               >
                 ← Volver
@@ -154,15 +193,15 @@ export default function QualityModule({ currentUser }) {
               </div>
             </>
           ) : seccionActiva?.key === "materia-prima" ? (
-            <MateriaPrimaPanel currentUser={currentUser} />
+            <MateriaPrimaPanel currentUser={currentUser} initialVerId={pendingVerId} />
           ) : seccionActiva?.key === "planta-1" ? (
-            <Planta1Panel currentUser={currentUser} />
+            <Planta1Panel currentUser={currentUser} initialVerId={pendingVerId} />
           ) : seccionActiva?.key === "planta-2" ? (
-            <Planta2Panel currentUser={currentUser} />
+            <Planta2Panel currentUser={currentUser} initialVerId={pendingVerId} />
           ) : seccionActiva?.key === "planta-3" ? (
-            <Planta3Panel currentUser={currentUser} />
+            <Planta3Panel currentUser={currentUser} initialVerId={pendingVerId} />
           ) : seccionActiva?.key === "producto-terminado" ? (
-            <ProductoTerminadoPanel currentUser={currentUser} />
+            <ProductoTerminadoPanel currentUser={currentUser} initialVerId={pendingVerId} />
           ) : herramientaActiva?.key === "pareto" ? (
             <ParetoView />
           ) : herramientaActiva?.key === "carta-p" ? (

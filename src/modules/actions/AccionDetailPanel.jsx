@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   getAnalisisCausa,
   upsertAnalisisCausa,
@@ -569,6 +570,7 @@ export default function AccionDetailPanel({
   accion, acciones, tiposFlujo, procesos, subprocesos, personas, objetivos, procesosById, subprocesosById, personasById, objetivosById,
   currentUser, initialSubTab, onUpdate, onDeactivate, onClose, onCreateProyecto, onEnviarPlanResponsables, onProgramarJunta, onNavigateToAccion,
 }) {
+  const navigate = useNavigate();
   const [subTab, setSubTab] = useState(initialSubTab || subTabParaEtapa(accion.estado));
 
   // Si se abre el detalle pidiendo una pestaña concreta (ej. desde el botón
@@ -977,8 +979,17 @@ export default function AccionDetailPanel({
                       </div>
 
                       {accion.origen_modulo && accion.origen_modulo !== "Manual" && accion.origen_tabla !== "acciones" && (
-                        <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-500">
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-500">
                           <span className="text-slate-400">🔗 Generada desde:</span> {accion.origen_modulo}
+                          {accion.origen_tabla === "calidad_recorridos" && accion.origen_id && (
+                            <button
+                              type="button"
+                              onClick={() => navigate("/calidad", { state: { verInspeccionId: accion.origen_id } })}
+                              className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-0.5 text-[9px] font-bold text-slate-600 hover:bg-slate-100"
+                            >
+                              👁 Ver informe
+                            </button>
+                          )}
                         </div>
                       )}
 

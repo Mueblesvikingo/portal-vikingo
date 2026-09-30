@@ -347,13 +347,20 @@ function renderIdentificacionPlanta1(insp) {
   );
 }
 
-export default function Planta1Panel({ currentUser, canEdit = true }) {
+export default function Planta1Panel({ currentUser, canEdit = true, initialVerId = null }) {
   const [puntos, setPuntos] = useState([]);
   const [personas, setPersonas] = useState([]);
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [verId, setVerId] = useState(null);
+
+  // Llegada desde "Ver informe" en Acciones de Mejora (ver QualityModule.jsx,
+  // que ya resolvió que este recorrido pertenece a esta planta) — abre el
+  // detalle directo, sin que el usuario tenga que buscarlo en la tabla.
+  useEffect(() => {
+    if (initialVerId) setVerId(initialVerId);
+  }, [initialVerId]);
   const [filtros, setFiltros] = useState(() => {
     const hoy = todayISO();
     return { ...FILTROS_VACIO, desde: inicioSemanaISO(hoy), hasta: finSemanaISO(hoy) };

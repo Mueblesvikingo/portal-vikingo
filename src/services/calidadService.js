@@ -229,6 +229,22 @@ export async function getRecorridos(planta, { desde, hasta } = {}) {
   }
 }
 
+// Solo la planta de un recorrido puntual, por su id — usado por el puente
+// inverso Acciones de Mejora → Calidad ("Ver informe" en el detalle de una
+// acción cuyo origen es una inspección): QualityModule necesita saber en qué
+// pestaña (Materia Prima/Planta 1/2/3/Producto Terminado) abrir el detalle
+// antes de poder mostrarlo, ya que cada una vive en su propio panel.
+export async function getRecorridoPlanta(id) {
+  try {
+    const { data, error } = await supabase.from("calidad_recorridos").select("planta").eq("id", id).maybeSingle();
+    if (error) { console.error("Error al leer la planta del recorrido:", error); return null; }
+    return data?.planta || null;
+  } catch (err) {
+    console.error("Error inesperado al leer la planta del recorrido:", err);
+    return null;
+  }
+}
+
 export async function createRecorrido(planta, payload, actor) {
   try {
     const { personaId, nombre } = actorFields(actor);
