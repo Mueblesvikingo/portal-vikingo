@@ -1020,7 +1020,7 @@ export default function AccionDetailPanel({
                           {accion.origen_tabla === "calidad_recorridos" && accion.origen_id && (
                             <button
                               type="button"
-                              onClick={() => navigate("/calidad", { state: { verInspeccionId: accion.origen_id } })}
+                              onClick={() => navigate("/calidad", { state: { verInspeccionId: accion.origen_id, returnToAccionId: accion.id } })}
                               className="ml-auto shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-0.5 text-[9px] font-bold text-slate-600 hover:bg-slate-100"
                             >
                               👁 Ver informe

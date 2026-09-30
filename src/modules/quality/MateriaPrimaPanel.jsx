@@ -339,7 +339,7 @@ function renderIdentificacionMP(insp) {
   );
 }
 
-export default function MateriaPrimaPanel({ currentUser, canEdit = true, initialVerId = null }) {
+export default function MateriaPrimaPanel({ currentUser, canEdit = true, initialVerId = null, returnToAccionId = null, onVolverAAccion }) {
   const [puntos, setPuntos] = useState([]);
   const [personas, setPersonas] = useState([]);
   const [registros, setRegistros] = useState([]);
@@ -589,6 +589,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true, initial
           onFirmarResponsable={handleFirmarResponsable}
           onFirmarGerente={handleFirmarGerente}
           onEnviarRecordatorio={handleEnviarRecordatorio}
+          onVolverAAccion={verId === initialVerId && returnToAccionId ? onVolverAAccion : undefined}
         />
       )}
 

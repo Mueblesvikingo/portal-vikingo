@@ -677,7 +677,7 @@ function BotonRecordatorio({ onEnviar }) {
   );
 }
 
-export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, canEdit, onClose, onDelete, onEvidenciaChange, renderIdentificacion, renderCantidadMuestra, tituloEliminar = "Eliminar registro", gerenteCalidadPersonaId, onFirmarResponsable, onFirmarGerente, onEnviarRecordatorio, mostrarFirmasArea = true }) {
+export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, canEdit, onClose, onDelete, onEvidenciaChange, renderIdentificacion, renderCantidadMuestra, tituloEliminar = "Eliminar registro", gerenteCalidadPersonaId, onFirmarResponsable, onFirmarGerente, onEnviarRecordatorio, mostrarFirmasArea = true, onVolverAAccion }) {
   const [openSection, setOpenSection] = useState("identificacion");
   const navigate = useNavigate();
   const insp = registro.calidad_inspecciones?.[0];
@@ -726,12 +726,27 @@ export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, ca
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className={`${cardClass} flex max-h-[92vh] w-full flex-col rounded-b-none sm:max-w-md sm:rounded-2xl`}>
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#edf0f4] px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-[#0f1f3d]">{registro.fecha} · {horaCorta(insp.hora)}</p>
-            <p className="truncate text-xs text-[#5b6472]">Inspectora: {registro.inspectora_nombre || "—"}</p>
+        <div className="flex shrink-0 flex-col gap-1.5 border-b border-[#edf0f4] px-4 py-3">
+          {/* Solo aparece cuando se llegó aquí desde "Ver informe" en el
+              detalle de una Acción de Mejora (ver AccionDetailPanel.jsx →
+              QualityModule.jsx) — regresa a esa misma acción en vez de dejar
+              a la persona varada en Calidad sin cómo volver. */}
+          {onVolverAAccion && (
+            <button
+              type="button"
+              onClick={onVolverAAccion}
+              className="flex w-fit items-center gap-1 rounded-lg border border-[#edf0f4] bg-[#f7f7f4] px-2 py-1 text-[10px] font-bold text-[#5b6472] transition hover:bg-[#edf0f4]"
+            >
+              ← Volver a la acción
+            </button>
+          )}
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-[#0f1f3d]">{registro.fecha} · {horaCorta(insp.hora)}</p>
+              <p className="truncate text-xs text-[#5b6472]">Inspectora: {registro.inspectora_nombre || "—"}</p>
+            </div>
+            <button type="button" onClick={onClose} className="shrink-0 rounded-lg border border-[#edf0f4] px-2 py-1 text-xs font-semibold text-[#5b6472]">✕</button>
           </div>
-          <button type="button" onClick={onClose} className="shrink-0 rounded-lg border border-[#edf0f4] px-2 py-1 text-xs font-semibold text-[#5b6472]">✕</button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">

@@ -348,7 +348,7 @@ function renderIdentificacionPlanta2(insp) {
   );
 }
 
-export default function Planta2Panel({ currentUser, canEdit = true, initialVerId = null }) {
+export default function Planta2Panel({ currentUser, canEdit = true, initialVerId = null, returnToAccionId = null, onVolverAAccion }) {
   const [puntos, setPuntos] = useState([]);
   const [personas, setPersonas] = useState([]);
   const [registros, setRegistros] = useState([]);
@@ -596,6 +596,7 @@ export default function Planta2Panel({ currentUser, canEdit = true, initialVerId
           onFirmarResponsable={handleFirmarResponsable}
           onFirmarGerente={handleFirmarGerente}
           onEnviarRecordatorio={handleEnviarRecordatorio}
+          onVolverAAccion={verId === initialVerId && returnToAccionId ? onVolverAAccion : undefined}
         />
       )}
 

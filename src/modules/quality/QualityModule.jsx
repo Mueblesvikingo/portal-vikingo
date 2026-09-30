@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { getRecorridoPlanta } from "../../services/calidadService";
 import MateriaPrimaPanel from "./MateriaPrimaPanel";
 import Planta1Panel from "./Planta1Panel";
@@ -107,13 +107,17 @@ function SeccionTile({ seccion, onClick }) {
 
 export default function QualityModule({ currentUser }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [bottomTab, setBottomTab] = useState("inicio");
   const [activeSection, setActiveSection] = useState(null);
   // Id del recorrido a abrir automáticamente al llegar desde el botón "Ver
   // informe" de Acciones de Mejora (ver AccionDetailPanel.jsx) — se limpia
   // al salir de esa planta para no reabrir el mismo detalle si se vuelve a
-  // entrar después sin venir de ese botón.
+  // entrar después sin venir de ese botón. `returnToAccionId` viaja junto
+  // con él para poder regresar a esa misma acción desde el informe (ver
+  // botón "← Volver a la acción" en DetalleRegistroModal, shared.jsx).
   const [pendingVerId, setPendingVerId] = useState(null);
+  const [returnToAccionId, setReturnToAccionId] = useState(null);
   const seccionActiva = SECCIONES.find((s) => s.key === activeSection);
   const herramientaActiva = HERRAMIENTAS.find((h) => h.key === activeSection);
   const activa = seccionActiva || herramientaActiva;
@@ -130,16 +134,22 @@ export default function QualityModule({ currentUser }) {
       setBottomTab("inicio");
       setActiveSection(seccionKey);
       setPendingVerId(id);
+      setReturnToAccionId(location.state?.returnToAccionId || null);
     }
     abrir();
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
+  function handleVolverAAccion() {
+    navigate("/acciones", { state: { openAccionId: returnToAccionId } });
+  }
+
   function goInicio() {
     setBottomTab("inicio");
     setActiveSection(null);
     setPendingVerId(null);
+    setReturnToAccionId(null);
   }
 
   return (
@@ -160,7 +170,7 @@ export default function QualityModule({ currentUser }) {
             {activa && (
               <button
                 type="button"
-                onClick={() => { setActiveSection(null); setPendingVerId(null); }}
+                onClick={() => { setActiveSection(null); setPendingVerId(null); setReturnToAccionId(null); }}
                 className="shrink-0 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/80 transition hover:bg-white/10"
               >
                 ← Volver
@@ -193,15 +203,15 @@ export default function QualityModule({ currentUser }) {
               </div>
             </>
           ) : seccionActiva?.key === "materia-prima" ? (
-            <MateriaPrimaPanel currentUser={currentUser} initialVerId={pendingVerId} />
+            <MateriaPrimaPanel currentUser={currentUser} initialVerId={pendingVerId} returnToAccionId={returnToAccionId} onVolverAAccion={handleVolverAAccion} />
           ) : seccionActiva?.key === "planta-1" ? (
-            <Planta1Panel currentUser={currentUser} initialVerId={pendingVerId} />
+            <Planta1Panel currentUser={currentUser} initialVerId={pendingVerId} returnToAccionId={returnToAccionId} onVolverAAccion={handleVolverAAccion} />
           ) : seccionActiva?.key === "planta-2" ? (
-            <Planta2Panel currentUser={currentUser} initialVerId={pendingVerId} />
+            <Planta2Panel currentUser={currentUser} initialVerId={pendingVerId} returnToAccionId={returnToAccionId} onVolverAAccion={handleVolverAAccion} />
           ) : seccionActiva?.key === "planta-3" ? (
-            <Planta3Panel currentUser={currentUser} initialVerId={pendingVerId} />
+            <Planta3Panel currentUser={currentUser} initialVerId={pendingVerId} returnToAccionId={returnToAccionId} onVolverAAccion={handleVolverAAccion} />
           ) : seccionActiva?.key === "producto-terminado" ? (
-            <ProductoTerminadoPanel currentUser={currentUser} initialVerId={pendingVerId} />
+            <ProductoTerminadoPanel currentUser={currentUser} initialVerId={pendingVerId} returnToAccionId={returnToAccionId} onVolverAAccion={handleVolverAAccion} />
           ) : herramientaActiva?.key === "pareto" ? (
             <ParetoView />
           ) : herramientaActiva?.key === "carta-p" ? (

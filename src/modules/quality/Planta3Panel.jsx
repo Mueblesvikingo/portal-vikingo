@@ -376,7 +376,7 @@ function renderIdentificacionPlanta3(insp) {
   );
 }
 
-export default function Planta3Panel({ currentUser, canEdit = true, initialVerId = null }) {
+export default function Planta3Panel({ currentUser, canEdit = true, initialVerId = null, returnToAccionId = null, onVolverAAccion }) {
   const [todosPuntos, setTodosPuntos] = useState([]);
   const [personas, setPersonas] = useState([]);
   const [registros, setRegistros] = useState([]);
@@ -624,6 +624,7 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
           onFirmarResponsable={handleFirmarResponsable}
           onFirmarGerente={handleFirmarGerente}
           onEnviarRecordatorio={handleEnviarRecordatorio}
+          onVolverAAccion={verId === initialVerId && returnToAccionId ? onVolverAAccion : undefined}
         />
       )}
 

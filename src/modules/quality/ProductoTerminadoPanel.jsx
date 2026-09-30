@@ -384,7 +384,7 @@ function renderCantidadMuestraPT(insp) {
   );
 }
 
-export default function ProductoTerminadoPanel({ currentUser, canEdit = true, initialVerId = null }) {
+export default function ProductoTerminadoPanel({ currentUser, canEdit = true, initialVerId = null, returnToAccionId = null, onVolverAAccion }) {
   const [puntos, setPuntos] = useState([]);
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -610,6 +610,7 @@ export default function ProductoTerminadoPanel({ currentUser, canEdit = true, in
           renderCantidadMuestra={renderCantidadMuestraPT}
           tituloEliminar="Eliminar inspección"
           mostrarFirmasArea={false}
+          onVolverAAccion={verId === initialVerId && returnToAccionId ? onVolverAAccion : undefined}
         />
       )}
 
