@@ -466,6 +466,15 @@ async function insertNotificaciones(accionId, personaIds, { tipo, mensaje, urgen
   if (error) console.error("Error al notificar involucrados de acción:", error);
 }
 
+// TEMPORAL: a pedido explícito del usuario (30-sep-2026) mientras hace
+// pruebas de la conexión Calidad → Acciones de Mejora, para no mandarle
+// alarmas urgentes reales al resto del equipo en cada prueba. Solo apaga el
+// aviso (campanita + sirena) — el registro en accion_involucrados sigue
+// intacto abajo, porque de ahí depende la visibilidad de "mis acciones" que
+// también se está probando. Reactivar cambiando esto a `false` cuando el
+// usuario avise que ya terminó de probar.
+const ALERTAS_NUEVA_ACCION_DESACTIVADAS = true;
+
 // Se llama justo después de crear una acción: une los involucrados que el
 // usuario eligió a mano con todo el equipo estratégico (siempre se entera de
 // una acción nueva, la haya elegido o no quien la registró), guarda quién
@@ -492,11 +501,13 @@ export async function notificarNuevaAccion(accion, involucradosSeleccionadosIds,
     const { error } = await supabase.from("accion_involucrados").upsert(rows, { onConflict: "accion_id,persona_id" });
     if (error) { console.error("Error al guardar involucrados de acción:", error); return { ok: false, error }; }
 
-    await insertNotificaciones(accion.id, personaIds, {
-      tipo: "nueva_accion",
-      mensaje: `Nueva acción ${accion.codigo}: ${accion.titulo} — te agregaron como involucrado.`,
-      urgente: true,
-    });
+    if (!ALERTAS_NUEVA_ACCION_DESACTIVADAS) {
+      await insertNotificaciones(accion.id, personaIds, {
+        tipo: "nueva_accion",
+        mensaje: `Nueva acción ${accion.codigo}: ${accion.titulo} — te agregaron como involucrado.`,
+        urgente: true,
+      });
+    }
     return { ok: true, error: null };
   } catch (err) {
     console.error("Error inesperado al notificar nueva acción:", err);
