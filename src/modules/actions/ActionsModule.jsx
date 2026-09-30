@@ -61,10 +61,9 @@ export default function ActionsModule({ currentUser }) {
   // formatos de inspección. seccionActiva solo aplica dentro de "inicio".
   const [bottomTab, setBottomTab] = useState("inicio");
   const [seccionActiva, setSeccionActiva] = useState(null);
-  function irInicio() {
-    setBottomTab("inicio");
-    setSeccionActiva(null);
-  }
+  // Prellenado que llega desde Calidad (botón "Generar Acción de Mejora" en
+  // una no conformidad) — ver más abajo el useEffect que lo consume.
+  const [prefillNueva, setPrefillNueva] = useState(null);
 
   async function loadAll() {
     setLoading(true);
@@ -95,6 +94,21 @@ export default function ActionsModule({ currentUser }) {
   // para abrir directo la auditoría señalada en el aviso.
   useEffect(() => {
     if (location.state?.openAccionId) setSelectedAccionId(location.state.openAccionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
+
+  // Llegada desde Calidad (botón "Generar Acción de Mejora" en una no
+  // conformidad, ver shared.jsx DetalleRegistroModal) — mismo mecanismo de
+  // `location.state` que openAccionId arriba. Abre el modal de alta ya
+  // parado en Inicio y con el problema redactado, para que se sienta
+  // continuación del mismo trámite y no un módulo aparte.
+  useEffect(() => {
+    if (location.state?.prefillNuevaAccion) {
+      setBottomTab("inicio");
+      setSeccionActiva(null);
+      setPrefillNueva(location.state.prefillNuevaAccion);
+      setCreating(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
@@ -628,8 +642,9 @@ export default function ActionsModule({ currentUser }) {
           personas={personas}
           objetivos={objetivos}
           acciones={acciones}
+          prefill={prefillNueva}
           onSave={handleCreateAccion}
-          onClose={() => setCreating(false)}
+          onClose={() => { setCreating(false); setPrefillNueva(null); }}
         />
       )}
 

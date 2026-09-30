@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import EvidenciaUploader from "./EvidenciaUploader";
 import HelpTip from "./HelpTip";
 import { cardClass, btnPrimaryClass, btnGhostClass } from "./coreliTheme";
@@ -678,6 +679,7 @@ function BotonRecordatorio({ onEnviar }) {
 
 export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, canEdit, onClose, onDelete, onEvidenciaChange, renderIdentificacion, renderCantidadMuestra, tituloEliminar = "Eliminar registro", gerenteCalidadPersonaId, onFirmarResponsable, onFirmarGerente, onEnviarRecordatorio, mostrarFirmasArea = true }) {
   const [openSection, setOpenSection] = useState("identificacion");
+  const navigate = useNavigate();
   const insp = registro.calidad_inspecciones?.[0];
   if (!insp) return null;
   const esConforme = insp.resultado !== "No Conforme";
@@ -685,6 +687,40 @@ export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, ca
 
   function toggle(section) {
     setOpenSection((cur) => (cur === section ? null : section));
+  }
+
+  // Puente Calidad → Acciones de Mejora: una no conformidad no debería
+  // quedarse solo registrada aquí — este botón manda directo al alta de
+  // Acciones de Mejora con el problema ya redactado (planta, fecha, puntos
+  // que fallaron, observación), como si fuera el siguiente paso del mismo
+  // trámite en vez de un módulo aparte. Reutiliza el mismo mecanismo de
+  // `location.state` que ya usa la alarma de notificaciones urgentes para
+  // abrir una acción puntual (ver ActionsModule.jsx).
+  function handleGenerarAccion() {
+    const puntosNC = puntosOrdenados
+      .filter((pp) => pp.valor === "NC")
+      .map((pp) => {
+        const punto = puntosCatalogo.find((p) => p.id === pp.punto_control_id);
+        return punto ? `${punto.letra}. ${punto.descripcion}` : null;
+      })
+      .filter(Boolean);
+    navigate("/acciones", {
+      state: {
+        prefillNuevaAccion: {
+          titulo: `No conformidad en ${registro.planta} — ${ddmmyyyy(registro.fecha)}`,
+          descripcion: [
+            `Inspección de ${registro.planta} del ${ddmmyyyy(registro.fecha)} (${horaCorta(insp.hora)}), inspectora: ${registro.inspectora_nombre || "—"}.`,
+            puntosNC.length ? `Puntos No Conformes: ${puntosNC.join("; ")}.` : "",
+            insp.observacion ? `Observación: ${insp.observacion}` : "",
+          ].filter(Boolean).join(" "),
+          tipo: "Corrección",
+          nivel: "Operativa",
+          origenModulo: "Gestión de Calidad",
+          origenTabla: "calidad_recorridos",
+          origenId: registro.id,
+        },
+      },
+    });
   }
 
   return (
@@ -699,8 +735,17 @@ export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, ca
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <div className={`mb-3 flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold ${esConforme ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-            {esConforme ? "✅" : "⚠️"} Resultado: {insp.resultado}
+          <div className={`mb-3 flex flex-col gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold sm:flex-row sm:items-center sm:justify-between ${esConforme ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+            <span>{esConforme ? "✅" : "⚠️"} Resultado: {insp.resultado}</span>
+            {!esConforme && (
+              <button
+                type="button"
+                onClick={handleGenerarAccion}
+                className="shrink-0 rounded-lg bg-red-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white transition hover:bg-red-700"
+              >
+                Generar Acción de Mejora →
+              </button>
+            )}
           </div>
 
           <div className="space-y-2">

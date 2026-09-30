@@ -68,8 +68,14 @@ function InvolucradosSelect({ personas, selectedIds, onToggle }) {
 // se definen después, en la pestaña "Plan de acción" del detalle — una vez
 // que ya se sabe (por el análisis de causa) qué acción concreta se necesita
 // y quién la puede ejecutar, en vez de comprometerlos de entrada.
-export default function NuevaAccionModal({ procesos, subprocesos, personas, acciones, onSave, onClose }) {
-  const [draft, setDraft] = useState(initialDraft);
+//
+// `prefill` (opcional): llega cuando el alta se dispara desde otro módulo
+// (hoy solo Calidad, ver shared.jsx DetalleRegistroModal → ActionsModule.jsx)
+// — trae título/descripción/tipo/nivel ya redactados y el origen_modulo/
+// origen_tabla/origen_id para trazabilidad, que se manda en onSave salvo que
+// el usuario ligue esta acción a una Corrección existente (esa liga manda).
+export default function NuevaAccionModal({ procesos, subprocesos, personas, acciones, prefill, onSave, onClose }) {
+  const [draft, setDraft] = useState(() => (prefill ? { ...initialDraft, ...prefill } : initialDraft));
   const [involucradosIds, setInvolucradosIds] = useState([]);
   const [error, setError] = useState("");
 
@@ -124,9 +130,9 @@ export default function NuevaAccionModal({ procesos, subprocesos, personas, acci
       objetivoId: null,
       prioridad: "Media",
       fechaCompromiso: null,
-      origenModulo: correccionId ? "Acciones de Mejora" : null,
-      origenTabla: correccionId ? "acciones" : null,
-      origenId: correccionId,
+      origenModulo: correccionId ? "Acciones de Mejora" : (prefill?.origenModulo || null),
+      origenTabla: correccionId ? "acciones" : (prefill?.origenTabla || null),
+      origenId: correccionId || prefill?.origenId || null,
       involucradosIds,
     });
   }
