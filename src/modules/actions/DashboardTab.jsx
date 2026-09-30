@@ -1,14 +1,26 @@
+import { useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { TIPO_COLOR, NIVEL_COLOR, ESTADO_COLOR, isVencida, formatDate } from "./actionsHelpers";
 
 // Fila delgada horizontal (etiqueta + número en línea) en vez de una tarjeta
-// alta — 4 de estas ya comunican lo mismo sin ocupar tanto alto.
-function StatChip({ label, value, color }) {
+// alta — 4 de estas ya comunican lo mismo sin ocupar tanto alto. Cuando trae
+// onClick, además de informar sirve de filtro rápido para "Necesita tu
+// atención" de abajo (una pantalla de trabajo debe permitir actuar sobre el
+// número, no solo mostrarlo) — se marca `active` con el mismo color a fondo
+// lleno en vez de solo el tinte, para que se note cuál filtro quedó puesto.
+function StatChip({ label, value, color, onClick, active }) {
+  const interactive = typeof onClick === "function";
   return (
-    <div className="flex flex-1 items-center justify-between gap-2 rounded-xl border px-3 py-2" style={{ borderColor: `${color}35`, background: `${color}0a` }}>
-      <p className="text-[9px] font-black uppercase tracking-widest" style={{ color }}>{label}</p>
-      <p className="text-lg font-black text-slate-900">{value}</p>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!interactive}
+      className={`flex flex-1 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition ${interactive ? "cursor-pointer" : "cursor-default"}`}
+      style={active ? { borderColor: color, background: color } : { borderColor: `${color}35`, background: `${color}0a` }}
+    >
+      <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: active ? "#fff" : color }}>{label}</p>
+      <p className="text-lg font-black" style={{ color: active ? "#fff" : "#0f172a" }}>{value}</p>
+    </button>
   );
 }
 
@@ -131,20 +143,40 @@ export default function DashboardTab({ acciones, procesosById, scope, onSelectAc
   const vencidas = acciones.filter((a) => isVencida(a)).length;
 
   const esMias = scope === "mias";
+  // Filtro rápido opcional sobre "Necesita tu atención" — solo Vencidas y
+  // Con riesgo tienen un tag correspondiente en construirAtencion (Abiertas
+  // y Cerradas son conteos informativos, no razones de atención, así que
+  // esos dos chips se quedan sin onClick).
+  const [filtroAtencion, setFiltroAtencion] = useState(null);
 
   if (esMias) {
-    const atencion = construirAtencion(acciones);
+    const atencionCompleta = construirAtencion(acciones);
+    const atencion = filtroAtencion
+      ? atencionCompleta.filter((item) => item.razones.some((r) => r.tag === filtroAtencion))
+      : atencionCompleta;
+    function toggleFiltro(tag) {
+      setFiltroAtencion((current) => (current === tag ? null : tag));
+    }
     return (
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
           <StatChip label="Abiertas" value={abiertas} color="#2a78d6" />
           <StatChip label="Cerradas" value={cerradas} color="#0ca30c" />
-          <StatChip label="Con riesgo" value={conRiesgo} color="#d03b3b" />
-          <StatChip label="Vencidas" value={vencidas} color="#eda100" />
+          <StatChip label="Con riesgo" value={conRiesgo} color="#d03b3b" onClick={() => toggleFiltro("Con riesgo")} active={filtroAtencion === "Con riesgo"} />
+          <StatChip label="Vencidas" value={vencidas} color="#eda100" onClick={() => toggleFiltro("Vencida")} active={filtroAtencion === "Vencida"} />
         </div>
         <Pipeline acciones={acciones} />
         <div>
-          <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">Necesita tu atención</p>
+          <div className="mb-1.5 flex items-center justify-between">
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+              Necesita tu atención{filtroAtencion ? ` — ${filtroAtencion}` : ""}
+            </p>
+            {filtroAtencion && (
+              <button type="button" onClick={() => setFiltroAtencion(null)} className="text-[9px] font-black text-slate-400 underline hover:text-red-500">
+                Quitar filtro
+              </button>
+            )}
+          </div>
           <AtencionList items={atencion} onSelectAccion={onSelectAccion} />
         </div>
         {acciones.length === 0 && (

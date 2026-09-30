@@ -33,7 +33,7 @@ export default function ActionsModule({ currentUser }) {
   const [personas, setPersonas] = useState([]);
   const [objetivos, setObjetivos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("tabla");
+  const [activeTab, setActiveTab] = useState("dashboard");
   // Un líder de proceso debe sentir este módulo como su propio gestor: entra
   // viendo SUS acciones (las que creó, en las que es responsable, o de un
   // proceso suyo aunque otro la haya levantado), no el tablero completo de
@@ -355,9 +355,9 @@ export default function ActionsModule({ currentUser }) {
   const selectedAccion = acciones.find((a) => a.id === selectedAccionId) || null;
 
   const tabs = [
+    { key: "dashboard", label: "Inicio" },
+    { key: "kanban", label: "Tablero" },
     { key: "tabla", label: "Tabla" },
-    { key: "kanban", label: "Kanban" },
-    { key: "dashboard", label: "Dashboard" },
   ];
 
   // Guía de 4 pasos, siempre visible arriba del módulo — pensada para que
@@ -406,67 +406,58 @@ export default function ActionsModule({ currentUser }) {
         </button>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          {esOperativo ? (
-            <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">Mis reportes</span>
-          ) : (
-            <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-              <button
-                type="button"
-                onClick={() => setScope("mias")}
-                className={`rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${scope === "mias" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
-              >
-                Mis acciones
-              </button>
-              <button
-                type="button"
-                onClick={() => setScope("todas")}
-                className={`rounded-md px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${scope === "todas" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
-              >
-                Todas
-              </button>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            className="h-9 rounded-lg bg-[#001225] px-4 text-[10px] font-black text-white transition hover:bg-[#0a1c3a]"
-          >
-            + Registrar situación / Acción
-          </button>
-          <button
-            type="button"
-            onClick={() => setFiltrosAbiertos((v) => !v)}
-            className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-[10px] font-black uppercase tracking-widest transition ${filtrosAbiertos || filtrosActivos > 0 ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
-          >
-            Filtros{filtrosActivos > 0 ? ` (${filtrosActivos})` : ""} {filtrosAbiertos ? "▲" : "▼"}
-          </button>
-        </div>
-        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black text-slate-500">
-          {filteredAcciones.length} {scope === "mias" ? "acciones mías" : "acciones en total"}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {esOperativo ? (
+          <span className="rounded-lg border border-[#edf0f4] bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">Mis reportes</span>
+        ) : (
+          <div className="flex rounded-lg border border-[#edf0f4] bg-white p-0.5">
+            <button
+              type="button"
+              onClick={() => setScope("mias")}
+              className={`rounded-md px-2.5 py-1 text-[9px] font-black uppercase tracking-widest transition ${scope === "mias" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              Mis acciones
+            </button>
+            <button
+              type="button"
+              onClick={() => setScope("todas")}
+              className={`rounded-md px-2.5 py-1 text-[9px] font-black uppercase tracking-widest transition ${scope === "todas" ? "bg-[#001225] text-white" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              Todas
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setFiltrosAbiertos((v) => !v)}
+          className={`flex h-6 items-center gap-1 rounded-lg border px-2 text-[9px] font-black uppercase tracking-widest transition ${filtrosAbiertos || filtrosActivos > 0 ? "border-[#c9a227] bg-[#fdf7e6] text-[#96771a]" : "border-[#edf0f4] bg-white text-slate-500 hover:bg-slate-50"}`}
+        >
+          Filtros{filtrosActivos > 0 ? ` (${filtrosActivos})` : ""} {filtrosAbiertos ? "▲" : "▼"}
+        </button>
+        <span className="ml-auto rounded-full border border-[#edf0f4] bg-white px-2 py-0.5 text-[9px] font-black text-slate-500">
+          {filteredAcciones.length} {scope === "mias" ? "mías" : "en total"}
         </span>
       </div>
 
       {filtrosAbiertos && (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-          <label className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-indigo-600">
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#edf0f4] bg-white px-3 py-2 shadow-sm">
+          <label className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-indigo-600">
             Nivel:
-            <select value={filtroNivel} onChange={(e) => setFiltroNivel(e.target.value)} className="h-7 rounded-md border border-indigo-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-indigo-700 outline-none">
+            <select value={filtroNivel} onChange={(e) => setFiltroNivel(e.target.value)} className="h-6 rounded-md border border-indigo-200 bg-white px-1.5 text-[10px] font-bold normal-case tracking-normal text-indigo-700 outline-none">
               <option value="all">Todos</option>
               {NIVELES_ACCION.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
-          <label className="flex items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-teal-600">
+          <label className="flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-teal-600">
             Tipo:
-            <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="h-7 rounded-md border border-teal-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-teal-700 outline-none">
+            <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="h-6 rounded-md border border-teal-200 bg-white px-1.5 text-[10px] font-bold normal-case tracking-normal text-teal-700 outline-none">
               <option value="all">Todos</option>
               {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
-          <label className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-amber-700">
+          <label className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-amber-700">
             Estado:
-            <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="h-7 rounded-md border border-amber-200 bg-white px-2 text-[11px] font-bold normal-case tracking-normal text-amber-700 outline-none">
+            <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="h-6 rounded-md border border-amber-200 bg-white px-1.5 text-[10px] font-bold normal-case tracking-normal text-amber-700 outline-none">
               <option value="all">Todos</option>
               {ESTADOS_ACCION.map((e) => <option key={e} value={e}>{e}</option>)}
             </select>
@@ -475,24 +466,24 @@ export default function ActionsModule({ currentUser }) {
             <button
               type="button"
               onClick={() => { setFiltroNivel("all"); setFiltroTipo("all"); setFiltroEstado("all"); }}
-              className="text-[10px] font-black text-slate-400 underline hover:text-red-500"
+              className="text-[9px] font-black text-slate-400 underline hover:text-red-500"
             >
-              Limpiar filtros
+              Limpiar
             </button>
           )}
         </div>
       )}
 
-      <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-3 bg-[#001225] px-4 py-1.5 text-white">
-          <h2 className="text-[13px] font-black uppercase tracking-tight">{scope === "mias" ? "Mis Acciones de Mejora" : "Acciones de Mejora"}</h2>
-          <div className="flex gap-1 rounded-xl bg-white/10 p-0.5">
+      <div className="overflow-hidden rounded-2xl border border-[#edf0f4] bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-2 bg-[#001225] px-3 py-1.5 text-white">
+          <h2 className="truncate text-[11px] font-black uppercase tracking-tight">{scope === "mias" ? "Mis Acciones de Mejora" : "Acciones de Mejora"}</h2>
+          <div className="flex shrink-0 gap-0.5 rounded-lg bg-white/10 p-0.5">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${activeTab === tab.key ? "bg-white text-[#001225]" : "text-white/70 hover:bg-white/10"}`}
+                className={`rounded-md px-2 py-1 text-[9px] font-black uppercase tracking-widest transition ${activeTab === tab.key ? "bg-white text-[#001225]" : "text-white/70 hover:bg-white/10"}`}
               >
                 {tab.label}
               </button>
@@ -536,6 +527,22 @@ export default function ActionsModule({ currentUser }) {
             )}
           </div>
         </div>
+
+      {/* FAB — antes era un botón ancho dentro de la barra de herramientas
+          ("+ Registrar situación / Acción"); en celular competía con el
+          scope y los filtros por la misma fila angosta. Como botón flotante
+          queda siempre a un toque del pulgar sin importar qué pestaña esté
+          abierta, sin necesitar una barra inferior completa (este módulo no
+          tiene 3 destinos reales que ofrecer como Calidad). */}
+      <button
+        type="button"
+        onClick={() => setCreating(true)}
+        aria-label="Registrar situación o acción"
+        className="fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#c9a227] text-2xl font-black text-[#001225] shadow-[0_4px_10px_rgba(201,162,39,0.45)] transition hover:bg-[#b8931f] active:scale-95"
+      >
+        +
+      </button>
+
       {creating && (
         <NuevaAccionModal
           procesos={procesos}
