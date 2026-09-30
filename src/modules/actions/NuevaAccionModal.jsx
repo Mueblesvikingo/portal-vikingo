@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { TIPOS_ACCION, NIVELES_ACCION } from "./actionsHelpers";
+import HelpTip from "./HelpTip";
 
 // Mismos estilos de campo/botón/tarjeta que usa Calidad (ver
 // src/modules/quality/shared.jsx: inputClass/labelClass/AccordionSection, y
@@ -47,6 +48,14 @@ const initialDraft = {
 // replicado aquí en vez de importado entre módulos, siguiendo el patrón ya
 // establecido de este proyecto de mantener los formularios de cada módulo
 // autocontenidos (ver `ProyectoForm`/`AsignacionForm` en AccionDetailPanel.jsx).
+//
+// La lista de personas se despliega EN FLUJO (no como panel `absolute`
+// superpuesto): la sección acordeón que la contiene (`AccordionSection`)
+// tiene `overflow-hidden` para redondear sus esquinas, y eso recortaba el
+// panel absoluto dejando ver solo 1-2 personas con scroll cortado a la
+// mitad. En flujo normal, la sección simplemente crece y el body del modal
+// (que sí tiene su propio scroll) se encarga de que nada se salga de la
+// pantalla.
 function InvolucradosSelect({ personas, selectedIds, onToggle }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
@@ -81,7 +90,7 @@ function InvolucradosSelect({ personas, selectedIds, onToggle }) {
       )}
 
       {open && (
-        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-[#edf0f4] bg-white p-1.5 shadow-xl">
+        <div className="mt-1.5 max-h-64 w-full overflow-y-auto rounded-xl border border-[#edf0f4] bg-white p-1.5 shadow-sm">
           {personas.map((p) => (
             <label key={p.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-[#0f1f3d] hover:bg-[#f7f7f4]">
               <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => onToggle(p.id)} />
@@ -178,9 +187,16 @@ export default function NuevaAccionModal({ procesos, subprocesos, personas, acci
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
       <div className={`${cardClass} flex max-h-[92vh] w-full flex-col overflow-hidden rounded-b-none sm:max-w-lg sm:rounded-2xl`}>
-        <div className="flex shrink-0 items-center justify-between gap-2 bg-[#001225] px-4 py-3 text-white">
-          <div>
-            <p className="text-xs font-black uppercase tracking-widest">Nueva acción</p>
+        <div className="flex shrink-0 items-center justify-between gap-2 bg-[#6b1e2f] px-4 py-3 text-white">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-black uppercase tracking-widest">Nueva acción</p>
+              <HelpTip>
+                Captura el problema o situación detectada: elige el <strong>tipo</strong> y <strong>nivel</strong> que mejor la describan, describe qué pasó y dónde en "Situación", y liga el <strong>proceso/área</strong> e <strong>involucrados</strong> si aplica.
+                <br /><br />
+                Responsable, prioridad y fecha compromiso se definen después, en "Plan de acción" — una vez identificada la causa.
+              </HelpTip>
+            </div>
             <p className="text-[10px] font-bold text-white/60">Registrar en Acciones de Mejora</p>
           </div>
           <button type="button" onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-black hover:bg-white/20">×</button>
