@@ -14,15 +14,19 @@ import { cardClass } from "./coreliTheme";
 
 // Ícono propio en SVG para Planta 1 (Carpintería) — no depende de la fuente
 // de emoji del dispositivo (mismo motivo que llevó a reemplazar el emoji de
-// sierra 🪚 antes: se veía en blanco en varios celulares). Un martillo se
-// reconoce como "carpintería" más rápido que una sierra a este tamaño.
-function IconoMartillo({ className = "h-6 w-6" }) {
+// sierra 🪚 antes: se veía en blanco en varios celulares). Máquina de corte
+// (mesa con sierra circular) — pedido explícito del usuario, aprobado tras
+// ver varias opciones en preview.
+function IconoSierraMesa({ className = "h-6 w-6" }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
-      <g transform="rotate(45 12 12)">
-        <rect x="10.5" y="6" width="3" height="16" rx="1" fill="#96771a" />
-        <rect x="6" y="2" width="12" height="5" rx="1.5" fill="#96771a" />
-      </g>
+      <circle cx="12" cy="17" r="7" fill="#96771a" />
+      <path d="M6.8 12.3 L8.3 12.1 L7.3 10.3 Z" fill="#96771a" />
+      <path d="M11 10.8 L13 10.8 L12 8.6 Z" fill="#96771a" />
+      <path d="M15.7 12.1 L17.2 12.3 L16.7 10.3 Z" fill="#96771a" />
+      <rect x="0.5" y="14.5" width="23" height="4.5" rx="1" fill="#96771a" />
+      <rect x="3" y="19" width="2" height="3" fill="#96771a" />
+      <rect x="19" y="19" width="2" height="3" fill="#96771a" />
     </svg>
   );
 }
@@ -34,7 +38,7 @@ function IconoMartillo({ className = "h-6 w-6" }) {
 // módulo se usa casi siempre desde celular.
 const SECCIONES = [
   { key: "materia-prima", titulo: "Materia Prima", codigo: "F-GC-01U", icono: "📥", disponible: true },
-  { key: "planta-1", titulo: "Planta 1", codigo: "F-GC-02U", icono: <IconoMartillo />, disponible: true },
+  { key: "planta-1", titulo: "Planta 1", codigo: "F-GC-02U", icono: <IconoSierraMesa />, disponible: true },
   { key: "planta-2", titulo: "Planta 2", codigo: "F-GC-03U", icono: "🧵", disponible: true },
   { key: "planta-3", titulo: "Planta 3", codigo: "F-GC-04U", icono: "🛋️", disponible: true },
   { key: "producto-terminado", titulo: "Producto Terminado", codigo: "F-GC-05", icono: "📦", disponible: true },
