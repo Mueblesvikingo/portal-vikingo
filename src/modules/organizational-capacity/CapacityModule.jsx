@@ -2576,7 +2576,9 @@ export default function CapacityModule({ currentUser } = {}) {
   const selectedProcessLanes = useMemo(() => {
     if (!selectedProcess) return [];
 
-    const subprocesses = selectedProcess.subprocesses || [];
+    const subprocesses = (selectedProcess.subprocesses || []).filter(
+      (subprocess) => subprocess.active !== false && subprocess.activo !== false
+    );
     const roles = selectedProcess.processRoles || [];
 
     const normalizeLaneName = (value) => String(value || "").trim();
@@ -2733,8 +2735,9 @@ export default function CapacityModule({ currentUser } = {}) {
     return (selectedProcess.activities || [])
       .filter((activity) => {
         const activitySubprocessId = activity.subproceso_id;
+        const isSameSubprocess = subprocessId && activitySubprocessId && String(activitySubprocessId) === String(subprocessId);
 
-        return subprocessId && activitySubprocessId && String(activitySubprocessId) === String(subprocessId);
+        return isSameSubprocess && activity.active !== false && activity.activo !== false && activity.activa !== false;
       })
       .sort(
         (a, b) =>
