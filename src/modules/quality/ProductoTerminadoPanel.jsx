@@ -7,6 +7,8 @@ import {
   deleteRecorrido,
   sugerirMuestreo,
   subirEvidencia,
+  getProductos,
+  getClientes,
 } from "../../services/calidadService";
 import EvidenciaPicker from "./EvidenciaPicker";
 import HelpTip from "./HelpTip";
@@ -100,7 +102,7 @@ function camposBusquedaPT(r, insp) {
 // Igual que los demás: registro único autosuficiente. Aquí no hay Proceso ni
 // Supervisor de área/Gerente de Calidad — solo la Inspectora firma, tal como
 // está en el formato F-GC-05 original.
-function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
+function NuevaInspeccionForm({ puntos, productos, clientes, currentUser, onSave, onCancel }) {
   const [form, setForm] = useState(FORM_VACIO);
   const [valoresPuntos, setValoresPuntos] = useState({});
   const [cierre, setCierre] = useState(CIERRE_VACIO);
@@ -167,7 +169,10 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
             </label>
             <label className={labelClass}>
               Código
-              <input value={form.producto_texto} onChange={(e) => setField("producto_texto", e.target.value)} className={inputClass} />
+              <input value={form.producto_texto} onChange={(e) => setField("producto_texto", e.target.value)} list="pt-codigos-sugeridos" className={inputClass} />
+              <datalist id="pt-codigos-sugeridos">
+                {productos.map((p) => <option key={p.id} value={p.codigo} label={p.nombre} />)}
+              </datalist>
             </label>
             <label className={labelClass}>
               Modelo
@@ -179,7 +184,10 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
             </label>
             <label className={labelClass}>
               Cliente / Destino
-              <input value={form.cliente_destino} onChange={(e) => setField("cliente_destino", e.target.value)} className={inputClass} />
+              <input value={form.cliente_destino} onChange={(e) => setField("cliente_destino", e.target.value)} list="pt-clientes-sugeridos" className={inputClass} />
+              <datalist id="pt-clientes-sugeridos">
+                {clientes.map((c) => <option key={c.id} value={c.nombre} />)}
+              </datalist>
             </label>
           </div>
         </AccordionSection>
@@ -382,6 +390,8 @@ function renderCantidadMuestraPT(insp) {
 
 export default function ProductoTerminadoPanel({ currentUser, canEdit = true, initialVerId = null, returnToAccionId = null, onVolverAAccion }) {
   const [puntos, setPuntos] = useState([]);
+  const [productosCatalogo, setProductosCatalogo] = useState([]);
+  const [clientes, setClientes] = useState([]);
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -426,8 +436,12 @@ export default function ProductoTerminadoPanel({ currentUser, canEdit = true, in
   useEffect(() => {
     async function init() {
       setLoading(true);
-      const [puntosResult] = await Promise.all([getPuntosControl(PLANTA), loadRegistros()]);
+      const [puntosResult, productosResult, clientesResult] = await Promise.all([
+        getPuntosControl(PLANTA), getProductos(), getClientes(), loadRegistros(),
+      ]);
       if (puntosResult.ok) setPuntos(puntosResult.data);
+      if (productosResult.ok) setProductosCatalogo(productosResult.data);
+      if (clientesResult.ok) setClientes(clientesResult.data);
       setLoading(false);
     }
     init();
@@ -517,7 +531,7 @@ export default function ProductoTerminadoPanel({ currentUser, canEdit = true, in
       </div>
 
       {showForm && (
-        <NuevaInspeccionForm puntos={puntos} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
+        <NuevaInspeccionForm puntos={puntos} productos={productosCatalogo} clientes={clientes} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
       )}
 
       {registros.length > 0 && showFiltros && (

@@ -13,6 +13,8 @@ import {
   createCalidadRecordatorio,
   GERENTE_CALIDAD_PERSONA_ID,
   GERENTE_CALIDAD_NOMBRE,
+  getProductos,
+  getColaboradores,
 } from "../../services/calidadService";
 import EvidenciaPicker from "./EvidenciaPicker";
 import HelpTip from "./HelpTip";
@@ -78,7 +80,7 @@ function camposBusquedaPlanta2(r, insp) {
 // que Materia Prima/Planta 1: identificación + puntos de control + cierre/
 // firmas en un solo paso, porque puede haber varias OPs inspeccionadas el
 // mismo día.
-function NuevaInspeccionForm({ puntos, personas, currentUser, onSave, onCancel }) {
+function NuevaInspeccionForm({ puntos, personas, productos, colaboradores, currentUser, onSave, onCancel }) {
   const [form, setForm] = useState(FORM_VACIO);
   const [valoresPuntos, setValoresPuntos] = useState({});
   const [cierre, setCierre] = useState(CIERRE_VACIO);
@@ -144,7 +146,10 @@ function NuevaInspeccionForm({ puntos, personas, currentUser, onSave, onCancel }
             </label>
             <label className={labelClass}>
               Código
-              <input value={form.producto_texto} onChange={(e) => setField("producto_texto", e.target.value)} className={inputClass} />
+              <input value={form.producto_texto} onChange={(e) => setField("producto_texto", e.target.value)} list="planta2-codigos-sugeridos" className={inputClass} />
+              <datalist id="planta2-codigos-sugeridos">
+                {productos.map((p) => <option key={p.id} value={p.codigo} label={p.nombre} />)}
+              </datalist>
             </label>
             <label className={`${labelClass} col-span-2`}>
               Terminación
@@ -152,7 +157,10 @@ function NuevaInspeccionForm({ puntos, personas, currentUser, onSave, onCancel }
             </label>
             <label className={`${labelClass} col-span-2`}>
               Línea / Operador
-              <input value={form.linea_operador} onChange={(e) => setField("linea_operador", e.target.value)} className={inputClass} />
+              <input value={form.linea_operador} onChange={(e) => setField("linea_operador", e.target.value)} list="planta2-operadores-sugeridos" className={inputClass} />
+              <datalist id="planta2-operadores-sugeridos">
+                {colaboradores.map((c) => <option key={c.id} value={c.nombre} />)}
+              </datalist>
             </label>
           </div>
         </AccordionSection>
@@ -347,6 +355,8 @@ function renderIdentificacionPlanta2(insp) {
 export default function Planta2Panel({ currentUser, canEdit = true, initialVerId = null, returnToAccionId = null, onVolverAAccion }) {
   const [puntos, setPuntos] = useState([]);
   const [personas, setPersonas] = useState([]);
+  const [productosCatalogo, setProductosCatalogo] = useState([]);
+  const [colaboradores, setColaboradores] = useState([]);
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -391,9 +401,13 @@ export default function Planta2Panel({ currentUser, canEdit = true, initialVerId
   useEffect(() => {
     async function init() {
       setLoading(true);
-      const [puntosResult, personasResult] = await Promise.all([getPuntosControl(PLANTA), getPersonasActivas(), loadRegistros()]);
+      const [puntosResult, personasResult, productosResult, colaboradoresResult] = await Promise.all([
+        getPuntosControl(PLANTA), getPersonasActivas(), getProductos(), getColaboradores(), loadRegistros(),
+      ]);
       if (puntosResult.ok) setPuntos(puntosResult.data);
       if (personasResult.ok) setPersonas(personasResult.data);
+      if (productosResult.ok) setProductosCatalogo(productosResult.data);
+      if (colaboradoresResult.ok) setColaboradores(colaboradoresResult.data);
       setLoading(false);
     }
     init();
@@ -501,7 +515,7 @@ export default function Planta2Panel({ currentUser, canEdit = true, initialVerId
       </div>
 
       {showForm && (
-        <NuevaInspeccionForm puntos={puntos} personas={personas} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
+        <NuevaInspeccionForm puntos={puntos} personas={personas} productos={productosCatalogo} colaboradores={colaboradores} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
       )}
 
       {registros.length > 0 && showFiltros && (

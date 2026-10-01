@@ -13,6 +13,8 @@ import {
   createCalidadRecordatorio,
   GERENTE_CALIDAD_PERSONA_ID,
   GERENTE_CALIDAD_NOMBRE,
+  getProveedores,
+  getProductos,
 } from "../../services/calidadService";
 import EvidenciaPicker from "./EvidenciaPicker";
 import HelpTip from "./HelpTip";
@@ -63,10 +65,11 @@ const FORM_VACIO = {
 };
 const CIERRE_VACIO = { dictamen: "", responsable_area_persona_id: "", firmado: false };
 
-// Filtros sobre texto libre (proveedor, MP, OC/Lote, inspectora) — no sobre
-// catálogos, porque Proveedores/Colaboradores/Productos aún no existen como
-// tablas propias. En cuanto se suban esos catálogos, "Proveedor" puede pasar
-// de texto libre a un select sin cambiar el resto de este filtro.
+// Filtros sobre texto libre (proveedor, MP, OC/Lote, inspectora) — Proveedor/
+// MP ya tienen catálogo propio (Configuración → Proveedores/Productos) que
+// alimenta sugerencias en la captura, pero el filtro de búsqueda sigue sobre
+// el texto guardado (sigue funcionando igual, haya venido de una sugerencia
+// o escrito libre).
 const FILTROS_VACIO = { busqueda: "", dictamen: "", desde: "", hasta: "" };
 function camposBusquedaMP(r, insp) {
   return [insp?.proveedor, insp?.producto_texto, insp?.oc_lote, insp?.lote_identificacion, r.inspectora_nombre];
@@ -77,7 +80,7 @@ function camposBusquedaMP(r, insp) {
 // un "recorrido" que agrupe varias inspecciones (eso sí aplica a Planta
 // 1/2/3, donde hay un recorrido físico por la planta; aquí puede haber
 // varias recepciones el mismo día — cada entrega es su propio registro).
-function NuevaInspeccionForm({ puntos, personas, currentUser, onSave, onCancel }) {
+function NuevaInspeccionForm({ puntos, personas, proveedores, productos, currentUser, onSave, onCancel }) {
   const [form, setForm] = useState(FORM_VACIO);
   const [valoresPuntos, setValoresPuntos] = useState({});
   const [cierre, setCierre] = useState(CIERRE_VACIO);
@@ -136,11 +139,17 @@ function NuevaInspeccionForm({ puntos, personas, currentUser, onSave, onCancel }
             </label>
             <label className={labelClass}>
               Proveedor
-              <input value={form.proveedor} onChange={(e) => setField("proveedor", e.target.value)} className={inputClass} />
+              <input value={form.proveedor} onChange={(e) => setField("proveedor", e.target.value)} list="mp-proveedores-sugeridos" className={inputClass} />
+              <datalist id="mp-proveedores-sugeridos">
+                {proveedores.map((p) => <option key={p.id} value={p.nombre} />)}
+              </datalist>
             </label>
             <label className={`${labelClass} col-span-2`}>
               MP a inspeccionar
-              <input value={form.producto_texto} onChange={(e) => setField("producto_texto", e.target.value)} className={inputClass} />
+              <input value={form.producto_texto} onChange={(e) => setField("producto_texto", e.target.value)} list="mp-productos-sugeridos" className={inputClass} />
+              <datalist id="mp-productos-sugeridos">
+                {productos.map((p) => <option key={p.id} value={p.nombre} />)}
+              </datalist>
             </label>
             <label className={`${labelClass} col-span-2`}>
               Lote / Identificación
@@ -338,6 +347,8 @@ function renderIdentificacionMP(insp) {
 export default function MateriaPrimaPanel({ currentUser, canEdit = true, initialVerId = null, returnToAccionId = null, onVolverAAccion }) {
   const [puntos, setPuntos] = useState([]);
   const [personas, setPersonas] = useState([]);
+  const [proveedores, setProveedores] = useState([]);
+  const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -384,9 +395,13 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true, initial
   useEffect(() => {
     async function init() {
       setLoading(true);
-      const [puntosResult, personasResult] = await Promise.all([getPuntosControl("Materia Prima"), getPersonasActivas(), loadRegistros()]);
+      const [puntosResult, personasResult, proveedoresResult, productosResult] = await Promise.all([
+        getPuntosControl("Materia Prima"), getPersonasActivas(), getProveedores(), getProductos(), loadRegistros(),
+      ]);
       if (puntosResult.ok) setPuntos(puntosResult.data);
       if (personasResult.ok) setPersonas(personasResult.data);
+      if (proveedoresResult.ok) setProveedores(proveedoresResult.data);
+      if (productosResult.ok) setProductosCatalogo(productosResult.data);
       setLoading(false);
     }
     init();
@@ -494,7 +509,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true, initial
       </div>
 
       {showForm && (
-        <NuevaInspeccionForm puntos={puntos} personas={personas} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
+        <NuevaInspeccionForm puntos={puntos} personas={personas} proveedores={proveedores} productos={productosCatalogo} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
       )}
 
       {registros.length > 0 && showFiltros && (
