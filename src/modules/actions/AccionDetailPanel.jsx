@@ -376,9 +376,15 @@ function PlanResponsablesTable({
   onAdd, onUpdateField, onRemove,
 }) {
   const permiteEditar = canEdit && !soloLectura;
+  const disponibles = personas.filter((p) => !planResponsables.some((r) => r.persona_id === p.id));
+
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200">
-      <div className="overflow-x-auto">
+      {/* Escritorio: tabla con su propio scroll horizontal si hace falta.
+          Celular: tarjeta por persona con los mismos campos apilados
+          verticalmente — pedido explícito del usuario, el scroll horizontal
+          de la tabla resultaba incómodo para capturar en celular. */}
+      <div className="hidden overflow-x-auto lg:block">
         <table className="w-full min-w-[560px] border-collapse text-[10px]">
           <thead>
             <tr className="bg-[#001225] text-left text-[8px] font-black uppercase tracking-widest text-white/60">
@@ -447,7 +453,7 @@ function PlanResponsablesTable({
                 <td className="px-2 py-2">
                   <select value={nuevoPlanPersonaId} onChange={(e) => setNuevoPlanPersonaId(e.target.value)} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none">
                     <option value="">Responsable...</option>
-                    {personas.filter((p) => !planResponsables.some((r) => r.persona_id === p.id)).map((p) => (
+                    {disponibles.map((p) => (
                       <option key={p.id} value={p.id}>{p.nombre}</option>
                     ))}
                   </select>
@@ -470,6 +476,79 @@ function PlanResponsablesTable({
             </tfoot>
           )}
         </table>
+      </div>
+
+      <div className="divide-y divide-slate-100 lg:hidden">
+        {planResponsables.map((fila) => {
+          const enviado = !!fila.workload_asignacion_id;
+          return (
+            <div key={fila.id} className={`space-y-2 p-2.5 ${enviado ? "bg-emerald-50/40" : ""}`}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-xs font-black text-slate-700">{personasById[fila.persona_id]?.nombre || "—"}</p>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span className={`rounded-full border px-2 py-0.5 text-[8px] font-black ${enviado ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                    {enviado ? "✓ Enviado" : "Pendiente"}
+                  </span>
+                  {!enviado && permiteEditar && (
+                    <button type="button" onClick={() => onRemove(fila.id)} className="text-sm text-slate-300 hover:text-red-500">×</button>
+                  )}
+                </div>
+              </div>
+              <EditableSmallField
+                value={fila.detalle}
+                canEdit={permiteEditar && !enviado}
+                placeholder="Qué debe hacer..."
+                onSave={(v) => onUpdateField(fila.id, "detalle", v)}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Fecha</p>
+                  <EditableSmallField
+                    type="date"
+                    value={fila.fecha_limite}
+                    canEdit={permiteEditar && !enviado}
+                    onSave={(v) => onUpdateField(fila.id, "fecha_limite", v)}
+                  />
+                </div>
+                <div>
+                  <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Horas</p>
+                  <EditableSmallField
+                    type="number"
+                    value={fila.horas}
+                    canEdit={permiteEditar && !enviado}
+                    placeholder="Hrs"
+                    onSave={(v) => onUpdateField(fila.id, "horas", v ? Number(v) : null)}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {!planResponsables.length && (
+          <p className="px-2.5 py-4 text-center text-[10px] font-semibold text-slate-300">
+            Aún no hay acciones capturadas — agrega la primera abajo: quién, qué debe hacer y para cuándo.
+          </p>
+        )}
+
+        {permiteEditar && (
+          <div className="space-y-2 bg-slate-50/70 p-2.5">
+            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Agregar responsable</p>
+            <select value={nuevoPlanPersonaId} onChange={(e) => setNuevoPlanPersonaId(e.target.value)} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-bold text-slate-700 outline-none">
+              <option value="">Responsable...</option>
+              {disponibles.map((p) => (
+                <option key={p.id} value={p.id}>{p.nombre}</option>
+              ))}
+            </select>
+            <input value={nuevoPlanDetalle} onChange={(e) => setNuevoPlanDetalle(e.target.value)} placeholder="Qué debe hacer..." className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-bold text-slate-700 outline-none" />
+            <div className="grid grid-cols-2 gap-2">
+              <input type="date" value={nuevoPlanFecha} onChange={(e) => setNuevoPlanFecha(e.target.value)} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-bold text-slate-700 outline-none" />
+              <input type="number" value={nuevoPlanHoras} onChange={(e) => setNuevoPlanHoras(e.target.value)} placeholder="Hrs" className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-bold text-slate-700 outline-none" />
+            </div>
+            <button type="button" disabled={!nuevoPlanPersonaId} onClick={onAdd} className="w-full rounded-lg bg-[#001225] py-2 text-[11px] font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
+              + Agregar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
