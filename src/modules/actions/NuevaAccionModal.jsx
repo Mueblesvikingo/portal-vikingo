@@ -2,6 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { TIPOS_ACCION, NIVELES_ACCION } from "./actionsHelpers";
 import HelpTip from "./HelpTip";
 
+// "Acción Operativa" se quita solo de la captura de una acción nueva (pedido
+// explícito del usuario) — ya existe al menos una acción con ese tipo en la
+// base, así que TIPOS_ACCION (usado también para agrupar/mostrar en
+// TablaLimpia y en el detalle de una acción ya guardada) se deja intacto
+// para no dejar de mostrarla ahí.
+const TIPOS_ACCION_NUEVA = TIPOS_ACCION.filter((t) => t !== "Acción Operativa");
+
 // Mismos estilos de campo/botón/tarjeta que usa Calidad (ver
 // src/modules/quality/shared.jsx: inputClass/labelClass/AccordionSection, y
 // coreliTheme.js: cardClass/btnPrimaryClass/btnGhostClass) — copiados aquí en
@@ -220,7 +227,7 @@ export default function NuevaAccionModal({ procesos, subprocesos, personas, acci
               <label className={labelClass}>
                 Tipo
                 <select value={draft.tipo} onChange={(e) => update("tipo", e.target.value)} className={inputClass}>
-                  {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {TIPOS_ACCION_NUEVA.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </label>
               <label className={labelClass}>
