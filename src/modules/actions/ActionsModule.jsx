@@ -512,8 +512,6 @@ export default function ActionsModule({ currentUser }) {
             📝 + Nueva situación / acción
           </button>
 
-          <InicioCharts acciones={accionesAbiertas} />
-
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {INICIO_TILES.map((t) => (
               <button
@@ -528,6 +526,8 @@ export default function ActionsModule({ currentUser }) {
               </button>
             ))}
           </div>
+
+          <InicioCharts acciones={accionesAbiertas} />
         </div>
       )}
 

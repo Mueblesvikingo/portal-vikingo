@@ -1,44 +1,43 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { ESTADOS_ACCION, ESTADO_COLOR, isVencida } from "./actionsHelpers";
 
-// Dona chica + lista de valores al lado (en vez de la Legend de Recharts,
-// que envuelve a su propio ancho y puede empujar la tarjeta más alta de lo
-// esperado) — pensado para vivir en pareja de a dos, lado a lado, sin
-// obligar a hacer scroll en celular (pedido explícito del usuario).
+// Dona arriba + lista de valores abajo (no al costado — apretados lado a
+// lado dentro de una tarjeta de medio ancho salía muy poco legible, pedido
+// explícito del usuario). Así el texto usa el ancho completo de la tarjeta.
 function MiniDonut({ title, data }) {
   const chartData = data.filter((d) => d.value > 0);
   const total = chartData.reduce((sum, d) => sum + d.value, 0);
   return (
-    <div className="rounded-2xl border border-[#edf0f4] bg-white p-2.5 shadow-[0_1px_1px_rgba(11,31,58,0.04),0_4px_12px_-2px_rgba(11,31,58,0.07)]">
-      <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">{title}</p>
+    <div className="rounded-2xl border border-[#edf0f4] bg-white p-3 shadow-[0_1px_1px_rgba(11,31,58,0.04),0_4px_12px_-2px_rgba(11,31,58,0.07)]">
+      <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">{title}</p>
       {chartData.length === 0 ? (
-        <div className="flex h-[88px] items-center justify-center text-[9px] font-bold text-slate-300">Sin datos</div>
+        <div className="flex h-[120px] items-center justify-center text-[10px] font-bold text-slate-300">Sin datos</div>
       ) : (
-        <div className="flex items-center gap-2">
-          <div className="h-[88px] w-[88px] shrink-0">
+        <>
+          <div className="mx-auto h-[110px] w-[110px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={chartData} dataKey="value" nameKey="label" innerRadius={24} outerRadius={42} stroke="none" paddingAngle={2}>
+                <Pie data={chartData} dataKey="value" nameKey="label" innerRadius={32} outerRadius={52} stroke="none" paddingAngle={2}>
                   {chartData.map((d) => <Cell key={d.label} fill={d.color} />)}
                 </Pie>
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 9, fontWeight: 700, padding: "2px 6px" }} formatter={(value, name) => [value, name]} />
+                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 11, fontWeight: 700, padding: "3px 8px" }} formatter={(value, name) => [value, name]} />
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="min-w-0 flex-1 space-y-1">
+          <div className="mt-2 space-y-1.5">
             {chartData.map((d) => (
-              <div key={d.label} className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: d.color }} />
-                <span className="min-w-0 flex-1 truncate text-[9px] font-bold text-slate-600">{d.label}</span>
-                <span className="shrink-0 text-[9px] font-black text-slate-800">{d.value}</span>
+              <div key={d.label} className="flex items-center gap-1.5">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.color }} />
+                <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-slate-600">{d.label}</span>
+                <span className="shrink-0 text-[12px] font-black text-slate-800">{d.value}</span>
               </div>
             ))}
-            <div className="flex items-center gap-1 border-t border-slate-100 pt-1">
-              <span className="min-w-0 flex-1 text-[8px] font-bold uppercase tracking-wide text-slate-400">Total</span>
-              <span className="shrink-0 text-[9px] font-black text-slate-500">{total}</span>
+            <div className="flex items-center gap-1.5 border-t border-slate-100 pt-1.5">
+              <span className="min-w-0 flex-1 text-[9px] font-bold uppercase tracking-wide text-slate-400">Total</span>
+              <span className="shrink-0 text-[11px] font-black text-slate-500">{total}</span>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
