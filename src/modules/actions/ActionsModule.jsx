@@ -28,6 +28,7 @@ import TablaLimpia from "./TablaLimpia";
 import AccionDetailPanel from "./AccionDetailPanel";
 import NuevaAccionModal from "./NuevaAccionModal";
 import BottomNav from "./BottomNav";
+import InicioCharts from "./InicioCharts";
 
 export default function ActionsModule({ currentUser }) {
   const location = useLocation();
@@ -510,6 +511,8 @@ export default function ActionsModule({ currentUser }) {
           >
             📝 + Nueva situación / acción
           </button>
+
+          <InicioCharts acciones={accionesAbiertas} />
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {INICIO_TILES.map((t) => (
