@@ -443,7 +443,7 @@ export default function ActionsModule({ currentUser }) {
       ) : seccionActiva === "abiertas" ? (
         <div className="space-y-2.5">
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setSeccionActiva(null)} className="shrink-0 rounded-lg border border-[#edf0f4] bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">← Volver</button>
+            <button type="button" onClick={() => setSeccionActiva(null)} className="shrink-0 rounded-lg border border-[#c9a227] bg-[#fdf7e6] px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-[#96771a] transition hover:bg-[#f8ecc0]">← Volver</button>
             <h2 className="text-[12px] font-black uppercase tracking-tight text-[#001225]">Abiertas</h2>
           </div>
 
@@ -456,7 +456,7 @@ export default function ActionsModule({ currentUser }) {
       ) : seccionActiva === "historial" ? (
         <div className="space-y-2.5">
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setSeccionActiva(null)} className="shrink-0 rounded-lg border border-[#edf0f4] bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">← Volver</button>
+            <button type="button" onClick={() => setSeccionActiva(null)} className="shrink-0 rounded-lg border border-[#c9a227] bg-[#fdf7e6] px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-[#96771a] transition hover:bg-[#f8ecc0]">← Volver</button>
             <h2 className="text-[12px] font-black uppercase tracking-tight text-[#001225]">Historial — acciones cerradas</h2>
           </div>
           {loading ? (

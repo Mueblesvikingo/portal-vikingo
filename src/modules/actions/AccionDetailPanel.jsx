@@ -1074,7 +1074,7 @@ export default function AccionDetailPanel({
               <button
                 type="button"
                 onClick={() => setSubTab(null)}
-                className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-500 transition hover:bg-slate-50"
+                className="flex items-center gap-1.5 rounded-lg border border-[#c9a227] bg-[#fdf7e6] px-2.5 py-1.5 text-[11px] font-black text-[#96771a] transition hover:bg-[#f8ecc0]"
               >
                 ← Volver al flujo
               </button>
