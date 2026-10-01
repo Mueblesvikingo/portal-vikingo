@@ -154,6 +154,28 @@ export default function QualityModule({ currentUser }) {
 
   return (
     <section className="mx-auto max-w-6xl px-3 pb-20 pt-4 sm:px-4 lg:pb-4">
+      {/* BottomNav (Inicio/Guías/Config) solo vive en celular (lg:hidden) —
+          en escritorio no había forma de llegar a Guías/Configuración, pedido
+          explícito del usuario para que también se vean ahí. */}
+      <div className="mb-2.5 hidden items-center gap-1.5 lg:flex">
+        {[
+          { key: "inicio", label: "Inicio", icon: "▦" },
+          { key: "guias", label: "Guías", icon: "📘" },
+          { key: "config", label: "Config.", icon: "⚙️" },
+        ].map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => (t.key === "inicio" ? goInicio() : setBottomTab(t.key))}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+              bottomTab === t.key ? "bg-[#0b1f3a] text-white" : "border border-[#edf0f4] bg-white text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
       {bottomTab === "inicio" && (
         <>
           <header className={`mb-2.5 flex items-center gap-2.5 rounded-xl px-3 py-2 sm:px-4 ${herramientaActiva ? "bg-[#6b1e2f]" : "bg-[#0b1f3a]"}`}>
