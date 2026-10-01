@@ -28,7 +28,10 @@ function MiniDonut({ title, data }) {
             {chartData.map((d) => (
               <div key={d.label} className="flex items-center gap-1.5">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.color }} />
-                <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-slate-600">{d.label}</span>
+                <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-slate-600">
+                  {d.label}
+                  {d.suffix && <span className="ml-1 font-semibold text-slate-400">{d.suffix}</span>}
+                </span>
                 <span className="shrink-0 text-[12px] font-black text-slate-800">{d.value}</span>
               </div>
             ))}
@@ -50,13 +53,16 @@ function MiniDonut({ title, data }) {
 export default function InicioCharts({ acciones }) {
   if (!acciones.length) return null;
 
-  const porEtapa = ESTADOS_ACCION
-    .filter((estado) => estado !== "Cerrada")
-    .map((estado) => ({
-      label: estado,
-      value: acciones.filter((a) => a.estado === estado).length,
-      color: ESTADO_COLOR[estado] || "#94a3b8",
-    }));
+  // "(n/total)" = en qué paso del flujo general va esa etapa (Registrada,
+  // En análisis, Plan de acción... hasta Verificación de eficacia) — ayuda a
+  // leer de un vistazo qué tan avanzada va, no solo cuántas hay.
+  const etapasAbiertas = ESTADOS_ACCION.filter((estado) => estado !== "Cerrada");
+  const porEtapa = etapasAbiertas.map((estado, index) => ({
+    label: estado,
+    value: acciones.filter((a) => a.estado === estado).length,
+    color: ESTADO_COLOR[estado] || "#94a3b8",
+    suffix: `(${index + 1}/${etapasAbiertas.length})`,
+  }));
 
   const vencidas = acciones.filter(isVencida).length;
   const urgencia = [
