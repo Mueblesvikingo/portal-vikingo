@@ -464,6 +464,20 @@ export function esParticipanteAccion(user, accion, proceso) {
   return false;
 }
 
+// Acciones de Mejora: excepción puntual para que Beatriz (Gerente de
+// Calidad, persona_id 11) vea TODAS las acciones que salen de una
+// inspección de Calidad (origen_tabla = "calidad_recorridos"), no solo las
+// suyas — necesita dar seguimiento al cierre de no conformidades de toda la
+// organización, aunque el resto del módulo le siga mostrando solo "mis
+// acciones" (decisión explícita del usuario, 01-oct-2026). Mismo criterio
+// que WORKLOAD_SCOPED_EDITORS más arriba: una excepción por persona, no un
+// rol general.
+const CALIDAD_ORIGEN_VISIBLE_PERSONA_IDS = [11];
+
+export function puedeVerTodasLasAccionesDeCalidad(user) {
+  return CALIDAD_ORIGEN_VISIBLE_PERSONA_IDS.includes(Number(user?.persona_id));
+}
+
 export function hasWorkloadFullAccess(user) {
   const userOverride = getUserModuleOverride(user, "workload-balance");
   if (userOverride && typeof userOverride.editar === "boolean") return userOverride.editar;

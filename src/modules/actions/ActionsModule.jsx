@@ -17,7 +17,7 @@ import { getSubprocesosCatalog } from "../../services/organizationalDesignServic
 import { getObjetivos } from "../../services/strategicDeploymentService";
 import { createWorkloadAssignment } from "../../services/workloadService";
 import { getProyectos, createProyecto, createRecordatorio, PM_PERSONA_ID } from "../../services/pmoService";
-import { isStrategicTeamMember, esParticipanteAccion, isOperativeRole } from "../../services/permissionsService";
+import { isStrategicTeamMember, esParticipanteAccion, isOperativeRole, puedeVerTodasLasAccionesDeCalidad } from "../../services/permissionsService";
 import { getFlujoConfig } from "./actionsHelpers";
 // DashboardTab (Resumen/KPIs) y KanbanTab (Tablero, drag&drop) se quedan sin
 // usar por ahora — "Abiertas" pidió ser solo una tabla limpia (ver más
@@ -122,11 +122,14 @@ export default function ActionsModule({ currentUser }) {
   const subprocesosById = useMemo(() => Object.fromEntries(subprocesos.map((s) => [s.id, s])), [subprocesos]);
   const objetivosById = useMemo(() => Object.fromEntries(objetivos.map((o) => [o.id, o])), [objetivos]);
 
+  const veTodoCalidad = puedeVerTodasLasAccionesDeCalidad(currentUser);
   const misAcciones = useMemo(
     () => acciones.filter((a) =>
-      esParticipanteAccion(currentUser, a, a.proceso_id ? procesosById[a.proceso_id] : null) || involucradoAccionIds.has(a.id)
+      esParticipanteAccion(currentUser, a, a.proceso_id ? procesosById[a.proceso_id] : null) ||
+      involucradoAccionIds.has(a.id) ||
+      (veTodoCalidad && a.origen_tabla === "calidad_recorridos")
     ),
-    [acciones, procesosById, currentUser, involucradoAccionIds]
+    [acciones, procesosById, currentUser, involucradoAccionIds, veTodoCalidad]
   );
 
   // Base para "Abiertas" (tabla limpia por tipo) e "Historial" (cerradas).
