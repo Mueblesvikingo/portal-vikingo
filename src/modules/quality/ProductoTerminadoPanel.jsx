@@ -90,7 +90,7 @@ const FORM_VACIO = {
   resultado_reinspeccion: "",
   hora_liberacion: "",
 };
-const CIERRE_VACIO = { dictamen: "", observacion_general: "", firmado: false };
+const CIERRE_VACIO = { dictamen: "", firmado: false };
 
 const FILTROS_VACIO = { busqueda: "", dictamen: "", desde: "", hasta: "" };
 function camposBusquedaPT(r, insp) {
@@ -301,10 +301,6 @@ function NuevaInspeccionForm({ puntos, currentUser, onSave, onCancel }) {
               <option value="Conforme con observación">Conforme con observación</option>
               <option value="Producto No Conforme">Producto No Conforme</option>
             </select>
-          </label>
-          <label className={`${labelClass} mt-3 block`}>
-            Observación general / pendientes
-            <textarea value={cierre.observacion_general} onChange={(e) => setCierre((c) => ({ ...c, observacion_general: e.target.value }))} rows={2} className={`${inputClass} resize-none`} />
           </label>
 
           <p className="mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">Firma</p>
