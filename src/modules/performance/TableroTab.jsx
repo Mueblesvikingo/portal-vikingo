@@ -269,8 +269,8 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
           <thead>
             <tr className="bg-[#203f73] text-left text-[9px] font-black uppercase tracking-widest text-white/60">
               <th className="px-3 py-2 text-white">Indicador</th>
-              <th className="px-3 py-2 text-right text-white">Real <span className="font-bold normal-case text-white/40">({mesActualLabel})</span></th>
-              <th className="px-3 py-2 text-right">Meta <span className="font-bold normal-case text-white/40">({mesActualLabel})</span></th>
+              <th className="px-3 py-2 text-right text-white">Real <span className="font-bold normal-case text-white/40">(último mes capturado)</span></th>
+              <th className="px-3 py-2 text-right">Meta <span className="font-bold normal-case text-white/40">(mismo mes)</span></th>
               <th className="px-3 py-2 text-right">Cumpl.</th>
               {canEdit && <th className="px-3 py-2"></th>}
             </tr>
@@ -316,7 +316,14 @@ export default function TableroTab({ kpis, resultados, anio, scope, canEdit, can
                         </td>
                         <td className="px-3 py-1.5 text-right font-black text-slate-800">
                           {formatKpiValue(real, kpi.unidad_medida)}
-                          {esMesAnterior && real !== null && <span className="ml-1 text-[8px] font-bold text-amber-500" title={`Último dato capturado: ${mesUsadoLabel} (aún sin captura de ${mesActualLabel})`}>{mesUsadoLabel}</span>}
+                          {real !== null && (
+                            <span
+                              className={`ml-1 text-[8px] font-bold ${esMesAnterior ? "text-amber-500" : "text-slate-400"}`}
+                              title={esMesAnterior ? `Último dato capturado: ${mesUsadoLabel} (aún sin captura de ${mesActualLabel})` : `Dato de ${mesUsadoLabel}`}
+                            >
+                              {mesUsadoLabel}
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-1.5 text-right text-slate-500">{formatKpiValue(meta, kpi.unidad_medida)}</td>
                         <td className="px-3 py-1.5 text-right">

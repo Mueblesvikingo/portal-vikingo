@@ -57,7 +57,7 @@ function OperationalKpiSummaryCard({ kpi, resultados, anio }) {
       </p>
       <div className="mt-0.5 flex items-baseline gap-1.5 pl-1.5">
         <p className="text-2xl font-black leading-none text-slate-900">{formatKpiValue(real, kpi.unidad_medida)}</p>
-        {esMesAnterior && real !== null && <span className="text-[8px] font-bold text-amber-500">{mesUsadoLabel}</span>}
+        {real !== null && <span className={`text-[8px] font-bold ${esMesAnterior ? "text-amber-500" : "text-slate-400"}`}>{mesUsadoLabel}</span>}
       </div>
       <p className="pl-1.5 text-[9px] font-bold text-slate-400">Meta: {formatKpiValue(meta, kpi.unidad_medida)}</p>
       <div className="mx-1.5 mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
