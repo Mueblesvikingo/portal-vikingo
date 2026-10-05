@@ -530,6 +530,51 @@ export async function notificarNuevaAccion(accion, involucradosSeleccionadosIds,
   }
 }
 
+// Suma involucrados a una acción YA registrada (después de crearla). Solo
+// agrega a quien todavía no está en la lista — nunca toca el "visto" de los
+// que ya estaban. Avisa a los nuevos con el mismo criterio que la alta
+// (respeta ALERTAS_NUEVA_ACCION_DESACTIVADAS) y deja constancia en el
+// historial de la acción.
+export async function agregarInvolucrados(accion, personaIds, personas, actor) {
+  try {
+    const existentes = await getInvolucrados(accion.id);
+    const yaEstan = new Set(existentes.map((i) => Number(i.persona_id)));
+    const nuevos = Array.from(new Set((personaIds || []).map(Number))).filter((id) => !yaEstan.has(id));
+    if (!nuevos.length) return { ok: true, error: null, agregados: [] };
+
+    const personasById = new Map((personas || []).map((p) => [Number(p.id), p.nombre]));
+    const rows = nuevos.map((personaId) => ({
+      accion_id: accion.id,
+      persona_id: personaId,
+      persona_nombre: personasById.get(personaId) || "",
+    }));
+    const { error } = await supabase.from("accion_involucrados").upsert(rows, { onConflict: "accion_id,persona_id", ignoreDuplicates: true });
+    if (error) { console.error("Error al agregar involucrados a la acción:", error); return { ok: false, error, agregados: [] }; }
+
+    if (!ALERTAS_NUEVA_ACCION_DESACTIVADAS) {
+      await insertNotificaciones(accion.id, nuevos, {
+        tipo: "nueva_accion",
+        mensaje: `Acción ${accion.codigo}: ${accion.titulo} — te agregaron como involucrado.`,
+        urgente: false,
+      });
+    }
+
+    const { personaId, nombre } = actorFields(actor);
+    await logHistorialEntries([{
+      accion_id: accion.id,
+      campo: "involucrados",
+      valor_anterior: null,
+      valor_nuevo: rows.map((r) => r.persona_nombre).join(", "),
+      persona_id: personaId,
+      usuario_nombre: nombre,
+    }]);
+    return { ok: true, error: null, agregados: rows };
+  } catch (err) {
+    console.error("Error inesperado al agregar involucrados a la acción:", err);
+    return { ok: false, error: err, agregados: [] };
+  }
+}
+
 // Aviso genérico a todos los involucrados de una acción ya registrada — se
 // usa en las transiciones de estado que el flujo marca como críticas
 // (aprobación de Dirección) o informativas (cierre).

@@ -11,6 +11,7 @@ import {
   getAdjuntos,
   addAdjunto,
   getInvolucrados,
+  agregarInvolucrados,
   getPlanResponsables,
   addPlanResponsable,
   updatePlanResponsable,
@@ -668,6 +669,9 @@ export default function AccionDetailPanel({
   const [comentarios, setComentarios] = useState([]);
   const [adjuntos, setAdjuntos] = useState([]);
   const [involucrados, setInvolucrados] = useState([]);
+  const [agregandoInvolucrados, setAgregandoInvolucrados] = useState(false);
+  const [nuevosInvolucradosIds, setNuevosInvolucradosIds] = useState([]);
+  const [guardandoInvolucrados, setGuardandoInvolucrados] = useState(false);
   const [planResponsables, setPlanResponsables] = useState([]);
   const [nuevoPlanPersonaId, setNuevoPlanPersonaId] = useState("");
   const [nuevoPlanDetalle, setNuevoPlanDetalle] = useState("");
@@ -832,6 +836,20 @@ export default function AccionDetailPanel({
     // para que Historial refleje el cambio sin tener que cerrar y reabrir.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accion.id, accion.updated_at]);
+
+  async function handleAgregarInvolucrados() {
+    if (!nuevosInvolucradosIds.length) return;
+    setGuardandoInvolucrados(true);
+    const result = await agregarInvolucrados(accion, nuevosInvolucradosIds, personas, currentUser);
+    if (!result.ok) {
+      alert("No se pudo agregar a los involucrados. Intenta de nuevo.");
+    } else {
+      setInvolucrados(await getInvolucrados(accion.id));
+      setNuevosInvolucradosIds([]);
+      setAgregandoInvolucrados(false);
+    }
+    setGuardandoInvolucrados(false);
+  }
 
   const analisisActual = analisisList.find((a) => a.herramienta === herramienta) || null;
   // Referencia para "Plan de acción": la causa raíz más reciente que se
@@ -1204,9 +1222,21 @@ export default function AccionDetailPanel({
                       </div>
                     </div>
 
-                    {involucrados.length > 0 && (
+                    {(involucrados.length > 0 || canEdit) && (
                       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                        <p className="mb-2 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className="text-[12px]">👥</span> Involucrados — notificados de esta acción</p>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400"><span className="text-[12px]">👥</span> Involucrados — notificados de esta acción</p>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => { setAgregandoInvolucrados((v) => !v); setNuevosInvolucradosIds([]); }}
+                              className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-slate-500 hover:bg-slate-50"
+                            >
+                              {agregandoInvolucrados ? "Cancelar" : "+ Agregar"}
+                            </button>
+                          )}
+                        </div>
+                        {involucrados.length === 0 && <p className="text-[10px] font-bold text-slate-400">Todavía no hay involucrados.</p>}
                         <div className="flex flex-wrap gap-1.5">
                           {involucrados.map((i) => (
                             <span
@@ -1218,6 +1248,40 @@ export default function AccionDetailPanel({
                             </span>
                           ))}
                         </div>
+                        {canEdit && agregandoInvolucrados && (() => {
+                          const yaInvolucradosIds = new Set(involucrados.map((i) => Number(i.persona_id)));
+                          const disponibles = personas.filter((p) => !yaInvolucradosIds.has(Number(p.id)));
+                          return (
+                            <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50/60 p-2">
+                              {disponibles.length === 0 ? (
+                                <p className="text-[10px] font-bold text-slate-400">Ya están involucradas todas las personas.</p>
+                              ) : (
+                                <div className="max-h-48 overflow-y-auto">
+                                  {disponibles.map((p) => (
+                                    <label key={p.id} className="flex items-center gap-2 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-white">
+                                      <input
+                                        type="checkbox"
+                                        checked={nuevosInvolucradosIds.includes(p.id)}
+                                        onChange={() => setNuevosInvolucradosIds((cur) => (cur.includes(p.id) ? cur.filter((id) => id !== p.id) : [...cur, p.id]))}
+                                      />
+                                      {p.nombre}
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="mt-2 flex justify-end">
+                                <button
+                                  type="button"
+                                  disabled={!nuevosInvolucradosIds.length || guardandoInvolucrados}
+                                  onClick={handleAgregarInvolucrados}
+                                  className="rounded-full bg-[#0f1f3d] px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white disabled:opacity-40"
+                                >
+                                  {guardandoInvolucrados ? "Agregando…" : `Agregar${nuevosInvolucradosIds.length ? ` (${nuevosInvolucradosIds.length})` : ""}`}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
 
