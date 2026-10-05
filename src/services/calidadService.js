@@ -463,6 +463,24 @@ export async function crearInspeccionUnica({ planta, fecha, jornada, inspeccion,
       }
     }
 
+    // Aviso normal (solo campanita, sin sirena) a quienes deben firmar: el
+    // supervisor de área asignado y la Gerente de Calidad. Producto Terminado
+    // queda fuera por ahora (solo firma la inspectora). Si el aviso falla, el
+    // registro ya quedó guardado — no se revierte.
+    if (planta !== "Producto Terminado") {
+      try {
+        const mensaje = `Tienes una firma pendiente en Gestión de Calidad · ${planta} — inspección del ${fecha}${insp.op ? " · OP " + insp.op : ""}.`;
+        const destinatarios = Array.from(new Set(
+          [recorrido.responsable_area_persona_id, GERENTE_CALIDAD_PERSONA_ID].filter(Boolean).map(Number)
+        )).filter((id) => id !== personaId);
+        await Promise.all(destinatarios.map((destinatarioPersonaId) =>
+          createCalidadRecordatorio({ recorridoId: recorrido.id, destinatarioPersonaId, mensaje }, actor)
+        ));
+      } catch (avisoErr) {
+        console.error("No se pudo enviar el aviso de firma pendiente:", avisoErr);
+      }
+    }
+
     return { ok: true, error: null, data: { ...recorrido, calidad_inspecciones: [insp] } };
   } catch (err) {
     console.error("Error inesperado al crear inspección:", err);
