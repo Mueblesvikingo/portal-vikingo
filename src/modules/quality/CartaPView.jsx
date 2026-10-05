@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
 import { getInspeccionesUnica } from "../../services/calidadService";
 import { cardClass } from "./coreliTheme";
-import { calcularPeriodo, todayISO, ddmmyyyy, SelectorPeriodoSPC } from "./shared";
+import { periodoMensualMovil, todayISO, ddmmyyyy, SelectorPeriodoSPC } from "./shared";
 
 // Carta de control p — complemento del Pareto: mientras el Pareto dice DONDE
 // se concentran las no conformidades, esta dice CUANDO el proceso se sale de
@@ -82,7 +82,7 @@ export default function CartaPView() {
   const navigate = useNavigate();
   const [planta, setPlanta] = useState("Materia Prima");
   const [rango, setRango] = useState(() => {
-    const r = calcularPeriodo("mes", todayISO());
+    const r = periodoMensualMovil(todayISO());
     return { desde: r.desde, hasta: r.hasta };
   });
   const { desde, hasta } = rango;

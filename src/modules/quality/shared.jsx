@@ -98,6 +98,17 @@ export function calcularPeriodo(periodo, fechaRef) {
   return { desde, hasta, label: `Mes ${MES_LABEL[Number(fechaRef.slice(5, 7)) - 1]} ${fechaRef.slice(0, 4)}` };
 }
 
+// Periodo mensual móvil: del mismo día del mes anterior hasta la fecha de
+// referencia (el 15 de octubre -> 15 de septiembre a 15 de octubre). Si el mes
+// anterior no tiene ese día (ej. 31), se usa su último día.
+export function periodoMensualMovil(fechaRef) {
+  const [y, m, d] = fechaRef.split("-").map(Number);
+  const prev = new Date(y, m - 2, 1);
+  const ultimoDiaPrev = new Date(prev.getFullYear(), prev.getMonth() + 1, 0).getDate();
+  const desde = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(Math.min(d, ultimoDiaPrev)).padStart(2, "0")}`;
+  return { desde, hasta: fechaRef };
+}
+
 // Selector de rango compacto para las herramientas SPC (Pareto, Carta p, ...)
 // — Día/Semana/Mes son atajos de un solo toque (rellenan Desde/Hasta a partir
 // de hoy, usando calcularPeriodo), y Desde/Hasta quedan siempre editables a
@@ -115,7 +126,7 @@ export function SelectorPeriodoSPC({ desde, hasta, onChange }) {
             key={key}
             type="button"
             onClick={() => {
-              const r = calcularPeriodo(key, todayISO());
+              const r = key === "mes" ? periodoMensualMovil(todayISO()) : calcularPeriodo(key, todayISO());
               onChange({ desde: r.desde, hasta: r.hasta });
             }}
             className="rounded-md px-1.5 py-1 text-[9px] font-bold uppercase tracking-wide text-[#5b6472] transition hover:bg-[#f7f7f4]"

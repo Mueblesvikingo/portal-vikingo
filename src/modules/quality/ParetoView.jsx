@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
 import { getInspeccionesUnica, getPuntosControl, getPuntosControlPorProceso } from "../../services/calidadService";
 import { cardClass } from "./coreliTheme";
-import { calcularPeriodo, todayISO, ddmmyyyy, SelectorPeriodoSPC } from "./shared";
+import { periodoMensualMovil, todayISO, ddmmyyyy, SelectorPeriodoSPC } from "./shared";
 
 // Pareto de no conformidades por punto de control — cuenta cuántas veces
 // cada punto (letra) salió NC entre todas las inspecciones ya guardadas de
@@ -67,7 +67,7 @@ export default function ParetoView() {
   const navigate = useNavigate();
   const [planta, setPlanta] = useState("Materia Prima");
   const [rango, setRango] = useState(() => {
-    const r = calcularPeriodo("mes", todayISO());
+    const r = periodoMensualMovil(todayISO());
     return { desde: r.desde, hasta: r.hasta };
   });
   const { desde, hasta } = rango;
