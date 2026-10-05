@@ -592,16 +592,14 @@ export function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, 
       <p className="mt-3 px-2 py-1 text-[9px] font-bold text-white" style={{ background: colorCierreTitulo }}>CIERRE / DICTAMEN</p>
       <table className="w-full border-collapse text-[8px]">
         <colgroup>
-          <col style={{ width: "13%" }} />
-          <col style={{ width: "17%" }} />
-          <col style={{ width: "40%" }} />
-          <col style={{ width: "30%" }} />
+          <col style={{ width: "20%" }} />
+          <col style={{ width: "25%" }} />
+          <col style={{ width: "55%" }} />
         </colgroup>
         <thead>
           <tr>
             <th className="border border-black px-1 py-1 font-bold" style={{ background: EXCEL_COLOR.leyendaFondo }}>{nombreRegistro}</th>
             <th className="border border-black px-1 py-1 font-bold" style={{ background: EXCEL_COLOR.leyendaFondo }}>Dictamen</th>
-            <th className="border border-black px-1 py-1 font-bold" style={{ background: EXCEL_COLOR.leyendaFondo }}>Observación general / pendientes</th>
             <th className="border border-black px-1 py-1 font-bold" style={{ background: EXCEL_COLOR.leyendaFondo }}>Firmas</th>
           </tr>
         </thead>
@@ -610,7 +608,6 @@ export function ReciboImprimible({ registros, puntosCatalogo, tituloEncabezado, 
             <tr key={r.id}>
               <td className="border border-black px-1 py-1">{ddmmyyyy(r.fecha)} · {horaCorta(r.calidad_inspecciones?.[0]?.hora)}</td>
               <td className="border border-black px-1 py-1">☑ {r.dictamen || "—"}</td>
-              <td className="border border-black px-1 py-1">{r.observacion_general || "—"}</td>
               <td className="border border-black px-1 py-1">{renderFirmas(r)}</td>
             </tr>
           ))}
@@ -825,7 +822,6 @@ export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, ca
 
             <AccordionSection icon="🖊️" title="Cierre y firmas" subtitle={registro.dictamen} open={openSection === "cierre"} onToggle={() => toggle("cierre")}>
               <CampoTexto label="Dictamen" value={registro.dictamen} />
-              <div className="mt-3"><CampoTexto label="Observación general / pendientes" value={registro.observacion_general} /></div>
               <p className="mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">Firmas</p>
               <div className={`grid gap-2 ${mostrarFirmasArea ? "sm:grid-cols-3" : ""}`}>
                 <FirmaCard rol="Inspectora" firmado={!!registro.firma_inspectora}>
