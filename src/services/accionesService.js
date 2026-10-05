@@ -481,14 +481,11 @@ async function insertNotificaciones(accionId, personaIds, { tipo, mensaje, urgen
   if (error) console.error("Error al notificar involucrados de acción:", error);
 }
 
-// TEMPORAL: a pedido explícito del usuario (30-sep-2026) mientras hace
-// pruebas de la conexión Calidad → Acciones de Mejora, para no mandarle
-// alarmas urgentes reales al resto del equipo en cada prueba. Solo apaga el
-// aviso (campanita + sirena) — el registro en accion_involucrados sigue
-// intacto abajo, porque de ahí depende la visibilidad de "mis acciones" que
-// también se está probando. Reactivar cambiando esto a `false` cuando el
-// usuario avise que ya terminó de probar.
-const ALERTAS_NUEVA_ACCION_DESACTIVADAS = true;
+// Interruptor del aviso (campanita + sirena) al alta de una acción y al sumar
+// involucrados después. Se apagó el 30-sep-2026 mientras se probaba la conexión
+// Calidad → Acciones de Mejora y se reactivó el 5-oct-2026 a pedido del usuario.
+// El registro en accion_involucrados no depende de esto: se guarda siempre.
+const ALERTAS_NUEVA_ACCION_DESACTIVADAS = false;
 
 // Se llama justo después de crear una acción: une los involucrados que el
 // usuario eligió a mano con todo el equipo estratégico (siempre se entera de
