@@ -34,9 +34,9 @@ const FORMATO_MP = {
   tituloRecibo: "RECEPCIÓN DE MATERIA PRIMA",
   subtitulo: "FÁBRICA DE MUEBLES VIKINGO  ·  GESTIÓN DE CALIDAD  ·  Código: F-GC-01U  ·  Versión: 00",
   instrucciones: "Una fila = una inspección realizada. Marcar puntos: C = Cumple, NC = No Cumple, NA = No aplica. Si existe NC, registrar clasificación, evidencia, acción y reinspección/liberación.",
-  columnas: ["Hora", "OC / Lote", "Proveedor", "MP a inspeccionar", "Lote / Identificación", "Cant.", "Muestra", "A", "B", "C", "D", "E", "F", "G", "Resultado", "Clasif.", "Observación / evidencia", "Acción / Reinspección"],
-  colAnchos: [4, 7, 7, 9, 9, 4, 4, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 6, 5, 17.5, 10],
-  letras: ["A", "B", "C", "D", "E", "F", "G"],
+  columnas: ["Hora", "OC / Lote", "Proveedor", "MP a inspeccionar", "Lote / Identificación", "Cant.", "Muestra", "A", "B", "C", "D", "E", "F", "G", "H", "Resultado", "Clasif.", "Observación / evidencia", "Acción / Reinspección"],
+  colAnchos: [4, 7, 7, 9, 9, 4, 4, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 6, 5, 15, 10],
+  letras: ["A", "B", "C", "D", "E", "F", "G", "H"],
   renderCeldasAntes: (insp) => [
     { v: insp.oc_lote }, { v: insp.proveedor }, { v: insp.producto_texto }, { v: insp.lote_identificacion },
     { v: insp.cantidad, center: true }, { v: insp.muestra, center: true },
@@ -45,7 +45,7 @@ const FORMATO_MP = {
     ["A = Identificación / material vs OC", "B = Cantidad / presentación"],
     ["C = Dimensión / calibre / espesor", "D = Condición física / integridad"],
     ["E = Humedad / contaminación", "F = Color / tono / apariencia"],
-    ["G = Criterio técnico específico", ""],
+    ["G = Criterio técnico específico", "H = Plagas / insectos (madera)"],
   ],
   criterio: "CRITERIO: La Matriz / plano / ficha técnica vigente establece la aceptación. Ante condición no contemplada: no asumir; documentar y escalar a Gestión de Calidad.",
   nombreRegistro: "Recepción",
@@ -187,7 +187,7 @@ function NuevaInspeccionForm({ puntos, personas, proveedores, productos, current
           icon="✅"
           title="Puntos de control"
           help="Del formato F-GC-01U: marcar cada punto como C = Cumple, NC = No Cumple, o NA = No aplica. La Matriz/plano/ficha técnica vigente establece la aceptación de cada uno."
-          subtitle={puntosMarcados > 0 ? `${puntosMarcados} de ${puntos.length} marcados · ${resultado}` : `${puntos.length} puntos (A-${puntos[puntos.length - 1]?.letra || "G"})`}
+          subtitle={puntosMarcados > 0 ? `${puntosMarcados} de ${puntos.length} marcados · ${resultado}` : `${puntos.length} puntos (A-${puntos[puntos.length - 1]?.letra || "H"})`}
           open={openSection === "puntos"}
           onToggle={() => toggle("puntos")}
         >

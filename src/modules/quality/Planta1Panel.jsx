@@ -37,9 +37,9 @@ const FORMATO_PLANTA1 = {
   tituloRecibo: "FORMATO UNIFICADO – PLANTA 1 | CORTE DE MADERA / ARMADO DE CASCO / HABILITADO",
   subtitulo: "FÁBRICA DE MUEBLES VIKINGO  ·  GESTIÓN DE CALIDAD  ·  PLANTA 1 ASPEL-PROD  ·  Código: F-GC-02U  ·  Versión: 00",
   instrucciones: "Una fila = una inspección realizada. En PROCESO seleccionar: Corte de Madera / Armado de Casco / Habilitado. Una fila = una OP inspeccionada. Marcar puntos: C = Cumple, NC = No Cumple, NA = No aplica. Si existe NC, registrar clasificación, evidencia, acción y reinspección/liberación.",
-  columnas: ["Hora", "Proceso", "OP", "Código", "Terminación", "Línea / Operador", "Cant.", "Muestra", "A", "B", "C", "D", "E", "F", "G", "H", "Resultado", "Clasif.", "Observación / evidencia", "Acción / Reinspección"],
-  colAnchos: [3, 9, 5, 7, 7, 8, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 5, 4, 18, 12],
-  letras: ["A", "B", "C", "D", "E", "F", "G", "H"],
+  columnas: ["Hora", "Proceso", "OP", "Código", "Terminación", "Línea / Operador", "Cant.", "Muestra", "A", "B", "C", "D", "E", "F", "G", "H", "I", "Resultado", "Clasif.", "Observación / evidencia", "Acción / Reinspección"],
+  colAnchos: [3, 9, 5, 7, 7, 8, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 4, 16, 12],
+  letras: ["A", "B", "C", "D", "E", "F", "G", "H", "I"],
   renderCeldasAntes: (insp) => [
     { v: insp.proceso }, { v: insp.op }, { v: insp.producto_texto }, { v: insp.terminacion }, { v: insp.linea_operador },
     { v: insp.cantidad, center: true }, { v: insp.muestra, center: true },
@@ -49,6 +49,7 @@ const FORMATO_PLANTA1 = {
     ["C = Escuadra / geometría / nivel", "D = Cortes / uniones / fijaciones"],
     ["E = Estabilidad estructural", "F = Resortes / bandastic / tensión"],
     ["G = Sin filos / puntas / metal-metal", "H = Preparación sig. proceso"],
+    ["I = Plagas / insectos en madera", ""],
   ],
   criterio: "CRITERIO: La Matriz / plano / ficha técnica vigente establece la aceptación. Ante condición no contemplada: no asumir; documentar y escalar a Gestión de Calidad.",
   nombreRegistro: "Inspección",
@@ -193,7 +194,7 @@ function NuevaInspeccionForm({ puntos, personas, productos, colaboradores, curre
           icon="✅"
           title="Puntos de control"
           help="Del formato F-GC-02U: marcar cada punto como C = Cumple, NC = No Cumple, o NA = No aplica. La Matriz/plano/ficha técnica vigente establece la aceptación de cada uno."
-          subtitle={puntosMarcados > 0 ? `${puntosMarcados} de ${puntos.length} marcados · ${resultado}` : `${puntos.length} puntos (A-${puntos[puntos.length - 1]?.letra || "H"})`}
+          subtitle={puntosMarcados > 0 ? `${puntosMarcados} de ${puntos.length} marcados · ${resultado}` : `${puntos.length} puntos (A-${puntos[puntos.length - 1]?.letra || "I"})`}
           open={openSection === "puntos"}
           onToggle={() => toggle("puntos")}
         >
