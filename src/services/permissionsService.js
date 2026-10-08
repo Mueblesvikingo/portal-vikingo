@@ -48,9 +48,9 @@ const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
 // Laura/Sulidey/Ofelia (únicos 3 usuarios con ese rol) antes de repartirles
 // sus claves de acceso — antes solo Supervisor/Auxiliar quedaban acotados,
 // por eso seguían viendo el tablero completo.
-// "Responsable/Encargado de Almacén" (antes "Supervisor de Almacén", renombrado
-// al desplegar Control de almacenes) conserva el mismo acceso acotado.
-const OPERATIVE_ROLE_PREFIXES = ["Supervisor", "Auxiliar", "Inspector de Calidad", "Responsable/Encargado de Almacén"];
+// "Responsable de Almacén" (antes "Supervisor de Almacén" y luego "Responsable/Encargado
+// de Almacén") conserva el mismo acceso acotado; se mantiene el nombre anterior por compatibilidad.
+const OPERATIVE_ROLE_PREFIXES = ["Supervisor", "Auxiliar", "Inspector de Calidad", "Responsable de Almacén", "Responsable/Encargado de Almacén"];
 const MODULES_VISIBLE_FOR_OPERATIVE_ROLES = ["organigrama", "workload-balance", "acciones", "operational-performance", "calidad"];
 
 export function isOperativeRole(user) {
@@ -499,7 +499,7 @@ export function hasWorkloadFullAccess(user) {
 // excepción por persona, no un rol general de "supervisor edita a su equipo".
 const WORKLOAD_SCOPED_EDITORS = {
   11: ["Inspector de Calidad"], // RUIZ CARREON BEATRIZ → persona_roles.rol de Laura y Sulidey
-  5: ["Supervisor de Almacén", "Responsable/Encargado de Almacén", "Auxiliar de Almacén"], // HERNANDO GONZALEZ KEVYN (Kevin) → persona_roles.rol de Erika y Erick (unificado 01/09/2026, antes eran 2 roles distintos)
+  5: ["Supervisor de Almacén", "Responsable de Almacén", "Responsable/Encargado de Almacén", "Auxiliar de Almacén"], // HERNANDO GONZALEZ KEVYN (Kevin) → persona_roles.rol de Erika y Erick (unificado 01/09/2026, antes eran 2 roles distintos)
   3: ["Chofer-Repartidor"], // HERNANDEZ ESCOBEDO EDUARDO (Coordinador de Distribución) → persona_roles.rol de su equipo de reparto
   13: ["Supervisor de Área"], // TERRONES TAPIA HUGO (Gerente de operaciones) → persona_roles.rol de sus supervisores de "Planeación y control de la producción" (Martín Cisneros, José Guadalupe Hernández, Sandra Neri, Joseline Orduña); ese texto de rol solo existe en ese proceso (07/09/2026)
 };
