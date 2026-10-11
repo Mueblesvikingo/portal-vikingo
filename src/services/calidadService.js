@@ -488,6 +488,105 @@ export async function crearInspeccionUnica({ planta, fecha, jornada, inspeccion,
   }
 }
 
+
+// Edición de un registro ya guardado (recorrido + inspección + puntos). Los
+// puntos se actualizan por diferencia (no se borra todo y se vuelve a
+// insertar) para no perder datos si algo falla a la mitad. Si el registro ya
+// tenía las firmas del supervisor de área y/o de la Gerente de Calidad, esas
+// firmas se reinician — firmaron un contenido que ya cambió — y se les vuelve
+// a avisar. La fecha y el folio no cambian.
+export async function actualizarInspeccionUnica({ registro, inspeccion, puntos, cierre }, actor) {
+  try {
+    const { personaId } = actorFields(actor);
+    const insp0 = registro?.calidad_inspecciones?.[0];
+    if (!registro?.id || !insp0?.id) return { ok: false, error: "Registro no válido", data: null };
+    const teniaFirmas = !!(registro.responsable_area_firmado_at || registro.gerente_calidad_firmado_at);
+
+    const recorridoUpd = { dictamen: cierre.dictamen };
+    if ("responsable_area_persona_id" in cierre) recorridoUpd.responsable_area_persona_id = cierre.responsable_area_persona_id || null;
+    if (teniaFirmas) {
+      Object.assign(recorridoUpd, { responsable_area_nombre: null, responsable_area_firmado_at: null, gerente_calidad_nombre: null, gerente_calidad_firmado_at: null });
+    }
+    const { data: recorrido, error: recorridoError } = await supabase.from("calidad_recorridos").update(recorridoUpd).eq("id", registro.id).select("*").single();
+    if (recorridoError) return { ok: false, error: recorridoError, data: null };
+
+    const { data: insp, error: inspError } = await supabase
+      .from("calidad_inspecciones")
+      .update({
+        hora: inspeccion.hora || null,
+        proceso: inspeccion.proceso || null,
+        op: inspeccion.op || null,
+        producto_texto: inspeccion.producto_texto || null,
+        terminacion: inspeccion.terminacion || null,
+        linea_operador: inspeccion.linea_operador || null,
+        proveedor: inspeccion.proveedor || null,
+        oc_lote: inspeccion.oc_lote || null,
+        lote_identificacion: inspeccion.lote_identificacion || null,
+        cantidad: inspeccion.cantidad || null,
+        muestra: inspeccion.muestra || null,
+        resultado: inspeccion.resultado || null,
+        clasificacion: inspeccion.clasificacion || null,
+        observacion: inspeccion.observacion || null,
+        accion_reinspeccion: inspeccion.accion_reinspeccion || null,
+        modelo: inspeccion.modelo || null,
+        cliente_destino: inspeccion.cliente_destino || null,
+        ac: inspeccion.ac || null,
+        re: inspeccion.re || null,
+        nc_menor: inspeccion.nc_menor || null,
+        nc_mayor_critico: inspeccion.nc_mayor_critico || null,
+        resultado_reinspeccion: inspeccion.resultado_reinspeccion || null,
+        hora_liberacion: inspeccion.hora_liberacion || null,
+      })
+      .eq("id", insp0.id)
+      .select("*")
+      .single();
+    if (inspError) return { ok: false, error: inspError, data: null };
+
+    // puntos de control por diferencia
+    const nuevos = new Map((puntos || []).filter((p) => p.valor).map((p) => [Number(p.punto_control_id), p.valor]));
+    const { data: existentes, error: exError } = await supabase.from("calidad_inspeccion_puntos").select("id,punto_control_id,valor").eq("inspeccion_id", insp0.id);
+    if (exError) return { ok: false, error: exError, data: null };
+    for (const e of existentes || []) {
+      const clave = Number(e.punto_control_id);
+      const valor = nuevos.get(clave);
+      if (valor === undefined) {
+        const { error } = await supabase.from("calidad_inspeccion_puntos").delete().eq("id", e.id);
+        if (error) return { ok: false, error, data: null };
+      } else {
+        if (valor !== e.valor) {
+          const { error } = await supabase.from("calidad_inspeccion_puntos").update({ valor }).eq("id", e.id);
+          if (error) return { ok: false, error, data: null };
+        }
+        nuevos.delete(clave);
+      }
+    }
+    if (nuevos.size) {
+      const rows = [...nuevos.entries()].map(([punto_control_id, valor]) => ({ inspeccion_id: insp0.id, punto_control_id, valor }));
+      const { error } = await supabase.from("calidad_inspeccion_puntos").insert(rows);
+      if (error) return { ok: false, error, data: null };
+    }
+
+    // firmas reiniciadas → aviso normal a quienes deben volver a firmar
+    if (teniaFirmas && registro.planta !== "Producto Terminado") {
+      try {
+        const mensaje = `La inspección de ${registro.planta} del ${registro.fecha}${insp.op ? " · OP " + insp.op : ""} fue editada: tienes una firma pendiente en Gestión de Calidad.`;
+        const destinatarios = Array.from(new Set(
+          [recorrido.responsable_area_persona_id, GERENTE_CALIDAD_PERSONA_ID].filter(Boolean).map(Number)
+        )).filter((id) => id !== personaId);
+        await Promise.all(destinatarios.map((destinatarioPersonaId) =>
+          createCalidadRecordatorio({ recorridoId: registro.id, destinatarioPersonaId, mensaje }, actor)
+        ));
+      } catch (avisoErr) {
+        console.error("No se pudo enviar el aviso de firma pendiente:", avisoErr);
+      }
+    }
+    return { ok: true, error: null, data: { ...recorrido, calidad_inspecciones: [insp] }, firmasReiniciadas: teniaFirmas };
+  } catch (err) {
+    console.error("Error inesperado al actualizar la inspección:", err);
+    return { ok: false, error: err, data: null };
+  }
+}
+
 // Firmas reales — el servidor vuelve a validar quién puede firmar cada rol
 // (nunca confía en lo que mande el cliente), igual que
 // firmarFichaComoAuditado en auditoriasService.js.

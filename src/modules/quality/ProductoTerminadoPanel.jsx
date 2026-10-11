@@ -9,6 +9,7 @@ import {
   subirEvidencia,
   getProductos,
   getClientes,
+  actualizarInspeccionUnica,
 } from "../../services/calidadService";
 import EvidenciaPicker from "./EvidenciaPicker";
 import HelpTip from "./HelpTip";
@@ -19,6 +20,7 @@ import {
   inicioSemanaISO, finSemanaISO, aplicarFiltrosRegistros,
   PuntoControlChip, AccordionSection, CampoTexto, FirmaCard, inputClass, labelClass,
   PRINT_STYLE_BLOCK, ImprimirModal, ReciboImprimible, DetalleRegistroModal, EXCEL_COLOR,
+  formDesdeRegistro, valoresPuntosDesdeRegistro, cierreDesdeRegistro,
 } from "./shared";
 
 const PLANTA = "Producto Terminado";
@@ -102,10 +104,10 @@ function camposBusquedaPT(r, insp) {
 // Igual que los demás: registro único autosuficiente. Aquí no hay Proceso ni
 // Supervisor de área/Gerente de Calidad — solo la Inspectora firma, tal como
 // está en el formato F-GC-05 original.
-function NuevaInspeccionForm({ puntos, productos, clientes, currentUser, onSave, onCancel }) {
-  const [form, setForm] = useState(FORM_VACIO);
-  const [valoresPuntos, setValoresPuntos] = useState({});
-  const [cierre, setCierre] = useState(CIERRE_VACIO);
+function NuevaInspeccionForm({ puntos, productos, clientes, currentUser, inicial = null, onSave, onCancel }) {
+  const [form, setForm] = useState(() => formDesdeRegistro(FORM_VACIO, inicial));
+  const [valoresPuntos, setValoresPuntos] = useState(() => valoresPuntosDesdeRegistro(inicial));
+  const [cierre, setCierre] = useState(() => cierreDesdeRegistro(CIERRE_VACIO, inicial));
   const [fotos, setFotos] = useState([]);
   const [saving, setSaving] = useState(false);
   const [openSection, setOpenSection] = useState("identificacion");
@@ -147,7 +149,7 @@ function NuevaInspeccionForm({ puntos, productos, clientes, currentUser, onSave,
 
   return (
     <div className={`${cardClass} p-3`}>
-      <p className="mb-3 px-1 text-sm font-bold text-[#0f1f3d]">✍️ Nueva inspección</p>
+      <p className="mb-3 px-1 text-sm font-bold text-[#0f1f3d]">{inicial ? "✏️ Editar inspección" : "✍️ Nueva inspección"}</p>
 
       <div className="space-y-2">
         <AccordionSection
@@ -323,7 +325,7 @@ function NuevaInspeccionForm({ puntos, productos, clientes, currentUser, onSave,
 
       <div className="mt-4 flex gap-2">
         <button type="button" onClick={handleSave} disabled={saving || !puedeGuardar} className={`flex-1 sm:flex-none ${btnPrimaryClass}`}>
-          {saving ? "Guardando…" : "Guardar inspección"}
+          {saving ? "Guardando…" : inicial ? "Guardar cambios" : "Guardar inspección"}
         </button>
         <button type="button" onClick={onCancel} className={btnGhostClass}>Cancelar</button>
       </div>
@@ -395,6 +397,7 @@ export default function ProductoTerminadoPanel({ currentUser, canEdit = true, in
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
   const [verId, setVerId] = useState(null);
 
   // Llegada desde "Ver informe" en Acciones de Mejora (ver QualityModule.jsx,
@@ -449,6 +452,24 @@ export default function ProductoTerminadoPanel({ currentUser, canEdit = true, in
   }, []);
 
   async function handleGuardar({ inspeccion, puntos: puntosPayload, cierre, fotos }) {
+    // Edición de un registro ya guardado (botón ✏️ del detalle).
+    if (editId) {
+      const reg = registros.find((r) => r.id === editId);
+      if (!reg) { setEditId(null); return; }
+      const conFirmas = !!(reg.responsable_area_firmado_at || reg.gerente_calidad_firmado_at);
+      if (conFirmas && !window.confirm("Este registro ya tiene firmas del supervisor de área y/o de la Gerente de Calidad. Al guardar los cambios esas firmas se reinician para que vuelvan a firmar. ¿Continuar?")) return;
+      const res = await actualizarInspeccionUnica({ registro: reg, inspeccion, puntos: puntosPayload, cierre }, currentUser);
+      if (!res.ok) { window.alert("No fue posible guardar los cambios."); return; }
+      const inspId = reg.calidad_inspecciones?.[0]?.id;
+      if (inspId && fotos?.length) {
+        for (const foto of fotos) await subirEvidencia(inspId, foto.blob, currentUser);
+      }
+      const id = editId;
+      setEditId(null);
+      await loadRegistros();
+      setVerId(id);
+      return;
+    }
     const result = await crearInspeccionUnica({ planta: PLANTA, fecha: todayISO(), jornada: "07:00–17:00", inspeccion, puntos: puntosPayload, cierre }, currentUser);
     if (!result.ok) { window.alert("No fue posible guardar la inspección."); return; }
     const inspeccionId = result.data?.calidad_inspecciones?.[0]?.id;
@@ -480,6 +501,7 @@ export default function ProductoTerminadoPanel({ currentUser, canEdit = true, in
   const grupos = agruparPorSemana(registrosFiltrados);
   const filtrosActivos = Object.values(filtros).filter(Boolean).length;
   const verRegistro = registros.find((r) => r.id === verId) || null;
+  const editRegistro = registros.find((r) => r.id === editId) || null;
 
   return (
     <div className="space-y-3">
@@ -499,7 +521,7 @@ export default function ProductoTerminadoPanel({ currentUser, canEdit = true, in
       </div>
 
       <div className="flex items-center gap-2">
-        {canEdit && !showForm && (
+        {canEdit && !showForm && !editRegistro && (
           <button
             type="button"
             onClick={() => setShowForm(true)}
@@ -530,8 +552,8 @@ export default function ProductoTerminadoPanel({ currentUser, canEdit = true, in
         )}
       </div>
 
-      {showForm && (
-        <NuevaInspeccionForm puntos={puntos} productos={productosCatalogo} clientes={clientes} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
+      {(showForm || editRegistro) && (
+        <NuevaInspeccionForm puntos={puntos} productos={productosCatalogo} clientes={clientes} currentUser={currentUser} onSave={handleGuardar} inicial={editRegistro} key={editId || "nuevo"} onCancel={() => { setShowForm(false); setEditId(null); }} />
       )}
 
       {registros.length > 0 && showFiltros && (
@@ -613,6 +635,7 @@ export default function ProductoTerminadoPanel({ currentUser, canEdit = true, in
           puntosCatalogo={puntos}
           currentUser={currentUser}
           canEdit={canEdit}
+          onEditar={() => { setEditId(verRegistro.id); setVerId(null); }}
           onClose={() => setVerId(null)}
           onDelete={handleDelete}
           onEvidenciaChange={loadRegistros}

@@ -15,6 +15,7 @@ import {
   GERENTE_CALIDAD_NOMBRE,
   getProveedores,
   getProductos,
+  actualizarInspeccionUnica,
 } from "../../services/calidadService";
 import EvidenciaPicker from "./EvidenciaPicker";
 import HelpTip from "./HelpTip";
@@ -25,6 +26,7 @@ import {
   inicioSemanaISO, finSemanaISO, aplicarFiltrosRegistros,
   PuntoControlChip, AccordionSection, CampoTexto, FirmaCard, inputClass, labelClass,
   PRINT_STYLE_BLOCK, ImprimirModal, ReciboImprimible, DetalleRegistroModal,
+  formDesdeRegistro, valoresPuntosDesdeRegistro, cierreDesdeRegistro,
 } from "./shared";
 
 // Formato F-GC-01U tal como está en el Excel original (RECEPCIÓN DE MATERIA
@@ -80,13 +82,13 @@ function camposBusquedaMP(r, insp) {
 // un "recorrido" que agrupe varias inspecciones (eso sí aplica a Planta
 // 1/2/3, donde hay un recorrido físico por la planta; aquí puede haber
 // varias recepciones el mismo día — cada entrega es su propio registro).
-function NuevaInspeccionForm({ puntos, personas, proveedores, productos, currentUser, onSave, onCancel }) {
-  const [form, setForm] = useState(FORM_VACIO);
-  const [valoresPuntos, setValoresPuntos] = useState({});
-  const [cierre, setCierre] = useState(CIERRE_VACIO);
+function NuevaInspeccionForm({ puntos, personas, proveedores, productos, currentUser, inicial = null, onSave, onCancel }) {
+  const [form, setForm] = useState(() => formDesdeRegistro(FORM_VACIO, inicial));
+  const [valoresPuntos, setValoresPuntos] = useState(() => valoresPuntosDesdeRegistro(inicial));
+  const [cierre, setCierre] = useState(() => cierreDesdeRegistro(CIERRE_VACIO, inicial));
   const [fotos, setFotos] = useState([]);
   const [saving, setSaving] = useState(false);
-  const [clasificacion, setClasificacion] = useState("");
+  const [clasificacion, setClasificacion] = useState(inicial?.calidad_inspecciones?.[0]?.clasificacion || "");
   const [openSection, setOpenSection] = useState("identificacion");
   const sugerencia = sugerirMuestreo(form.cantidad);
   const nombreInspectora = currentUser?.nombre || currentUser?.usuario || "Inspectora";
@@ -117,7 +119,7 @@ function NuevaInspeccionForm({ puntos, personas, proveedores, productos, current
 
   return (
     <div className={`${cardClass} p-3`}>
-      <p className="mb-3 px-1 text-sm font-bold text-[#0f1f3d]">✍️ Nueva recepción</p>
+      <p className="mb-3 px-1 text-sm font-bold text-[#0f1f3d]">{inicial ? "✏️ Editar recepción" : "✍️ Nueva recepción"}</p>
 
       <div className="space-y-2">
         <AccordionSection
@@ -289,7 +291,7 @@ function NuevaInspeccionForm({ puntos, personas, proveedores, productos, current
 
       <div className="mt-4 flex gap-2">
         <button type="button" onClick={handleSave} disabled={saving || !puedeGuardar} className={`flex-1 sm:flex-none ${btnPrimaryClass}`}>
-          {saving ? "Guardando…" : "Guardar recepción"}
+          {saving ? "Guardando…" : inicial ? "Guardar cambios" : "Guardar recepción"}
         </button>
         <button type="button" onClick={onCancel} className={btnGhostClass}>Cancelar</button>
       </div>
@@ -352,6 +354,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true, initial
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
   const [verId, setVerId] = useState(null);
 
   // Llegada desde "Ver informe" en Acciones de Mejora (ver QualityModule.jsx,
@@ -409,6 +412,24 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true, initial
   }, []);
 
   async function handleGuardar({ inspeccion, puntos: puntosPayload, cierre, fotos }) {
+    // Edición de un registro ya guardado (botón ✏️ del detalle).
+    if (editId) {
+      const reg = registros.find((r) => r.id === editId);
+      if (!reg) { setEditId(null); return; }
+      const conFirmas = !!(reg.responsable_area_firmado_at || reg.gerente_calidad_firmado_at);
+      if (conFirmas && !window.confirm("Este registro ya tiene firmas del supervisor de área y/o de la Gerente de Calidad. Al guardar los cambios esas firmas se reinician para que vuelvan a firmar. ¿Continuar?")) return;
+      const res = await actualizarInspeccionUnica({ registro: reg, inspeccion, puntos: puntosPayload, cierre }, currentUser);
+      if (!res.ok) { window.alert("No fue posible guardar los cambios."); return; }
+      const inspId = reg.calidad_inspecciones?.[0]?.id;
+      if (inspId && fotos?.length) {
+        for (const foto of fotos) await subirEvidencia(inspId, foto.blob, currentUser);
+      }
+      const id = editId;
+      setEditId(null);
+      await loadRegistros();
+      setVerId(id);
+      return;
+    }
     const result = await crearInspeccionMP({ fecha: todayISO(), jornada: "07:00–17:00", inspeccion, puntos: puntosPayload, cierre }, currentUser);
     if (!result.ok) { window.alert("No fue posible guardar la recepción."); return; }
     const inspeccionId = result.data?.calidad_inspecciones?.[0]?.id;
@@ -458,6 +479,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true, initial
   const grupos = agruparPorSemana(registrosFiltrados);
   const filtrosActivos = Object.values(filtros).filter(Boolean).length;
   const verRegistro = registros.find((r) => r.id === verId) || null;
+  const editRegistro = registros.find((r) => r.id === editId) || null;
 
   return (
     <div className="space-y-3">
@@ -477,7 +499,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true, initial
       </div>
 
       <div className="flex items-center gap-2">
-        {canEdit && !showForm && (
+        {canEdit && !showForm && !editRegistro && (
           <button
             type="button"
             onClick={() => setShowForm(true)}
@@ -508,8 +530,8 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true, initial
         )}
       </div>
 
-      {showForm && (
-        <NuevaInspeccionForm puntos={puntos} personas={personas} proveedores={proveedores} productos={productosCatalogo} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
+      {(showForm || editRegistro) && (
+        <NuevaInspeccionForm puntos={puntos} personas={personas} proveedores={proveedores} productos={productosCatalogo} currentUser={currentUser} onSave={handleGuardar} inicial={editRegistro} key={editId || "nuevo"} onCancel={() => { setShowForm(false); setEditId(null); }} />
       )}
 
       {registros.length > 0 && showFiltros && (
@@ -591,6 +613,7 @@ export default function MateriaPrimaPanel({ currentUser, canEdit = true, initial
           puntosCatalogo={puntos}
           currentUser={currentUser}
           canEdit={canEdit}
+          onEditar={() => { setEditId(verRegistro.id); setVerId(null); }}
           onClose={() => setVerId(null)}
           onDelete={handleDelete}
           onEvidenciaChange={loadRegistros}

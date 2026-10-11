@@ -22,6 +22,35 @@ export function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+// Edición de registros guardados: arman el estado inicial de los formularios
+// de captura a partir de un registro ya existente (recorrido + inspección).
+export function formDesdeRegistro(vacio, registro) {
+  const insp = registro?.calidad_inspecciones?.[0];
+  if (!insp) return vacio;
+  const out = { ...vacio };
+  for (const k of Object.keys(vacio)) {
+    const v = insp[k];
+    out[k] = v === null || v === undefined ? vacio[k] : typeof vacio[k] === "string" ? String(v) : v;
+  }
+  if (typeof out.hora === "string") out.hora = out.hora.slice(0, 5);
+  if (typeof out.hora_liberacion === "string") out.hora_liberacion = out.hora_liberacion.slice(0, 5);
+  return out;
+}
+export function valoresPuntosDesdeRegistro(registro) {
+  const mapa = {};
+  for (const pp of registro?.calidad_inspecciones?.[0]?.calidad_inspeccion_puntos || []) {
+    if (pp.valor) mapa[pp.punto_control_id] = pp.valor;
+  }
+  return mapa;
+}
+export function cierreDesdeRegistro(vacio, registro) {
+  if (!registro) return vacio;
+  const out = { ...vacio, dictamen: registro.dictamen || "", firmado: !!registro.firma_inspectora };
+  if ("responsable_area_persona_id" in vacio) out.responsable_area_persona_id = registro.responsable_area_persona_id || "";
+  return out;
+}
+
 export function nowHHMM() {
   return new Date().toTimeString().slice(0, 5);
 }
@@ -685,7 +714,7 @@ function BotonRecordatorio({ onEnviar }) {
   );
 }
 
-export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, canEdit, onClose, onDelete, onEvidenciaChange, renderIdentificacion, renderCantidadMuestra, tituloEliminar = "Eliminar registro", gerenteCalidadPersonaId, onFirmarResponsable, onFirmarGerente, onEnviarRecordatorio, mostrarFirmasArea = true, onVolverAAccion }) {
+export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, canEdit, onClose, onDelete, onEvidenciaChange, renderIdentificacion, renderCantidadMuestra, tituloEliminar = "Eliminar registro", gerenteCalidadPersonaId, onFirmarResponsable, onFirmarGerente, onEnviarRecordatorio, mostrarFirmasArea = true, onVolverAAccion, onEditar }) {
   const [openSection, setOpenSection] = useState("identificacion");
   const navigate = useNavigate();
   const insp = registro.calidad_inspecciones?.[0];
@@ -753,7 +782,12 @@ export function DetalleRegistroModal({ registro, puntosCatalogo, currentUser, ca
               <p className="text-sm font-bold text-[#0f1f3d]">{registro.fecha} · {horaCorta(insp.hora)}</p>
               <p className="truncate text-xs text-[#5b6472]">Inspectora: {registro.inspectora_nombre || "—"}</p>
             </div>
-            <button type="button" onClick={onClose} className="shrink-0 rounded-lg border border-[#edf0f4] px-2 py-1 text-xs font-semibold text-[#5b6472]">✕</button>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {canEdit && onEditar && (
+                <button type="button" onClick={onEditar} title="Editar inspección" aria-label="Editar inspección" className="rounded-lg border border-[#edf0f4] px-2 py-1 text-xs font-semibold text-[#94a3b8] transition hover:text-[#0f1f3d]">✏️</button>
+              )}
+              <button type="button" onClick={onClose} className="rounded-lg border border-[#edf0f4] px-2 py-1 text-xs font-semibold text-[#5b6472]">✕</button>
+            </div>
           </div>
         </div>
 

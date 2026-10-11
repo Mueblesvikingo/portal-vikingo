@@ -15,6 +15,7 @@ import {
   GERENTE_CALIDAD_NOMBRE,
   getProductos,
   getColaboradores,
+  actualizarInspeccionUnica,
 } from "../../services/calidadService";
 import EvidenciaPicker from "./EvidenciaPicker";
 import HelpTip from "./HelpTip";
@@ -25,6 +26,7 @@ import {
   inicioSemanaISO, finSemanaISO, aplicarFiltrosRegistros,
   PuntoControlChip, AccordionSection, CampoTexto, FirmaCard, inputClass, labelClass,
   PRINT_STYLE_BLOCK, ImprimirModal, ReciboImprimible, DetalleRegistroModal,
+  formDesdeRegistro, valoresPuntosDesdeRegistro, cierreDesdeRegistro,
 } from "./shared";
 
 const PLANTA = "Planta 3";
@@ -103,13 +105,13 @@ function camposBusquedaPlanta3(r, insp) {
 // de control (uno por proceso) — hay que elegir el Proceso primero para
 // saber cuál juego usar. `puntosDelProceso` se recalcula cada vez que
 // cambia form.proceso.
-function NuevaInspeccionForm({ todosPuntos, personas, productos, colaboradores, currentUser, onSave, onCancel }) {
-  const [form, setForm] = useState(FORM_VACIO);
-  const [valoresPuntos, setValoresPuntos] = useState({});
-  const [cierre, setCierre] = useState(CIERRE_VACIO);
+function NuevaInspeccionForm({ todosPuntos, personas, productos, colaboradores, currentUser, inicial = null, onSave, onCancel }) {
+  const [form, setForm] = useState(() => formDesdeRegistro(FORM_VACIO, inicial));
+  const [valoresPuntos, setValoresPuntos] = useState(() => valoresPuntosDesdeRegistro(inicial));
+  const [cierre, setCierre] = useState(() => cierreDesdeRegistro(CIERRE_VACIO, inicial));
   const [fotos, setFotos] = useState([]);
   const [saving, setSaving] = useState(false);
-  const [clasificacion, setClasificacion] = useState("");
+  const [clasificacion, setClasificacion] = useState(inicial?.calidad_inspecciones?.[0]?.clasificacion || "");
   const [openSection, setOpenSection] = useState("identificacion");
   const sugerencia = sugerirMuestreo(form.cantidad);
   const nombreInspectora = currentUser?.nombre || currentUser?.usuario || "Inspectora";
@@ -141,7 +143,7 @@ function NuevaInspeccionForm({ todosPuntos, personas, productos, colaboradores, 
 
   return (
     <div className={`${cardClass} p-3`}>
-      <p className="mb-3 px-1 text-sm font-bold text-[#0f1f3d]">✍️ Nueva inspección</p>
+      <p className="mb-3 px-1 text-sm font-bold text-[#0f1f3d]">{inicial ? "✏️ Editar inspección" : "✍️ Nueva inspección"}</p>
 
       <div className="space-y-2">
         <AccordionSection
@@ -326,7 +328,7 @@ function NuevaInspeccionForm({ todosPuntos, personas, productos, colaboradores, 
 
       <div className="mt-4 flex gap-2">
         <button type="button" onClick={handleSave} disabled={saving || !puedeGuardar} className={`flex-1 sm:flex-none ${btnPrimaryClass}`}>
-          {saving ? "Guardando…" : "Guardar inspección"}
+          {saving ? "Guardando…" : inicial ? "Guardar cambios" : "Guardar inspección"}
         </button>
         <button type="button" onClick={onCancel} className={btnGhostClass}>Cancelar</button>
       </div>
@@ -388,6 +390,7 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
   const [verId, setVerId] = useState(null);
 
   // Llegada desde "Ver informe" en Acciones de Mejora (ver QualityModule.jsx,
@@ -443,6 +446,24 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
   }, []);
 
   async function handleGuardar({ inspeccion, puntos: puntosPayload, cierre, fotos }) {
+    // Edición de un registro ya guardado (botón ✏️ del detalle).
+    if (editId) {
+      const reg = registros.find((r) => r.id === editId);
+      if (!reg) { setEditId(null); return; }
+      const conFirmas = !!(reg.responsable_area_firmado_at || reg.gerente_calidad_firmado_at);
+      if (conFirmas && !window.confirm("Este registro ya tiene firmas del supervisor de área y/o de la Gerente de Calidad. Al guardar los cambios esas firmas se reinician para que vuelvan a firmar. ¿Continuar?")) return;
+      const res = await actualizarInspeccionUnica({ registro: reg, inspeccion, puntos: puntosPayload, cierre }, currentUser);
+      if (!res.ok) { window.alert("No fue posible guardar los cambios."); return; }
+      const inspId = reg.calidad_inspecciones?.[0]?.id;
+      if (inspId && fotos?.length) {
+        for (const foto of fotos) await subirEvidencia(inspId, foto.blob, currentUser);
+      }
+      const id = editId;
+      setEditId(null);
+      await loadRegistros();
+      setVerId(id);
+      return;
+    }
     const result = await crearInspeccionUnica({ planta: PLANTA, fecha: todayISO(), jornada: "07:00–17:00", inspeccion, puntos: puntosPayload, cierre }, currentUser);
     if (!result.ok) { window.alert("No fue posible guardar la inspección."); return; }
     const inspeccionId = result.data?.calidad_inspecciones?.[0]?.id;
@@ -492,6 +513,7 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
   const grupos = agruparPorSemana(registrosFiltrados);
   const filtrosActivos = Object.values(filtros).filter(Boolean).length;
   const verRegistro = registros.find((r) => r.id === verId) || null;
+  const editRegistro = registros.find((r) => r.id === editId) || null;
 
   return (
     <div className="space-y-3">
@@ -511,7 +533,7 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
       </div>
 
       <div className="flex items-center gap-2">
-        {canEdit && !showForm && (
+        {canEdit && !showForm && !editRegistro && (
           <button
             type="button"
             onClick={() => setShowForm(true)}
@@ -542,8 +564,8 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
         )}
       </div>
 
-      {showForm && (
-        <NuevaInspeccionForm todosPuntos={todosPuntos} personas={personas} productos={productosCatalogo} colaboradores={colaboradores} currentUser={currentUser} onSave={handleGuardar} onCancel={() => setShowForm(false)} />
+      {(showForm || editRegistro) && (
+        <NuevaInspeccionForm todosPuntos={todosPuntos} personas={personas} productos={productosCatalogo} colaboradores={colaboradores} currentUser={currentUser} onSave={handleGuardar} inicial={editRegistro} key={editId || "nuevo"} onCancel={() => { setShowForm(false); setEditId(null); }} />
       )}
 
       {registros.length > 0 && showFiltros && (
@@ -625,6 +647,7 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
           puntosCatalogo={todosPuntos}
           currentUser={currentUser}
           canEdit={canEdit}
+          onEditar={() => { setEditId(verRegistro.id); setVerId(null); }}
           onClose={() => setVerId(null)}
           onDelete={handleDelete}
           onEvidenciaChange={loadRegistros}
