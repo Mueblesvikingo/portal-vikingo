@@ -184,22 +184,89 @@ export function SelectorPeriodoSPC({ desde, hasta, onChange }) {
   );
 }
 
-// Filtro genérico sobre texto libre — cada panel decide qué campos entran a
-// la búsqueda (proveedor/OC-lote en Materia Prima, proceso/OP en Planta 1…).
-export function aplicarFiltrosRegistros(registros, filtros, extraerCamposBusqueda) {
-  const q = filtros.busqueda.trim().toLowerCase();
+// ---------- Búsqueda del historial ----------
+// Tolerante, no de palabras exactas: no distingue mayúsculas ni acentos,
+// encuentra palabras parciales ("plag" → "plagas"), varias palabras se buscan
+// juntas en cualquier orden y lo que va "entre comillas" se busca como frase
+// exacta. Busca en TODO el registro: observación, acción, personas (inspectora,
+// supervisor, firmas, operador), proceso, OP, producto/código, proveedor,
+// dictamen, fecha y los puntos de control que salieron No Cumple.
+function normalizarTexto(s) {
+  return String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+function tokensDeBusqueda(q) {
+  const tokens = [];
+  const re = /"([^"]+)"|(\S+)/g;
+  const n = normalizarTexto(q);
+  let m;
+  while ((m = re.exec(n))) tokens.push((m[1] ?? m[2]).trim());
+  return tokens.filter(Boolean);
+}
+const CAMPOS_INSPECCION_BUSCABLES = [
+  "proceso", "op", "producto_texto", "terminacion", "linea_operador", "proveedor", "oc_lote", "lote_identificacion",
+  "cantidad", "muestra", "resultado", "clasificacion", "observacion", "accion_reinspeccion", "modelo", "cliente_destino",
+  "resultado_reinspeccion", "created_by_nombre",
+];
+function textoBuscableRegistro(r, extraerCamposBusqueda, { puntosCatalogo = [], personas = [] } = {}) {
+  const insp = r.calidad_inspecciones?.[0];
+  const partes = [...(extraerCamposBusqueda ? extraerCamposBusqueda(r, insp) : [])];
+  partes.push(r.folio, r.fecha, ddmmyyyy(r.fecha), r.dictamen, r.inspectora_nombre, r.firma_inspectora, r.responsable_area_nombre, r.gerente_calidad_nombre, r.observacion_general);
+  const supervisor = personas.find((p) => Number(p.id) === Number(r.responsable_area_persona_id));
+  if (supervisor) partes.push(supervisor.nombre);
+  if (insp) {
+    for (const campo of CAMPOS_INSPECCION_BUSCABLES) partes.push(insp[campo]);
+    for (const pp of insp.calidad_inspeccion_puntos || []) {
+      if (pp.valor !== "NC") continue;
+      const punto = puntosCatalogo.find((p) => p.id === pp.punto_control_id);
+      if (punto) partes.push(`${punto.letra} ${punto.descripcion} no cumple`);
+    }
+  }
+  return normalizarTexto(partes.filter((x) => x !== null && x !== undefined && x !== "").join(" | "));
+}
+
+// Filtro del historial. Si hay texto de búsqueda, se busca en TODO el
+// historial (se ignora el rango de fechas, que por defecto es la semana en
+// curso); el filtro de dictamen sí se respeta.
+export function aplicarFiltrosRegistros(registros, filtros, extraerCamposBusqueda, contexto = {}) {
+  const tokens = tokensDeBusqueda(filtros.busqueda || "");
   return registros.filter((r) => {
     if (filtros.dictamen && r.dictamen !== filtros.dictamen) return false;
-    if (filtros.desde && r.fecha < filtros.desde) return false;
-    if (filtros.hasta && r.fecha > filtros.hasta) return false;
-    if (q) {
-      const insp = r.calidad_inspecciones?.[0];
-      const campos = extraerCamposBusqueda(r, insp);
-      if (!campos.some((c) => (c || "").toLowerCase().includes(q))) return false;
+    if (!tokens.length) {
+      if (filtros.desde && r.fecha < filtros.desde) return false;
+      if (filtros.hasta && r.fecha > filtros.hasta) return false;
+      return true;
     }
-    return true;
+    const pajar = textoBuscableRegistro(r, extraerCamposBusqueda, contexto);
+    return tokens.every((t) => pajar.includes(t));
   });
 }
+
+export function BuscadorHistorial({ value, onChange, total, mostrados }) {
+  const buscando = value.trim().length > 0;
+  return (
+    <div className="space-y-1">
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs">🔍</span>
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Buscar: observación, persona, proceso, OP, proveedor…"
+          aria-label="Buscar en el historial"
+          className="w-full rounded-xl border border-[#edf0f4] bg-white py-2 pl-8 pr-8 text-sm font-medium text-[#0f1f3d] outline-none placeholder:font-normal placeholder:text-[#94a3b8] focus:border-[#c9a227]"
+        />
+        {buscando && (
+          <button type="button" onClick={() => onChange("")} aria-label="Limpiar búsqueda" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#94a3b8] hover:text-[#0f1f3d]">✕</button>
+        )}
+      </div>
+      {buscando && (
+        <p className="px-1 text-[10px] text-[#94a3b8]">
+          {mostrados} de {total} · busca en todo el historial, sin importar mayúsculas ni acentos; varias palabras se buscan juntas y una frase "entre comillas" se busca exacta.
+        </p>
+      )}
+    </div>
+  );
+}
+
 
 // Devuelve pares {label, value} en vez de un solo string — en el recibo
 // impreso se renderizan como bloques separados (gap real), no como texto

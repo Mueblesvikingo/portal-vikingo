@@ -20,7 +20,7 @@ import {
   inicioSemanaISO, finSemanaISO, aplicarFiltrosRegistros,
   PuntoControlChip, AccordionSection, CampoTexto, FirmaCard, inputClass, labelClass,
   PRINT_STYLE_BLOCK, ImprimirModal, ReciboImprimible, DetalleRegistroModal, EXCEL_COLOR,
-  formDesdeRegistro, valoresPuntosDesdeRegistro, cierreDesdeRegistro, BarraBorradores,
+  formDesdeRegistro, valoresPuntosDesdeRegistro, cierreDesdeRegistro, BarraBorradores, BuscadorHistorial,
 } from "./shared";
 
 const PLANTA = "Producto Terminado";
@@ -523,9 +523,9 @@ export default function ProductoTerminadoPanel({ currentUser, canEdit = true, in
 
   if (loading) return <div className="py-10 text-center text-sm font-medium text-[#94a3b8]">Cargando…</div>;
 
-  const registrosFiltrados = aplicarFiltrosRegistros(registros, filtros, camposBusquedaPT);
+  const registrosFiltrados = aplicarFiltrosRegistros(registros, filtros, camposBusquedaPT, { puntosCatalogo: puntos, personas: [] });
   const grupos = agruparPorSemana(registrosFiltrados);
-  const filtrosActivos = Object.values(filtros).filter(Boolean).length;
+  const filtrosActivos = Object.entries(filtros).filter(([k, v]) => k !== "busqueda" && v).length;
   const verRegistro = registros.find((r) => r.id === verId) || null;
   const editRegistro = registros.find((r) => r.id === editId) || null;
 
@@ -601,15 +601,6 @@ export default function ProductoTerminadoPanel({ currentUser, canEdit = true, in
       {registros.length > 0 && showFiltros && (
         <div className={`${cardClass} p-3`}>
           <div className="space-y-2.5">
-            <label className={`${labelClass} block`}>
-              Buscar
-              <input
-                value={filtros.busqueda}
-                onChange={(e) => setFiltros((f) => ({ ...f, busqueda: e.target.value }))}
-                placeholder="OP, código, modelo, cliente/destino, inspectora…"
-                className={inputClass}
-              />
-            </label>
             <div className="grid grid-cols-2 gap-2.5">
               <label className={labelClass}>
                 Desde
@@ -636,6 +627,10 @@ export default function ProductoTerminadoPanel({ currentUser, canEdit = true, in
             )}
           </div>
         </div>
+      )}
+
+      {registros.length > 0 && (
+        <BuscadorHistorial value={filtros.busqueda} onChange={(v) => setFiltros((f) => ({ ...f, busqueda: v }))} total={registros.length} mostrados={registrosFiltrados.length} />
       )}
 
       {registros.length === 0 ? (

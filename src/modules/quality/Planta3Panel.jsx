@@ -26,7 +26,7 @@ import {
   inicioSemanaISO, finSemanaISO, aplicarFiltrosRegistros,
   PuntoControlChip, AccordionSection, CampoTexto, FirmaCard, inputClass, labelClass,
   PRINT_STYLE_BLOCK, ImprimirModal, ReciboImprimible, DetalleRegistroModal,
-  formDesdeRegistro, valoresPuntosDesdeRegistro, cierreDesdeRegistro, BarraBorradores,
+  formDesdeRegistro, valoresPuntosDesdeRegistro, cierreDesdeRegistro, BarraBorradores, BuscadorHistorial,
 } from "./shared";
 
 const PLANTA = "Planta 3";
@@ -535,9 +535,9 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
 
   if (loading) return <div className="py-10 text-center text-sm font-medium text-[#94a3b8]">Cargando…</div>;
 
-  const registrosFiltrados = aplicarFiltrosRegistros(registros, filtros, camposBusquedaPlanta3);
+  const registrosFiltrados = aplicarFiltrosRegistros(registros, filtros, camposBusquedaPlanta3, { puntosCatalogo: todosPuntos, personas: personas });
   const grupos = agruparPorSemana(registrosFiltrados);
-  const filtrosActivos = Object.values(filtros).filter(Boolean).length;
+  const filtrosActivos = Object.entries(filtros).filter(([k, v]) => k !== "busqueda" && v).length;
   const verRegistro = registros.find((r) => r.id === verId) || null;
   const editRegistro = registros.find((r) => r.id === editId) || null;
 
@@ -613,15 +613,6 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
       {registros.length > 0 && showFiltros && (
         <div className={`${cardClass} p-3`}>
           <div className="space-y-2.5">
-            <label className={`${labelClass} block`}>
-              Buscar
-              <input
-                value={filtros.busqueda}
-                onChange={(e) => setFiltros((f) => ({ ...f, busqueda: e.target.value }))}
-                placeholder="Proceso, OP, código, línea/operador, inspectora…"
-                className={inputClass}
-              />
-            </label>
             <div className="grid grid-cols-2 gap-2.5">
               <label className={labelClass}>
                 Desde
@@ -648,6 +639,10 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
             )}
           </div>
         </div>
+      )}
+
+      {registros.length > 0 && (
+        <BuscadorHistorial value={filtros.busqueda} onChange={(v) => setFiltros((f) => ({ ...f, busqueda: v }))} total={registros.length} mostrados={registrosFiltrados.length} />
       )}
 
       {registros.length === 0 ? (
