@@ -34,16 +34,16 @@ const PROCESOS = ["Corte y pegado de hule espuma", "Tapicería", "Empaque"];
 
 // Formato F-GC-04U tal como está en el Excel original — a diferencia de
 // Materia Prima/Planta 1/2 (un solo juego de puntos de control), aquí cada
-// proceso tiene su PROPIO juego: Corte y pegado de hule espuma = A-H (8),
-// Tapicería y Empaque comparten el mismo juego A-I (9). También usa una
+// proceso tiene su PROPIO juego: Corte y pegado de hule espuma = A-I (9),
+// Tapicería y Empaque comparten el mismo juego A-J (10). También usa una
 // paleta de colores propia (no la ámbar/teal del resto de los formatos).
 const FORMATO_PLANTA3 = {
   tituloRecibo: "FORMATO UNIFICADO – PLANTA 3 | CORTE Y PEGADO DE HULE ESPUMA / TAPICERÍA / EMPAQUE",
   subtitulo: "FÁBRICA DE MUEBLES VIKINGO  ·  GESTIÓN DE CALIDAD  ·  PLANTA 3 ASPEL-PROD  ·  Código: F-GC-04U  ·  Versión: 00",
   instrucciones: "Una fila = una inspección realizada. En PROCESO seleccionar: Corte y pegado de hule espuma / Tapicería / Empaque. Una fila = una OP inspeccionada. Marcar puntos: C = Cumple, NC = No Cumple, NA = No aplica. Si existe NC, registrar clasificación, evidencia, acción y reinspección/liberación.",
-  columnas: ["Hora", "Proceso", "OP", "Código", "Terminación", "Línea / Operador", "Cant.", "Muestra", "A", "B", "C", "D", "E", "F", "G", "H", "I", "Resultado", "Clasif.", "Observación / evidencia", "Acción / Reinspección"],
-  colAnchos: [3, 8, 4, 6, 6, 7, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 4, 22, 12],
-  letras: ["A", "B", "C", "D", "E", "F", "G", "H", "I"],
+  columnas: ["Hora", "Proceso", "OP", "Código", "Terminación", "Línea / Operador", "Cant.", "Muestra", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "Resultado", "Clasif.", "Observación / evidencia", "Acción / Reinspección"],
+  colAnchos: [3, 8, 4, 6, 6, 7, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 4, 20, 12],
+  letras: ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
   renderCeldasAntes: (insp) => [
     { v: insp.proceso }, { v: insp.op }, { v: insp.producto_texto }, { v: insp.terminacion }, { v: insp.linea_operador },
     { v: insp.cantidad, center: true }, { v: insp.muestra, center: true },
@@ -58,6 +58,7 @@ const FORMATO_PLANTA3 = {
         ["C = Escuadra / perfil del corte", "D = Superficie de corte"],
         ["E = Aplicación del adhesivo", "F = Tiempo abierto / momento de unión"],
         ["G = Calidad de la unión", "H = Identificación / liberación"],
+        ["I = OP / código / terminación", ""],
       ],
     },
     {
@@ -69,7 +70,7 @@ const FORMATO_PLANTA3 = {
         ["C = Tensión tapizado", "D = Costuras / uniones"],
         ["E = Arrugas / pliegues / deformación", "F = Grapado / fijaciones / acabados"],
         ["G = Simetría / dimensiones", "H = Funcionamiento"],
-        ["I = Limpieza / identificación / empaque", ""],
+        ["I = Limpieza / identificación / empaque", "J = OP / código / terminación"],
       ],
     },
   ],
@@ -227,7 +228,7 @@ function NuevaInspeccionForm({ todosPuntos, personas, productos, colaboradores, 
         <AccordionSection
           icon="✅"
           title="Puntos de control"
-          help="Del formato F-GC-04U: cada proceso tiene su propio juego de puntos (Corte y pegado de hule espuma = A-H; Tapicería/Empaque = A-I). Marcar cada punto como C = Cumple, NC = No Cumple, o NA = No aplica."
+          help="Del formato F-GC-04U: cada proceso tiene su propio juego de puntos (Corte y pegado de hule espuma = A-I; Tapicería/Empaque = A-J). Marcar cada punto como C = Cumple, NC = No Cumple, o NA = No aplica."
           subtitle={!form.proceso ? "Selecciona un proceso primero" : puntosMarcados > 0 ? `${puntosMarcados} de ${puntosDelProceso.length} marcados · ${resultado}` : `${puntosDelProceso.length} puntos de ${form.proceso}`}
           open={openSection === "puntos"}
           onToggle={() => toggle("puntos")}

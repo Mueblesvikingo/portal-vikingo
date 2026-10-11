@@ -48,7 +48,7 @@ const FORMATO_PT = {
   // tabla principal, van en la tabla extra de abajo.
   columnasFinales: [],
   leyenda: [
-    ["A = Etiqueta / identificación y trazabilidad", "B = Cliente / destino vs programa de carga"],
+    ["A = Etiqueta: producto, OP, terminación y cliente", "B = Cliente / destino vs programa de carga"],
     ["C = Apariencia general", "D = Tapicería"],
     ["E = Costuras y acabados", "F = Simetría / alineación"],
     ["G = Funcionalidad", "H = Estabilidad / estructura"],
