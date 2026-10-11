@@ -489,6 +489,71 @@ export async function crearInspeccionUnica({ planta, fecha, jornada, inspeccion,
 }
 
 
+
+// Historial de ediciones (tabla calidad_ediciones, ver sql/2026-10-calidad_ediciones.sql).
+// Si la tabla todavía no existe, todo esto se ignora en silencio: la edición
+// de inspecciones funciona igual, solo que sin historial.
+const CAMPOS_EDITABLES_LABEL = {
+  hora: "Hora", proceso: "Proceso", op: "OP", producto_texto: "Producto / código", terminacion: "Terminación",
+  linea_operador: "Línea / Operador", proveedor: "Proveedor", oc_lote: "OC / Lote", lote_identificacion: "Lote / Identificación",
+  cantidad: "Cantidad", muestra: "Muestra", observacion: "Observación", accion_reinspeccion: "Acción / Reinspección",
+  modelo: "Modelo", cliente_destino: "Cliente / Destino", ac: "Ac", re: "Re", nc_menor: "NC menor", nc_mayor_critico: "NC mayor / crítico",
+  resultado_reinspeccion: "Resultado reinspección", hora_liberacion: "Hora de liberación", resultado: "Resultado", clasificacion: "Clasificación",
+};
+const normalizarValor = (campo, v) => {
+  if (v === null || v === undefined || v === "") return "";
+  const s = String(v);
+  return campo === "hora" || campo === "hora_liberacion" ? s.slice(0, 5) : s;
+};
+
+function calcularCambios({ registro, insp0, inspeccion, puntos, existentes, cierre, firmasReiniciadas }) {
+  const campos = [];
+  for (const campo of Object.keys(CAMPOS_EDITABLES_LABEL)) {
+    const antes = normalizarValor(campo, insp0[campo]);
+    const despues = normalizarValor(campo, inspeccion[campo]);
+    if (antes !== despues) campos.push({ campo: CAMPOS_EDITABLES_LABEL[campo], antes, despues });
+  }
+  if ((registro.dictamen || "") !== (cierre.dictamen || "")) campos.push({ campo: "Dictamen", antes: registro.dictamen || "", despues: cierre.dictamen || "" });
+  if ("responsable_area_persona_id" in cierre && String(registro.responsable_area_persona_id || "") !== String(cierre.responsable_area_persona_id || "")) {
+    campos.push({ campo: "Supervisor de área (asignado)", antes: String(registro.responsable_area_persona_id || ""), despues: String(cierre.responsable_area_persona_id || "") });
+  }
+  const antesMapa = new Map((existentes || []).map((e) => [Number(e.punto_control_id), e.valor]));
+  const despuesMapa = new Map((puntos || []).filter((p) => p.valor).map((p) => [Number(p.punto_control_id), p.valor]));
+  const ids = new Set([...antesMapa.keys(), ...despuesMapa.keys()]);
+  const puntosCambiados = [];
+  for (const id of ids) {
+    const a = antesMapa.get(id) || "";
+    const d = despuesMapa.get(id) || "";
+    if (a !== d) puntosCambiados.push({ punto_control_id: id, antes: a, despues: d });
+  }
+  return { campos, puntos: puntosCambiados, firmas_reiniciadas: !!firmasReiniciadas };
+}
+
+export async function getEdicionesRecorrido(recorridoId) {
+  try {
+    const { data, error } = await supabase
+      .from("calidad_ediciones")
+      .select("*")
+      .eq("recorrido_id", recorridoId)
+      .order("created_at", { ascending: false });
+    if (error) return { ok: true, error: null, data: [] }; // tabla aún no creada: sin historial
+    return { ok: true, error: null, data: data || [] };
+  } catch {
+    return { ok: true, error: null, data: [] };
+  }
+}
+
+async function registrarEdicion(recorridoId, actor, cambios) {
+  try {
+    if (!cambios.campos.length && !cambios.puntos.length) return;
+    const { personaId, nombre } = actorFields(actor);
+    const { error } = await supabase.from("calidad_ediciones").insert({ recorrido_id: recorridoId, persona_id: personaId, nombre, cambios });
+    if (error) console.warn("Historial de ediciones no disponible (¿falta crear la tabla calidad_ediciones?):", error.message);
+  } catch (err) {
+    console.warn("No se pudo registrar el historial de la edición:", err);
+  }
+}
+
 // Edición de un registro ya guardado (recorrido + inspección + puntos). Los
 // puntos se actualizan por diferencia (no se borra todo y se vuelve a
 // insertar) para no perder datos si algo falla a la mitad. Si el registro ya
@@ -502,6 +567,8 @@ export async function actualizarInspeccionUnica({ registro, inspeccion, puntos, 
     if (!registro?.id || !insp0?.id) return { ok: false, error: "Registro no válido", data: null };
     const teniaFirmas = !!(registro.responsable_area_firmado_at || registro.gerente_calidad_firmado_at);
 
+    const { data: existentesAntes } = await supabase.from("calidad_inspeccion_puntos").select("id,punto_control_id,valor").eq("inspeccion_id", insp0.id);
+    const cambios = calcularCambios({ registro, insp0, inspeccion, puntos, existentes: existentesAntes, cierre, firmasReiniciadas: teniaFirmas });
     const recorridoUpd = { dictamen: cierre.dictamen };
     if ("responsable_area_persona_id" in cierre) recorridoUpd.responsable_area_persona_id = cierre.responsable_area_persona_id || null;
     if (teniaFirmas) {
@@ -580,6 +647,7 @@ export async function actualizarInspeccionUnica({ registro, inspeccion, puntos, 
         console.error("No se pudo enviar el aviso de firma pendiente:", avisoErr);
       }
     }
+    await registrarEdicion(registro.id, actor, cambios);
     return { ok: true, error: null, data: { ...recorrido, calidad_inspecciones: [insp] }, firmasReiniciadas: teniaFirmas };
   } catch (err) {
     console.error("Error inesperado al actualizar la inspección:", err);

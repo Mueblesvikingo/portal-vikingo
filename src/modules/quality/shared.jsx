@@ -1,4 +1,5 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { getEdicionesRecorrido } from "../../services/calidadService";
 import { useNavigate } from "react-router-dom";
 import EvidenciaUploader from "./EvidenciaUploader";
 import HelpTip from "./HelpTip";
@@ -383,6 +384,7 @@ export function ImprimirModal({ registros, area, nombreRegistroSingular, nombreR
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <HistorialEdiciones recorridoId={registro.id} puntosCatalogo={puntosCatalogo} />
           {pasoFotos ? (
             <div className="flex flex-col items-center justify-center gap-1.5 py-10 text-center">
               <p className="text-3xl">📷</p>
@@ -711,6 +713,48 @@ function BotonRecordatorio({ onEnviar }) {
     >
       🔔
     </button>
+  );
+}
+
+
+// Historial de ediciones de un registro — línea discreta bajo el encabezado del
+// detalle; se despliega solo si la persona lo abre. Si la tabla de historial
+// aún no existe (o el registro nunca se editó) no muestra nada.
+function HistorialEdiciones({ recorridoId, puntosCatalogo }) {
+  const [ediciones, setEdiciones] = useState([]);
+  const [abierto, setAbierto] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    getEdicionesRecorrido(recorridoId).then((r) => { if (vivo) setEdiciones(r.data || []); });
+    return () => { vivo = false; };
+  }, [recorridoId]);
+  if (!ediciones.length) return null;
+  const ultima = ediciones[0];
+  const etiquetaPunto = (id) => {
+    const p = puntosCatalogo.find((x) => x.id === id);
+    return p ? `${p.letra}. ${p.descripcion}` : `Punto ${id}`;
+  };
+  const fmt = (v) => (v === "" || v == null ? "—" : v);
+  return (
+    <div className="px-1">
+      <button type="button" onClick={() => setAbierto((v) => !v)} className="text-[10px] font-medium text-[#94a3b8] hover:text-[#5b6472]">
+        ✏️ Editada {ediciones.length} {ediciones.length === 1 ? "vez" : "veces"} · última: {ultima.nombre || "—"}, {new Date(ultima.created_at).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })} {abierto ? "▴" : "▾"}
+      </button>
+      {abierto && (
+        <div className="mt-1.5 space-y-2 rounded-lg bg-[#f7f7f4] p-2">
+          {ediciones.map((e) => (
+            <div key={e.id} className="text-[10px] text-[#5b6472]">
+              <p className="font-semibold text-[#0f1f3d]">{e.nombre || "—"} · {new Date(e.created_at).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}</p>
+              <ul className="mt-0.5 space-y-0.5">
+                {(e.cambios?.campos || []).map((c, i) => <li key={`c${i}`}>{c.campo}: {fmt(c.antes)} → <span className="font-semibold">{fmt(c.despues)}</span></li>)}
+                {(e.cambios?.puntos || []).map((p, i) => <li key={`p${i}`}>{etiquetaPunto(p.punto_control_id)}: {fmt(p.antes)} → <span className="font-semibold">{fmt(p.despues)}</span></li>)}
+                {e.cambios?.firmas_reiniciadas && <li className="italic">Se reiniciaron las firmas del supervisor y/o de la Gerente.</li>}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
