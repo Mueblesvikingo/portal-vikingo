@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   getPuntosControlPorProceso,
@@ -26,7 +26,7 @@ import {
   inicioSemanaISO, finSemanaISO, aplicarFiltrosRegistros,
   PuntoControlChip, AccordionSection, CampoTexto, FirmaCard, inputClass, labelClass,
   PRINT_STYLE_BLOCK, ImprimirModal, ReciboImprimible, DetalleRegistroModal,
-  formDesdeRegistro, valoresPuntosDesdeRegistro, cierreDesdeRegistro,
+  formDesdeRegistro, valoresPuntosDesdeRegistro, cierreDesdeRegistro, BarraBorradores,
 } from "./shared";
 
 const PLANTA = "Planta 3";
@@ -105,7 +105,7 @@ function camposBusquedaPlanta3(r, insp) {
 // de control (uno por proceso) — hay que elegir el Proceso primero para
 // saber cuál juego usar. `puntosDelProceso` se recalcula cada vez que
 // cambia form.proceso.
-function NuevaInspeccionForm({ todosPuntos, personas, productos, colaboradores, currentUser, inicial = null, onSave, onCancel }) {
+function NuevaInspeccionForm({ todosPuntos, personas, productos, colaboradores, currentUser, inicial = null, onResumen = null, onSave, onCancel }) {
   const [form, setForm] = useState(() => formDesdeRegistro(FORM_VACIO, inicial));
   const [valoresPuntos, setValoresPuntos] = useState(() => valoresPuntosDesdeRegistro(inicial));
   const [cierre, setCierre] = useState(() => cierreDesdeRegistro(CIERRE_VACIO, inicial));
@@ -128,6 +128,14 @@ function NuevaInspeccionForm({ todosPuntos, personas, productos, colaboradores, 
   const hayNC = Object.values(valoresPuntos).includes("NC");
   const resultado = hayNC ? "No Conforme" : "Conforme";
   const puedeGuardar = cierre.dictamen && cierre.firmado && cierre.responsable_area_persona_id && form.proceso;
+
+  useEffect(() => {
+    if (!onResumen) return;
+    const titulo = form.op ? `OP ${form.op}` : form.producto_texto || form.proveedor || form.oc_lote || "";
+    const sucio = Object.entries(form).some(([k, v]) => k !== "hora" && !!v) || puntosMarcados > 0 || !!cierre.dictamen || fotos.length > 0;
+    onResumen({ titulo, sucio });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, valoresPuntos, cierre, fotos]);
 
   async function handleSave() {
     setSaving(true);
@@ -389,7 +397,25 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
   const [colaboradores, setColaboradores] = useState([]);
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [borradores, setBorradores] = useState([]);
+  const [borradorActivo, setBorradorActivo] = useState(null);
+  const [resumenes, setResumenes] = useState({});
+  const contadorBorradores = useRef(0);
+  function agregarBorrador() {
+    contadorBorradores.current += 1;
+    const id = contadorBorradores.current;
+    setBorradores((b) => [...b, id]);
+    setBorradorActivo(id);
+  }
+  function cerrarBorrador(id, { confirmar = true } = {}) {
+    if (confirmar && resumenes[id]?.sucio && !window.confirm("¿Descartar esta captura sin guardar? Se perderá lo que llevas escrito.")) return;
+    setBorradores((b) => b.filter((x) => x !== id));
+    setResumenes((r) => { const n = { ...r }; delete n[id]; return n; });
+  }
+  // si se cierra el borrador activo, pasa al último que quede abierto
+  useEffect(() => {
+    if (borradorActivo !== null && !borradores.includes(borradorActivo)) setBorradorActivo(borradores.length ? borradores[borradores.length - 1] : null);
+  }, [borradores, borradorActivo]);
   const [editId, setEditId] = useState(null);
   const [verId, setVerId] = useState(null);
 
@@ -445,7 +471,7 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleGuardar({ inspeccion, puntos: puntosPayload, cierre, fotos }) {
+  async function handleGuardar({ inspeccion, puntos: puntosPayload, cierre, fotos }, borradorId = null) {
     // Edición de un registro ya guardado (botón ✏️ del detalle).
     if (editId) {
       const reg = registros.find((r) => r.id === editId);
@@ -472,7 +498,7 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
         await subirEvidencia(inspeccionId, foto.blob, currentUser);
       }
     }
-    setShowForm(false);
+    if (borradorId !== null) cerrarBorrador(borradorId, { confirmar: false });
     await loadRegistros();
     // Antes había que ir a Historial y abrir "Ver" para encontrar el botón
     // "Generar Acción de Mejora" de una NC recién capturada — ahora, si la
@@ -533,10 +559,10 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
       </div>
 
       <div className="flex items-center gap-2">
-        {canEdit && !showForm && !editRegistro && (
+        {canEdit && borradores.length === 0 && !editRegistro && (
           <button
             type="button"
-            onClick={() => setShowForm(true)}
+            onClick={agregarBorrador}
             className="gc-gold-pulse flex-1 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-[#c9a227] bg-white px-2 py-2 text-xs font-semibold text-[#96771a] transition active:scale-[0.98] sm:text-sm"
           >
             📥 + Nueva inspección
@@ -564,8 +590,24 @@ export default function Planta3Panel({ currentUser, canEdit = true, initialVerId
         )}
       </div>
 
-      {(showForm || editRegistro) && (
-        <NuevaInspeccionForm todosPuntos={todosPuntos} personas={personas} productos={productosCatalogo} colaboradores={colaboradores} currentUser={currentUser} onSave={handleGuardar} inicial={editRegistro} key={editId || "nuevo"} onCancel={() => { setShowForm(false); setEditId(null); }} />
+      {canEdit && borradores.length > 0 && !editRegistro && (
+        <BarraBorradores
+          borradores={borradores}
+          activoId={borradorActivo}
+          resumenes={resumenes}
+          etiqueta="Inspección"
+          onActivar={setBorradorActivo}
+          onAgregar={agregarBorrador}
+          onCerrar={cerrarBorrador}
+        />
+      )}
+      {borradores.map((id) => (
+        <div key={id} className={id === borradorActivo && !editRegistro ? "" : "hidden"}>
+          <NuevaInspeccionForm todosPuntos={todosPuntos} personas={personas} productos={productosCatalogo} colaboradores={colaboradores} currentUser={currentUser} onSave={(payload) => handleGuardar(payload, id)} onResumen={(r) => setResumenes((prev) => (prev[id] && prev[id].titulo === r.titulo && prev[id].sucio === r.sucio ? prev : { ...prev, [id]: r }))} onCancel={() => cerrarBorrador(id)} />
+        </div>
+      ))}
+      {editRegistro && (
+        <NuevaInspeccionForm todosPuntos={todosPuntos} personas={personas} productos={productosCatalogo} colaboradores={colaboradores} currentUser={currentUser} onSave={(payload) => handleGuardar(payload)} inicial={editRegistro} key={"edit-" + editId} onCancel={() => setEditId(null)} />
       )}
 
       {registros.length > 0 && showFiltros && (

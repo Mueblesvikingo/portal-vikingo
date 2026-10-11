@@ -105,6 +105,14 @@ function SeccionTile({ seccion, onClick }) {
   );
 }
 
+const PANELES_INSPECCION = {
+  "materia-prima": MateriaPrimaPanel,
+  "planta-1": Planta1Panel,
+  "planta-2": Planta2Panel,
+  "planta-3": Planta3Panel,
+  "producto-terminado": ProductoTerminadoPanel,
+};
+
 export default function QualityModule({ currentUser }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -121,6 +129,13 @@ export default function QualityModule({ currentUser }) {
   const seccionActiva = SECCIONES.find((s) => s.key === activeSection);
   const herramientaActiva = HERRAMIENTAS.find((h) => h.key === activeSection);
   const activa = seccionActiva || herramientaActiva;
+  // Los formatos de inspección ya visitados se quedan montados (ocultos) para
+  // no perder las capturas abiertas al volver al menú o cambiar de pestaña.
+  const [montadas, setMontadas] = useState([]);
+  useEffect(() => {
+    const k = seccionActiva?.key;
+    if (k && PANELES_INSPECCION[k] && !montadas.includes(k)) setMontadas((m) => [...m, k]);
+  }, [seccionActiva?.key, montadas]);
 
   useEffect(() => {
     const id = location.state?.verInspeccionId;
@@ -224,16 +239,6 @@ export default function QualityModule({ currentUser }) {
                 ))}
               </div>
             </>
-          ) : seccionActiva?.key === "materia-prima" ? (
-            <MateriaPrimaPanel currentUser={currentUser} initialVerId={pendingVerId} returnToAccionId={returnToAccionId} onVolverAAccion={handleVolverAAccion} />
-          ) : seccionActiva?.key === "planta-1" ? (
-            <Planta1Panel currentUser={currentUser} initialVerId={pendingVerId} returnToAccionId={returnToAccionId} onVolverAAccion={handleVolverAAccion} />
-          ) : seccionActiva?.key === "planta-2" ? (
-            <Planta2Panel currentUser={currentUser} initialVerId={pendingVerId} returnToAccionId={returnToAccionId} onVolverAAccion={handleVolverAAccion} />
-          ) : seccionActiva?.key === "planta-3" ? (
-            <Planta3Panel currentUser={currentUser} initialVerId={pendingVerId} returnToAccionId={returnToAccionId} onVolverAAccion={handleVolverAAccion} />
-          ) : seccionActiva?.key === "producto-terminado" ? (
-            <ProductoTerminadoPanel currentUser={currentUser} initialVerId={pendingVerId} returnToAccionId={returnToAccionId} onVolverAAccion={handleVolverAAccion} />
           ) : herramientaActiva?.key === "pareto" ? (
             <ParetoView />
           ) : herramientaActiva?.key === "carta-p" ? (
@@ -241,6 +246,16 @@ export default function QualityModule({ currentUser }) {
           ) : null}
         </>
       )}
+
+      {Object.keys(PANELES_INSPECCION).filter((k) => montadas.includes(k)).map((k) => {
+        const Panel = PANELES_INSPECCION[k];
+        const visible = bottomTab === "inicio" && seccionActiva?.key === k;
+        return (
+          <div key={k} className={visible ? "" : "hidden"}>
+            <Panel currentUser={currentUser} initialVerId={visible ? pendingVerId : null} returnToAccionId={returnToAccionId} onVolverAAccion={handleVolverAAccion} />
+          </div>
+        );
+      })}
 
       {bottomTab === "guias" && <GuiasView />}
       {bottomTab === "config" && <ConfiguracionView />}

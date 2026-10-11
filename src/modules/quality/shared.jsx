@@ -717,6 +717,51 @@ function BotonRecordatorio({ onEnviar }) {
 }
 
 
+
+// Varias inspecciones abiertas a la vez: pestañas compactas (una por borrador)
+// con un "+" para abrir otra sin cerrar la que se está capturando. Cada
+// borrador conserva su propio formulario montado (los inactivos solo se
+// ocultan), así que nada se pierde al cambiar de pestaña. Con capturas sin
+// guardar, el navegador avisa antes de cerrar o recargar la página.
+export function BarraBorradores({ borradores, activoId, resumenes, etiqueta = "Inspección", onActivar, onAgregar, onCerrar }) {
+  const hayCambios = borradores.some((id) => resumenes[id]?.sucio);
+  useEffect(() => {
+    if (!hayCambios) return undefined;
+    const avisar = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", avisar);
+    return () => window.removeEventListener("beforeunload", avisar);
+  }, [hayCambios]);
+  return (
+    <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+      {borradores.map((id, i) => {
+        const activo = id === activoId;
+        const r = resumenes[id];
+        return (
+          <div
+            key={id}
+            className={`flex shrink-0 items-center overflow-hidden rounded-xl border text-[11px] font-semibold transition ${activo ? "border-[#c9a227] bg-[#fdf7e6] text-[#96771a]" : "border-[#edf0f4] bg-white text-[#5b6472]"}`}
+          >
+            <button type="button" onClick={() => onActivar(id)} className="max-w-[9rem] truncate px-2.5 py-1.5">
+              {r?.titulo || `${etiqueta} ${i + 1}`}
+              {r?.sucio && <span className="ml-1 text-[#c9a227]">•</span>}
+            </button>
+            <button type="button" onClick={() => onCerrar(id)} title="Descartar" aria-label="Descartar borrador" className="px-1.5 py-1.5 text-[#94a3b8] transition hover:text-red-500">✕</button>
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        onClick={onAgregar}
+        title="Abrir otra inspección"
+        aria-label="Abrir otra inspección"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-dashed border-[#c9a227] text-base font-bold text-[#96771a] transition active:scale-95"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
 // Historial de ediciones de un registro — línea discreta bajo el encabezado del
 // detalle; se despliega solo si la persona lo abre. Si la tabla de historial
 // aún no existe (o el registro nunca se editó) no muestra nada.
