@@ -4,14 +4,13 @@
 -- no modifica el esquema ni las inspecciones ya guardadas (las anteriores
 -- simplemente no traen valor en el punto nuevo).
 
-insert into public.calidad_puntos_control (id, planta, proceso, letra, descripcion, orden, activo)
-select m.mx + v.n, 'Planta 3', v.proceso, v.letra, 'OP / código / terminación', v.orden, true
-from (select coalesce(max(id), 0) as mx from public.calidad_puntos_control) m,
-     (values
-       (1, 'Corte y pegado de hule espuma', 'I', 9),
-       (2, 'Tapicería',                      'J', 10),
-       (3, 'Empaque',                        'J', 10)
-     ) as v(n, proceso, letra, orden)
+insert into public.calidad_puntos_control (planta, proceso, letra, descripcion, orden, activo)
+select 'Planta 3', v.proceso, v.letra, 'OP / código / terminación', v.orden, true
+from (values
+       ('Corte y pegado de hule espuma', 'I', 9),
+       ('Tapicería',                      'J', 10),
+       ('Empaque',                        'J', 10)
+     ) as v(proceso, letra, orden)
 where not exists (
   select 1 from public.calidad_puntos_control p
   where p.planta = 'Planta 3' and p.proceso = v.proceso and p.descripcion = 'OP / código / terminación'
