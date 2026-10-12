@@ -113,11 +113,18 @@ function NuevaInspeccionForm({ puntos, personas, proveedores, productos, current
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, valoresPuntos, cierre, fotos]);
 
+  // La hora es automática: en una inspección nueva sigue al reloj y se fija al guardar; al editar se conserva la original.
+  useEffect(() => {
+    if (inicial) return undefined;
+    const t = setInterval(() => setForm((f) => (f.hora === nowHHMM() ? f : { ...f, hora: nowHHMM() })), 20000);
+    return () => clearInterval(t);
+  }, [inicial]);
+
   async function handleSave() {
     setSaving(true);
     const puntosPayload = puntos.map((p) => ({ punto_control_id: p.id, valor: valoresPuntos[p.id] || null }));
     await onSave({
-      inspeccion: { ...form, cantidad: form.cantidad || null, muestra: form.muestra || sugerencia?.muestra || null, resultado, clasificacion: hayNC ? clasificacion || "Menor" : null },
+      inspeccion: { ...form, hora: inicial ? form.hora : nowHHMM(), cantidad: form.cantidad || null, muestra: form.muestra || sugerencia?.muestra || null, resultado, clasificacion: hayNC ? clasificacion || "Menor" : null },
       puntos: puntosPayload,
       cierre,
       fotos,
@@ -141,7 +148,7 @@ function NuevaInspeccionForm({ puntos, personas, proveedores, productos, current
           <div className="grid grid-cols-2 gap-3">
             <label className={labelClass}>
               Hora
-              <input type="time" value={form.hora} onChange={(e) => setField("hora", e.target.value)} className={inputClass} />
+              <input type="time" value={form.hora} readOnly tabIndex={-1} title="Se registra automáticamente" className={`${inputClass} cursor-not-allowed bg-[#f1f5f9] text-[#5b6472]`} />
             </label>
             <label className={labelClass}>
               OC / Lote

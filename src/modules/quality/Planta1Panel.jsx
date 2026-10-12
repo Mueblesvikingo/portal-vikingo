@@ -39,9 +39,9 @@ const FORMATO_PLANTA1 = {
   tituloRecibo: "FORMATO UNIFICADO – PLANTA 1 | CORTE DE MADERA / ARMADO DE CASCO / HABILITADO",
   subtitulo: "FÁBRICA DE MUEBLES VIKINGO  ·  GESTIÓN DE CALIDAD  ·  PLANTA 1 ASPEL-PROD  ·  Código: F-GC-02U  ·  Versión: 00",
   instrucciones: "Una fila = una inspección realizada. En PROCESO seleccionar: Corte de Madera / Armado de Casco / Habilitado. Una fila = una OP inspeccionada. Marcar puntos: C = Cumple, NC = No Cumple, NA = No aplica. Si existe NC, registrar clasificación, evidencia, acción y reinspección/liberación.",
-  columnas: ["Hora", "Proceso", "OP", "Código", "Terminación", "Línea / Operador", "Cant.", "Muestra", "A", "B", "C", "D", "E", "F", "G", "H", "I", "Resultado", "Clasif.", "Observación / evidencia", "Acción / Reinspección"],
-  colAnchos: [3, 9, 5, 7, 7, 8, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 4, 16, 12],
-  letras: ["A", "B", "C", "D", "E", "F", "G", "H", "I"],
+  columnas: ["Hora", "Proceso", "OP", "Código", "Terminación", "Línea / Operador", "Cant.", "Muestra", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "Resultado", "Clasif.", "Observación / evidencia", "Acción / Reinspección"],
+  colAnchos: [3, 9, 5, 7, 7, 8, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 4, 14, 12],
+  letras: ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
   renderCeldasAntes: (insp) => [
     { v: insp.proceso }, { v: insp.op }, { v: insp.producto_texto }, { v: insp.terminacion }, { v: insp.linea_operador },
     { v: insp.cantidad, center: true }, { v: insp.muestra, center: true },
@@ -51,7 +51,7 @@ const FORMATO_PLANTA1 = {
     ["C = Escuadra / geometría / nivel", "D = Cortes / uniones / fijaciones"],
     ["E = Estabilidad estructural", "F = Resortes / bandastic / tensión"],
     ["G = Sin filos / puntas / metal-metal", "H = Preparación sig. proceso"],
-    ["I = Plagas / insectos en madera", ""],
+    ["I = Plagas / insectos en madera", "J = Exceso de grapa"],
   ],
   criterio: "CRITERIO: La Matriz / plano / ficha técnica vigente establece la aceptación. Ante condición no contemplada: no asumir; documentar y escalar a Gestión de Calidad.",
   nombreRegistro: "Inspección",
@@ -113,11 +113,18 @@ function NuevaInspeccionForm({ puntos, personas, productos, colaboradores, curre
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, valoresPuntos, cierre, fotos]);
 
+  // La hora es automática: en una inspección nueva sigue al reloj y se fija al guardar; al editar se conserva la original.
+  useEffect(() => {
+    if (inicial) return undefined;
+    const t = setInterval(() => setForm((f) => (f.hora === nowHHMM() ? f : { ...f, hora: nowHHMM() })), 20000);
+    return () => clearInterval(t);
+  }, [inicial]);
+
   async function handleSave() {
     setSaving(true);
     const puntosPayload = puntos.map((p) => ({ punto_control_id: p.id, valor: valoresPuntos[p.id] || null }));
     await onSave({
-      inspeccion: { ...form, cantidad: form.cantidad || null, muestra: form.muestra || sugerencia?.muestra || null, resultado, clasificacion: hayNC ? clasificacion || "Menor" : null },
+      inspeccion: { ...form, hora: inicial ? form.hora : nowHHMM(), cantidad: form.cantidad || null, muestra: form.muestra || sugerencia?.muestra || null, resultado, clasificacion: hayNC ? clasificacion || "Menor" : null },
       puntos: puntosPayload,
       cierre,
       fotos,
@@ -141,7 +148,7 @@ function NuevaInspeccionForm({ puntos, personas, productos, colaboradores, curre
           <div className="grid grid-cols-2 gap-3">
             <label className={labelClass}>
               Hora
-              <input type="time" value={form.hora} onChange={(e) => setField("hora", e.target.value)} className={inputClass} />
+              <input type="time" value={form.hora} readOnly tabIndex={-1} title="Se registra automáticamente" className={`${inputClass} cursor-not-allowed bg-[#f1f5f9] text-[#5b6472]`} />
             </label>
             <label className={labelClass}>
               Proceso
@@ -204,7 +211,7 @@ function NuevaInspeccionForm({ puntos, personas, productos, colaboradores, curre
           icon="✅"
           title="Puntos de control"
           help="Del formato F-GC-02U: marcar cada punto como C = Cumple, NC = No Cumple, o NA = No aplica. La Matriz/plano/ficha técnica vigente establece la aceptación de cada uno."
-          subtitle={puntosMarcados > 0 ? `${puntosMarcados} de ${puntos.length} marcados · ${resultado}` : `${puntos.length} puntos (A-${puntos[puntos.length - 1]?.letra || "I"})`}
+          subtitle={puntosMarcados > 0 ? `${puntosMarcados} de ${puntos.length} marcados · ${resultado}` : `${puntos.length} puntos (A-${puntos[puntos.length - 1]?.letra || "J"})`}
           open={openSection === "puntos"}
           onToggle={() => toggle("puntos")}
         >
