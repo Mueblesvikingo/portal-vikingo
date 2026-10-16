@@ -94,7 +94,9 @@ const STRATEGIC_TEAM_ROLES = ["PM", "Coordinador SIG", "Analista de Procesos", "
 // terminó la etapa de "solo Coordinador SIG lo ve" (ver historial) y ahora
 // es visible para todo el equipo estratégico — las inspectoras/gerencia de
 // Calidad conservan su acceso aparte, vía MODULES_VISIBLE_FOR_OPERATIVE_ROLES.
-const STRATEGIC_TEAM_ONLY_MODULES = ["decision-center", "calidad"];
+// "control-correctivo" (Control Correctivo, pedido de la PM): por ahora solo da
+// visibilidad al equipo estratégico.
+const STRATEGIC_TEAM_ONLY_MODULES = ["decision-center", "calidad", "control-correctivo"];
 
 // Módulo S&OP: visible para el equipo estratégico (por rol) más un grupo
 // puntual de gerencias que participan en el ciclo (Hugo Terrones, Beatriz

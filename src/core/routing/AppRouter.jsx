@@ -18,6 +18,7 @@ import OrganigramaModule from "../../modules/organigrama/OrganigramaModule";
 import CompetenciaDetailPage from "../../modules/competencias/CompetenciaDetailPage";
 import SopModule from "../../modules/sop/SopModule";
 import QualityModule from "../../modules/quality/QualityModule";
+import ControlCorrectivoModule from "../../modules/control-correctivo/ControlCorrectivoModule";
 
 // El Sidebar ya oculta los enlaces a los que un usuario no tiene acceso,
 // pero eso no bloqueaba entrar por URL directa (marcador, historial del
@@ -148,6 +149,11 @@ export default function AppRouter({
           <Route
             path="/calidad"
             element={<Guarded moduleKey="calidad" currentUser={currentUser}><QualityModule currentUser={currentUser} /></Guarded>}
+          />
+
+          <Route
+            path="/control-correctivo"
+            element={<Guarded moduleKey="control-correctivo" currentUser={currentUser}><ControlCorrectivoModule currentUser={currentUser} /></Guarded>}
           />
         </Routes>
       </AppLayout>

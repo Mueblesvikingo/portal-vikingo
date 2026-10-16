@@ -14,6 +14,7 @@ const menuItems = [
   { label: "Balance de Carga", route: "/workload-balance", moduleKey: "workload-balance" },
   { label: "Organigrama", route: "/organigrama", moduleKey: "organigrama" },
   { label: "Acciones de Mejora", route: "/acciones", moduleKey: "acciones" },
+  { label: "Control Correctivo", route: "/control-correctivo", moduleKey: "control-correctivo" },
   { label: "Madurez Organizacional", route: "/maturity", moduleKey: "maturity" },
   { label: "Diagnóstico SIG", route: "/sig", moduleKey: "sig" },
   { label: "Gestión de Calidad", route: "/calidad", moduleKey: "calidad" },
