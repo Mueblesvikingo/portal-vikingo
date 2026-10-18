@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  TIPOS_BRECHA,
-  PRIORIDADES,
   estadoCorrectivo,
   hoyISO,
   getCorrectivos,
@@ -28,7 +26,7 @@ import AvanceSlider from "./AvanceSlider";
 import CorrectivoFormModal from "./CorrectivoFormModal";
 import CorrectivoGantt from "./CorrectivoGantt";
 
-const FILTROS_VACIO = { proceso: "", brecha: "", prioridad: "", lider: "", estado: "" };
+const FILTROS_VACIO = { proceso: "" };
 const ESTADOS = ["En curso", "Vencida", "Completada"];
 
 const selectFiltroClass = `${inputClass} mt-0 py-1.5 text-xs`;
@@ -92,11 +90,7 @@ export default function ControlCorrectivoModule({ currentUser }) {
 
   const filtrados = useMemo(() => {
     const lista = conEstado.filter((i) => (
-      (!filtros.proceso || String(i.proceso_id) === filtros.proceso) &&
-      (!filtros.brecha || i.tipo_brecha === filtros.brecha) &&
-      (!filtros.prioridad || i.prioridad === filtros.prioridad) &&
-      (!filtros.lider || String(i.lider_persona_id) === filtros.lider) &&
-      (!filtros.estado || i.estado === filtros.estado)
+      !filtros.proceso || String(i.proceso_id) === filtros.proceso
     ));
     // Pendientes primero por fecha compromiso; las completadas al final.
     return lista.sort((a, b) => {
@@ -202,57 +196,32 @@ export default function ControlCorrectivoModule({ currentUser }) {
 
       {!tablaFaltante && (
       <>
-      <div className={`${cardClass} space-y-2.5 p-3`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex gap-1 rounded-xl bg-[#f7f7f4] p-1">
-            {[["tablero", "Tablero"], ["gantt", "Gantt"]].map(([clave, texto]) => (
-              <button
-                key={clave}
-                type="button"
-                onClick={() => setVista(clave)}
-                className={`rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-wide transition ${vista === clave ? "bg-[#0f1f3d] text-white shadow-sm" : "text-[#5b6472] hover:bg-white"}`}
-              >
-                {texto}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {ESTADOS.map((e) => (
-              <button
-                key={e}
-                type="button"
-                onClick={() => setFiltros((f) => ({ ...f, estado: f.estado === e ? "" : e }))}
-                className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition ${ESTADO_BADGE[e]} ${filtros.estado === e ? "ring-2 ring-[#c9a227]" : "hover:brightness-95"}`}
-              >
-                {e} · {conteo[e]}
-              </button>
-            ))}
-            <span className="px-1 text-[10px] font-bold uppercase tracking-wide text-[#5b6472]">Avance promedio {promedioAvance}%</span>
-          </div>
-          </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            <select aria-label="Filtrar por proceso" value={filtros.proceso} onChange={(e) => setFiltros((f) => ({ ...f, proceso: e.target.value }))} className={selectFiltroClass}>
-              <option value="">Todos los procesos</option>
-              {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-            </select>
-            <select aria-label="Filtrar por tipo de brecha" value={filtros.brecha} onChange={(e) => setFiltros((f) => ({ ...f, brecha: e.target.value }))} className={selectFiltroClass}>
-              <option value="">Todas las brechas</option>
-              {TIPOS_BRECHA.map((b) => <option key={b} value={b}>{b}</option>)}
-            </select>
-            <select aria-label="Filtrar por prioridad" value={filtros.prioridad} onChange={(e) => setFiltros((f) => ({ ...f, prioridad: e.target.value }))} className={selectFiltroClass}>
-              <option value="">Toda prioridad</option>
-              {PRIORIDADES.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-            <select aria-label="Filtrar por líder responsable" value={filtros.lider} onChange={(e) => setFiltros((f) => ({ ...f, lider: e.target.value }))} className={selectFiltroClass}>
-              <option value="">Todos los líderes</option>
-              {personas.lideres.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-            </select>
-          </div>
-            {hayFiltros && (
-            <button type="button" onClick={() => setFiltros(FILTROS_VACIO)} className="rounded-xl px-3 py-1.5 text-xs font-semibold text-[#5b6472] transition hover:bg-[#f7f7f4]">Limpiar</button>
-          )}
-          </div>
+      <div className={`${cardClass} flex flex-wrap items-center gap-2 p-3`}>
+        <div className="flex gap-1 rounded-xl bg-[#f7f7f4] p-1">
+          {[["tablero", "Tablero"], ["gantt", "Gantt"]].map(([clave, texto]) => (
+            <button
+              key={clave}
+              type="button"
+              onClick={() => setVista(clave)}
+              className={`rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-wide transition ${vista === clave ? "bg-[#0f1f3d] text-white shadow-sm" : "text-[#5b6472] hover:bg-white"}`}
+            >
+              {texto}
+            </button>
+          ))}
+        </div>
+        <select aria-label="Filtrar por proceso" value={filtros.proceso} onChange={(e) => setFiltros({ proceso: e.target.value })} className={`${selectFiltroClass} min-w-[220px] flex-1 sm:max-w-sm`}>
+          <option value="">Todos los procesos</option>
+          {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+        </select>
+        {hayFiltros && (
+          <button type="button" onClick={() => setFiltros(FILTROS_VACIO)} className="rounded-xl px-3 py-1.5 text-xs font-semibold text-[#5b6472] transition hover:bg-[#f7f7f4]">Limpiar</button>
+        )}
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          {ESTADOS.map((e) => (
+            <span key={e} className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${ESTADO_BADGE[e]}`}>{e} · {conteo[e]}</span>
+          ))}
+          <span className="px-1 text-[10px] font-bold uppercase tracking-wide text-[#5b6472]">Avance promedio {promedioAvance}%</span>
+        </div>
       </div>
 
       {loading ? (
