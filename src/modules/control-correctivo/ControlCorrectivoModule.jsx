@@ -184,8 +184,15 @@ export default function ControlCorrectivoModule({ currentUser }) {
       </div>
 
       {tablaFaltante && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Falta crear la tabla de este módulo en Supabase. Ejecuta una vez el archivo <span className="font-bold">sql/2026-10-control_correctivo.sql</span> en el SQL Editor y recarga la página.
+        <div className={`${cardClass} mx-auto flex max-w-xl flex-col items-center gap-2 px-6 py-8 text-center`}>
+          <span className="text-3xl">🛠️</span>
+          <p className="text-base font-black text-[#0f1f3d]">Falta un paso para activar este módulo</p>
+          <p className="text-sm text-[#5b6472]">La tabla donde se guardan las acciones correctivas todavía no existe en Supabase.</p>
+          <ol className="mt-1 space-y-1 text-left text-sm text-[#0f1f3d]">
+            <li>1. Abre Supabase → <span className="font-semibold">SQL Editor</span>.</li>
+            <li>2. Pega y ejecuta el archivo <span className="font-semibold">sql/2026-10-control_correctivo.sql</span>.</li>
+            <li>3. Recarga esta página.</li>
+          </ol>
         </div>
       )}
       {errorCarga && (
@@ -193,53 +200,59 @@ export default function ControlCorrectivoModule({ currentUser }) {
       )}
       {aviso && <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{aviso}</div>}
 
-      <div className={`${cardClass} flex flex-wrap items-center gap-2 p-2`}>
-        <div className="flex gap-1 rounded-xl bg-[#f7f7f4] p-1">
-          {[["tablero", "Tablero"], ["gantt", "Gantt"]].map(([clave, texto]) => (
-            <button
-              key={clave}
-              type="button"
-              onClick={() => setVista(clave)}
-              className={`rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-wide transition ${vista === clave ? "bg-[#0f1f3d] text-white shadow-sm" : "text-[#5b6472] hover:bg-white"}`}
-            >
-              {texto}
-            </button>
-          ))}
-        </div>
-        <div className="grid min-w-0 flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
-          <select aria-label="Filtrar por proceso" value={filtros.proceso} onChange={(e) => setFiltros((f) => ({ ...f, proceso: e.target.value }))} className={selectFiltroClass}>
-            <option value="">Todos los procesos</option>
-            {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-          </select>
-          <select aria-label="Filtrar por tipo de brecha" value={filtros.brecha} onChange={(e) => setFiltros((f) => ({ ...f, brecha: e.target.value }))} className={selectFiltroClass}>
-            <option value="">Todas las brechas</option>
-            {TIPOS_BRECHA.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-          <select aria-label="Filtrar por prioridad" value={filtros.prioridad} onChange={(e) => setFiltros((f) => ({ ...f, prioridad: e.target.value }))} className={selectFiltroClass}>
-            <option value="">Toda prioridad</option>
-            {PRIORIDADES.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <select aria-label="Filtrar por líder responsable" value={filtros.lider} onChange={(e) => setFiltros((f) => ({ ...f, lider: e.target.value }))} className={selectFiltroClass}>
-            <option value="">Todos los líderes</option>
-            {personas.lideres.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-          </select>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {ESTADOS.map((e) => (
-            <button
-              key={e}
-              type="button"
-              onClick={() => setFiltros((f) => ({ ...f, estado: f.estado === e ? "" : e }))}
-              className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition ${ESTADO_BADGE[e]} ${filtros.estado === e ? "ring-2 ring-[#c9a227]" : "hover:brightness-95"}`}
-            >
-              {e} · {conteo[e]}
-            </button>
-          ))}
-          <span className="px-1 text-[10px] font-bold uppercase tracking-wide text-[#5b6472]">Avance promedio {promedioAvance}%</span>
-        </div>
-        {hayFiltros && (
-          <button type="button" onClick={() => setFiltros(FILTROS_VACIO)} className="rounded-xl px-3 py-1.5 text-xs font-semibold text-[#5b6472] transition hover:bg-[#f7f7f4]">Limpiar</button>
-        )}
+      {!tablaFaltante && (
+      <>
+      <div className={`${cardClass} space-y-2.5 p-3`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex gap-1 rounded-xl bg-[#f7f7f4] p-1">
+            {[["tablero", "Tablero"], ["gantt", "Gantt"]].map(([clave, texto]) => (
+              <button
+                key={clave}
+                type="button"
+                onClick={() => setVista(clave)}
+                className={`rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-wide transition ${vista === clave ? "bg-[#0f1f3d] text-white shadow-sm" : "text-[#5b6472] hover:bg-white"}`}
+              >
+                {texto}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {ESTADOS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => setFiltros((f) => ({ ...f, estado: f.estado === e ? "" : e }))}
+                className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition ${ESTADO_BADGE[e]} ${filtros.estado === e ? "ring-2 ring-[#c9a227]" : "hover:brightness-95"}`}
+              >
+                {e} · {conteo[e]}
+              </button>
+            ))}
+            <span className="px-1 text-[10px] font-bold uppercase tracking-wide text-[#5b6472]">Avance promedio {promedioAvance}%</span>
+          </div>
+          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <select aria-label="Filtrar por proceso" value={filtros.proceso} onChange={(e) => setFiltros((f) => ({ ...f, proceso: e.target.value }))} className={selectFiltroClass}>
+              <option value="">Todos los procesos</option>
+              {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+            </select>
+            <select aria-label="Filtrar por tipo de brecha" value={filtros.brecha} onChange={(e) => setFiltros((f) => ({ ...f, brecha: e.target.value }))} className={selectFiltroClass}>
+              <option value="">Todas las brechas</option>
+              {TIPOS_BRECHA.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
+            <select aria-label="Filtrar por prioridad" value={filtros.prioridad} onChange={(e) => setFiltros((f) => ({ ...f, prioridad: e.target.value }))} className={selectFiltroClass}>
+              <option value="">Toda prioridad</option>
+              {PRIORIDADES.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <select aria-label="Filtrar por líder responsable" value={filtros.lider} onChange={(e) => setFiltros((f) => ({ ...f, lider: e.target.value }))} className={selectFiltroClass}>
+              <option value="">Todos los líderes</option>
+              {personas.lideres.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+            </select>
+          </div>
+            {hayFiltros && (
+            <button type="button" onClick={() => setFiltros(FILTROS_VACIO)} className="rounded-xl px-3 py-1.5 text-xs font-semibold text-[#5b6472] transition hover:bg-[#f7f7f4]">Limpiar</button>
+          )}
+          </div>
       </div>
 
       {loading ? (
@@ -327,6 +340,9 @@ export default function ControlCorrectivoModule({ currentUser }) {
             </table>
           </div>
         </div>
+      )}
+
+      </>
       )}
 
       {modal && (
