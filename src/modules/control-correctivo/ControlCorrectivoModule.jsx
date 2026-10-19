@@ -256,9 +256,15 @@ export default function ControlCorrectivoModule({ currentUser }) {
                         <div className="mt-1.5"><Badge clase={BRECHA_BADGE[i.tipo_brecha]}>{i.tipo_brecha}</Badge></div>
                       </td>
                       <td className="px-3 py-4">
-                        <button type="button" onClick={alternar} className="block w-full text-left" title={expandido ? "Ocultar detalle" : "Ver completo"}>
-                          <p className={`text-[13px] font-semibold leading-snug text-[#0f1f3d] ${expandido ? "" : "line-clamp-2"}`}>{i.accion_correctiva}</p>
-                          <p className={`mt-1 text-xs leading-snug text-[#7b8494] ${expandido ? "" : "line-clamp-2"}`}>{i.causa_raiz || "Sin causa raíz"}</p>
+                        <button type="button" onClick={alternar} className="block w-full space-y-3 text-left" title={expandido ? "Ocultar detalle" : "Ver completo"}>
+                          <div>
+                            <p className="text-[9px] font-bold uppercase tracking-wider text-[#94a3b8]">Acción correctiva</p>
+                            <p className={`mt-1 text-[13px] font-semibold leading-relaxed text-[#0f1f3d] ${expandido ? "" : "line-clamp-2"}`}>{i.accion_correctiva}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-bold uppercase tracking-wider text-[#94a3b8]">Causa raíz</p>
+                            <p className={`mt-1 text-xs leading-relaxed text-[#6b7587] ${expandido ? "" : "line-clamp-2"}`}>{i.causa_raiz || "Sin causa raíz"}</p>
+                          </div>
                         </button>
                         {(i.eficiencia_operativa || expandido) && (
                           <p className="mt-2 rounded-lg bg-[#f7f7f4] px-2.5 py-1.5 text-xs leading-snug text-[#5b6472]">
