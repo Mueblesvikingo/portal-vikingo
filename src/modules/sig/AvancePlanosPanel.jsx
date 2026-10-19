@@ -131,6 +131,18 @@ export default function AvancePlanosPanel({ currentUser }) {
     }
   }
 
+  // Avance general: casillas hechas entre las que aplican, sobre todos los productos
+  // del seguimiento (no solo la familia que se está viendo).
+  let aplicablesGeneral = 0;
+  let hechosGeneral = 0;
+  productos.forEach((p) => COLUMNAS_PLANOS.forEach((c) => {
+    const e = estadoDe(p, c);
+    if (e === ESTADO_NO_APLICA) return;
+    aplicablesGeneral += 1;
+    if (e === ESTADO_HECHO) hechosGeneral += 1;
+  }));
+  const avanceGeneral = aplicablesGeneral ? Math.round((hechosGeneral / aplicablesGeneral) * 100) : 0;
+
   // Total de casillas hechas por columna (sobre los productos que se ven).
   const totalColumna = (c) => filtrados.filter((p) => estadoDe(p, c) === ESTADO_HECHO).length;
 
@@ -152,7 +164,10 @@ export default function AvancePlanosPanel({ currentUser }) {
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="h-11 bg-[#111827] text-white px-4 flex items-center justify-between text-sm font-black">
-          <div>AVANCE DE PLANOS POR PRODUCTO</div>
+          <div className="flex items-center gap-3">
+            <span>AVANCE DE PLANOS POR PRODUCTO</span>
+            <span title="Avance general de todos los productos" className="rounded-md bg-white/10 px-2 py-0.5 text-sm leading-none font-black text-green-300">{avanceGeneral}%</span>
+          </div>
           <div className="text-[10px] font-bold text-gray-400">{filtrados.length} productos</div>
         </div>
 
