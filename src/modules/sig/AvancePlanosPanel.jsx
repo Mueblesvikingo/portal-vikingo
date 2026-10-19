@@ -14,8 +14,6 @@ import {
 // verdes y barra de avance azul marino).
 
 const TOTAL_POR_PRODUCTO = COLUMNAS_PLANOS.length;
-const COLUMNAS_2D = COLUMNAS_PLANOS.filter((c) => c.tipo === "2D").length;
-const COLUMNAS_3D = COLUMNAS_PLANOS.filter((c) => c.tipo === "3D").length;
 
 // Familia = primera palabra del nombre (Base, Cabecera, Sala…); "Par de buros"
 // se agrupa como Buros.
@@ -79,33 +77,6 @@ export default function AvancePlanosPanel({ currentUser }) {
 
   const hechosDe = (p) => COLUMNAS_PLANOS.filter((c) => marcadas.has(claveAvance(p.id, c.area, c.tipo))).length;
 
-  const resumen = useMemo(() => {
-    const total = productos.length * TOTAL_POR_PRODUCTO;
-    let hechos = 0;
-    let hechos2d = 0;
-    let hechos3d = 0;
-    let completos = 0;
-    productos.forEach((p) => {
-      let h = 0;
-      COLUMNAS_PLANOS.forEach((c) => {
-        if (marcadas.has(claveAvance(p.id, c.area, c.tipo))) {
-          h += 1;
-          if (c.tipo === "2D") hechos2d += 1; else hechos3d += 1;
-        }
-      });
-      hechos += h;
-      if (h === TOTAL_POR_PRODUCTO) completos += 1;
-    });
-    return {
-      total,
-      hechos,
-      global: total ? Math.round((hechos / total) * 100) : 0,
-      pct2d: productos.length * COLUMNAS_2D ? Math.round((hechos2d / (productos.length * COLUMNAS_2D)) * 100) : 0,
-      pct3d: productos.length * COLUMNAS_3D ? Math.round((hechos3d / (productos.length * COLUMNAS_3D)) * 100) : 0,
-      completos,
-    };
-  }, [productos, marcadas]);
-
   async function alternar(producto, area, tipo) {
     if (tablaFaltante) return;
     const clave = claveAvance(producto.id, area, tipo);
@@ -133,28 +104,6 @@ export default function AvancePlanosPanel({ currentUser }) {
 
   return (
     <div className="space-y-5">
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-        <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 relative text-center">
-          <span className="absolute left-3 top-2.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[9px] font-bold text-amber-700">Implementación temporal</span>
-          <div className="text-lg font-black tracking-tight">Avance de planos 2D y 3D</div>
-          <div className="text-[11px] text-gray-500 font-semibold">Avance global: {resumen.global}% · {resumen.hechos} de {resumen.total} planos</div>
-        </div>
-        <div className="grid grid-cols-3 text-center">
-          <div className="py-2 border-r border-gray-200">
-            <div className="text-[9px] font-black uppercase tracking-wide text-gray-400">Planos 2D</div>
-            <div className="text-2xl font-black text-[#203f73]">{resumen.pct2d}%</div>
-          </div>
-          <div className="py-2 border-r border-gray-200">
-            <div className="text-[9px] font-black uppercase tracking-wide text-gray-400">Planos 3D</div>
-            <div className="text-2xl font-black text-[#203f73]">{resumen.pct3d}%</div>
-          </div>
-          <div className="py-2">
-            <div className="text-[9px] font-black uppercase tracking-wide text-gray-400">Productos completos</div>
-            <div className="text-2xl font-black text-green-700">{resumen.completos}<span className="text-sm text-gray-400">/{productos.length}</span></div>
-          </div>
-        </div>
-      </div>
-
       {message && <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-bold text-red-600">{message}</div>}
 
       {tablaFaltante && (
