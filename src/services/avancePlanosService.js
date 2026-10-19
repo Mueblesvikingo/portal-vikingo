@@ -8,7 +8,7 @@ import { supabase } from "./supabase";
 // Armado es el de Carpintería, por eso Armado no tiene casilla 2D. Tapizado no
 // lleva planos propios, por eso no es una columna.
 export const COLUMNAS_PLANOS = [
-  { area: "corte", label: "Corte", tipo: "2D" },
+  { area: "corte", label: "Corte tela", tipo: "2D" },
   { area: "costura", label: "Costura", tipo: "2D" },
   { area: "carpinteria", label: "Carpintería", tipo: "2D" },
   { area: "armado", label: "Armado", tipo: "3D" },
