@@ -10,7 +10,7 @@
 create table if not exists public.sig_avance_planos (
   id                    bigint generated always as identity primary key,
   producto_id           bigint not null,
-  area                  text not null check (area in ('corte', 'costura', 'carpinteria', 'armado', 'tapizado')),
+  area                  text not null check (area in ('corte', 'costura', 'carpinteria', 'armado', 'tapizado', 'espuma')),
   tipo                  text not null check (tipo in ('2D', '3D')),
   completado            boolean not null default false,
   updated_at            timestamptz not null default now(),

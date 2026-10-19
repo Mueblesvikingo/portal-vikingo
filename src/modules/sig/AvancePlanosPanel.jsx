@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AREAS_PLANOS,
-  TIPOS_PLANO,
+  COLUMNAS_PLANOS,
   claveAvance,
   getProductosPlanos,
   getAvancePlanos,
@@ -9,12 +8,14 @@ import {
 } from "../../services/avancePlanosService";
 
 // Avance de planos 2D y 3D por producto y área (Corte, Costura, Carpintería,
-// Armado, Tapizado). Implementación temporal mientras no hay diseñador: solo
+// Armado, Tapizado y Espuma; el 3D aplica solo a Armado). Implementación temporal mientras no hay diseñador: solo
 // sirve para ir marcando qué planos ya existen. Misma estructura visual que la
 // tabla de Madurez Organizacional (encabezado gris, barra oscura, casillas
 // verdes y barra de avance azul marino).
 
-const TOTAL_POR_PRODUCTO = AREAS_PLANOS.length * TIPOS_PLANO.length;
+const TOTAL_POR_PRODUCTO = COLUMNAS_PLANOS.length;
+const COLUMNAS_2D = COLUMNAS_PLANOS.filter((c) => c.tipo === "2D").length;
+const COLUMNAS_3D = COLUMNAS_PLANOS.filter((c) => c.tipo === "3D").length;
 
 // Familia = primera palabra del nombre (Base, Cabecera, Sala…); "Par de buros"
 // se agrupa como Buros.
@@ -76,7 +77,7 @@ export default function AvancePlanosPanel({ currentUser }) {
   const familias = useMemo(() => ["Todas", ...new Set(productos.map((p) => familiaDe(p.nombre)))], [productos]);
   const filtrados = familia === "Todas" ? productos : productos.filter((p) => familiaDe(p.nombre) === familia);
 
-  const hechosDe = (p) => AREAS_PLANOS.reduce((s, a) => s + TIPOS_PLANO.filter((t) => marcadas.has(claveAvance(p.id, a.key, t))).length, 0);
+  const hechosDe = (p) => COLUMNAS_PLANOS.filter((c) => marcadas.has(claveAvance(p.id, c.area, c.tipo))).length;
 
   const resumen = useMemo(() => {
     const total = productos.length * TOTAL_POR_PRODUCTO;
@@ -86,22 +87,21 @@ export default function AvancePlanosPanel({ currentUser }) {
     let completos = 0;
     productos.forEach((p) => {
       let h = 0;
-      AREAS_PLANOS.forEach((a) => TIPOS_PLANO.forEach((t) => {
-        if (marcadas.has(claveAvance(p.id, a.key, t))) {
+      COLUMNAS_PLANOS.forEach((c) => {
+        if (marcadas.has(claveAvance(p.id, c.area, c.tipo))) {
           h += 1;
-          if (t === "2D") hechos2d += 1; else hechos3d += 1;
+          if (c.tipo === "2D") hechos2d += 1; else hechos3d += 1;
         }
-      }));
+      });
       hechos += h;
       if (h === TOTAL_POR_PRODUCTO) completos += 1;
     });
-    const porTipo = productos.length * AREAS_PLANOS.length;
     return {
       total,
       hechos,
       global: total ? Math.round((hechos / total) * 100) : 0,
-      pct2d: porTipo ? Math.round((hechos2d / porTipo) * 100) : 0,
-      pct3d: porTipo ? Math.round((hechos3d / porTipo) * 100) : 0,
+      pct2d: productos.length * COLUMNAS_2D ? Math.round((hechos2d / (productos.length * COLUMNAS_2D)) * 100) : 0,
+      pct3d: productos.length * COLUMNAS_3D ? Math.round((hechos3d / (productos.length * COLUMNAS_3D)) * 100) : 0,
       completos,
     };
   }, [productos, marcadas]);
@@ -185,12 +185,12 @@ export default function AvancePlanosPanel({ currentUser }) {
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="text-left px-3 py-2 font-black text-gray-500">N°</th>
                   <th className="text-left px-3 py-2 font-black text-gray-500">Producto</th>
-                  {AREAS_PLANOS.flatMap((a, ai) => TIPOS_PLANO.map((t, ti) => (
-                    <th key={`${a.key}${t}`} className={`text-center px-[2px] py-1 font-black w-[58px] text-gray-500 ${ti === 0 ? "border-l border-gray-200" : ""} ${ai % 2 === 1 ? "bg-gray-100/60" : ""}`}>
-                      <div className="text-[9px] leading-tight uppercase">{a.label}</div>
-                      <div className="text-[11px] mt-[2px] leading-none font-black text-[#203f73]">{t}</div>
+                  {COLUMNAS_PLANOS.map((c, ci) => (
+                    <th key={c.area} className={`text-center px-[2px] py-1 font-black w-[84px] text-gray-500 border-l border-gray-200 ${ci % 2 === 1 ? "bg-gray-100/60" : ""}`}>
+                      <div className="text-[9px] leading-tight uppercase">{c.label}</div>
+                      <div className="text-[11px] mt-[2px] leading-none font-black text-[#203f73]">{c.tipo}</div>
                     </th>
-                  )))}
+                  ))}
                   <th className="text-left px-3 py-2 font-black text-gray-500 min-w-[120px] border-l border-gray-200">Avance</th>
                 </tr>
               </thead>
@@ -206,15 +206,15 @@ export default function AvancePlanosPanel({ currentUser }) {
                         <div className="font-black leading-tight text-[10px]">{producto.nombre}</div>
                         {producto.codigo && <div className="text-[9px] font-semibold text-gray-400">{producto.codigo}</div>}
                       </td>
-                      {AREAS_PLANOS.flatMap((a, ai) => TIPOS_PLANO.map((t, ti) => (
-                        <td key={`${a.key}${t}`} className={`px-1 py-1 text-center ${ti === 0 ? "border-l border-gray-200" : ""} ${ai % 2 === 1 ? "bg-gray-100/40" : ""}`}>
+                      {COLUMNAS_PLANOS.map((c, ci) => (
+                        <td key={c.area} className={`px-1 py-1 text-center border-l border-gray-200 ${ci % 2 === 1 ? "bg-gray-100/40" : ""}`}>
                           <CheckCell
-                            marcada={marcadas.has(claveAvance(producto.id, a.key, t))}
-                            onToggle={() => alternar(producto, a.key, t)}
-                            titulo={`${producto.nombre} · ${a.label} · plano ${t}`}
+                            marcada={marcadas.has(claveAvance(producto.id, c.area, c.tipo))}
+                            onToggle={() => alternar(producto, c.area, c.tipo)}
+                            titulo={`${producto.nombre} · ${c.label} · plano ${c.tipo}`}
                           />
                         </td>
-                      )))}
+                      ))}
                       <td className="px-3 py-2 border-l border-gray-200">
                         <div className="flex items-center gap-2">
                           <div className="flex-1"><Progress value={pct} /></div>
@@ -230,9 +230,9 @@ export default function AvancePlanosPanel({ currentUser }) {
                 <tr className="bg-gray-50 border-t border-gray-200 font-black text-gray-500">
                   <td className="px-3 py-2" />
                   <td className="px-3 py-2 text-[10px] uppercase">Total marcados</td>
-                  {AREAS_PLANOS.flatMap((a) => TIPOS_PLANO.map((t, ti) => (
-                    <td key={`${a.key}${t}`} className={`px-1 py-2 text-center ${ti === 0 ? "border-l border-gray-200" : ""}`}>{totalColumna(a.key, t)}</td>
-                  )))}
+                  {COLUMNAS_PLANOS.map((c) => (
+                    <td key={c.area} className="px-1 py-2 text-center border-l border-gray-200">{totalColumna(c.area, c.tipo)}</td>
+                  ))}
                   <td className="px-3 py-2 border-l border-gray-200 text-[10px]">de {filtrados.length} productos</td>
                 </tr>
               </tfoot>

@@ -1,16 +1,18 @@
 import { supabase } from "./supabase";
 
-// Avance de planos 2D y 3D por producto y área (tabla `sig_avance_planos`, ver
+// Avance de planos por producto y área (tabla `sig_avance_planos`, ver
 // sql/2026-10-sig_avance_planos.sql). Implementación temporal.
 
-export const AREAS_PLANOS = [
-  { key: "corte", label: "Corte" },
-  { key: "costura", label: "Costura" },
-  { key: "carpinteria", label: "Carpintería" },
-  { key: "armado", label: "Armado" },
-  { key: "tapizado", label: "Tapizado" },
+// Cada área lleva UN solo tipo de plano: el 3D aplica solo a Armado, y el 2D de
+// Armado es el de Carpintería, por eso Armado no tiene casilla 2D.
+export const COLUMNAS_PLANOS = [
+  { area: "corte", label: "Corte", tipo: "2D" },
+  { area: "costura", label: "Costura", tipo: "2D" },
+  { area: "carpinteria", label: "Carpintería", tipo: "2D" },
+  { area: "armado", label: "Armado", tipo: "3D" },
+  { area: "tapizado", label: "Tapizado", tipo: "2D" },
+  { area: "espuma", label: "Espuma", tipo: "2D" },
 ];
-export const TIPOS_PLANO = ["2D", "3D"];
 
 const TABLA = "sig_avance_planos";
 
