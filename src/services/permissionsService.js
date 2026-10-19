@@ -329,6 +329,13 @@ export function isDirectorGeneral(user) {
   return roles.includes("Director General");
 }
 
+// Pestaña temporal "Avance de planos 2D/3D" de Diagnóstico SIG: solo el
+// Coordinador SIG y el Director General la ven y marcan (pedido explícito).
+export function canViewAvancePlanos(user) {
+  const roles = getApplicableRoles(user);
+  return roles.includes("Coordinador SIG") || roles.includes("Director General");
+}
+
 // Edición del tablero Estratégico de Desempeño Organizacional: decisión
 // explícita del usuario de restringirla a estas dos personas puntuales
 // (Alejandro García Hernández y Cristian García Hernández), no a un rol —
