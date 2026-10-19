@@ -106,6 +106,9 @@ export default function AvancePlanosPanel({ currentUser }) {
   const familiaActiva = familia || familias[0]?.nombre || "";
   const filtrados = familiaActiva === "Todas" ? productos : productos.filter((p) => familiaDe(p.nombre) === familiaActiva);
 
+  // En la vista de Bases no se muestra la columna de espuma (ninguna base la lleva).
+  const columnas = COLUMNAS_PLANOS.filter((c) => !(familiaActiva === "Base" && REGLAS_NO_APLICA.some((r) => r.familia === "Base" && r.area === c.area)));
+
   const estadoDe = (p, c) => (esNoAplicaFijo(p, c) ? ESTADO_NO_APLICA : estados.get(claveAvance(p.id, c.area, c.tipo)) || "no");
 
   async function ciclar(producto, columna) {
@@ -179,7 +182,7 @@ export default function AvancePlanosPanel({ currentUser }) {
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="text-left px-2 py-1 font-black text-gray-500 w-8">N°</th>
                   <th className="text-left px-2 py-1 font-black text-gray-500">Producto</th>
-                  {COLUMNAS_PLANOS.map((c) => (
+                  {columnas.map((c) => (
                     <th key={c.area} className="text-center px-[2px] py-0.5 font-black w-[84px] text-gray-500 border-l border-gray-200">
                       <div className="text-[9px] leading-tight uppercase">{c.label}</div>
                       <div className="text-[10px] leading-none font-black text-[#203f73]">{c.tipo}</div>
@@ -202,10 +205,10 @@ export default function AvancePlanosPanel({ currentUser }) {
                         <span className="font-black text-[10px]">{producto.nombre}</span>
                         {producto.codigo && <span className="ml-1.5 text-[9px] font-semibold text-gray-400">{producto.codigo}</span>}
                       </td>
-                      {COLUMNAS_PLANOS.map((c, ci) => (
+                      {columnas.map((c) => (
                         <td key={c.area} className="px-1 py-[3px] text-center border-l border-gray-100">
                           <CheckCell
-                            estado={estadosFila[ci]}
+                            estado={estadoDe(producto, c)}
                             fijo={esNoAplicaFijo(producto, c)}
                             onCycle={() => ciclar(producto, c)}
                             titulo={`${producto.nombre} · ${c.label} · plano ${c.tipo}`}
@@ -227,7 +230,7 @@ export default function AvancePlanosPanel({ currentUser }) {
                 <tr className="bg-gray-50 border-t border-gray-200 font-black text-gray-500">
                   <td className="px-2 py-1" />
                   <td className="px-2 py-1 text-[10px] uppercase">Total marcados</td>
-                  {COLUMNAS_PLANOS.map((c) => (
+                  {columnas.map((c) => (
                     <td key={c.area} className="px-1 py-1 text-center border-l border-gray-200">{totalColumna(c)}</td>
                   ))}
                   <td className="px-2 py-1 border-l border-gray-200 text-[10px]">de {filtrados.length} productos</td>
