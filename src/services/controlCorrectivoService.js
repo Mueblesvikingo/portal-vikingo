@@ -89,7 +89,8 @@ export async function getPersonasCorrectivo() {
   if (personasRes.error) console.error("Error al cargar personas de Control Correctivo:", personasRes.error);
   if (rolesRes.error) console.error("Error al cargar roles de Control Correctivo:", rolesRes.error);
 
-  const personas = (personasRes.data || []).filter((p) => p.activo !== false).map((p) => ({ id: p.id, nombre: formatNombre(p.nombre), nombreOriginal: p.nombre }));
+  // "LIDERES DE PROCESO" es un registro genérico del catálogo, no una persona: no se ofrece como responsable.
+  const personas = (personasRes.data || []).filter((p) => p.activo !== false && !/^l[ií]deres de/i.test(String(p.nombre || "").trim())).map((p) => ({ id: p.id, nombre: formatNombre(p.nombre), nombreOriginal: p.nombre }));
   const rolesActivos = (rolesRes.data || []).filter((r) => r.activo !== false);
   const idsLider = new Set(rolesActivos.filter((r) => String(r.rol || "").trim().toLowerCase() === ROL_LIDER.toLowerCase()).map((r) => r.persona_id));
   const idsSupervisor = new Set(rolesActivos.filter((r) => String(r.rol || "").trim().toLowerCase().startsWith("supervisor")).map((r) => r.persona_id));

@@ -27,7 +27,7 @@ export default function AvanceSlider({ value, prioridad, disabled, onCommit, com
           type="range"
           min={0}
           max={100}
-          step={5}
+          step={1}
           value={local}
           disabled={disabled}
           aria-label="Avance reportado"

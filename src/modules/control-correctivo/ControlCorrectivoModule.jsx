@@ -36,17 +36,14 @@ function Badge({ clase, children }) {
 }
 
 // Avatar con iniciales + nombre y rol; "Sin asignar" cuando no hay persona.
-function Persona({ nombre, rol }) {
+function Persona({ nombre }) {
   const asignada = nombre && nombre !== "—";
   return (
     <div className="flex items-center gap-2">
       <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-black ${asignada ? "bg-[#0f1f3d] text-white" : "border border-dashed border-[#cbd5e1] text-[#cbd5e1]"}`}>
         {asignada ? iniciales(nombre) : "?"}
       </span>
-      <span className="min-w-0 leading-tight">
-        <span className={`block truncate text-xs font-semibold ${asignada ? "text-[#0f1f3d]" : "text-[#94a3b8]"}`}>{asignada ? nombre : "Sin asignar"}</span>
-        <span className="block text-[9px] font-semibold uppercase tracking-wide text-[#94a3b8]">{rol}</span>
-      </span>
+      <span className={`min-w-0 text-xs font-semibold leading-tight ${asignada ? "text-[#0f1f3d]" : "text-[#94a3b8]"}`}>{asignada ? nombre : "Sin asignar"}</span>
     </div>
   );
 }
@@ -237,75 +234,70 @@ export default function ControlCorrectivoModule({ currentUser }) {
       ) : (
         <div className={`${cardClass} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] border-collapse text-left">
+            <table className="w-full min-w-[1380px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-[#edf0f4] bg-[#f7f7f4] text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">
-                  <th className="px-4 py-2.5">Causa raíz y acción correctiva</th>
-                  <th className="px-3 py-2.5">Responsables</th>
-                  <th className="px-3 py-2.5">Prioridad</th>
-                  <th className="px-3 py-2.5">Compromiso</th>
-                  <th className="px-3 py-2.5">Avance</th>
+                  <th className="w-[150px] px-3 py-2.5">Proceso</th>
+                  <th className="w-[110px] px-3 py-2.5">Tipo de brecha</th>
+                  <th className="w-[190px] px-3 py-2.5">Causa raíz</th>
+                  <th className="w-[210px] px-3 py-2.5">Acción correctiva</th>
+                  <th className="w-[150px] px-3 py-2.5">Líder responsable</th>
+                  <th className="w-[150px] px-3 py-2.5">Supervisor ejecutor</th>
+                  <th className="w-[80px] px-3 py-2.5">Prioridad</th>
+                  <th className="w-[125px] px-3 py-2.5">Fecha compromiso</th>
+                  <th className="w-[160px] px-3 py-2.5">Avance reportado</th>
+                  <th className="w-[190px] px-3 py-2.5">Eficiencia operativa</th>
                   <th className="w-10 px-1 py-2.5" />
                 </tr>
               </thead>
-              {grupos.map(({ proceso, filas }) => {
-                const promedio = Math.round(filas.reduce((s, i) => s + (Number(i.avance) || 0), 0) / filas.length);
-                return (
-                  <tbody key={proceso.id}>
-                    <tr className="border-b border-[#edf0f4] bg-[#fafbfc]">
-                      <td colSpan={6} className="px-4 py-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-xs font-black uppercase tracking-wide text-[#0f1f3d]">{proceso.nombre}</p>
-                          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-[#5b6472]">
-                            <span>{filas.length} acción{filas.length === 1 ? "" : "es"}</span>
-                            <span className="h-1.5 w-20 overflow-hidden rounded-full bg-[#e5e9f0]"><span className="block h-full rounded-full bg-[#c9a227]" style={{ width: `${promedio}%` }} /></span>
-                            <span className="tabular-nums">{promedio}%</span>
-                          </div>
+              <tbody>
+                {grupos.flatMap((g) => g.filas.map((i) => ({ i, proceso: g.proceso }))).map(({ i, proceso }) => {
+                  const expandido = abierto === i.id;
+                  const alternar = () => setAbierto((cur) => (cur === i.id ? null : i.id));
+                  const textoClase = `text-xs leading-snug ${expandido ? "" : "line-clamp-3"}`;
+                  return (
+                    <tr key={i.id} className="group border-b border-[#edf0f4] align-top transition last:border-0 hover:bg-[#fcfcfa]">
+                      <td className="px-3 py-3">
+                        <div className="flex items-start gap-1.5">
+                          <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: PRIORIDAD_COLOR[i.prioridad] }} />
+                          <p className="text-xs font-bold leading-snug text-[#0f1f3d]">{proceso.nombre}</p>
                         </div>
                       </td>
+                      <td className="px-3 py-3"><Badge clase={BRECHA_BADGE[i.tipo_brecha]}>{i.tipo_brecha}</Badge></td>
+                      <td className="px-3 py-3">
+                        <button type="button" onClick={alternar} className="block w-full text-left" title={expandido ? "Ocultar detalle" : "Ver completo"}>
+                          <p className={`${textoClase} text-[#5b6472]`}>{i.causa_raiz || "—"}</p>
+                        </button>
+                      </td>
+                      <td className="px-3 py-3">
+                        <button type="button" onClick={alternar} className="block w-full text-left" title={expandido ? "Ocultar detalle" : "Ver completo"}>
+                          <p className={`${textoClase} font-semibold text-[#0f1f3d]`}>{i.accion_correctiva}</p>
+                        </button>
+                      </td>
+                      <td className="px-3 py-3"><Persona nombre={nombrePersona(i.lider_persona_id)} /></td>
+                      <td className="px-3 py-3"><Persona nombre={nombrePersona(i.supervisor_persona_id)} /></td>
+                      <td className="px-3 py-3"><Badge clase={PRIORIDAD_BADGE[i.prioridad]}>{i.prioridad}</Badge></td>
+                      <td className="px-3 py-3">
+                        <p className="text-xs font-semibold text-[#0f1f3d]">{fmtFecha(i.fecha_compromiso)}</p>
+                        <p className={`mt-0.5 text-[11px] font-semibold ${i.estado === "Vencida" ? "text-red-600" : i.estado === "Completada" ? "text-emerald-600" : "text-[#5b6472]"}`}>{textoVencimiento(i.fecha_compromiso, i.estado, hoy)}</p>
+                      </td>
+                      <td className="px-3 py-3">
+                        <AvanceSlider value={i.avance} prioridad={i.prioridad} disabled={!puedeEditar} onCommit={(v) => guardarAvance(i, v)} compact />
+                      </td>
+                      <td className="px-3 py-3">
+                        <button type="button" onClick={alternar} className="block w-full text-left" title={expandido ? "Ocultar detalle" : "Ver completo"}>
+                          <p className={`${textoClase} ${i.eficiencia_operativa ? "text-[#5b6472]" : "text-[#cbd5e1]"}`}>{i.eficiencia_operativa || "Sin capturar"}</p>
+                        </button>
+                      </td>
+                      <td className="px-1 py-3 text-right">
+                        {puedeEditar && (
+                          <button type="button" onClick={() => setModal({ item: i })} title="Editar" aria-label="Editar acción" className="rounded-lg px-2 py-1 text-sm text-[#94a3b8] transition hover:bg-[#f7f7f4] hover:text-[#0f1f3d]">✏️</button>
+                        )}
+                      </td>
                     </tr>
-                    {filas.map((i) => {
-                      const expandido = abierto === i.id;
-                      return (
-                        <tr key={i.id} className="border-b border-[#edf0f4] align-top transition last:border-0 hover:bg-[#fcfcfa]">
-                          <td className="px-4 py-3">
-                            <div className="mb-1.5 flex items-center gap-1.5">
-                              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: PRIORIDAD_COLOR[i.prioridad] }} />
-                              <Badge clase={BRECHA_BADGE[i.tipo_brecha]}>{i.tipo_brecha}</Badge>
-                            </div>
-                            <button type="button" onClick={() => setAbierto((cur) => (cur === i.id ? null : i.id))} className="block w-full text-left" title={expandido ? "Ocultar detalle" : "Ver detalle"}>
-                              <p className={`text-[13px] font-semibold leading-snug text-[#0f1f3d] ${expandido ? "" : "line-clamp-2"}`}>{i.accion_correctiva}</p>
-                              <p className={`mt-1 text-xs leading-snug text-[#5b6472] ${expandido ? "" : "line-clamp-2"}`}><span className="font-semibold text-[#94a3b8]">Causa raíz · </span>{i.causa_raiz || "—"}</p>
-                              {expandido && (
-                                <p className="mt-2 rounded-lg bg-[#f7f7f4] px-2.5 py-1.5 text-xs leading-snug text-[#5b6472]"><span className="font-semibold text-[#0f1f3d]">Eficiencia operativa · </span>{i.eficiencia_operativa || "Sin resultado capturado"}</p>
-                              )}
-                            </button>
-                          </td>
-                          <td className="w-[210px] px-3 py-3">
-                            <div className="space-y-1.5">
-                              <Persona nombre={nombrePersona(i.lider_persona_id)} rol="Líder responsable" />
-                              <Persona nombre={nombrePersona(i.supervisor_persona_id)} rol="Supervisor ejecutor" />
-                            </div>
-                          </td>
-                          <td className="w-[90px] px-3 py-3"><Badge clase={PRIORIDAD_BADGE[i.prioridad]}>{i.prioridad}</Badge></td>
-                          <td className="w-[130px] px-3 py-3">
-                            <p className="text-xs font-semibold text-[#0f1f3d]">{fmtFecha(i.fecha_compromiso)}</p>
-                            <p className={`mt-0.5 text-[11px] font-semibold ${i.estado === "Vencida" ? "text-red-600" : i.estado === "Completada" ? "text-emerald-600" : "text-[#5b6472]"}`}>{textoVencimiento(i.fecha_compromiso, i.estado, hoy)}</p>
-                          </td>
-                          <td className="w-[180px] px-3 py-3">
-                            <AvanceSlider value={i.avance} prioridad={i.prioridad} disabled={!puedeEditar} onCommit={(v) => guardarAvance(i, v)} compact />
-                          </td>
-                          <td className="px-1 py-3 text-right">
-                            {puedeEditar && (
-                              <button type="button" onClick={() => setModal({ item: i })} title="Editar" aria-label="Editar acción" className="rounded-lg px-2 py-1 text-sm text-[#94a3b8] transition hover:bg-[#f7f7f4] hover:text-[#0f1f3d]">✏️</button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                );
-              })}
+                  );
+                })}
+              </tbody>
             </table>
           </div>
         </div>

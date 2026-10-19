@@ -138,8 +138,8 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
             </div>
           </div>
           <label className={`${labelClass} sm:col-span-2`}>
-            Eficiencia operativa (resultado)
-            <textarea value={form.eficiencia_operativa} onChange={(e) => setField("eficiencia_operativa", e.target.value)} rows={3} placeholder="Resultado obtenido en la eficiencia operativa del proceso" className={inputClass} />
+            Eficiencia operativa
+            <textarea value={form.eficiencia_operativa} onChange={(e) => setField("eficiencia_operativa", e.target.value)} rows={3} placeholder="Resultado de la eficiencia operativa del proceso" className={inputClass} />
           </label>
         </div>
 
