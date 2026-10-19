@@ -15,10 +15,15 @@ import {
 
 const TOTAL_POR_PRODUCTO = COLUMNAS_PLANOS.length;
 
-// Paleta pastel discreta: cada fila toma un tono distinto y la secuencia se
-// repite (mismos tonos suaves del Gantt del Tablero de Proyectos). Ninguno cae
-// en rojo/ámbar/verde, para que el fondo de fila no se lea como un estado.
-const PALETA_FILAS = ["#eef4fb", "#eafaf3", "#fdeef3", "#f3eefb", "#fdf8e6", "#e8f8f7", "#fdf1e6"];
+// Familias que no entran en este seguimiento (siguen en el catálogo de productos).
+const FAMILIAS_EXCLUIDAS = ["Buros", "Tocador"];
+
+// Tampoco entran las bases de tela (todas): se sigue el avance de las demás bases.
+const esBaseDeTela = (p) => familiaDe(p.nombre) === "Base" && /tela/i.test(p.nombre);
+const esExcluido = (p) => FAMILIAS_EXCLUIDAS.includes(familiaDe(p.nombre)) || esBaseDeTela(p);
+
+// Filas alternadas: blanco y un solo tono rojo claro.
+const COLOR_FILA_ALTERNA = "#fdecec";
 
 // Familia = primera palabra del nombre (Base, Cabecera, Sala…); "Par de buros"
 // se agrupa como Buros.
@@ -31,7 +36,7 @@ function familiaDe(nombre) {
 function Progress({ value }) {
   const seguro = Number.isFinite(Number(value)) ? Math.max(0, Math.min(100, Number(value))) : 0;
   return (
-    <div className="h-1.5 bg-white/80 rounded-full overflow-hidden">
+    <div className="h-1.5 bg-gray-200/80 rounded-full overflow-hidden">
       <div className="h-full rounded-full bg-[#203f73]" style={{ width: `${seguro}%` }} />
     </div>
   );
@@ -67,7 +72,7 @@ export default function AvancePlanosPanel({ currentUser }) {
     async function cargar() {
       const [prods, avance] = await Promise.all([getProductosPlanos(), getAvancePlanos()]);
       if (cancelado) return;
-      setProductos(prods);
+      setProductos(prods.filter((p) => !esExcluido(p)));
       setMarcadas(avance.marcadas);
       setTablaFaltante(avance.tablaFaltante);
       if (avance.error) setMessage("No fue posible cargar el avance. Recarga la página.");
@@ -171,14 +176,14 @@ export default function AvancePlanosPanel({ currentUser }) {
                   const hechos = hechosDe(producto);
                   const pct = Math.round((hechos / TOTAL_POR_PRODUCTO) * 100);
                   return (
-                    <tr key={producto.id} style={{ backgroundColor: PALETA_FILAS[index % PALETA_FILAS.length] }} className="border-b border-white/70 transition-all hover:brightness-[0.97]">
+                    <tr key={producto.id} style={{ backgroundColor: index % 2 === 1 ? COLOR_FILA_ALTERNA : "#ffffff" }} className="border-b border-gray-100 transition-all hover:brightness-[0.97]">
                       <td className="px-2 py-[3px] font-bold text-gray-400 text-[10px]">{index + 1}</td>
                       <td className="px-2 py-[3px] min-w-[210px] whitespace-nowrap">
                         <span className="font-black text-[10px]">{producto.nombre}</span>
                         {producto.codigo && <span className="ml-1.5 text-[9px] font-semibold text-gray-400">{producto.codigo}</span>}
                       </td>
                       {COLUMNAS_PLANOS.map((c) => (
-                        <td key={c.area} className="px-1 py-[3px] text-center border-l border-white/70">
+                        <td key={c.area} className="px-1 py-[3px] text-center border-l border-gray-100">
                           <CheckCell
                             marcada={marcadas.has(claveAvance(producto.id, c.area, c.tipo))}
                             onToggle={() => alternar(producto, c.area, c.tipo)}
@@ -186,7 +191,7 @@ export default function AvancePlanosPanel({ currentUser }) {
                           />
                         </td>
                       ))}
-                      <td className="px-2 py-[3px] border-l border-white/70">
+                      <td className="px-2 py-[3px] border-l border-gray-100">
                         <div className="flex items-center gap-2">
                           <div className="flex-1"><Progress value={pct} /></div>
                           <span className={`w-8 text-right text-[10px] font-black ${pct === 100 ? "text-green-700" : "text-gray-600"}`}>{pct}%</span>
