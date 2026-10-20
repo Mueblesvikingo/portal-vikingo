@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   COLUMNAS_PLANOS,
   ESTADO_HECHO,
+  ESTADO_VALIDADO,
   ESTADO_NO_APLICA,
   claveAvance,
   getProductosPlanos,
@@ -14,7 +15,7 @@ import {
 // mientras no hay diseñador: solo sirve para ir marcando qué planos ya existen.
 // Misma estructura visual que la tabla de Madurez Organizacional (encabezado
 // gris, barra oscura, casillas verdes y barra de avance azul marino).
-// Cada casilla se cicla con clic: vacía → ✓ → N/A → vacía.
+// Cada casilla se cicla con clic: vacía → ✓ verde (terminado) → ✓ dorado (validado) → N/A → vacía.
 
 // Familias que no entran en este seguimiento (siguen en el catálogo de productos).
 const FAMILIAS_EXCLUIDAS = ["Buros", "Tocador"];
@@ -50,23 +51,25 @@ function Progress({ value }) {
 
 function CheckCell({ estado, fijo, onCycle, titulo }) {
   const clases =
-    estado === ESTADO_HECHO
-      ? "bg-green-100 border-green-300 text-green-700"
-      : estado === ESTADO_NO_APLICA
-        ? "bg-gray-100 border-gray-300 text-gray-500"
-        : "bg-white border-gray-200 text-gray-300";
+    estado === ESTADO_VALIDADO
+      ? "bg-amber-100 border-amber-400 text-amber-500"
+      : estado === ESTADO_HECHO
+        ? "bg-green-100 border-green-300 text-green-700"
+        : estado === ESTADO_NO_APLICA
+          ? "bg-gray-100 border-gray-300 text-gray-500"
+          : "bg-white border-gray-200 text-gray-300";
   return (
     <button
       type="button"
       onClick={fijo ? undefined : onCycle}
-      title={fijo ? `${titulo} · no aplica` : `${titulo} · clic: ✓ → N/A → vacío`}
+      title={fijo ? `${titulo} · no aplica` : `${titulo} · clic: ✓ terminado → ✓ validado → N/A → vacío`}
       aria-label={titulo}
       aria-pressed={estado !== "no"}
       className={`relative w-5 h-4 rounded flex items-center justify-center border leading-none font-black mx-auto ${fijo ? "cursor-default" : "cursor-pointer hover:opacity-80"} ${clases} ${
         estado === ESTADO_NO_APLICA ? "text-[7px] tracking-tighter" : "text-[10px]"
       }`}
     >
-      {estado === ESTADO_HECHO ? "✓" : estado === ESTADO_NO_APLICA ? "N/A" : ""}
+      {estado === ESTADO_HECHO || estado === ESTADO_VALIDADO ? "✓" : estado === ESTADO_NO_APLICA ? "N/A" : ""}
     </button>
   );
 }
@@ -77,6 +80,7 @@ export default function AvancePlanosPanel({ currentUser }) {
   const [loading, setLoading] = useState(true);
   const [tablaFaltante, setTablaFaltante] = useState(false);
   const [naDisponible, setNaDisponible] = useState(true);
+  const [validadoDisponible, setValidadoDisponible] = useState(true);
   const [message, setMessage] = useState("");
   const [familia, setFamilia] = useState("");
 
@@ -89,6 +93,7 @@ export default function AvancePlanosPanel({ currentUser }) {
       setEstados(avance.estados);
       setTablaFaltante(avance.tablaFaltante);
       setNaDisponible(avance.naDisponible);
+      setValidadoDisponible(avance.validadoDisponible);
       if (avance.error) setMessage("No fue posible cargar el avance. Recarga la página.");
       setLoading(false);
     }
@@ -115,7 +120,9 @@ export default function AvancePlanosPanel({ currentUser }) {
     if (tablaFaltante || esNoAplicaFijo(producto, columna)) return;
     const clave = claveAvance(producto.id, columna.area, columna.tipo);
     const anterior = estados.get(clave) || "no";
-    const siguiente = anterior === "no" ? ESTADO_HECHO : anterior === ESTADO_HECHO ? (naDisponible ? ESTADO_NO_APLICA : "no") : "no";
+    // vacía → terminado → validado → N/A → vacía (se omiten los pasos cuya columna aún no existe)
+    const ciclo = ["no", ESTADO_HECHO, ...(validadoDisponible ? [ESTADO_VALIDADO] : []), ...(naDisponible ? [ESTADO_NO_APLICA] : [])];
+    const siguiente = ciclo[(Math.max(0, ciclo.indexOf(anterior)) + 1) % ciclo.length];
     const poner = (valor) => setEstados((actual) => {
       const copia = new Map(actual);
       if (valor === "no") copia.delete(clave); else copia.set(clave, valor);
@@ -123,7 +130,7 @@ export default function AvancePlanosPanel({ currentUser }) {
     });
     poner(siguiente);
     try {
-      await setAvancePlano({ productoId: producto.id, area: columna.area, tipo: columna.tipo, estado: siguiente }, currentUser, naDisponible);
+      await setAvancePlano({ productoId: producto.id, area: columna.area, tipo: columna.tipo, estado: siguiente }, currentUser, { na: naDisponible, va: validadoDisponible });
     } catch (err) {
       console.error("Error al guardar el avance de planos:", err);
       poner(anterior);
@@ -131,20 +138,24 @@ export default function AvancePlanosPanel({ currentUser }) {
     }
   }
 
-  // Avance general: casillas hechas entre las que aplican, sobre todos los productos
-  // del seguimiento (no solo la familia que se está viendo).
+  // Avance general sobre todos los productos del seguimiento (no solo la familia que
+  // se ve) y solo las casillas que aplican: planos terminados (verde; incluye los
+  // validados) y planos validados (dorado).
   let aplicablesGeneral = 0;
-  let hechosGeneral = 0;
+  let terminadosGeneral = 0;
+  let validadosGeneral = 0;
   productos.forEach((p) => COLUMNAS_PLANOS.forEach((c) => {
     const e = estadoDe(p, c);
     if (e === ESTADO_NO_APLICA) return;
     aplicablesGeneral += 1;
-    if (e === ESTADO_HECHO) hechosGeneral += 1;
+    if (e === ESTADO_HECHO || e === ESTADO_VALIDADO) terminadosGeneral += 1;
+    if (e === ESTADO_VALIDADO) validadosGeneral += 1;
   }));
-  const avanceGeneral = aplicablesGeneral ? Math.round((hechosGeneral / aplicablesGeneral) * 100) : 0;
+  const avanceGeneral = aplicablesGeneral ? Math.round((terminadosGeneral / aplicablesGeneral) * 100) : 0;
+  const validadoGeneral = aplicablesGeneral ? Math.round((validadosGeneral / aplicablesGeneral) * 100) : 0;
 
   // Total de casillas hechas por columna (sobre los productos que se ven).
-  const totalColumna = (c) => filtrados.filter((p) => estadoDe(p, c) === ESTADO_HECHO).length;
+  const totalColumna = (c) => filtrados.filter((p) => [ESTADO_HECHO, ESTADO_VALIDADO].includes(estadoDe(p, c))).length;
 
   return (
     <div className="space-y-5">
@@ -162,11 +173,18 @@ export default function AvancePlanosPanel({ currentUser }) {
         </div>
       )}
 
+      {!tablaFaltante && !validadoDisponible && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+          Para poder marcar planos como validados (paloma dorada) ejecuta una vez <span className="font-black">sql/2026-10-sig_avance_planos_validado.sql</span> en el SQL Editor y recarga la página.
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="h-11 bg-[#111827] text-white px-4 flex items-center justify-between text-sm font-black">
           <div className="flex items-center gap-3">
             <span>AVANCE DE PLANOS POR PRODUCTO</span>
-            <span title="Avance general de todos los productos" className="rounded-md bg-white/10 px-2 py-0.5 text-sm leading-none font-black text-green-300">{avanceGeneral}%</span>
+            <span title="Planos terminados (todos los productos)" className="rounded-md bg-white/10 px-2 py-0.5 text-sm leading-none font-black text-green-300">{avanceGeneral}%</span>
+            <span title="Planos validados (todos los productos)" className="rounded-md bg-white/10 px-2 py-0.5 text-sm leading-none font-black text-amber-300">{validadoGeneral}%</span>
           </div>
           <div className="text-[10px] font-bold text-gray-400">{filtrados.length} productos</div>
         </div>
@@ -211,7 +229,7 @@ export default function AvancePlanosPanel({ currentUser }) {
                 {filtrados.map((producto, index) => {
                   const estadosFila = COLUMNAS_PLANOS.map((c) => estadoDe(producto, c));
                   const aplicables = estadosFila.filter((e) => e !== ESTADO_NO_APLICA).length;
-                  const hechos = estadosFila.filter((e) => e === ESTADO_HECHO).length;
+                  const hechos = estadosFila.filter((e) => e === ESTADO_HECHO || e === ESTADO_VALIDADO).length;
                   const pct = aplicables ? Math.round((hechos / aplicables) * 100) : 100;
                   return (
                     <tr key={producto.id} style={{ backgroundColor: index % 2 === 1 ? COLOR_FILA_ALTERNA : "#ffffff" }} className="border-b border-gray-100 transition-all hover:brightness-[0.97]">
