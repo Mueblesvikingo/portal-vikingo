@@ -330,10 +330,18 @@ export function isDirectorGeneral(user) {
 }
 
 // Pestaña temporal "Avance de planos 2D/3D" de Diagnóstico SIG: solo el
-// Coordinador SIG y el Director General la ven y marcan (pedido explícito).
+// Coordinador SIG y el Director General la ven y marcan (pedido explícito),
+// más Beatriz (Gerente de Calidad, persona_id 11) por excepción puntual a
+// pedido del usuario (20-oct-2026): una persona, no un rol general.
+const AVANCE_PLANOS_PERSONA_IDS = [11];
+
 export function canViewAvancePlanos(user) {
   const roles = getApplicableRoles(user);
-  return roles.includes("Coordinador SIG") || roles.includes("Director General");
+  return (
+    roles.includes("Coordinador SIG") ||
+    roles.includes("Director General") ||
+    AVANCE_PLANOS_PERSONA_IDS.includes(Number(user?.persona_id))
+  );
 }
 
 // Edición del tablero Estratégico de Desempeño Organizacional: decisión
