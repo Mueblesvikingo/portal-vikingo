@@ -190,6 +190,7 @@ export default function AvancePlanosPanel({ currentUser }) {
             <span>AVANCE DE PLANOS POR PRODUCTO</span>
             <span title="Planos terminados (todos los productos)" className="rounded-md bg-white/10 px-2 py-0.5 text-sm leading-none font-black text-green-300">{avanceGeneral}%</span>
             <span title="Planos validados (todos los productos)" className="rounded-md bg-white/10 px-2 py-0.5 text-sm leading-none font-black text-amber-300">{validadoGeneral}%</span>
+            <span className="-ml-1.5 text-[10px] font-black uppercase tracking-wider text-amber-400">Validado</span>
           </div>
           <div className="text-[10px] font-bold text-gray-400">{filtrados.length} productos</div>
         </div>
