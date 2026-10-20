@@ -40,11 +40,16 @@ function familiaDe(nombre) {
   return n.split(/\s+/)[0] || "Otros";
 }
 
-function Progress({ value }) {
-  const seguro = Number.isFinite(Number(value)) ? Math.max(0, Math.min(100, Number(value))) : 0;
+// Una sola barra: azul = planos terminados, dorado encima (desde la izquierda) =
+// planos validados (los validados también están terminados).
+function Progress({ value, validado = 0 }) {
+  const acotar = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : 0);
+  const terminado = acotar(value);
+  const validadoPct = Math.min(acotar(validado), terminado);
   return (
-    <div className="h-1.5 bg-gray-200/80 rounded-full overflow-hidden">
-      <div className="h-full rounded-full bg-[#203f73]" style={{ width: `${seguro}%` }} />
+    <div className="relative h-1.5 bg-gray-200/80 rounded-full overflow-hidden" title={`Terminado ${terminado}% · Validado ${validadoPct}%`}>
+      <div className="absolute inset-y-0 left-0 rounded-full bg-[#203f73]" style={{ width: `${terminado}%` }} />
+      <div className="absolute inset-y-0 left-0 rounded-full bg-amber-400" style={{ width: `${validadoPct}%` }} />
     </div>
   );
 }
@@ -231,6 +236,7 @@ export default function AvancePlanosPanel({ currentUser }) {
                   const aplicables = estadosFila.filter((e) => e !== ESTADO_NO_APLICA).length;
                   const hechos = estadosFila.filter((e) => e === ESTADO_HECHO || e === ESTADO_VALIDADO).length;
                   const pct = aplicables ? Math.round((hechos / aplicables) * 100) : 100;
+                  const pctValidado = aplicables ? Math.round((estadosFila.filter((e) => e === ESTADO_VALIDADO).length / aplicables) * 100) : 0;
                   return (
                     <tr key={producto.id} style={{ backgroundColor: index % 2 === 1 ? COLOR_FILA_ALTERNA : "#ffffff" }} className="border-b border-gray-100 transition-all hover:brightness-[0.97]">
                       <td className="px-2 py-[3px] font-bold text-gray-400 text-[10px]">{index + 1}</td>
@@ -250,7 +256,7 @@ export default function AvancePlanosPanel({ currentUser }) {
                       ))}
                       <td className="px-2 py-[3px] border-l border-gray-100">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1"><Progress value={pct} /></div>
+                          <div className="flex-1"><Progress value={pct} validado={pctValidado} /></div>
                           <span className={`w-8 text-right text-[10px] font-black ${pct === 100 ? "text-green-700" : "text-gray-600"}`}>{pct}%</span>
                         </div>
                       </td>
