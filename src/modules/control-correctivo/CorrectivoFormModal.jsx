@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TIPOS_BRECHA, PRIORIDADES, hoyISO, mismaPersona, procesosDe, lideresDe, supervisoresDe } from "../../services/controlCorrectivoService";
 import { inputClass, labelClass, btnPrimaryClass, btnGhostClass, PRIORIDAD_COLOR } from "./ccHelpers";
 import AvanceSlider from "./AvanceSlider";
@@ -45,6 +45,95 @@ function Chips({ opciones, seleccion, onToggle, activoClass, vacio }) {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// Filtro desplegable de selección múltiple: cerrado muestra un resumen de lo marcado
+// y al abrirlo deja marcar varias opciones (con buscador cuando hay muchas).
+// `opciones`: [{ id, texto, grupo? }]; `especial`: opción fija arriba (p. ej. "Todos los procesos").
+function SelectorMultiple({ opciones, seleccion, onToggle, placeholder = "Seleccionar…", vacio, especial = null }) {
+  const [abierto, setAbierto] = useState(false);
+  const [buscar, setBuscar] = useState("");
+  const caja = useRef(null);
+
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) setAbierto(false); };
+    const tecla = (e) => { if (e.key === "Escape") setAbierto(false); };
+    document.addEventListener("mousedown", fuera);
+    document.addEventListener("keydown", tecla);
+    return () => { document.removeEventListener("mousedown", fuera); document.removeEventListener("keydown", tecla); };
+  }, [abierto]);
+
+  const marcadas = opciones.filter((o) => seleccion.includes(Number(o.id)));
+  const resumen = especial?.activo
+    ? especial.texto
+    : marcadas.length === 0 ? "" : marcadas.length <= 2 ? marcadas.map((o) => o.texto).join(", ") : `${marcadas.length} seleccionados`;
+  const filtradas = buscar.trim() ? opciones.filter((o) => o.texto.toLowerCase().includes(buscar.trim().toLowerCase())) : opciones;
+  const grupos = [];
+  filtradas.forEach((o) => {
+    const g = o.grupo || "";
+    let bloque = grupos.find((x) => x.g === g);
+    if (!bloque) { bloque = { g, lista: [] }; grupos.push(bloque); }
+    bloque.lista.push(o);
+  });
+
+  return (
+    <div ref={caja} className="relative mt-1">
+      <button
+        type="button"
+        aria-expanded={abierto}
+        onClick={() => setAbierto((a) => !a)}
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-[#d9dee6] bg-white px-3 py-2 text-left text-sm font-medium text-[#0f1f3d] outline-none transition hover:bg-[#fbfbf9] focus:border-[#c9a227] focus:shadow-[0_0_0_3px_rgba(201,162,39,0.2)]"
+      >
+        <span className={`truncate ${resumen ? "" : "text-[#94a3b8]"}`}>{resumen || placeholder}</span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          {marcadas.length > 0 && !especial?.activo && <span className="rounded-full bg-[#0f1f3d] px-1.5 py-0.5 text-[10px] font-black leading-none text-white">{marcadas.length}</span>}
+          <span className={`text-[10px] text-[#94a3b8] transition ${abierto ? "rotate-180" : ""}`}>▼</span>
+        </span>
+      </button>
+      {abierto && (
+        <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-xl border border-[#d9dee6] bg-white shadow-[0_12px_28px_-10px_rgba(11,31,58,0.35)]">
+          {opciones.length > 8 && (
+            <div className="border-b border-[#edf0f4] p-2">
+              <input type="text" value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar…" autoFocus className="w-full rounded-lg border border-[#edf0f4] bg-[#fbfbf9] px-2.5 py-1.5 text-xs outline-none focus:border-[#c9a227]" />
+            </div>
+          )}
+          <div className="max-h-56 overflow-y-auto py-1">
+            {especial && (
+              <button type="button" role="option" aria-selected={especial.activo} onClick={especial.onToggle} className="flex w-full items-center gap-2 border-b border-[#edf0f4] px-3 py-1.5 text-left text-xs font-bold text-[#0f1f3d] hover:bg-[#f7f7f4]">
+                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${especial.activo ? "border-[#0f1f3d] bg-[#0f1f3d] text-white" : "border-[#cbd2dc] bg-white"}`}>{especial.activo ? "✓" : ""}</span>
+                {especial.texto}
+              </button>
+            )}
+            {opciones.length === 0 && <p className="px-3 py-2 text-[11px] text-[#94a3b8]">{vacio}</p>}
+            {opciones.length > 0 && filtradas.length === 0 && <p className="px-3 py-2 text-[11px] text-[#94a3b8]">Sin resultados.</p>}
+            {grupos.map(({ g, lista }) => (
+              <div key={g || "_"}>
+                {g && <p className="px-3 pb-0.5 pt-1.5 text-[10px] font-black uppercase tracking-wider text-[#94a3b8]">{g}</p>}
+                {lista.map((o) => {
+                  const activo = especial?.activo || seleccion.includes(Number(o.id));
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      role="option"
+                      aria-selected={activo}
+                      disabled={Boolean(especial?.activo)}
+                      onClick={() => onToggle(Number(o.id))}
+                      className="flex w-full items-start gap-2 px-3 py-1.5 text-left text-xs font-medium text-[#0f1f3d] hover:bg-[#f7f7f4] disabled:cursor-default disabled:text-[#94a3b8] disabled:hover:bg-transparent"
+                    >
+                      <span className={`mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${activo ? "border-[#0f1f3d] bg-[#0f1f3d] text-white" : "border-[#cbd2dc] bg-white"}`}>{activo ? "✓" : ""}</span>
+                      <span>{o.texto}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -210,7 +299,7 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
             {multiples ? (
               <>
                 <p className={labelClass}>Proceso <span className="normal-case tracking-normal">(uno o varios)</span></p>
-                <Chips opciones={procesos} seleccion={form.procesos_ids} onToggle={alternarProceso} activoClass="border-[#0f1f3d] bg-[#0f1f3d] text-white" vacio="No hay procesos en el catálogo." />
+                <SelectorMultiple opciones={procesos.map((p) => ({ id: p.id, texto: p.nombre }))} seleccion={form.procesos_ids} onToggle={alternarProceso} placeholder="Seleccionar procesos…" vacio="No hay procesos en el catálogo." />
                 <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className={labelClass}>
                     Tipo de brecha
@@ -242,31 +331,14 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
             {extendido && (
               <div className="mt-3">
                 <p className={labelClass}>Otros procesos involucrados</p>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    aria-pressed={form.todos_procesos}
-                    onClick={() => setField("todos_procesos", !form.todos_procesos)}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${form.todos_procesos ? "border-[#0f1f3d] bg-[#0f1f3d] text-white" : "border-[#d9dee6] bg-white text-[#0f1f3d] hover:bg-[#f7f7f4]"}`}
-                  >
-                    {form.todos_procesos ? "✓ " : ""}Todos los procesos
-                  </button>
-                  {procesos.filter((p) => (multiples ? !form.procesos_ids.includes(Number(p.id)) : String(p.id) !== form.proceso_id)).map((p) => {
-                    const activo = form.todos_procesos || form.procesos_involucrados_ids.includes(Number(p.id));
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        aria-pressed={activo}
-                        disabled={form.todos_procesos}
-                        onClick={() => alternarEn("procesos_involucrados_ids", Number(p.id))}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-default ${activo ? "border-sky-300 bg-sky-100 text-sky-800" : "border-[#d9dee6] bg-white text-[#5b6472] hover:bg-[#f7f7f4]"}`}
-                      >
-                        {p.nombre}
-                      </button>
-                    );
-                  })}
-                </div>
+                <SelectorMultiple
+                  opciones={procesos.filter((p) => (multiples ? !form.procesos_ids.includes(Number(p.id)) : String(p.id) !== form.proceso_id)).map((p) => ({ id: p.id, texto: p.nombre }))}
+                  seleccion={form.procesos_involucrados_ids}
+                  onToggle={(id) => alternarEn("procesos_involucrados_ids", id)}
+                  placeholder="Ninguno · seleccionar procesos…"
+                  vacio="No hay más procesos."
+                  especial={{ texto: "Todos los procesos", activo: form.todos_procesos, onToggle: () => setField("todos_procesos", !form.todos_procesos) }}
+                />
               </div>
             )}
           </Bloque>
@@ -295,11 +367,11 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
               <div className="space-y-3">
                 <div>
                   <p className={labelClass}>Líder responsable <span className="normal-case tracking-normal">(uno o varios)</span></p>
-                  <Chips opciones={opcionesLider} seleccion={form.lideres_ids} onToggle={(id) => alternarEn("lideres_ids", id)} activoClass="border-violet-400 bg-violet-100 text-violet-900" vacio="No hay líderes de proceso." />
+                  <SelectorMultiple opciones={opcionesLider.map((p) => ({ id: p.id, texto: p.nombre }))} seleccion={form.lideres_ids} onToggle={(id) => alternarEn("lideres_ids", id)} placeholder="Seleccionar líderes…" vacio="No hay líderes de proceso." />
                 </div>
                 <div>
                   <p className={labelClass}>Supervisor ejecutor <span className="normal-case tracking-normal">(opcional, uno o varios)</span></p>
-                  <Chips opciones={supervisores} seleccion={form.supervisores_ids} onToggle={(id) => alternarEn("supervisores_ids", id)} activoClass="border-violet-300 bg-violet-50 text-violet-800" vacio="No hay supervisores." />
+                  <SelectorMultiple opciones={supervisores.map((p) => ({ id: p.id, texto: p.nombre }))} seleccion={form.supervisores_ids} onToggle={(id) => alternarEn("supervisores_ids", id)} placeholder="Sin asignar · seleccionar supervisores…" vacio="No hay supervisores." />
                 </div>
               </div>
             ) : (
@@ -330,23 +402,7 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
                   <p className="mt-1 text-[11px] font-semibold text-amber-800">Para agregar directrices propias, ejecuta una vez <span className="font-black">sql/2026-10-control_correctivo_v3.sql</span> en el SQL Editor de Supabase y recarga la página.</p>
                 ) : (
                   <>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {directricesPropias.length === 0 && <span className="text-[11px] text-[#94a3b8]">Aún no hay directrices: agrega la primera.</span>}
-                      {directricesPropias.map((d) => {
-                        const activo = form.directrices_propias_ids.includes(Number(d.id));
-                        return (
-                          <button
-                            key={d.id}
-                            type="button"
-                            aria-pressed={activo}
-                            onClick={() => alternarEn("directrices_propias_ids", Number(d.id))}
-                            className={`max-w-full rounded-full border px-2.5 py-1 text-left text-[11px] font-semibold transition ${activo ? "border-sky-400 bg-sky-100 text-sky-900" : "border-[#d9dee6] bg-white text-[#5b6472] hover:bg-[#f7f7f4]"}`}
-                          >
-                            {d.nombre}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <SelectorMultiple opciones={directricesPropias.map((d) => ({ id: d.id, texto: d.nombre }))} seleccion={form.directrices_propias_ids} onToggle={(id) => alternarEn("directrices_propias_ids", id)} placeholder="Seleccionar directrices…" vacio="Aún no hay directrices: agrega la primera." />
                     <div className="mt-2 flex gap-2">
                       <input
                         type="text"
@@ -369,31 +425,13 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
               {directricesPorPerspectiva.length === 0 ? (
                 <p className="text-xs text-[#5b6472]">No hay objetivos cargados en Despliegue Estratégico.</p>
               ) : (
-                <div className="mt-1.5 space-y-2.5">
-                  {directricesPorPerspectiva.map(([perspectiva, lista]) => (
-                    <div key={perspectiva}>
-                      <p className="text-[10px] font-black uppercase tracking-wider text-[#94a3b8]">{perspectiva}</p>
-                      <div className="mt-1 flex flex-wrap gap-1.5">
-                        {lista.map((d) => {
-                          const activo = form.directrices_ids.includes(Number(d.id));
-                          return (
-                            <button
-                              key={d.id}
-                              type="button"
-                              aria-pressed={activo}
-                              onClick={() => alternarEn("directrices_ids", Number(d.id))}
-                              title={d.titulo}
-                              className={`max-w-full rounded-full border px-2.5 py-1 text-left text-[11px] font-semibold transition ${activo ? "border-[#c9a227] bg-[#fbf6e3] text-[#7a5f0c]" : "border-[#d9dee6] bg-white text-[#5b6472] hover:bg-[#f7f7f4]"}`}
-                            >
-                              <span className="font-black">{d.codigo}</span> · {d.titulo}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                  <p className="text-[10px] font-semibold text-[#94a3b8]">{form.directrices_ids.length === 0 ? "Opcional: marca los objetivos a los que contribuye la acción." : `${form.directrices_ids.length} objetivo(s) seleccionado(s).`}</p>
-                </div>
+                <SelectorMultiple
+                  opciones={directricesPorPerspectiva.flatMap(([perspectiva, lista]) => lista.map((d) => ({ id: d.id, texto: `${d.codigo} · ${d.titulo}`, grupo: perspectiva })))}
+                  seleccion={form.directrices_ids}
+                  onToggle={(id) => alternarEn("directrices_ids", id)}
+                  placeholder="Opcional · seleccionar objetivos…"
+                  vacio="No hay objetivos cargados."
+                />
               )}
             </Bloque>
           )}
