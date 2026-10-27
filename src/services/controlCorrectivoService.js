@@ -240,7 +240,7 @@ export async function probarNotificaciones() {
 // que se agregan). Devuelve cuántos avisos nuevos se crearon.
 export async function notificarCorrectivo(item, personaIds, actor) {
   const { personaId, nombre } = actorFields(actor);
-  const { data: previos, error: errPrevios } = await supabase.from(TABLA_NOTIF).select("destinatario_persona_id").eq("correctivo_id", item.id);
+  const { data: previos, error: errPrevios } = await supabase.from(TABLA_NOTIF).select("destinatario_persona_id").eq("correctivo_id", item.id).eq("motivo", "nueva_accion");
   if (errPrevios) throw errPrevios;
   const yaAvisados = new Set((previos || []).map((r) => Number(r.destinatario_persona_id)));
   const nuevos = [...new Set(personaIds.map(Number))].filter((id) => !yaAvisados.has(id));
@@ -256,9 +256,99 @@ export async function notificarCorrectivo(item, personaIds, actor) {
     created_by_persona_id: personaId,
     created_by_nombre: nombre,
   }));
-  const { error } = await supabase.from(TABLA_NOTIF).upsert(filas, { onConflict: "correctivo_id,destinatario_persona_id", ignoreDuplicates: true });
+  // Insert simple: los ya avisados se filtraron arriba (v5 quitó la restricción
+  // única general para permitir varios avisos de avance a la PM).
+  const { error } = await supabase.from(TABLA_NOTIF).insert(filas);
   if (error) throw error;
   return filas.length;
+}
+
+// Involucrados de cada acción = quienes recibieron la alerta de acción nueva
+// (líderes y supervisores se suman aparte con lideresDe/supervisoresDe).
+// Devuelve Map correctivo_id → Set de persona_id.
+export async function getAvisadosPorCorrectivo() {
+  const { data, error } = await supabase.from(TABLA_NOTIF).select("correctivo_id,destinatario_persona_id").eq("motivo", "nueva_accion");
+  if (error) {
+    if (!esTablaFaltante(error)) console.error("Error al cargar los involucrados de Control Correctivo:", error);
+    return new Map();
+  }
+  const mapa = new Map();
+  (data || []).forEach((r) => {
+    const id = Number(r.correctivo_id);
+    if (!mapa.has(id)) mapa.set(id, new Set());
+    mapa.get(id).add(Number(r.destinatario_persona_id));
+  });
+  return mapa;
+}
+
+// ---- Reportes de avance de los involucrados (sql/2026-10-control_correctivo_v5.sql)
+const TABLA_AVANCES = "control_correctivo_avances";
+const BUCKET_AVANCES = "control-correctivo-avances";
+export const MAX_ARCHIVO_MB = 15;
+
+export async function getAvancesEquipo() {
+  const { data, error } = await supabase.from(TABLA_AVANCES).select("*").order("created_at", { ascending: true });
+  if (error) {
+    if (!esTablaFaltante(error)) console.error("Error al cargar los avances del equipo:", error);
+    return { data: [], disponible: false };
+  }
+  return { data: data || [], disponible: true };
+}
+
+function nombreArchivoSeguro(nombre) {
+  const limpio = String(nombre || "archivo").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-");
+  return limpio.slice(-80) || "archivo";
+}
+
+// Un reporte puede llevar barra (avance), "mi parte está lista" (listo),
+// comentario y/o un archivo. Al guardarlo se avisa a la PM en la campanita
+// (sin sirena), salvo que quien reporta sea la propia PM.
+export async function reportarAvanceEquipo(item, { avance = null, listo = false, comentario = "", archivo = null }, actor, pmPersonaId) {
+  const { personaId, nombre } = actorFields(actor);
+  if (personaId == null) throw new Error("Tu usuario no tiene persona asignada: no se puede registrar el avance.");
+  const texto = String(comentario || "").trim();
+  if (avance == null && !listo && !texto && !archivo) throw new Error("Marca un avance, “mi parte está lista”, un comentario o un archivo.");
+  if (archivo && archivo.size > MAX_ARCHIVO_MB * 1024 * 1024) throw new Error(`El archivo pesa más de ${MAX_ARCHIVO_MB} MB.`);
+
+  let adjunto = {};
+  if (archivo) {
+    const path = `correctivo-${item.id}/${personaId}-${Date.now()}-${nombreArchivoSeguro(archivo.name)}`;
+    const { error: errSubida } = await supabase.storage.from(BUCKET_AVANCES).upload(path, archivo, { contentType: archivo.type || undefined });
+    if (errSubida) throw errSubida;
+    const { data: pub } = supabase.storage.from(BUCKET_AVANCES).getPublicUrl(path);
+    adjunto = { archivo_url: pub.publicUrl, archivo_nombre: archivo.name, archivo_path: path };
+  }
+
+  const { data, error } = await supabase
+    .from(TABLA_AVANCES)
+    .insert({
+      correctivo_id: item.id,
+      persona_id: personaId,
+      persona_nombre: nombre,
+      avance: avance == null ? null : Math.max(0, Math.min(100, Math.round(Number(avance) || 0))),
+      listo: Boolean(listo),
+      comentario: texto || null,
+      ...adjunto,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+
+  if (pmPersonaId != null && Number(pmPersonaId) !== Number(personaId)) {
+    const titulo = item.nombre_accion?.trim() || item.accion_correctiva?.trim() || "Acción correctiva";
+    const partes = [data.avance != null ? `${data.avance}%` : null, data.listo ? "su parte está lista" : null, data.archivo_url ? "adjuntó un archivo" : null].filter(Boolean);
+    const { error: errAviso } = await supabase.from(TABLA_NOTIF).insert({
+      correctivo_id: item.id,
+      destinatario_persona_id: Number(pmPersonaId),
+      motivo: "avance",
+      mensaje: `${nombre || "Un involucrado"} reportó avance en “${titulo}”${partes.length ? `: ${partes.join(" · ")}` : ""}.`,
+      urgente: false,
+      created_by_persona_id: personaId,
+      created_by_nombre: nombre,
+    });
+    if (errAviso) console.error("Error al avisar a la PM del avance reportado:", errAviso);
+  }
+  return data;
 }
 
 // Sondeo de la ventana emergente y la campanita. Mientras no exista la tabla

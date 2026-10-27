@@ -35,6 +35,7 @@ const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
   "operational-performance",
   "acciones",
   "calidad",
+  "control-correctivo",
 ];
 
 // Supervisores, auxiliares e inspectores de calidad (cualquier rol que
@@ -51,7 +52,7 @@ const MODULES_VISIBLE_FOR_RESTRICTED_ROLES = [
 // "Responsable de Almacén" (antes "Supervisor de Almacén" y luego "Responsable/Encargado
 // de Almacén") conserva el mismo acceso acotado; se mantiene el nombre anterior por compatibilidad.
 const OPERATIVE_ROLE_PREFIXES = ["Supervisor", "Auxiliar", "Inspector de Calidad", "Responsable de Almacén", "Responsable/Encargado de Almacén"];
-const MODULES_VISIBLE_FOR_OPERATIVE_ROLES = ["organigrama", "workload-balance", "acciones", "operational-performance", "calidad"];
+const MODULES_VISIBLE_FOR_OPERATIVE_ROLES = ["organigrama", "workload-balance", "acciones", "operational-performance", "calidad", "control-correctivo"];
 
 export function isOperativeRole(user) {
   return getApplicableRoles(user).some((role) =>
@@ -94,9 +95,11 @@ const STRATEGIC_TEAM_ROLES = ["PM", "Coordinador SIG", "Analista de Procesos", "
 // terminó la etapa de "solo Coordinador SIG lo ve" (ver historial) y ahora
 // es visible para todo el equipo estratégico — las inspectoras/gerencia de
 // Calidad conservan su acceso aparte, vía MODULES_VISIBLE_FOR_OPERATIVE_ROLES.
-// "control-correctivo" (Control Correctivo, pedido de la PM): por ahora solo da
-// visibilidad al equipo estratégico.
-const STRATEGIC_TEAM_ONLY_MODULES = ["decision-center", "calidad", "control-correctivo"];
+// "control-correctivo" (Control Correctivo) salió de esta lista el 27-oct-2026
+// a pedido del usuario: ahora lo abre cualquier usuario para reportar su
+// avance, pero fuera del equipo estratégico solo ve las acciones donde está
+// involucrado y no puede editarlas (el filtro vive en ControlCorrectivoModule).
+const STRATEGIC_TEAM_ONLY_MODULES = ["decision-center", "calidad"];
 
 // Módulo S&OP: visible para el equipo estratégico (por rol) más un grupo
 // puntual de gerencias que participan en el ciclo (Hugo Terrones, Beatriz

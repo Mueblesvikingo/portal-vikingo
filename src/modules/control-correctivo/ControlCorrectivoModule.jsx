@@ -14,6 +14,9 @@ import {
   procesosDe,
   lideresDe,
   supervisoresDe,
+  getAvisadosPorCorrectivo,
+  getAvancesEquipo,
+  reportarAvanceEquipo,
   getDirectricesPropias,
   createDirectrizPropia,
   createCorrectivo,
@@ -36,6 +39,8 @@ import {
 import AvanceSlider from "./AvanceSlider";
 import CorrectivoFormModal from "./CorrectivoFormModal";
 import CorrectivoGantt from "./CorrectivoGantt";
+import AvanceEquipoModal from "./AvanceEquipoModal";
+import { PM_PERSONA_ID } from "../../services/pmoService";
 
 const FILTROS_VACIO = { proceso: "" };
 const ESTADOS = ["En curso", "Vencida", "Completada"];
@@ -71,6 +76,10 @@ export default function ControlCorrectivoModule({ currentUser }) {
   const [propiasDisponible, setPropiasDisponible] = useState(false); // sql/2026-10-control_correctivo_v3.sql // ya existen las columnas de sql/2026-10-control_correctivo_v2.sql
   const [multiples, setMultiples] = useState(false); // sql/2026-10-control_correctivo_v4.sql: varios procesos, líderes y supervisores
   const [alertasDisponibles, setAlertasDisponibles] = useState(false); // sql/2026-10-control_correctivo_v4.sql: control_correctivo_notificaciones
+  const [avisados, setAvisados] = useState(new Map()); // correctivo_id → personas que recibieron la alerta (involucrados)
+  const [avances, setAvances] = useState([]); // reportes de avance de los involucrados
+  const [avancesDisponible, setAvancesDisponible] = useState(false); // sql/2026-10-control_correctivo_v5.sql
+  const [equipoItem, setEquipoItem] = useState(null);
   const [errorCarga, setErrorCarga] = useState(false);
   const [vista, setVista] = useState("tablero");
   const [filtros, setFiltros] = useState(FILTROS_VACIO);
@@ -83,8 +92,11 @@ export default function ControlCorrectivoModule({ currentUser }) {
   useEffect(() => {
     let cancelado = false;
     async function cargar() {
-      const [correctivos, procs, pers, dirs, columnasNuevas, propias, columnasMultiples, notificaciones] = await Promise.all([getCorrectivos(), getProcesosCorrectivo(), getPersonasCorrectivo(), getDirectricesCorrectivo(), probarColumnasNuevas(), getDirectricesPropias(), probarColumnasMultiples(), probarNotificaciones()]);
+      const [correctivos, procs, pers, dirs, columnasNuevas, propias, columnasMultiples, notificaciones, avisadosMapa, avancesRes] = await Promise.all([getCorrectivos(), getProcesosCorrectivo(), getPersonasCorrectivo(), getDirectricesCorrectivo(), probarColumnasNuevas(), getDirectricesPropias(), probarColumnasMultiples(), probarNotificaciones(), getAvisadosPorCorrectivo(), getAvancesEquipo()]);
       if (cancelado) return;
+      setAvisados(avisadosMapa);
+      setAvances(avancesRes.data);
+      setAvancesDisponible(avancesRes.disponible);
       setMultiples(columnasMultiples);
       setAlertasDisponibles(notificaciones);
       setItems(correctivos.data);
@@ -108,8 +120,29 @@ export default function ControlCorrectivoModule({ currentUser }) {
   const directrizPorId = useMemo(() => new Map(directrices.map((d) => [Number(d.id), d])), [directrices]);
   const nombrePersona = (id) => (id != null ? personaPorId.get(Number(id)) || "—" : "—");
 
+  // Involucrados de una acción: líderes, supervisores y quienes recibieron la alerta.
+  const involucradosDe = (i) => [...new Set([...lideresDe(i), ...supervisoresDe(i), ...(avisados.get(Number(i.id)) || [])])];
+  const avancesPorItem = useMemo(() => {
+    const mapa = new Map();
+    avances.forEach((r) => {
+      const id = Number(r.correctivo_id);
+      if (!mapa.has(id)) mapa.set(id, []);
+      mapa.get(id).push(r);
+    });
+    return mapa;
+  }, [avances]);
+
+  // Fuera del equipo estratégico solo se ven las acciones donde la persona está involucrada.
+  const verTodo = isStrategicTeamMember(currentUser);
+  const miPersonaId = currentUser?.persona_id != null ? Number(currentUser.persona_id) : null;
   const hoy = hoyISO();
-  const conEstado = useMemo(() => items.map((i) => ({ ...i, estado: estadoCorrectivo(i, hoy) })), [items, hoy]);
+  const conEstado = useMemo(
+    () => items
+      .filter((i) => verTodo || (miPersonaId != null && involucradosDe(i).includes(miPersonaId)))
+      .map((i) => ({ ...i, estado: estadoCorrectivo(i, hoy) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, hoy, verTodo, miPersonaId, avisados],
+  );
 
   const filtrados = useMemo(() => {
     const lista = conEstado.filter((i) => (
@@ -169,6 +202,11 @@ export default function ControlCorrectivoModule({ currentUser }) {
         mostrarAviso("La acción se guardó, pero no se pudieron enviar las alertas a las personas.");
       }
     }
+  }
+
+  async function reportarAvance(item, reporte) {
+    const nuevo = await reportarAvanceEquipo(item, reporte, currentUser, PM_PERSONA_ID);
+    setAvances((lista) => [...lista, nuevo]);
   }
 
   async function crearDirectriz(nombre) {
@@ -240,6 +278,11 @@ export default function ControlCorrectivoModule({ currentUser }) {
           Para elegir varios procesos, líderes y supervisores, y para que les llegue la alerta con ventana emergente y sonido, ejecuta una vez <span className="font-black">sql/2026-10-control_correctivo_v4.sql</span> en el SQL Editor de Supabase y recarga la página.
         </div>
       )}
+      {!tablaFaltante && !loading && multiples && alertasDisponibles && !avancesDisponible && puedeEditar && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+          Para que los involucrados reporten su avance (barra, “mi parte está lista” o archivo), ejecuta una vez <span className="font-black">sql/2026-10-control_correctivo_v5.sql</span> en el SQL Editor de Supabase y recarga la página.
+        </div>
+      )}
       {errorCarga && (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">No se pudieron cargar las acciones. Recarga la página; si sigue igual, avisa a sistemas.</div>
       )}
@@ -282,13 +325,13 @@ export default function ControlCorrectivoModule({ currentUser }) {
       ) : filtrados.length === 0 ? (
         <div className={`${cardClass} flex flex-col items-center gap-1 py-12 text-center`}>
           <span className="text-3xl text-slate-200">🛠️</span>
-          <p className="text-sm font-bold text-slate-400">{items.length === 0 ? "Aún no hay acciones correctivas" : "Ninguna acción coincide con los filtros"}</p>
+          <p className="text-sm font-bold text-slate-400">{conEstado.length === 0 ? (verTodo ? "Aún no hay acciones correctivas" : "No tienes acciones correctivas asignadas") : "Ninguna acción coincide con los filtros"}</p>
           {items.length === 0 && puedeEditar && !tablaFaltante && <p className="text-xs text-slate-400">Usa “+ Nueva acción” para registrar la primera.</p>}
         </div>
       ) : (
         <div className={`${cardClass} overflow-hidden`}>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] border-collapse text-left">
+            <table className={`w-full ${avancesDisponible ? "min-w-[1000px]" : "min-w-[860px]"} border-collapse text-left`}>
               <thead>
                 <tr className="border-b border-[#edf0f4] text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">
                   <th className="px-4 py-3">Proceso · brecha</th>
@@ -296,6 +339,7 @@ export default function ControlCorrectivoModule({ currentUser }) {
                   <th className="px-3 py-3">Líder · supervisor</th>
                   <th className="px-3 py-3">Prioridad · compromiso</th>
                   <th className="px-3 py-3">Avance reportado</th>
+                  {avancesDisponible && <th className="px-3 py-3">Avance del equipo</th>}
                   <th className="w-10 px-1 py-3" />
                 </tr>
               </thead>
@@ -374,6 +418,37 @@ export default function ControlCorrectivoModule({ currentUser }) {
                       <td className="w-[150px] px-3 py-4">
                         <AvanceSlider value={i.avance} prioridad={i.prioridad} disabled={!puedeEditar} onCommit={(v) => guardarAvance(i, v)} compact />
                       </td>
+                      {avancesDisponible && (() => {
+                        // Resumen: cuántos involucrados reportaron, cuántos ya terminaron su parte y cuántos archivos hay.
+                        const involucrados = involucradosDe(i);
+                        const reportes = avancesPorItem.get(Number(i.id)) || [];
+                        const ultimos = new Map();
+                        reportes.forEach((r) => ultimos.set(Number(r.persona_id), r));
+                        const listos = [...ultimos.values()].filter((r) => r.listo).length;
+                        const archivos = reportes.filter((r) => r.archivo_url).length;
+                        const ultimo = reportes[reportes.length - 1];
+                        const soyInvolucrado = miPersonaId != null && involucrados.includes(miPersonaId);
+                        return (
+                          <td className="w-[170px] px-3 py-4">
+                            <p className="text-xs font-bold text-[#0f1f3d]">{ultimos.size} de {involucrados.length} reportaron</p>
+                            {(listos > 0 || archivos > 0) && (
+                              <p className="mt-0.5 text-[11px] font-semibold text-[#5b6472]">
+                                {listos > 0 && <span className="text-emerald-700">✓ {listos} lista{listos === 1 ? "" : "s"}</span>}
+                                {listos > 0 && archivos > 0 && " · "}
+                                {archivos > 0 && <span className="text-sky-700">📎 {archivos}</span>}
+                              </p>
+                            )}
+                            {ultimo && <p className="mt-0.5 text-[10px] font-semibold text-[#94a3b8]">Último: {fmtFecha(String(ultimo.created_at).slice(0, 10))}</p>}
+                            <button
+                              type="button"
+                              onClick={() => setEquipoItem(i)}
+                              className={`mt-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-bold transition ${soyInvolucrado ? "border-[#c9a227] bg-[#fbf6e3] text-[#7a5f0c] hover:bg-[#f6ecc9]" : "border-[#d9dee6] bg-white text-[#0f1f3d] hover:bg-[#f7f7f4]"}`}
+                            >
+                              {soyInvolucrado ? "+ Reportar mi avance" : "Ver detalle"}
+                            </button>
+                          </td>
+                        );
+                      })()}
                       <td className="px-1 py-4 text-right">
                         {puedeEditar && (
                           <button type="button" onClick={() => setModal({ item: i })} title="Editar" aria-label="Editar acción" className="rounded-lg px-2 py-1 text-sm text-[#94a3b8] transition hover:bg-[#f7f7f4] hover:text-[#0f1f3d]">✏️</button>
@@ -389,6 +464,21 @@ export default function ControlCorrectivoModule({ currentUser }) {
       )}
 
       </>
+      )}
+
+      {equipoItem && (
+        <AvanceEquipoModal
+          item={equipoItem}
+          titulo={equipoItem.nombre_accion || equipoItem.accion_correctiva || "Acción correctiva"}
+          color={PRIORIDAD_COLOR[equipoItem.prioridad] || "#64748b"}
+          involucrados={involucradosDe(equipoItem)}
+          reportes={avancesPorItem.get(Number(equipoItem.id)) || []}
+          nombrePersona={nombrePersona}
+          miPersonaId={miPersonaId}
+          puedeReportar={miPersonaId != null && involucradosDe(equipoItem).includes(miPersonaId)}
+          onReportar={(reporte) => reportarAvance(equipoItem, reporte)}
+          onClose={() => setEquipoItem(null)}
+        />
       )}
 
       {modal && (
