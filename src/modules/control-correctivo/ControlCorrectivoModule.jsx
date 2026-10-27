@@ -433,29 +433,12 @@ export default function ControlCorrectivoModule({ currentUser }) {
                             <p className={`mt-1 text-xs leading-relaxed text-[#6b7587] ${expandido ? "" : "line-clamp-2"}`}>{i.causa_raiz || "Sin causa raíz"}</p>
                           </div>
                         </button>
-                        {(i.todos_procesos || (i.procesos_involucrados_ids || []).length > 0 || (i.directrices_ids || []).length > 0 || (i.directrices_propias_ids || []).length > 0) && (
+                        {(i.directrices_propias_ids || []).length > 0 && (
                           <div className="mt-2 space-y-1.5">
-                            {(i.todos_procesos || (i.procesos_involucrados_ids || []).length > 0) && (
-                              <div className="flex flex-wrap items-center gap-1">
-                                <span className="text-[9px] font-bold uppercase tracking-wider text-[#94a3b8]">Involucra</span>
-                                {i.todos_procesos
-                                  ? <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700">Todos los procesos</span>
-                                  : i.procesos_involucrados_ids.map((pid) => <span key={pid} className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">{procesoPorId.get(Number(pid)) || `Proceso ${pid}`}</span>)}
-                              </div>
-                            )}
                             {(i.directrices_propias_ids || []).length > 0 && (
                               <div className="flex flex-wrap items-center gap-1">
                                 <span className="text-[9px] font-bold uppercase tracking-wider text-[#94a3b8]">Directrices</span>
                                 {i.directrices_propias_ids.map((did) => <span key={did} className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-800">{propiaPorId.get(Number(did)) || `Directriz ${did}`}</span>)}
-                              </div>
-                            )}
-                            {(i.directrices_ids || []).length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1">
-                                <span className="text-[9px] font-bold uppercase tracking-wider text-[#94a3b8]">Objetivos</span>
-                                {i.directrices_ids.map((did) => {
-                                  const d = directrizPorId.get(Number(did));
-                                  return <span key={did} title={d?.titulo} className="rounded-full border border-[#efe2b4] bg-[#fbf6e3] px-2 py-0.5 text-[10px] font-bold text-[#7a5f0c]">{d?.codigo || `#${did}`}</span>;
-                                })}
                               </div>
                             )}
                           </div>
