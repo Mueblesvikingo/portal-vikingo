@@ -3,6 +3,7 @@ import { getPendingRecordatorios, markRecordatorioVisto } from "../services/pmoS
 import { getFichasFirmadasPendientesAviso, marcarFirmaAvisoVisto } from "../services/auditoriasService";
 import { getPendingAccionNotificaciones, marcarNotificacionVista } from "../services/accionesService";
 import { getPendingCalidadRecordatorios, markCalidadRecordatorioVisto } from "../services/calidadService";
+import { getPendingCorrectivoNotificaciones, marcarCorrectivoNotificacionVista } from "../services/controlCorrectivoService";
 
 const POLL_INTERVAL_MS = 30000;
 
@@ -30,6 +31,7 @@ export default function NotificationBell({ currentUser }) {
   const [firmas, setFirmas] = useState([]);
   const [accionNotifs, setAccionNotifs] = useState([]);
   const [calidadRecordatorios, setCalidadRecordatorios] = useState([]);
+  const [correctivoNotifs, setCorrectivoNotifs] = useState([]);
   const [open, setOpen] = useState(false);
   const [dismissing, setDismissing] = useState(null);
   const containerRef = useRef(null);
@@ -84,6 +86,18 @@ export default function NotificationBell({ currentUser }) {
   }, [personaId]);
 
   useEffect(() => {
+    if (!personaId) { setCorrectivoNotifs([]); return undefined; }
+    let cancelled = false;
+    async function poll() {
+      const result = await getPendingCorrectivoNotificaciones(personaId);
+      if (!cancelled) setCorrectivoNotifs(result || []);
+    }
+    poll();
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [personaId]);
+
+  useEffect(() => {
     if (typeof Notification === "undefined") return;
     firmas.forEach((item) => {
       const key = `${item.id}-${item.firmado_auditado_at}`;
@@ -121,6 +135,14 @@ export default function NotificationBell({ currentUser }) {
       mensaje: item.mensaje,
       when: item.created_at,
     })),
+    ...correctivoNotifs.map((item) => ({
+      kind: "correctivo",
+      id: item.id,
+      titulo: item.control_correctivo?.nombre_accion ? `Control Correctivo · ${item.control_correctivo.nombre_accion}` : "Control Correctivo",
+      mensaje: item.mensaje,
+      from: item.created_by_nombre,
+      when: item.created_at,
+    })),
     ...calidadRecordatorios.map((item) => ({
       kind: "calidad",
       id: item.id,
@@ -143,6 +165,11 @@ export default function NotificationBell({ currentUser }) {
       await marcarNotificacionVista(item.id, { accionId: item.accionId, personaId, tipo: item.tipo });
       setDismissing(null);
       setAccionNotifs((current) => current.filter((a) => a.id !== item.id));
+    } else if (item.kind === "correctivo") {
+      const result = await marcarCorrectivoNotificacionVista(item.id);
+      setDismissing(null);
+      if (!result?.ok) return;
+      setCorrectivoNotifs((current) => current.filter((c) => c.id !== item.id));
     } else if (item.kind === "calidad") {
       const result = await markCalidadRecordatorioVisto(item.id);
       setDismissing(null);
@@ -187,10 +214,11 @@ export default function NotificationBell({ currentUser }) {
                 const key = `${item.kind}-${item.id}`;
                 const isFirma = item.kind === "firma";
                 const isAccion = item.kind === "accion";
+                const isCorrectivo = item.kind === "correctivo";
                 return (
                   <div key={key} className="border-b border-slate-100 px-4 py-3 last:border-b-0">
-                    <p className={`text-[9px] font-black uppercase tracking-wide ${isFirma ? "text-emerald-600" : isAccion ? "text-red-600" : "text-amber-600"}`}>
-                      {isFirma ? "✍️ " : isAccion ? "🚩 " : ""}{item.titulo}
+                    <p className={`text-[9px] font-black uppercase tracking-wide ${isFirma ? "text-emerald-600" : isAccion || isCorrectivo ? "text-red-600" : "text-amber-600"}`}>
+                      {isFirma ? "✍️ " : isAccion ? "🚩 " : isCorrectivo ? "🛠️ " : ""}{item.titulo}
                     </p>
                     <p className="mt-1 text-[11px] font-semibold text-slate-700">{item.mensaje}</p>
                     <div className="mt-1.5 flex items-center justify-between gap-2">

@@ -7,6 +7,13 @@ import {
   getPersonasCorrectivo,
   getDirectricesCorrectivo,
   probarColumnasNuevas,
+  probarColumnasMultiples,
+  probarNotificaciones,
+  destinatariosCorrectivo,
+  notificarCorrectivo,
+  procesosDe,
+  lideresDe,
+  supervisoresDe,
   getDirectricesPropias,
   createDirectrizPropia,
   createCorrectivo,
@@ -55,13 +62,15 @@ function Persona({ nombre, suave = false }) {
 export default function ControlCorrectivoModule({ currentUser }) {
   const [items, setItems] = useState([]);
   const [procesos, setProcesos] = useState([]);
-  const [personas, setPersonas] = useState({ personas: [], lideres: [], supervisores: [] });
+  const [personas, setPersonas] = useState({ personas: [], lideres: [], supervisores: [], porProceso: new Map() });
   const [loading, setLoading] = useState(true);
   const [tablaFaltante, setTablaFaltante] = useState(false);
   const [directrices, setDirectrices] = useState([]);
   const [extendido, setExtendido] = useState(false);
   const [directricesPropias, setDirectricesPropias] = useState([]);
   const [propiasDisponible, setPropiasDisponible] = useState(false); // sql/2026-10-control_correctivo_v3.sql // ya existen las columnas de sql/2026-10-control_correctivo_v2.sql
+  const [multiples, setMultiples] = useState(false); // sql/2026-10-control_correctivo_v4.sql: varios procesos, líderes y supervisores
+  const [alertasDisponibles, setAlertasDisponibles] = useState(false); // sql/2026-10-control_correctivo_v4.sql: control_correctivo_notificaciones
   const [errorCarga, setErrorCarga] = useState(false);
   const [vista, setVista] = useState("tablero");
   const [filtros, setFiltros] = useState(FILTROS_VACIO);
@@ -74,8 +83,10 @@ export default function ControlCorrectivoModule({ currentUser }) {
   useEffect(() => {
     let cancelado = false;
     async function cargar() {
-      const [correctivos, procs, pers, dirs, columnasNuevas, propias] = await Promise.all([getCorrectivos(), getProcesosCorrectivo(), getPersonasCorrectivo(), getDirectricesCorrectivo(), probarColumnasNuevas(), getDirectricesPropias()]);
+      const [correctivos, procs, pers, dirs, columnasNuevas, propias, columnasMultiples, notificaciones] = await Promise.all([getCorrectivos(), getProcesosCorrectivo(), getPersonasCorrectivo(), getDirectricesCorrectivo(), probarColumnasNuevas(), getDirectricesPropias(), probarColumnasMultiples(), probarNotificaciones()]);
       if (cancelado) return;
+      setMultiples(columnasMultiples);
+      setAlertasDisponibles(notificaciones);
       setItems(correctivos.data);
       setTablaFaltante(correctivos.tablaFaltante);
       setErrorCarga(Boolean(correctivos.error));
@@ -102,7 +113,7 @@ export default function ControlCorrectivoModule({ currentUser }) {
 
   const filtrados = useMemo(() => {
     const lista = conEstado.filter((i) => (
-      !filtros.proceso || String(i.proceso_id) === filtros.proceso || i.todos_procesos || (i.procesos_involucrados_ids || []).map(String).includes(filtros.proceso)
+      !filtros.proceso || procesosDe(i).map(String).includes(filtros.proceso) || i.todos_procesos || (i.procesos_involucrados_ids || []).map(String).includes(filtros.proceso)
     ));
     // Pendientes primero por fecha compromiso; las completadas al final.
     return lista.sort((a, b) => {
@@ -138,14 +149,26 @@ export default function ControlCorrectivoModule({ currentUser }) {
   }
 
   async function guardarForm(form) {
+    let guardado;
     if (modal?.item?.id) {
-      const actualizado = await updateCorrectivo(modal.item.id, form, currentUser, extendido, propiasDisponible);
-      setItems((lista) => lista.map((i) => (i.id === actualizado.id ? actualizado : i)));
+      guardado = await updateCorrectivo(modal.item.id, form, currentUser, extendido, propiasDisponible, multiples);
+      setItems((lista) => lista.map((i) => (i.id === guardado.id ? guardado : i)));
     } else {
-      const creado = await createCorrectivo(form, currentUser, extendido, propiasDisponible);
-      setItems((lista) => [...lista, creado]);
+      guardado = await createCorrectivo(form, currentUser, extendido, propiasDisponible, multiples);
+      setItems((lista) => [...lista, guardado]);
     }
     setModal(null);
+    // Ventana emergente + sirena + campanita para líderes, supervisores y gente
+    // de los procesos (al editar, solo a quien se agregó). Si falla, la acción
+    // ya quedó guardada: solo se avisa.
+    if (alertasDisponibles) {
+      try {
+        await notificarCorrectivo(guardado, destinatariosCorrectivo(guardado, { procesos, ...personas }, currentUser?.persona_id), currentUser);
+      } catch (err) {
+        console.error("Error al enviar las alertas de Control Correctivo:", err);
+        mostrarAviso("La acción se guardó, pero no se pudieron enviar las alertas a las personas.");
+      }
+    }
   }
 
   async function crearDirectriz(nombre) {
@@ -210,6 +233,11 @@ export default function ControlCorrectivoModule({ currentUser }) {
       {!tablaFaltante && !loading && !extendido && puedeEditar && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
           Para usar el nombre de la acción, los procesos involucrados y las directrices estratégicas, ejecuta una vez <span className="font-black">sql/2026-10-control_correctivo_v2.sql</span> en el SQL Editor de Supabase y recarga la página.
+        </div>
+      )}
+      {!tablaFaltante && !loading && (!multiples || !alertasDisponibles) && puedeEditar && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+          Para elegir varios procesos, líderes y supervisores, y para que les llegue la alerta con ventana emergente y sonido, ejecuta una vez <span className="font-black">sql/2026-10-control_correctivo_v4.sql</span> en el SQL Editor de Supabase y recarga la página.
         </div>
       )}
       {errorCarga && (
@@ -279,6 +307,9 @@ export default function ControlCorrectivoModule({ currentUser }) {
                     <tr key={i.id} className="border-b border-[#f1f3f6] align-top transition last:border-0 hover:bg-[#fafbfc]">
                       <td className="w-[170px] px-4 py-4">
                         <p className="text-[13px] font-bold leading-snug text-[#0f1f3d]">{proceso.nombre}</p>
+                        {procesosDe(i).filter((pid) => pid !== Number(proceso.id)).map((pid) => (
+                          <p key={pid} className="text-[12px] font-bold leading-snug text-[#0f1f3d]">{procesoPorId.get(pid) || `Proceso ${pid}`}</p>
+                        ))}
                         <div className="mt-1.5"><Badge clase={BRECHA_BADGE[i.tipo_brecha]}>{i.tipo_brecha}</Badge></div>
                       </td>
                       <td className="px-3 py-4">
@@ -328,8 +359,12 @@ export default function ControlCorrectivoModule({ currentUser }) {
                         )}
                       </td>
                       <td className="w-[170px] px-3 py-4">
-                        <Persona nombre={nombrePersona(i.lider_persona_id)} />
-                        <div className="mt-2"><Persona nombre={nombrePersona(i.supervisor_persona_id)} suave /></div>
+                        <div className="space-y-1.5">
+                          {(lideresDe(i).length ? lideresDe(i) : [null]).map((pid, n) => <Persona key={pid ?? `l${n}`} nombre={nombrePersona(pid)} />)}
+                        </div>
+                        <div className="mt-2 space-y-1.5">
+                          {(supervisoresDe(i).length ? supervisoresDe(i) : [null]).map((pid, n) => <Persona key={pid ?? `s${n}`} nombre={nombrePersona(pid)} suave />)}
+                        </div>
                       </td>
                       <td className="w-[130px] px-3 py-4">
                         <Badge clase={PRIORIDAD_BADGE[i.prioridad]}>{i.prioridad}</Badge>
@@ -364,6 +399,7 @@ export default function ControlCorrectivoModule({ currentUser }) {
           supervisores={personas.supervisores}
           directrices={directrices}
           extendido={extendido}
+          multiples={multiples}
           directricesPropias={directricesPropias}
           propiasDisponible={propiasDisponible}
           onCrearDirectriz={crearDirectriz}

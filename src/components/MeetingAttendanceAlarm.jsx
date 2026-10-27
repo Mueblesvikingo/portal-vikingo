@@ -9,6 +9,8 @@ import {
 import { getPendingRecordatorios, markRecordatorioVisto, PM_PERSONA_ID } from "../services/pmoService";
 import { getPendingFichasParaFirmar, DIRECTOR_GENERAL_PERSONA_ID } from "../services/auditoriasService";
 import { getPendingAccionNotificaciones, marcarNotificacionVista } from "../services/accionesService";
+import { getPendingCorrectivoNotificaciones, marcarCorrectivoNotificacionVista } from "../services/controlCorrectivoService";
+import { canViewModule } from "../services/permissionsService";
 
 // Mismo aviso de "informe pendiente de firmar", pero con el motivo por el
 // que le importa a CADA audiencia leerlo completo — no solo "hay que
@@ -36,6 +38,7 @@ const PRE_MEETING_TITLE = "⏰ TU REUNIÓN ESTÁ POR COMENZAR";
 const RECORDATORIO_TITLE = "🔔 TIENES UN RECORDATORIO NUEVO";
 const FIRMA_TITLE = "✍️ TIENES UN INFORME PENDIENTE DE FIRMAR";
 const ACCION_TITLE = "🚩 ACCIÓN DE MEJORA URGENTE";
+const CORRECTIVO_TITLE = "🛠️ NUEVA ACCIÓN CORRECTIVA";
 const SIREN_LOW_FREQ = 420;
 const SIREN_HIGH_FREQ = 1250;
 const SIREN_SWEEP_DURATION = 0.28;
@@ -73,6 +76,7 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
   const [pendingRecordatorios, setPendingRecordatorios] = useState([]);
   const [pendingFirmas, setPendingFirmas] = useState([]);
   const [pendingAcciones, setPendingAcciones] = useState([]);
+  const [pendingCorrectivos, setPendingCorrectivos] = useState([]);
   const [confirming, setConfirming] = useState(false);
   const snoozedUntilRef = useRef({});
   const originalTitleRef = useRef(typeof document !== "undefined" ? document.title : "");
@@ -208,9 +212,37 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
     };
   }, [personaId]);
 
+  // Control Correctivo: te incluyeron en una acción correctiva (líder,
+  // supervisor o persona de uno de sus procesos). Misma alarma que una acción
+  // de mejora urgente.
+  useEffect(() => {
+    if (!personaId) {
+      setPendingCorrectivos([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function poll() {
+      const result = await getPendingCorrectivoNotificaciones(personaId);
+      if (cancelled) return;
+      const now = Date.now();
+      const visible = (result || []).filter((item) => item.urgente && (snoozedUntilRef.current[`correctivo-${item.id}`] || 0) <= now);
+      setPendingCorrectivos(visible);
+    }
+
+    poll();
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [personaId]);
+
   const activePreMeeting = pendingPreMeeting[0] || null;
   const activeAttendance = pendingAttendance[0] || null;
   const activeAccion = pendingAcciones[0] || null;
+  const activeCorrectivo = pendingCorrectivos[0] || null;
   const activeFirma = pendingFirmas[0] || null;
   const activeRecordatorio = pendingRecordatorios[0] || null;
   // Las reuniones son urgentes por tiempo — van primero. Una acción de
@@ -219,8 +251,8 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
   // ficha pendiente de firma es una solicitud explícita (alguien la envió a
   // propósito), así que pasa antes que los recordatorios pasivos del
   // tablero PMO.
-  const activeType = activePreMeeting ? "pre-meeting" : activeAttendance ? "attendance" : activeAccion ? "accion" : activeFirma ? "firma" : activeRecordatorio ? "recordatorio" : null;
-  const active = activePreMeeting || activeAttendance || activeAccion || activeFirma || activeRecordatorio;
+  const activeType = activePreMeeting ? "pre-meeting" : activeAttendance ? "attendance" : activeAccion ? "accion" : activeCorrectivo ? "correctivo" : activeFirma ? "firma" : activeRecordatorio ? "recordatorio" : null;
+  const active = activePreMeeting || activeAttendance || activeAccion || activeCorrectivo || activeFirma || activeRecordatorio;
   // Para "firma" el timestamp de reenvío entra a la clave — así un reenvío
   // (mismo id, enviado_auditado_at nuevo) SÍ vuelve a notificar/emerger,
   // aunque el auditado ya hubiera cerrado o pospuesto el aviso anterior.
@@ -231,7 +263,7 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
       if (typeof document !== "undefined") document.title = originalTitleRef.current;
       return undefined;
     }
-    const alarmTitle = activeType === "pre-meeting" ? PRE_MEETING_TITLE : activeType === "accion" ? ACCION_TITLE : activeType === "firma" ? FIRMA_TITLE : activeType === "recordatorio" ? RECORDATORIO_TITLE : ATTENDANCE_TITLE;
+    const alarmTitle = activeType === "pre-meeting" ? PRE_MEETING_TITLE : activeType === "accion" ? ACCION_TITLE : activeType === "correctivo" ? CORRECTIVO_TITLE : activeType === "firma" ? FIRMA_TITLE : activeType === "recordatorio" ? RECORDATORIO_TITLE : ATTENDANCE_TITLE;
     let showAlarmTitle = false;
     const interval = setInterval(() => {
       document.title = showAlarmTitle ? originalTitleRef.current : alarmTitle;
@@ -247,8 +279,8 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
     if (!active || !notifyKey || notifiedRef.current.has(notifyKey)) return;
     notifiedRef.current.add(notifyKey);
     if (typeof Notification === "undefined") return;
-    const title = activeType === "pre-meeting" ? "Tu reunión está por comenzar" : activeType === "accion" ? "Acción de mejora urgente" : activeType === "firma" ? "Tienes un informe pendiente de firmar" : activeType === "recordatorio" ? "Tienes un recordatorio nuevo" : "Confirma tu asistencia a una reunión";
-    const body = activeType === "accion"
+    const title = activeType === "pre-meeting" ? "Tu reunión está por comenzar" : activeType === "accion" ? "Acción de mejora urgente" : activeType === "correctivo" ? "Nueva acción correctiva" : activeType === "firma" ? "Tienes un informe pendiente de firmar" : activeType === "recordatorio" ? "Tienes un recordatorio nuevo" : "Confirma tu asistencia a una reunión";
+    const body = activeType === "accion" || activeType === "correctivo"
       ? active.mensaje || ""
       : activeType === "recordatorio"
       ? `${active.proyecto?.nombre || "Proyecto"} · ${active.mensaje || ""}`
@@ -317,6 +349,17 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
     navigate("/acciones", { state: { openAccionId: active.accion_id } });
   }
 
+  // Abrir la acción correctiva cuenta como "visto" (mismo criterio que la
+  // campanita). Control Correctivo hoy solo lo ve el equipo estratégico: a
+  // los demás (supervisores, gente del proceso) la ventana ya les muestra el
+  // detalle y el botón solo la marca como enterada.
+  const puedeAbrirCorrectivo = canViewModule(currentUser, "control-correctivo");
+  function handleVerCorrectivo() {
+    marcarCorrectivoNotificacionVista(active.id);
+    setPendingCorrectivos((current) => current.filter((item) => item.id !== active.id));
+    if (puedeAbrirCorrectivo) navigate("/control-correctivo");
+  }
+
   async function handleConfirm() {
     setConfirming(true);
     const result = activeType === "pre-meeting"
@@ -337,7 +380,7 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
   }
 
   function handleSnooze() {
-    const prefix = activeType === "pre-meeting" ? "pre" : activeType === "recordatorio" ? "recordatorio" : activeType === "firma" ? "firma" : activeType === "accion" ? "accion" : "attendance";
+    const prefix = activeType === "pre-meeting" ? "pre" : activeType === "recordatorio" ? "recordatorio" : activeType === "firma" ? "firma" : activeType === "accion" ? "accion" : activeType === "correctivo" ? "correctivo" : "attendance";
     snoozedUntilRef.current[`${prefix}-${active.id}`] = Date.now() + SNOOZE_MS;
     if (activeType === "pre-meeting") {
       setPendingPreMeeting((current) => current.filter((item) => item.id !== active.id));
@@ -347,6 +390,8 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
       setPendingFirmas((current) => current.filter((item) => item.id !== active.id));
     } else if (activeType === "accion") {
       setPendingAcciones((current) => current.filter((item) => item.id !== active.id));
+    } else if (activeType === "correctivo") {
+      setPendingCorrectivos((current) => current.filter((item) => item.id !== active.id));
     } else {
       setPendingAttendance((current) => current.filter((item) => item.id !== active.id));
     }
@@ -366,20 +411,27 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
   const isRecordatorio = activeType === "recordatorio";
   const isFirma = activeType === "firma";
   const isAccion = activeType === "accion";
+  const isCorrectivo = activeType === "correctivo";
 
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-red-950/80 p-4">
       <div className="w-full max-w-sm animate-pulse rounded-2xl border-4 border-red-500 bg-white p-5 shadow-2xl">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">{isPreMeeting ? "⏰" : isAccion ? "🚩" : isFirma ? "✍️" : isRecordatorio ? "🔔" : "⚠️"}</span>
+          <span className="text-2xl">{isPreMeeting ? "⏰" : isAccion ? "🚩" : isCorrectivo ? "🛠️" : isFirma ? "✍️" : isRecordatorio ? "🔔" : "⚠️"}</span>
           <p className="text-sm font-black uppercase tracking-widest text-red-600">
-            {isPreMeeting ? "Tu reunión está por comenzar" : isAccion ? "Acción de mejora urgente" : isFirma ? "Informe pendiente de firmar" : isRecordatorio ? "Recordatorio nuevo" : "Confirma tu asistencia"}
+            {isPreMeeting ? "Tu reunión está por comenzar" : isAccion ? "Acción de mejora urgente" : isCorrectivo ? "Nueva acción correctiva" : isFirma ? "Informe pendiente de firmar" : isRecordatorio ? "Recordatorio nuevo" : "Confirma tu asistencia"}
           </p>
         </div>
         {isAccion ? (
           <>
             <p className="mt-3 text-base font-black text-slate-900">{active.acciones?.codigo || "Acción de mejora"}</p>
             <p className="mt-1 text-[11px] font-semibold leading-snug text-slate-600">{active.mensaje}</p>
+          </>
+        ) : isCorrectivo ? (
+          <>
+            <p className="mt-3 text-base font-black text-slate-900">{active.control_correctivo?.nombre_accion || "Control Correctivo"}</p>
+            <p className="mt-1 text-[11px] font-semibold leading-snug text-slate-600">{active.mensaje}</p>
+            {active.created_by_nombre && <p className="mt-1 text-[11px] font-black text-red-600">De: {active.created_by_nombre}</p>}
           </>
         ) : isFirma ? (
           <>
@@ -408,10 +460,10 @@ export default function MeetingAttendanceAlarm({ currentUser }) {
           <button
             type="button"
             disabled={confirming}
-            onClick={isFirma ? handleVerInforme : isAccion ? handleVerAccion : handleConfirm}
-            className={`rounded-xl px-4 py-2.5 text-sm font-black text-white shadow-sm transition disabled:cursor-not-allowed ${isFirma || isAccion ? "bg-sky-600 hover:bg-sky-700 disabled:bg-sky-300" : "bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300"}`}
+            onClick={isFirma ? handleVerInforme : isAccion ? handleVerAccion : isCorrectivo ? handleVerCorrectivo : handleConfirm}
+            className={`rounded-xl px-4 py-2.5 text-sm font-black text-white shadow-sm transition disabled:cursor-not-allowed ${isFirma || isAccion || isCorrectivo ? "bg-sky-600 hover:bg-sky-700 disabled:bg-sky-300" : "bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300"}`}
           >
-            {confirming ? "Confirmando..." : isFirma ? "→ Ver mi informe" : isAccion ? "→ Abrir acción" : isPreMeeting ? "✓ Entendido, ya voy" : isRecordatorio ? "✓ Marcar como visto" : "✓ Confirmar asistencia"}
+            {confirming ? "Confirmando..." : isFirma ? "→ Ver mi informe" : isAccion ? "→ Abrir acción" : isCorrectivo ? (puedeAbrirCorrectivo ? "→ Abrir Control Correctivo" : "✓ Enterado") : isPreMeeting ? "✓ Entendido, ya voy" : isRecordatorio ? "✓ Marcar como visto" : "✓ Confirmar asistencia"}
           </button>
           <button
             type="button"

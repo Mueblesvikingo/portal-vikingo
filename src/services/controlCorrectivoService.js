@@ -33,6 +33,22 @@ export async function probarColumnasNuevas() {
   return false;
 }
 
+// Selección múltiple de proceso, líder y supervisor (sql/2026-10-control_correctivo_v4.sql).
+// Mientras no exista, el formulario sigue con un solo valor por campo.
+const COLUMNAS_MULTIPLES = "procesos_ids,lideres_ids,supervisores_ids";
+
+export async function probarColumnasMultiples() {
+  const { error } = await supabase.from(TABLA).select(COLUMNAS_MULTIPLES).limit(1);
+  if (!error) return true;
+  if (!esColumnaFaltante(error) && !esTablaFaltante(error)) console.error("Error al comprobar la selección múltiple de Control Correctivo:", error);
+  return false;
+}
+
+// Listas de una acción; las registradas antes de v4 solo tienen la columna de un valor.
+export const procesosDe = (i) => (i?.procesos_ids?.length ? i.procesos_ids : i?.proceso_id != null ? [i.proceso_id] : []).map(Number);
+export const lideresDe = (i) => (i?.lideres_ids?.length ? i.lideres_ids : i?.lider_persona_id != null ? [i.lider_persona_id] : []).map(Number);
+export const supervisoresDe = (i) => (i?.supervisores_ids?.length ? i.supervisores_ids : i?.supervisor_persona_id != null ? [i.supervisor_persona_id] : []).map(Number);
+
 // Directrices propias (sql/2026-10-control_correctivo_v3.sql): catálogo que se
 // llena desde el formulario y se reutiliza entre acciones. Devuelve
 // `disponible: false` mientras no exista la tabla o la columna de la acción.
@@ -151,12 +167,18 @@ export async function getProcesosCorrectivo() {
   return data || [];
 }
 
+// Nombre de proceso comparable: persona_roles.proceso es texto libre y puede
+// diferir de procesos.nombre en acentos o mayúsculas.
+const claveProceso = (nombre) => String(nombre || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
 // Líderes = personas con el rol "Líder de proceso"; supervisores = personas
 // cuyo rol empieza con "Supervisor" (Supervisor de Área, de Embalaje, etc.).
+// `porProceso` (nombre de proceso normalizado → ids de persona) sirve para
+// avisar a la gente de los procesos de una acción.
 export async function getPersonasCorrectivo() {
   const [personasRes, rolesRes] = await Promise.all([
     supabase.from("personas").select("id,nombre,activo").order("nombre", { ascending: true }),
-    supabase.from("persona_roles").select("persona_id,rol,activo"),
+    supabase.from("persona_roles").select("persona_id,proceso,rol,activo"),
   ]);
   if (personasRes.error) console.error("Error al cargar personas de Control Correctivo:", personasRes.error);
   if (rolesRes.error) console.error("Error al cargar roles de Control Correctivo:", rolesRes.error);
@@ -167,11 +189,102 @@ export async function getPersonasCorrectivo() {
   const idsLider = new Set(rolesActivos.filter((r) => String(r.rol || "").trim().toLowerCase() === ROL_LIDER.toLowerCase()).map((r) => r.persona_id));
   const idsSupervisor = new Set(rolesActivos.filter((r) => String(r.rol || "").trim().toLowerCase().startsWith("supervisor")).map((r) => r.persona_id));
 
+  const activas = new Set(personas.map((p) => Number(p.id)));
+  const porProceso = new Map();
+  rolesActivos.forEach((r) => {
+    const clave = claveProceso(r.proceso);
+    if (!clave || !activas.has(Number(r.persona_id))) return;
+    if (!porProceso.has(clave)) porProceso.set(clave, new Set());
+    porProceso.get(clave).add(Number(r.persona_id));
+  });
+
   return {
     personas,
     lideres: personas.filter((p) => (idsLider.has(p.id) && !LIDERES_QUITAR_IDS.includes(Number(p.id))) || LIDERES_AGREGAR_IDS.includes(Number(p.id))),
     supervisores: personas.filter((p) => idsSupervisor.has(p.id)),
+    porProceso,
   };
+}
+
+// Quién recibe la alerta de una acción: sus líderes y supervisores, la gente
+// con rol en sus procesos y en los procesos involucrados, y el responsable de
+// cada uno de esos procesos. Con "Todos los procesos" solo se suma el
+// responsable de cada proceso (no toda la plantilla). Nunca quien la registra.
+export function destinatariosCorrectivo(item, { procesos = [], personas = [], porProceso = new Map() } = {}, excluirPersonaId = null) {
+  const ids = new Set([...lideresDe(item), ...supervisoresDe(item)]);
+  const responsableDe = (proceso) => personas.find((p) => mismaPersona(p.nombreOriginal, proceso?.responsable));
+  const conGente = new Set([...procesosDe(item), ...(item?.todos_procesos ? [] : (item?.procesos_involucrados_ids || []).map(Number))]);
+  procesos.forEach((proceso) => {
+    const id = Number(proceso.id);
+    if (conGente.has(id)) (porProceso.get(claveProceso(proceso.nombre)) || []).forEach((pid) => ids.add(pid));
+    if (conGente.has(id) || item?.todos_procesos) {
+      const responsable = responsableDe(proceso);
+      if (responsable) ids.add(Number(responsable.id));
+    }
+  });
+  if (excluirPersonaId != null) ids.delete(Number(excluirPersonaId));
+  return [...ids].filter((n) => Number.isFinite(n));
+}
+
+// ---- Alertas (sql/2026-10-control_correctivo_v4.sql) ----------------------
+const TABLA_NOTIF = "control_correctivo_notificaciones";
+
+export async function probarNotificaciones() {
+  const { error } = await supabase.from(TABLA_NOTIF).select("id").limit(1);
+  if (!error) return true;
+  if (!esTablaFaltante(error)) console.error("Error al comprobar las alertas de Control Correctivo:", error);
+  return false;
+}
+
+// Avisa a quien todavía no tenga aviso de esta acción (al editar, solo a los
+// que se agregan). Devuelve cuántos avisos nuevos se crearon.
+export async function notificarCorrectivo(item, personaIds, actor) {
+  const { personaId, nombre } = actorFields(actor);
+  const { data: previos, error: errPrevios } = await supabase.from(TABLA_NOTIF).select("destinatario_persona_id").eq("correctivo_id", item.id);
+  if (errPrevios) throw errPrevios;
+  const yaAvisados = new Set((previos || []).map((r) => Number(r.destinatario_persona_id)));
+  const nuevos = [...new Set(personaIds.map(Number))].filter((id) => !yaAvisados.has(id));
+  if (!nuevos.length) return 0;
+  const titulo = item.nombre_accion?.trim() || item.accion_correctiva?.trim() || "Acción correctiva";
+  const mensaje = `${titulo} — prioridad ${item.prioridad || "Media"}, compromiso ${item.fecha_compromiso}. Te incluyeron en esta acción correctiva.`;
+  const filas = nuevos.map((destinatario) => ({
+    correctivo_id: item.id,
+    destinatario_persona_id: destinatario,
+    motivo: "nueva_accion",
+    mensaje,
+    urgente: true,
+    created_by_persona_id: personaId,
+    created_by_nombre: nombre,
+  }));
+  const { error } = await supabase.from(TABLA_NOTIF).upsert(filas, { onConflict: "correctivo_id,destinatario_persona_id", ignoreDuplicates: true });
+  if (error) throw error;
+  return filas.length;
+}
+
+// Sondeo de la ventana emergente y la campanita. Mientras no exista la tabla
+// devuelve [] sin escribir en la consola cada 25 s.
+export async function getPendingCorrectivoNotificaciones(personaId) {
+  if (!personaId) return [];
+  const { data, error } = await supabase
+    .from(TABLA_NOTIF)
+    .select("*, control_correctivo(nombre_accion, accion_correctiva, prioridad, fecha_compromiso, activo)")
+    .eq("destinatario_persona_id", personaId)
+    .is("visto_en", null)
+    .order("created_at", { ascending: true });
+  if (error) {
+    if (!esTablaFaltante(error)) console.error("Error al cargar alertas de Control Correctivo:", error);
+    return [];
+  }
+  return (data || []).filter((n) => n.control_correctivo?.activo !== false);
+}
+
+export async function marcarCorrectivoNotificacionVista(id) {
+  const { error } = await supabase.from(TABLA_NOTIF).update({ visto_en: new Date().toISOString() }).eq("id", id);
+  if (error) {
+    console.error("Error al marcar la alerta de Control Correctivo como vista:", error);
+    return { ok: false };
+  }
+  return { ok: true };
 }
 
 export async function getCorrectivos() {
@@ -190,9 +303,10 @@ export async function getCorrectivos() {
 
 const aIds = (lista) => [...new Set((lista || []).map(Number).filter((n) => Number.isFinite(n)))];
 
-// `extendido` = ya existen las columnas de v2; `propias` = la de v3. Si no
-// existen, esos campos no se envían.
-function limpiar(payload, extendido = false, propias = false) {
+// `extendido` = ya existen las columnas de v2; `propias` = la de v3;
+// `multiples` = las listas de v4. Si no existen, esos campos no se envían.
+// Con listas, las columnas de un valor guardan el primero de cada una.
+function limpiar(payload, extendido = false, propias = false, multiples = false) {
   const nuevos = extendido
     ? {
         nombre_accion: payload.nombre_accion?.trim() || null,
@@ -202,14 +316,20 @@ function limpiar(payload, extendido = false, propias = false) {
       }
     : {};
   if (propias) nuevos.directrices_propias_ids = aIds(payload.directrices_propias_ids);
+  if (multiples) {
+    nuevos.procesos_ids = aIds(payload.procesos_ids);
+    nuevos.lideres_ids = aIds(payload.lideres_ids);
+    nuevos.supervisores_ids = aIds(payload.supervisores_ids);
+  }
+  const primero = (lista, unico) => (multiples ? (aIds(lista)[0] ?? null) : unico ? Number(unico) : null);
   return {
     ...nuevos,
-    proceso_id: Number(payload.proceso_id),
+    proceso_id: primero(payload.procesos_ids, payload.proceso_id),
     tipo_brecha: payload.tipo_brecha,
     causa_raiz: payload.causa_raiz?.trim() || null,
     accion_correctiva: payload.accion_correctiva?.trim(),
-    lider_persona_id: payload.lider_persona_id ? Number(payload.lider_persona_id) : null,
-    supervisor_persona_id: payload.supervisor_persona_id ? Number(payload.supervisor_persona_id) : null,
+    lider_persona_id: primero(payload.lideres_ids, payload.lider_persona_id),
+    supervisor_persona_id: primero(payload.supervisores_ids, payload.supervisor_persona_id),
     prioridad: payload.prioridad,
     fecha_inicio: payload.fecha_inicio,
     fecha_compromiso: payload.fecha_compromiso,
@@ -218,11 +338,11 @@ function limpiar(payload, extendido = false, propias = false) {
   };
 }
 
-export async function createCorrectivo(payload, actor, extendido = false, propias = false) {
+export async function createCorrectivo(payload, actor, extendido = false, propias = false, multiples = false) {
   const { personaId, nombre } = actorFields(actor);
   const { data, error } = await supabase
     .from(TABLA)
-    .insert({ ...limpiar(payload, extendido, propias), created_by_persona_id: personaId, created_by_nombre: nombre })
+    .insert({ ...limpiar(payload, extendido, propias, multiples), created_by_persona_id: personaId, created_by_nombre: nombre })
     .select()
     .single();
   if (error) throw error;
@@ -230,10 +350,10 @@ export async function createCorrectivo(payload, actor, extendido = false, propia
 }
 
 // `cambios` puede ser parcial (por ejemplo solo { avance } al mover la barra).
-export async function updateCorrectivo(id, cambios, actor, extendido = false, propias = false) {
+export async function updateCorrectivo(id, cambios, actor, extendido = false, propias = false, multiples = false) {
   const { personaId, nombre } = actorFields(actor);
   const completo = Object.keys(cambios).length > 1 || !("avance" in cambios);
-  const cuerpo = completo ? limpiar(cambios, extendido, propias) : { avance: Math.max(0, Math.min(100, Math.round(Number(cambios.avance) || 0))) };
+  const cuerpo = completo ? limpiar(cambios, extendido, propias, multiples) :{ avance: Math.max(0, Math.min(100, Math.round(Number(cambios.avance) || 0))) };
   const { data, error } = await supabase
     .from(TABLA)
     .update({ ...cuerpo, updated_at: new Date().toISOString(), updated_by_persona_id: personaId, updated_by_nombre: nombre })
