@@ -50,14 +50,16 @@ function EditableValue({ kpi, mesIndex, tipo, semana = null, resultados, anio, c
   return (
     <input
       autoFocus
-      type="number"
+      type="text"
+      inputMode="decimal"
+      title="Puedes escribir una operación, ej. 50+30"
       value={draft}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => {
         setEditing(false);
         if (draft === "") return;
-        const num = Number(draft);
-        if (!Number.isFinite(num)) return;
+        const num = evaluateCapturedValue(draft);
+        if (num === null) return;
         // Un 0 capturado se trata como celda vacía salvo en KPIs "Menor es
         // mejor" (ahí 0 suele ser justo la meta/resultado ideal — cero
         // quiebres, cero desviación, cero incidentes — y sí es un dato real).
