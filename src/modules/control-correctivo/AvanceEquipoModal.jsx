@@ -51,7 +51,7 @@ function ResumenReporte({ r, color }) {
 // Avance que reportan los involucrados de una acción correctiva (aparte de la
 // barra oficial de la PM). Quien está involucrado puede reportar: barra %,
 // "mi parte está lista", comentario y/o archivo; todos los demás solo leen.
-export default function AvanceEquipoModal({ item, titulo, color, involucrados, reportes, nombrePersona, miPersonaId, puedeReportar, onReportar, onClose }) {
+export default function AvanceEquipoModal({ item, titulo, color, involucrados, reportes, vistos = new Map(), nombrePersona, miPersonaId, puedeReportar, onReportar, onClose }) {
   const [form, setForm] = useState({ usarBarra: false, avance: 0, listo: false, comentario: "" });
   const [archivo, setArchivo] = useState(null);
   const [guardando, setGuardando] = useState(false);
@@ -81,8 +81,10 @@ export default function AvanceEquipoModal({ item, titulo, color, involucrados, r
     const listas = filas.filter((x) => x.ultimo?.listo).length;
     const conBarra = filas.filter((x) => x.ultimo && x.ultimo.avance != null);
     const promedio = conBarra.length ? Math.round(conBarra.reduce((a, x) => a + Number(x.ultimo.avance), 0) / conBarra.length) : null;
-    return { total: filas.length, reportaron, listas, promedio };
-  }, [filas]);
+    const alertados = [...vistos.keys()];
+    const vieron = alertados.filter((id) => vistos.get(id)).length;
+    return { total: filas.length, reportaron, listas, promedio, alertados: alertados.length, vieron };
+  }, [filas, vistos]);
 
   const sinContenido = !form.usarBarra && !form.listo && !form.comentario.trim() && !archivo;
 
@@ -108,6 +110,7 @@ export default function AvanceEquipoModal({ item, titulo, color, involucrados, r
           <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#c9a227]">Avance del equipo</p>
             <p className="truncate text-lg font-black text-white">{titulo}</p>
+            <p className="text-[11px] font-semibold text-white/60">Compromiso: {fmtFecha(item.fecha_compromiso)}</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-lg px-2 py-1 text-white/60 transition hover:bg-white/10 hover:text-white">✕</button>
         </div>
@@ -117,7 +120,7 @@ export default function AvanceEquipoModal({ item, titulo, color, involucrados, r
             <Dato etiqueta="Reportaron" valor={`${resumen.reportaron} de ${resumen.total}`} />
             <Dato etiqueta="Su parte lista" valor={`${resumen.listas} de ${resumen.total}`} tono={resumen.listas > 0 && resumen.listas === resumen.total ? "text-emerald-700" : "text-[#0f1f3d]"} />
             <Dato etiqueta="Avance reportado" valor={resumen.promedio != null ? `${resumen.promedio}%` : "—"} />
-            <Dato etiqueta="Fecha compromiso" valor={fmtFecha(item.fecha_compromiso)} />
+            <Dato etiqueta="Vieron la alerta" valor={resumen.alertados ? `${resumen.vieron} de ${resumen.alertados}` : "—"} tono={resumen.alertados > 0 && resumen.vieron === resumen.alertados ? "text-emerald-700" : "text-[#0f1f3d]"} />
           </div>
 
           {!puedeReportar && (
@@ -183,6 +186,11 @@ export default function AvanceEquipoModal({ item, titulo, color, involucrados, r
                           <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide ${!f.ultimo ? "border-[#e2e8f0] bg-[#f8fafc] text-[#94a3b8]" : f.ultimo.listo ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{!f.ultimo ? "Sin reporte" : f.ultimo.listo ? "Lista" : "En proceso"}</span>
                         </p>
                       </div>
+                      {vistos.has(f.id) && (
+                        <p className={`mt-1 text-[11px] font-bold ${vistos.get(f.id) ? "text-emerald-700" : "text-amber-700"}`}>
+                          {vistos.get(f.id) ? `✓ Vio la alerta · ${fmtFechaHora(vistos.get(f.id))}` : "⏳ Alerta enviada · aún no la ha visto"}
+                        </p>
+                      )}
                       {f.ultimo && (
                         <div className="mt-1 space-y-1">
                           <ResumenReporte r={f.ultimo} color={color} />

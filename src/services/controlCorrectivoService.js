@@ -281,6 +281,23 @@ export async function getAvisadosPorCorrectivo() {
   return mapa;
 }
 
+// Estado de la alerta de acción nueva de cada involucrado: visto_en lleno = ya la vio
+// (cerró la ventana emergente). Devuelve Map correctivo_id → Map persona_id → visto_en|null.
+export async function getAlertasNuevaAccion() {
+  const { data, error } = await supabase.from(TABLA_NOTIF).select("correctivo_id,destinatario_persona_id,visto_en").eq("motivo", "nueva_accion");
+  if (error) {
+    if (!esTablaFaltante(error)) console.error("Error al cargar el estado de las alertas de Control Correctivo:", error);
+    return new Map();
+  }
+  const mapa = new Map();
+  (data || []).forEach((r) => {
+    const id = Number(r.correctivo_id);
+    if (!mapa.has(id)) mapa.set(id, new Map());
+    mapa.get(id).set(Number(r.destinatario_persona_id), r.visto_en || null);
+  });
+  return mapa;
+}
+
 // ---- Reportes de avance de los involucrados (sql/2026-10-control_correctivo_v5.sql)
 const TABLA_AVANCES = "control_correctivo_avances";
 const BUCKET_AVANCES = "control-correctivo-avances";

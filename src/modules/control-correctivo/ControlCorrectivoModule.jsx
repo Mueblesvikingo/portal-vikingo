@@ -15,6 +15,7 @@ import {
   lideresDe,
   supervisoresDe,
   getAvisadosPorCorrectivo,
+  getAlertasNuevaAccion,
   getAvancesEquipo,
   reportarAvanceEquipo,
   getDirectricesPropias,
@@ -28,6 +29,7 @@ import {
   cardClass,
   inputClass,
   btnPrimaryClass,
+  btnGhostClass,
   PRIORIDAD_BADGE,
   PRIORIDAD_COLOR,
   ESTADO_BADGE,
@@ -77,6 +79,8 @@ export default function ControlCorrectivoModule({ currentUser }) {
   const [multiples, setMultiples] = useState(false); // sql/2026-10-control_correctivo_v4.sql: varios procesos, líderes y supervisores
   const [alertasDisponibles, setAlertasDisponibles] = useState(false); // sql/2026-10-control_correctivo_v4.sql: control_correctivo_notificaciones
   const [avisados, setAvisados] = useState(new Map()); // correctivo_id → personas que recibieron la alerta (involucrados)
+  const [vistos, setVistos] = useState(new Map()); // correctivo_id → (persona_id → cuándo vio la alerta | null)
+  const [probando, setProbando] = useState(false);
   const [avances, setAvances] = useState([]); // reportes de avance de los involucrados
   const [avancesDisponible, setAvancesDisponible] = useState(false); // sql/2026-10-control_correctivo_v5.sql
   const [equipoItem, setEquipoItem] = useState(null);
@@ -92,9 +96,10 @@ export default function ControlCorrectivoModule({ currentUser }) {
   useEffect(() => {
     let cancelado = false;
     async function cargar() {
-      const [correctivos, procs, pers, dirs, columnasNuevas, propias, columnasMultiples, notificaciones, avisadosMapa, avancesRes] = await Promise.all([getCorrectivos(), getProcesosCorrectivo(), getPersonasCorrectivo(), getDirectricesCorrectivo(), probarColumnasNuevas(), getDirectricesPropias(), probarColumnasMultiples(), probarNotificaciones(), getAvisadosPorCorrectivo(), getAvancesEquipo()]);
+      const [correctivos, procs, pers, dirs, columnasNuevas, propias, columnasMultiples, notificaciones, avisadosMapa, avancesRes, vistosMapa] = await Promise.all([getCorrectivos(), getProcesosCorrectivo(), getPersonasCorrectivo(), getDirectricesCorrectivo(), probarColumnasNuevas(), getDirectricesPropias(), probarColumnasMultiples(), probarNotificaciones(), getAvisadosPorCorrectivo(), getAvancesEquipo(), getAlertasNuevaAccion()]);
       if (cancelado) return;
       setAvisados(avisadosMapa);
+      setVistos(vistosMapa);
       setAvances(avancesRes.data);
       setAvancesDisponible(avancesRes.disponible);
       setMultiples(columnasMultiples);
@@ -204,6 +209,61 @@ export default function ControlCorrectivoModule({ currentUser }) {
     }
   }
 
+  // Al abrir el detalle se vuelve a leer quién ya vio la alerta y qué se ha reportado.
+  async function abrirEquipo(item) {
+    setEquipoItem(item);
+    const [vistosMapa, avancesRes] = await Promise.all([getAlertasNuevaAccion(), getAvancesEquipo()]);
+    setVistos(vistosMapa);
+    if (avancesRes.disponible) setAvances(avancesRes.data);
+  }
+
+  // Prueba de avisos y reportes: crea una acción marcada como PRUEBA y manda la
+  // alerta (ventana emergente + sirena) solo a quien pulsa el botón. Desde esa
+  // acción puede reportar avance y la PM recibe el aviso en la campanita.
+  async function probarAvisos() {
+    if (miPersonaId == null) { mostrarAviso("Tu usuario no tiene persona asignada: no se puede hacer la prueba."); return; }
+    if (!procesos.length) { mostrarAviso("No hay procesos en el catálogo para crear la prueba."); return; }
+    if (!window.confirm("Se creará una acción de PRUEBA y la alerta (ventana emergente con sirena) te llegará solo a ti. Desde ella podrás reportar avance y la PM recibirá el aviso en su campanita. Después la eliminas con el lápiz. ¿Continuar?")) return;
+    setProbando(true);
+    try {
+      const inicio = hoyISO();
+      const fin = new Date(); fin.setDate(fin.getDate() + 7);
+      const finISO = `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, "0")}-${String(fin.getDate()).padStart(2, "0")}`;
+      const form = {
+        proceso_id: String(procesos[0].id),
+        procesos_ids: [Number(procesos[0].id)],
+        tipo_brecha: "Operativa",
+        nombre_accion: "PRUEBA · Avisos y reportes",
+        todos_procesos: false,
+        procesos_involucrados_ids: [],
+        directrices_ids: [],
+        directrices_propias_ids: [],
+        causa_raiz: "Acción de prueba para comprobar las alertas y los reportes de avance.",
+        accion_correctiva: "Ver la alerta, reportar avance y confirmar que la PM recibe el aviso. Se puede eliminar al terminar.",
+        lider_persona_id: String(miPersonaId),
+        supervisor_persona_id: "",
+        lideres_ids: [miPersonaId],
+        supervisores_ids: [],
+        prioridad: "Media",
+        fecha_inicio: inicio,
+        fecha_compromiso: finISO,
+        avance: 0,
+        eficiencia_operativa: "",
+      };
+      const guardado = await createCorrectivo(form, currentUser, extendido, propiasDisponible, multiples);
+      setItems((lista) => [...lista, guardado]);
+      await notificarCorrectivo(guardado, [miPersonaId], currentUser);
+      setAvisados((prev) => { const m = new Map(prev); m.set(Number(guardado.id), new Set([...(m.get(Number(guardado.id)) || []), miPersonaId])); return m; });
+      setVistos((prev) => { const m = new Map(prev); m.set(Number(guardado.id), new Map([[miPersonaId, null]])); return m; });
+      mostrarAviso("Prueba creada: en unos segundos te llega la alerta (ventana y sirena).");
+    } catch (err) {
+      console.error("Error al crear la prueba de avisos:", err);
+      mostrarAviso("No se pudo crear la prueba. Inténtalo de nuevo.");
+    } finally {
+      setProbando(false);
+    }
+  }
+
   async function reportarAvance(item, reporte) {
     const nuevo = await reportarAvanceEquipo(item, reporte, currentUser, PM_PERSONA_ID);
     setAvances((lista) => [...lista, nuevo]);
@@ -252,7 +312,12 @@ export default function ControlCorrectivoModule({ currentUser }) {
           <p className="text-xs text-[#5b6472]">Acciones correctivas por proceso: causa, responsables, fecha compromiso y avance.</p>
         </div>
         {puedeEditar && !tablaFaltante && (
-          <button type="button" onClick={() => setModal({ item: null })} className={btnPrimaryClass}>+ Nueva acción</button>
+          <div className="flex flex-wrap items-center gap-2">
+            {alertasDisponibles && avancesDisponible && (
+              <button type="button" onClick={probarAvisos} disabled={probando} title="Crea una acción de prueba y te manda la alerta solo a ti" className={btnGhostClass}>{probando ? "Creando prueba…" : "🔔 Probar avisos"}</button>
+            )}
+            <button type="button" onClick={() => setModal({ item: null })} className={btnPrimaryClass}>+ Nueva acción</button>
+          </div>
         )}
       </div>
 
@@ -438,10 +503,16 @@ export default function ControlCorrectivoModule({ currentUser }) {
                                 {archivos > 0 && <span className="text-sky-700">📎 {archivos}</span>}
                               </p>
                             )}
+                            {(() => {
+                              const alertados = vistos.get(Number(i.id));
+                              if (!alertados || alertados.size === 0) return null;
+                              const vieron = [...alertados.values()].filter(Boolean).length;
+                              return <p className={`mt-0.5 text-[11px] font-semibold ${vieron === alertados.size ? "text-emerald-700" : "text-amber-700"}`}>{vieron === alertados.size ? "✓ " : ""}{vieron} de {alertados.size} vieron la alerta</p>;
+                            })()}
                             {ultimo && <p className="mt-0.5 text-[10px] font-semibold text-[#94a3b8]">Último: {fmtFecha(String(ultimo.created_at).slice(0, 10))}</p>}
                             <button
                               type="button"
-                              onClick={() => setEquipoItem(i)}
+                              onClick={() => abrirEquipo(i)}
                               className={`mt-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-bold transition ${soyInvolucrado ? "border-[#c9a227] bg-[#fbf6e3] text-[#7a5f0c] hover:bg-[#f6ecc9]" : "border-[#d9dee6] bg-white text-[#0f1f3d] hover:bg-[#f7f7f4]"}`}
                             >
                               {soyInvolucrado ? "+ Reportar mi avance" : "Ver detalle"}
@@ -473,6 +544,7 @@ export default function ControlCorrectivoModule({ currentUser }) {
           color={PRIORIDAD_COLOR[equipoItem.prioridad] || "#64748b"}
           involucrados={involucradosDe(equipoItem)}
           reportes={avancesPorItem.get(Number(equipoItem.id)) || []}
+          vistos={vistos.get(Number(equipoItem.id)) || new Map()}
           nombrePersona={nombrePersona}
           miPersonaId={miPersonaId}
           puedeReportar={miPersonaId != null && involucradosDe(equipoItem).includes(miPersonaId)}
