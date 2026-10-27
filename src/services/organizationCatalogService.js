@@ -173,14 +173,17 @@ export async function updatePersonaRole(id, payload) {
 
 /* =========================
    USUARIOS
-   Nota: password_hash se guarda tal cual se recibe (sin hashear en cliente),
-   igual que ya está guardada la de los usuarios existentes en esta tabla.
+   Nota: password_hash se envía tal cual al crear el usuario; la base la cifra
+   con bcrypt (trigger de sql/2026-10-seguridad_login.sql). El portal nunca la
+   lee: por eso las consultas piden columnas explícitas en vez de "*".
 ========================= */
+
+const USUARIO_COLUMNAS = "id,usuario,nombre,puesto,rol_sistema,rol_organizacional,activo,ultimo_acceso,created_at,permisos_custom,persona_id,ultima_actividad";
 
 export async function getUsuarios() {
   const { data, error } = await supabase
     .from("usuarios")
-    .select("*")
+    .select(USUARIO_COLUMNAS)
     .order("usuario", { ascending: true });
 
   if (error) throw error;
@@ -202,7 +205,7 @@ export async function createUsuario(payload) {
         activo: payload.activo ?? true,
       }),
     ])
-    .select()
+    .select(USUARIO_COLUMNAS)
     .single();
 
   if (error) throw error;
@@ -226,7 +229,7 @@ export async function updateUsuario(id, payload) {
       })
     )
     .eq("id", id)
-    .select()
+    .select(USUARIO_COLUMNAS)
     .single();
 
   if (error) throw error;
@@ -240,7 +243,7 @@ export async function updateUsuarioPermisos(id, permisosCustom) {
     .from("usuarios")
     .update({ permisos_custom: permisosCustom })
     .eq("id", id)
-    .select()
+    .select(USUARIO_COLUMNAS)
     .single();
 
   if (error) throw error;
