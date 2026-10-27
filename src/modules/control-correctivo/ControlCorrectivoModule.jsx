@@ -7,6 +7,8 @@ import {
   getPersonasCorrectivo,
   getDirectricesCorrectivo,
   probarColumnasNuevas,
+  getDirectricesPropias,
+  createDirectrizPropia,
   createCorrectivo,
   updateCorrectivo,
   deactivateCorrectivo,
@@ -57,7 +59,9 @@ export default function ControlCorrectivoModule({ currentUser }) {
   const [loading, setLoading] = useState(true);
   const [tablaFaltante, setTablaFaltante] = useState(false);
   const [directrices, setDirectrices] = useState([]);
-  const [extendido, setExtendido] = useState(false); // ya existen las columnas de sql/2026-10-control_correctivo_v2.sql
+  const [extendido, setExtendido] = useState(false);
+  const [directricesPropias, setDirectricesPropias] = useState([]);
+  const [propiasDisponible, setPropiasDisponible] = useState(false); // sql/2026-10-control_correctivo_v3.sql // ya existen las columnas de sql/2026-10-control_correctivo_v2.sql
   const [errorCarga, setErrorCarga] = useState(false);
   const [vista, setVista] = useState("tablero");
   const [filtros, setFiltros] = useState(FILTROS_VACIO);
@@ -70,7 +74,7 @@ export default function ControlCorrectivoModule({ currentUser }) {
   useEffect(() => {
     let cancelado = false;
     async function cargar() {
-      const [correctivos, procs, pers, dirs, columnasNuevas] = await Promise.all([getCorrectivos(), getProcesosCorrectivo(), getPersonasCorrectivo(), getDirectricesCorrectivo(), probarColumnasNuevas()]);
+      const [correctivos, procs, pers, dirs, columnasNuevas, propias] = await Promise.all([getCorrectivos(), getProcesosCorrectivo(), getPersonasCorrectivo(), getDirectricesCorrectivo(), probarColumnasNuevas(), getDirectricesPropias()]);
       if (cancelado) return;
       setItems(correctivos.data);
       setTablaFaltante(correctivos.tablaFaltante);
@@ -79,6 +83,8 @@ export default function ControlCorrectivoModule({ currentUser }) {
       setPersonas(pers);
       setDirectrices(dirs);
       setExtendido(columnasNuevas);
+      setDirectricesPropias(propias.data);
+      setPropiasDisponible(propias.disponible);
       setLoading(false);
     }
     cargar();
@@ -87,6 +93,7 @@ export default function ControlCorrectivoModule({ currentUser }) {
 
   const personaPorId = useMemo(() => new Map(personas.personas.map((p) => [Number(p.id), p.nombre])), [personas]);
   const procesoPorId = useMemo(() => new Map(procesos.map((p) => [Number(p.id), p.nombre])), [procesos]);
+  const propiaPorId = useMemo(() => new Map(directricesPropias.map((d) => [Number(d.id), d.nombre])), [directricesPropias]);
   const directrizPorId = useMemo(() => new Map(directrices.map((d) => [Number(d.id), d])), [directrices]);
   const nombrePersona = (id) => (id != null ? personaPorId.get(Number(id)) || "—" : "—");
 
@@ -132,13 +139,19 @@ export default function ControlCorrectivoModule({ currentUser }) {
 
   async function guardarForm(form) {
     if (modal?.item?.id) {
-      const actualizado = await updateCorrectivo(modal.item.id, form, currentUser, extendido);
+      const actualizado = await updateCorrectivo(modal.item.id, form, currentUser, extendido, propiasDisponible);
       setItems((lista) => lista.map((i) => (i.id === actualizado.id ? actualizado : i)));
     } else {
-      const creado = await createCorrectivo(form, currentUser, extendido);
+      const creado = await createCorrectivo(form, currentUser, extendido, propiasDisponible);
       setItems((lista) => [...lista, creado]);
     }
     setModal(null);
+  }
+
+  async function crearDirectriz(nombre) {
+    const creada = await createDirectrizPropia(nombre, currentUser);
+    setDirectricesPropias((lista) => [...lista, creada].sort((a, b) => a.nombre.localeCompare(b.nombre, "es")));
+    return creada;
   }
 
   async function eliminar() {
@@ -280,7 +293,7 @@ export default function ControlCorrectivoModule({ currentUser }) {
                             <p className={`mt-1 text-xs leading-relaxed text-[#6b7587] ${expandido ? "" : "line-clamp-2"}`}>{i.causa_raiz || "Sin causa raíz"}</p>
                           </div>
                         </button>
-                        {(i.todos_procesos || (i.procesos_involucrados_ids || []).length > 0 || (i.directrices_ids || []).length > 0) && (
+                        {(i.todos_procesos || (i.procesos_involucrados_ids || []).length > 0 || (i.directrices_ids || []).length > 0 || (i.directrices_propias_ids || []).length > 0) && (
                           <div className="mt-2 space-y-1.5">
                             {(i.todos_procesos || (i.procesos_involucrados_ids || []).length > 0) && (
                               <div className="flex flex-wrap items-center gap-1">
@@ -290,9 +303,15 @@ export default function ControlCorrectivoModule({ currentUser }) {
                                   : i.procesos_involucrados_ids.map((pid) => <span key={pid} className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">{procesoPorId.get(Number(pid)) || `Proceso ${pid}`}</span>)}
                               </div>
                             )}
-                            {(i.directrices_ids || []).length > 0 && (
+                            {(i.directrices_propias_ids || []).length > 0 && (
                               <div className="flex flex-wrap items-center gap-1">
                                 <span className="text-[9px] font-bold uppercase tracking-wider text-[#94a3b8]">Directrices</span>
+                                {i.directrices_propias_ids.map((did) => <span key={did} className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-800">{propiaPorId.get(Number(did)) || `Directriz ${did}`}</span>)}
+                              </div>
+                            )}
+                            {(i.directrices_ids || []).length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-[#94a3b8]">Objetivos</span>
                                 {i.directrices_ids.map((did) => {
                                   const d = directrizPorId.get(Number(did));
                                   return <span key={did} title={d?.titulo} className="rounded-full border border-[#efe2b4] bg-[#fbf6e3] px-2 py-0.5 text-[10px] font-bold text-[#7a5f0c]">{d?.codigo || `#${did}`}</span>;
@@ -345,6 +364,9 @@ export default function ControlCorrectivoModule({ currentUser }) {
           supervisores={personas.supervisores}
           directrices={directrices}
           extendido={extendido}
+          directricesPropias={directricesPropias}
+          propiasDisponible={propiasDisponible}
+          onCrearDirectriz={crearDirectriz}
           nombrePersona={nombrePersona}
           onSave={guardarForm}
           onClose={() => setModal(null)}

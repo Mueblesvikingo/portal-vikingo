@@ -35,7 +35,10 @@ function Bloque({ icono, titulo, tono, children }) {
 // otros procesos involucrados (con opción "Todos los procesos") y las
 // directrices estratégicas que atiende (una acción puede atender varias).
 // Esos tres campos necesitan sql/2026-10-control_correctivo_v2.sql (`extendido`).
-export default function CorrectivoFormModal({ item, procesos, lideres, supervisores, directrices = [], extendido = false, nombrePersona, onSave, onClose, onDelete }) {
+export default function CorrectivoFormModal({ item, procesos, lideres, supervisores, directrices = [], extendido = false, directricesPropias = [], propiasDisponible = false, onCrearDirectriz, nombrePersona, onSave, onClose, onDelete }) {
+  const [nuevaDirectriz, setNuevaDirectriz] = useState("");
+  const [agregando, setAgregando] = useState(false);
+  const [errorDirectriz, setErrorDirectriz] = useState("");
   const esEdicion = Boolean(item?.id);
   const [form, setForm] = useState(() => ({
     proceso_id: item?.proceso_id != null ? String(item.proceso_id) : "",
@@ -44,6 +47,7 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
     todos_procesos: Boolean(item?.todos_procesos),
     procesos_involucrados_ids: (item?.procesos_involucrados_ids || []).map(Number),
     directrices_ids: (item?.directrices_ids || []).map(Number),
+    directrices_propias_ids: (item?.directrices_propias_ids || []).map(Number),
     causa_raiz: item?.causa_raiz || "",
     accion_correctiva: item?.accion_correctiva || "",
     lider_persona_id: item?.lider_persona_id != null ? String(item.lider_persona_id) : "",
@@ -71,6 +75,22 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
       const sugerido = !f.lider_persona_id && proceso ? lideres.find((l) => mismaPersona(l.nombreOriginal, proceso.responsable)) : null;
       return { ...f, proceso_id: valor, lider_persona_id: sugerido ? String(sugerido.id) : f.lider_persona_id };
     });
+  }
+
+  // La directriz nueva se guarda en el catálogo y queda marcada en esta acción.
+  async function agregarDirectriz() {
+    if (!onCrearDirectriz || !nuevaDirectriz.trim()) return;
+    setAgregando(true);
+    setErrorDirectriz("");
+    try {
+      const creada = await onCrearDirectriz(nuevaDirectriz);
+      setForm((f) => ({ ...f, directrices_propias_ids: [...f.directrices_propias_ids, Number(creada.id)] }));
+      setNuevaDirectriz("");
+    } catch (err) {
+      setErrorDirectriz(err?.message || "No se pudo agregar la directriz.");
+    } finally {
+      setAgregando(false);
+    }
   }
 
   function alternarEn(campo, id) {
@@ -230,10 +250,52 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
 
           {extendido && (
             <Bloque icono="🎯" titulo="Directrices estratégicas que atiende" tono="sky">
+              <div className="mb-3 border-b border-sky-100 pb-3">
+                <p className={labelClass}>Directrices</p>
+                {!propiasDisponible ? (
+                  <p className="mt-1 text-[11px] font-semibold text-amber-800">Para agregar directrices propias, ejecuta una vez <span className="font-black">sql/2026-10-control_correctivo_v3.sql</span> en el SQL Editor de Supabase y recarga la página.</p>
+                ) : (
+                  <>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {directricesPropias.length === 0 && <span className="text-[11px] text-[#94a3b8]">Aún no hay directrices: agrega la primera.</span>}
+                      {directricesPropias.map((d) => {
+                        const activo = form.directrices_propias_ids.includes(Number(d.id));
+                        return (
+                          <button
+                            key={d.id}
+                            type="button"
+                            aria-pressed={activo}
+                            onClick={() => alternarEn("directrices_propias_ids", Number(d.id))}
+                            className={`max-w-full rounded-full border px-2.5 py-1 text-left text-[11px] font-semibold transition ${activo ? "border-sky-400 bg-sky-100 text-sky-900" : "border-[#d9dee6] bg-white text-[#5b6472] hover:bg-[#f7f7f4]"}`}
+                          >
+                            {d.nombre}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        value={nuevaDirectriz}
+                        maxLength={120}
+                        onChange={(e) => setNuevaDirectriz(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); agregarDirectriz(); } }}
+                        placeholder="Nueva directriz"
+                        className={`${inputClass} mt-0 py-1.5 text-xs`}
+                      />
+                      <button type="button" onClick={agregarDirectriz} disabled={agregando || !nuevaDirectriz.trim()} className="shrink-0 rounded-xl border border-sky-300 bg-white px-3 py-1.5 text-xs font-bold text-sky-800 transition hover:bg-sky-50 disabled:opacity-50">
+                        {agregando ? "Agregando…" : "+ Agregar directriz"}
+                      </button>
+                    </div>
+                    {errorDirectriz && <p className="mt-1 text-[11px] font-semibold text-red-600">{errorDirectriz}</p>}
+                  </>
+                )}
+              </div>
+              <p className={labelClass}>Objetivos estratégicos <span className="normal-case tracking-normal">(opcional)</span></p>
               {directricesPorPerspectiva.length === 0 ? (
-                <p className="text-xs text-[#5b6472]">No hay directrices cargadas en Despliegue Estratégico.</p>
+                <p className="text-xs text-[#5b6472]">No hay objetivos cargados en Despliegue Estratégico.</p>
               ) : (
-                <div className="space-y-2.5">
+                <div className="mt-1.5 space-y-2.5">
                   {directricesPorPerspectiva.map(([perspectiva, lista]) => (
                     <div key={perspectiva}>
                       <p className="text-[10px] font-black uppercase tracking-wider text-[#94a3b8]">{perspectiva}</p>
@@ -256,7 +318,7 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
                       </div>
                     </div>
                   ))}
-                  <p className="text-[10px] font-semibold text-[#94a3b8]">{form.directrices_ids.length === 0 ? "Puedes marcar todas las que atienda la acción." : `${form.directrices_ids.length} directriz(ces) seleccionada(s).`}</p>
+                  <p className="text-[10px] font-semibold text-[#94a3b8]">{form.directrices_ids.length === 0 ? "Opcional: marca los objetivos a los que contribuye la acción." : `${form.directrices_ids.length} objetivo(s) seleccionado(s).`}</p>
                 </div>
               )}
             </Bloque>

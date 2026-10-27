@@ -33,7 +33,41 @@ export async function probarColumnasNuevas() {
   return false;
 }
 
-// Directrices estratégicas = objetivos del Despliegue Estratégico (GLOBAL y OBJ-xx).
+// Directrices propias (sql/2026-10-control_correctivo_v3.sql): catálogo que se
+// llena desde el formulario y se reutiliza entre acciones. Devuelve
+// `disponible: false` mientras no exista la tabla o la columna de la acción.
+const TABLA_DIRECTRICES = "control_correctivo_directrices";
+
+export async function getDirectricesPropias() {
+  const [lista, columna] = await Promise.all([
+    supabase.from(TABLA_DIRECTRICES).select("id,nombre").eq("activo", true).order("nombre", { ascending: true }),
+    supabase.from(TABLA).select("directrices_propias_ids").limit(1),
+  ]);
+  const error = lista.error || columna.error;
+  if (error) {
+    if (!esTablaFaltante(error) && !esColumnaFaltante(error)) console.error("Error al cargar las directrices propias:", error);
+    return { data: [], disponible: false };
+  }
+  return { data: lista.data || [], disponible: true };
+}
+
+export async function createDirectrizPropia(nombre, actor) {
+  const limpio = String(nombre || "").trim().replace(/\s+/g, " ");
+  if (!limpio) throw new Error("Escribe la directriz.");
+  const { personaId, nombre: autor } = actorFields(actor);
+  const { data, error } = await supabase
+    .from(TABLA_DIRECTRICES)
+    .insert({ nombre: limpio, created_by_persona_id: personaId, created_by_nombre: autor })
+    .select("id,nombre")
+    .single();
+  if (error) {
+    if (error.code === "23505") throw new Error("Esa directriz ya existe: búscala en la lista.");
+    throw error;
+  }
+  return data;
+}
+
+// Objetivos estratégicos = objetivos del Despliegue Estratégico (GLOBAL y OBJ-xx); opcionales.
 export async function getDirectricesCorrectivo() {
   const { data, error } = await supabase
     .from("despliegue_objetivos")
@@ -156,8 +190,9 @@ export async function getCorrectivos() {
 
 const aIds = (lista) => [...new Set((lista || []).map(Number).filter((n) => Number.isFinite(n)))];
 
-// `extendido` = ya existen las columnas nuevas; si no, esos campos no se envían.
-function limpiar(payload, extendido = false) {
+// `extendido` = ya existen las columnas de v2; `propias` = la de v3. Si no
+// existen, esos campos no se envían.
+function limpiar(payload, extendido = false, propias = false) {
   const nuevos = extendido
     ? {
         nombre_accion: payload.nombre_accion?.trim() || null,
@@ -166,6 +201,7 @@ function limpiar(payload, extendido = false) {
         directrices_ids: aIds(payload.directrices_ids),
       }
     : {};
+  if (propias) nuevos.directrices_propias_ids = aIds(payload.directrices_propias_ids);
   return {
     ...nuevos,
     proceso_id: Number(payload.proceso_id),
@@ -182,11 +218,11 @@ function limpiar(payload, extendido = false) {
   };
 }
 
-export async function createCorrectivo(payload, actor, extendido = false) {
+export async function createCorrectivo(payload, actor, extendido = false, propias = false) {
   const { personaId, nombre } = actorFields(actor);
   const { data, error } = await supabase
     .from(TABLA)
-    .insert({ ...limpiar(payload, extendido), created_by_persona_id: personaId, created_by_nombre: nombre })
+    .insert({ ...limpiar(payload, extendido, propias), created_by_persona_id: personaId, created_by_nombre: nombre })
     .select()
     .single();
   if (error) throw error;
@@ -194,10 +230,10 @@ export async function createCorrectivo(payload, actor, extendido = false) {
 }
 
 // `cambios` puede ser parcial (por ejemplo solo { avance } al mover la barra).
-export async function updateCorrectivo(id, cambios, actor, extendido = false) {
+export async function updateCorrectivo(id, cambios, actor, extendido = false, propias = false) {
   const { personaId, nombre } = actorFields(actor);
   const completo = Object.keys(cambios).length > 1 || !("avance" in cambios);
-  const cuerpo = completo ? limpiar(cambios, extendido) : { avance: Math.max(0, Math.min(100, Math.round(Number(cambios.avance) || 0))) };
+  const cuerpo = completo ? limpiar(cambios, extendido, propias) : { avance: Math.max(0, Math.min(100, Math.round(Number(cambios.avance) || 0))) };
   const { data, error } = await supabase
     .from(TABLA)
     .update({ ...cuerpo, updated_at: new Date().toISOString(), updated_by_persona_id: personaId, updated_by_nombre: nombre })
