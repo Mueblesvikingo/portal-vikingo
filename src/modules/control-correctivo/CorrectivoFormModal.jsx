@@ -31,11 +31,19 @@ function Bloque({ icono, titulo, tono, children }) {
 // ejecutor, prioridad, fecha compromiso, avance (0 a 100) y eficiencia
 // operativa. Se agrega "Fecha de inicio" para que el Gantt pueda dibujar
 // barras con principio y fin.
-export default function CorrectivoFormModal({ item, procesos, lideres, supervisores, onSave, onClose, onDelete }) {
+// Ajustes de la PM (26-oct-2026): nombre de la acción (lo que muestra el Gantt),
+// otros procesos involucrados (con opción "Todos los procesos") y las
+// directrices estratégicas que atiende (una acción puede atender varias).
+// Esos tres campos necesitan sql/2026-10-control_correctivo_v2.sql (`extendido`).
+export default function CorrectivoFormModal({ item, procesos, lideres, supervisores, directrices = [], extendido = false, nombrePersona, onSave, onClose, onDelete }) {
   const esEdicion = Boolean(item?.id);
   const [form, setForm] = useState(() => ({
     proceso_id: item?.proceso_id != null ? String(item.proceso_id) : "",
     tipo_brecha: item?.tipo_brecha || "",
+    nombre_accion: item?.nombre_accion || "",
+    todos_procesos: Boolean(item?.todos_procesos),
+    procesos_involucrados_ids: (item?.procesos_involucrados_ids || []).map(Number),
+    directrices_ids: (item?.directrices_ids || []).map(Number),
     causa_raiz: item?.causa_raiz || "",
     accion_correctiva: item?.accion_correctiva || "",
     lider_persona_id: item?.lider_persona_id != null ? String(item.lider_persona_id) : "",
@@ -65,9 +73,32 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
     });
   }
 
+  function alternarEn(campo, id) {
+    setForm((f) => ({ ...f, [campo]: f[campo].includes(id) ? f[campo].filter((x) => x !== id) : [...f[campo], id] }));
+  }
+
+  // Si el líder guardado ya no está en la lista (p. ej. Hugo, quitado a pedido
+  // de la PM), se conserva como opción para no bloquear la edición de esa acción.
+  const opcionesLider = useMemo(() => {
+    const actual = item?.lider_persona_id;
+    if (actual == null || lideres.some((l) => Number(l.id) === Number(actual))) return lideres;
+    return [...lideres, { id: actual, nombre: `${nombrePersona ? nombrePersona(actual) : "Líder actual"} (ya no es líder)` }];
+  }, [lideres, item, nombrePersona]);
+
+  const directricesPorPerspectiva = useMemo(() => {
+    const grupos = new Map();
+    directrices.forEach((d) => {
+      const clave = d.perspectiva || "General";
+      if (!grupos.has(clave)) grupos.set(clave, []);
+      grupos.get(clave).push(d);
+    });
+    return [...grupos.entries()];
+  }, [directrices]);
+
   function validar() {
     if (!form.proceso_id) return "Selecciona el proceso.";
     if (!form.tipo_brecha) return "Selecciona el tipo de brecha.";
+    if (extendido && !form.nombre_accion.trim()) return "Escribe el nombre de la acción.";
     if (!form.causa_raiz.trim()) return "Escribe la causa raíz.";
     if (!form.accion_correctiva.trim()) return "Escribe la acción correctiva.";
     if (!form.lider_persona_id) return "Selecciona el líder responsable.";
@@ -105,6 +136,11 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto bg-[#fbfbf9] p-4">
+          {!extendido && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+              Para usar el nombre de la acción, los procesos involucrados y las directrices estratégicas, ejecuta una vez <span className="font-black">sql/2026-10-control_correctivo_v2.sql</span> en el SQL Editor de Supabase y recarga la página.
+            </div>
+          )}
           <Bloque icono="📍" titulo="¿Dónde ocurre?" tono="sky">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className={labelClass}>
@@ -122,10 +158,46 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
                 </select>
               </label>
             </div>
+            {extendido && (
+              <div className="mt-3">
+                <p className={labelClass}>Otros procesos involucrados</p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    aria-pressed={form.todos_procesos}
+                    onClick={() => setField("todos_procesos", !form.todos_procesos)}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${form.todos_procesos ? "border-[#0f1f3d] bg-[#0f1f3d] text-white" : "border-[#d9dee6] bg-white text-[#0f1f3d] hover:bg-[#f7f7f4]"}`}
+                  >
+                    {form.todos_procesos ? "✓ " : ""}Todos los procesos
+                  </button>
+                  {procesos.filter((p) => String(p.id) !== form.proceso_id).map((p) => {
+                    const activo = form.todos_procesos || form.procesos_involucrados_ids.includes(Number(p.id));
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        aria-pressed={activo}
+                        disabled={form.todos_procesos}
+                        onClick={() => alternarEn("procesos_involucrados_ids", Number(p.id))}
+                        className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-default ${activo ? "border-sky-300 bg-sky-100 text-sky-800" : "border-[#d9dee6] bg-white text-[#5b6472] hover:bg-[#f7f7f4]"}`}
+                      >
+                        {p.nombre}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </Bloque>
 
           <Bloque icono="🔍" titulo="Qué pasó y qué se hará" tono="amber">
             <div className="space-y-3">
+              {extendido && (
+                <label className={labelClass}>
+                  Nombre de la acción
+                  <input type="text" value={form.nombre_accion} maxLength={80} onChange={(e) => setField("nombre_accion", e.target.value)} placeholder="Nombre corto: es el que se ve en el Gantt" className={inputClass} />
+                </label>
+              )}
               <label className={labelClass}>
                 Causa raíz
                 <textarea value={form.causa_raiz} onChange={(e) => setField("causa_raiz", e.target.value)} rows={3} className={inputClass} />
@@ -143,7 +215,7 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
                 Líder responsable
                 <select value={form.lider_persona_id} onChange={(e) => setField("lider_persona_id", e.target.value)} className={inputClass}>
                   <option value="">Seleccionar…</option>
-                  {lideres.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  {opcionesLider.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                 </select>
               </label>
               <label className={labelClass}>
@@ -155,6 +227,40 @@ export default function CorrectivoFormModal({ item, procesos, lideres, superviso
               </label>
             </div>
           </Bloque>
+
+          {extendido && (
+            <Bloque icono="🎯" titulo="Directrices estratégicas que atiende" tono="sky">
+              {directricesPorPerspectiva.length === 0 ? (
+                <p className="text-xs text-[#5b6472]">No hay directrices cargadas en Despliegue Estratégico.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {directricesPorPerspectiva.map(([perspectiva, lista]) => (
+                    <div key={perspectiva}>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-[#94a3b8]">{perspectiva}</p>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {lista.map((d) => {
+                          const activo = form.directrices_ids.includes(Number(d.id));
+                          return (
+                            <button
+                              key={d.id}
+                              type="button"
+                              aria-pressed={activo}
+                              onClick={() => alternarEn("directrices_ids", Number(d.id))}
+                              title={d.titulo}
+                              className={`max-w-full rounded-full border px-2.5 py-1 text-left text-[11px] font-semibold transition ${activo ? "border-[#c9a227] bg-[#fbf6e3] text-[#7a5f0c]" : "border-[#d9dee6] bg-white text-[#5b6472] hover:bg-[#f7f7f4]"}`}
+                            >
+                              <span className="font-black">{d.codigo}</span> · {d.titulo}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-[10px] font-semibold text-[#94a3b8]">{form.directrices_ids.length === 0 ? "Puedes marcar todas las que atienda la acción." : `${form.directrices_ids.length} directriz(ces) seleccionada(s).`}</p>
+                </div>
+              )}
+            </Bloque>
+          )}
 
           <Bloque icono="📅" titulo="Cuándo y con qué prioridad" tono="emerald">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

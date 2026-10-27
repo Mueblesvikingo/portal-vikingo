@@ -159,7 +159,11 @@ export default function CorrectivoGantt({ items, procesos, nombrePersona, onOpen
                           ) : (
                             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
                           )}
-                          <span className={`truncate text-[11px] font-semibold ${completa ? "text-slate-300 line-through" : estado === "Vencida" ? "text-red-600" : "text-slate-700"}`} title={i.accion_correctiva}>{i.accion_correctiva}</span>
+                          {/* Nombre y fecha compromiso; el texto completo de la acción queda en el tooltip. */}
+                          <div className="min-w-0 leading-tight" title={i.accion_correctiva}>
+                            <span className={`block truncate text-[11px] font-semibold ${completa ? "text-slate-300 line-through" : estado === "Vencida" ? "text-red-600" : "text-slate-700"}`}>{i.nombre_accion || i.accion_correctiva}</span>
+                            <span className="block text-[9px] font-bold text-slate-400">{fmtCorta(fin)}</span>
+                          </div>
                         </div>
                         <div className="relative" style={{ width: ancho, height: ROW_H }}>
                           <button
@@ -181,7 +185,7 @@ export default function CorrectivoGantt({ items, procesos, nombrePersona, onOpen
                           </button>
                           {activo && (
                             <div className="pointer-events-none absolute z-20 whitespace-nowrap rounded-lg bg-slate-900 px-2 py-1 text-[10px] font-bold text-white shadow-lg" style={{ left, top: -6 }}>
-                              {fmtCorta(inicio)} → {fmtCorta(fin)} · {avance}% · {estado}{i.lider_persona_id ? ` · ${nombrePersona(i.lider_persona_id)}` : ""}
+                              {i.nombre_accion ? `${i.nombre_accion} · ` : ""}{fmtCorta(inicio)} → {fmtCorta(fin)} · {avance}% · {estado}{i.lider_persona_id ? ` · ${nombrePersona(i.lider_persona_id)}` : ""}
                             </div>
                           )}
                         </div>

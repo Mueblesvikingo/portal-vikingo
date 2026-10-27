@@ -5,6 +5,8 @@ import {
   getCorrectivos,
   getProcesosCorrectivo,
   getPersonasCorrectivo,
+  getDirectricesCorrectivo,
+  probarColumnasNuevas,
   createCorrectivo,
   updateCorrectivo,
   deactivateCorrectivo,
@@ -54,6 +56,8 @@ export default function ControlCorrectivoModule({ currentUser }) {
   const [personas, setPersonas] = useState({ personas: [], lideres: [], supervisores: [] });
   const [loading, setLoading] = useState(true);
   const [tablaFaltante, setTablaFaltante] = useState(false);
+  const [directrices, setDirectrices] = useState([]);
+  const [extendido, setExtendido] = useState(false); // ya existen las columnas de sql/2026-10-control_correctivo_v2.sql
   const [errorCarga, setErrorCarga] = useState(false);
   const [vista, setVista] = useState("tablero");
   const [filtros, setFiltros] = useState(FILTROS_VACIO);
@@ -66,13 +70,15 @@ export default function ControlCorrectivoModule({ currentUser }) {
   useEffect(() => {
     let cancelado = false;
     async function cargar() {
-      const [correctivos, procs, pers] = await Promise.all([getCorrectivos(), getProcesosCorrectivo(), getPersonasCorrectivo()]);
+      const [correctivos, procs, pers, dirs, columnasNuevas] = await Promise.all([getCorrectivos(), getProcesosCorrectivo(), getPersonasCorrectivo(), getDirectricesCorrectivo(), probarColumnasNuevas()]);
       if (cancelado) return;
       setItems(correctivos.data);
       setTablaFaltante(correctivos.tablaFaltante);
       setErrorCarga(Boolean(correctivos.error));
       setProcesos(procs);
       setPersonas(pers);
+      setDirectrices(dirs);
+      setExtendido(columnasNuevas);
       setLoading(false);
     }
     cargar();
@@ -80,6 +86,8 @@ export default function ControlCorrectivoModule({ currentUser }) {
   }, []);
 
   const personaPorId = useMemo(() => new Map(personas.personas.map((p) => [Number(p.id), p.nombre])), [personas]);
+  const procesoPorId = useMemo(() => new Map(procesos.map((p) => [Number(p.id), p.nombre])), [procesos]);
+  const directrizPorId = useMemo(() => new Map(directrices.map((d) => [Number(d.id), d])), [directrices]);
   const nombrePersona = (id) => (id != null ? personaPorId.get(Number(id)) || "—" : "—");
 
   const hoy = hoyISO();
@@ -87,7 +95,7 @@ export default function ControlCorrectivoModule({ currentUser }) {
 
   const filtrados = useMemo(() => {
     const lista = conEstado.filter((i) => (
-      !filtros.proceso || String(i.proceso_id) === filtros.proceso
+      !filtros.proceso || String(i.proceso_id) === filtros.proceso || i.todos_procesos || (i.procesos_involucrados_ids || []).map(String).includes(filtros.proceso)
     ));
     // Pendientes primero por fecha compromiso; las completadas al final.
     return lista.sort((a, b) => {
@@ -124,10 +132,10 @@ export default function ControlCorrectivoModule({ currentUser }) {
 
   async function guardarForm(form) {
     if (modal?.item?.id) {
-      const actualizado = await updateCorrectivo(modal.item.id, form, currentUser);
+      const actualizado = await updateCorrectivo(modal.item.id, form, currentUser, extendido);
       setItems((lista) => lista.map((i) => (i.id === actualizado.id ? actualizado : i)));
     } else {
-      const creado = await createCorrectivo(form, currentUser);
+      const creado = await createCorrectivo(form, currentUser, extendido);
       setItems((lista) => [...lista, creado]);
     }
     setModal(null);
@@ -184,6 +192,11 @@ export default function ControlCorrectivoModule({ currentUser }) {
             <li>2. Pega y ejecuta el archivo <span className="font-semibold">sql/2026-10-control_correctivo.sql</span>.</li>
             <li>3. Recarga esta página.</li>
           </ol>
+        </div>
+      )}
+      {!tablaFaltante && !loading && !extendido && puedeEditar && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+          Para usar el nombre de la acción, los procesos involucrados y las directrices estratégicas, ejecuta una vez <span className="font-black">sql/2026-10-control_correctivo_v2.sql</span> en el SQL Editor de Supabase y recarga la página.
         </div>
       )}
       {errorCarga && (
@@ -259,13 +272,35 @@ export default function ControlCorrectivoModule({ currentUser }) {
                         <button type="button" onClick={alternar} className="block w-full space-y-3 text-left" title={expandido ? "Ocultar detalle" : "Ver completo"}>
                           <div>
                             <p className="text-[9px] font-bold uppercase tracking-wider text-[#94a3b8]">Acción correctiva</p>
-                            <p className={`mt-1 text-[13px] font-semibold leading-relaxed text-[#0f1f3d] ${expandido ? "" : "line-clamp-2"}`}>{i.accion_correctiva}</p>
+                            {i.nombre_accion && <p className="mt-1 text-sm font-black leading-snug text-[#0f1f3d]">{i.nombre_accion}</p>}
+                            <p className={`${i.nombre_accion ? "mt-0.5 text-xs font-medium text-[#5b6472]" : "mt-1 text-[13px] font-semibold text-[#0f1f3d]"} leading-relaxed ${expandido ? "" : "line-clamp-2"}`}>{i.accion_correctiva}</p>
                           </div>
                           <div>
                             <p className="text-[9px] font-bold uppercase tracking-wider text-[#94a3b8]">Causa raíz</p>
                             <p className={`mt-1 text-xs leading-relaxed text-[#6b7587] ${expandido ? "" : "line-clamp-2"}`}>{i.causa_raiz || "Sin causa raíz"}</p>
                           </div>
                         </button>
+                        {(i.todos_procesos || (i.procesos_involucrados_ids || []).length > 0 || (i.directrices_ids || []).length > 0) && (
+                          <div className="mt-2 space-y-1.5">
+                            {(i.todos_procesos || (i.procesos_involucrados_ids || []).length > 0) && (
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-[#94a3b8]">Involucra</span>
+                                {i.todos_procesos
+                                  ? <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700">Todos los procesos</span>
+                                  : i.procesos_involucrados_ids.map((pid) => <span key={pid} className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">{procesoPorId.get(Number(pid)) || `Proceso ${pid}`}</span>)}
+                              </div>
+                            )}
+                            {(i.directrices_ids || []).length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-[#94a3b8]">Directrices</span>
+                                {i.directrices_ids.map((did) => {
+                                  const d = directrizPorId.get(Number(did));
+                                  return <span key={did} title={d?.titulo} className="rounded-full border border-[#efe2b4] bg-[#fbf6e3] px-2 py-0.5 text-[10px] font-bold text-[#7a5f0c]">{d?.codigo || `#${did}`}</span>;
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {(i.eficiencia_operativa || expandido) && (
                           <p className="mt-2 rounded-lg bg-[#f7f7f4] px-2.5 py-1.5 text-xs leading-snug text-[#5b6472]">
                             <span className="font-bold text-[#0f1f3d]">Eficiencia operativa: </span>
@@ -308,6 +343,9 @@ export default function ControlCorrectivoModule({ currentUser }) {
           procesos={procesos}
           lideres={personas.lideres}
           supervisores={personas.supervisores}
+          directrices={directrices}
+          extendido={extendido}
+          nombrePersona={nombrePersona}
           onSave={guardarForm}
           onClose={() => setModal(null)}
           onDelete={modal.item ? eliminar : null}

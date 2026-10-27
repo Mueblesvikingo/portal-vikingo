@@ -9,6 +9,44 @@ export const PRIORIDADES = ["Alta", "Media", "Baja"];
 const TABLA = "control_correctivo";
 const ROL_LIDER = "Líder de proceso";
 
+// Líderes de proceso en este módulo: pedido de la PM (26-oct-2026) — Hugo
+// Terrones (persona 13) ya no se ofrece y Alejandro García (persona 14), que
+// no tiene el rol "Líder de proceso" en persona_roles, sí. Es un ajuste solo de
+// este módulo: no toca persona_roles, que usan otros módulos y permisos.
+const LIDERES_QUITAR_IDS = [13];
+const LIDERES_AGREGAR_IDS = [14];
+
+// Columnas agregadas por sql/2026-10-control_correctivo_v2.sql. Mientras no se
+// ejecute ese SQL, el módulo sigue funcionando sin ellas y avisa.
+const COLUMNAS_NUEVAS = "nombre_accion,procesos_involucrados_ids,todos_procesos,directrices_ids";
+
+function esColumnaFaltante(error) {
+  const texto = `${error?.message || ""}`.toLowerCase();
+  return error?.code === "42703" || error?.code === "PGRST204" || (texto.includes("column") && (texto.includes("does not exist") || texto.includes("could not find")));
+}
+
+// ¿Ya existen las columnas nuevas (nombre, procesos involucrados, directrices)?
+export async function probarColumnasNuevas() {
+  const { error } = await supabase.from(TABLA).select(COLUMNAS_NUEVAS).limit(1);
+  if (!error) return true;
+  if (!esColumnaFaltante(error) && !esTablaFaltante(error)) console.error("Error al comprobar las columnas nuevas de Control Correctivo:", error);
+  return false;
+}
+
+// Directrices estratégicas = objetivos del Despliegue Estratégico (GLOBAL y OBJ-xx).
+export async function getDirectricesCorrectivo() {
+  const { data, error } = await supabase
+    .from("despliegue_objetivos")
+    .select("id,codigo,titulo,perspectiva")
+    .eq("activo", true)
+    .order("orden", { ascending: true });
+  if (error) {
+    console.error("Error al cargar las directrices estratégicas:", error);
+    return [];
+  }
+  return data || [];
+}
+
 // La tabla la crea el usuario con un SQL aparte; mientras no exista, el módulo
 // avisa en vez de mostrar un error técnico.
 function esTablaFaltante(error) {
@@ -97,7 +135,7 @@ export async function getPersonasCorrectivo() {
 
   return {
     personas,
-    lideres: personas.filter((p) => idsLider.has(p.id)),
+    lideres: personas.filter((p) => (idsLider.has(p.id) && !LIDERES_QUITAR_IDS.includes(Number(p.id))) || LIDERES_AGREGAR_IDS.includes(Number(p.id))),
     supervisores: personas.filter((p) => idsSupervisor.has(p.id)),
   };
 }
@@ -116,8 +154,20 @@ export async function getCorrectivos() {
   return { data: data || [], tablaFaltante: false, error: null };
 }
 
-function limpiar(payload) {
+const aIds = (lista) => [...new Set((lista || []).map(Number).filter((n) => Number.isFinite(n)))];
+
+// `extendido` = ya existen las columnas nuevas; si no, esos campos no se envían.
+function limpiar(payload, extendido = false) {
+  const nuevos = extendido
+    ? {
+        nombre_accion: payload.nombre_accion?.trim() || null,
+        todos_procesos: Boolean(payload.todos_procesos),
+        procesos_involucrados_ids: payload.todos_procesos ? [] : aIds(payload.procesos_involucrados_ids),
+        directrices_ids: aIds(payload.directrices_ids),
+      }
+    : {};
   return {
+    ...nuevos,
     proceso_id: Number(payload.proceso_id),
     tipo_brecha: payload.tipo_brecha,
     causa_raiz: payload.causa_raiz?.trim() || null,
@@ -132,11 +182,11 @@ function limpiar(payload) {
   };
 }
 
-export async function createCorrectivo(payload, actor) {
+export async function createCorrectivo(payload, actor, extendido = false) {
   const { personaId, nombre } = actorFields(actor);
   const { data, error } = await supabase
     .from(TABLA)
-    .insert({ ...limpiar(payload), created_by_persona_id: personaId, created_by_nombre: nombre })
+    .insert({ ...limpiar(payload, extendido), created_by_persona_id: personaId, created_by_nombre: nombre })
     .select()
     .single();
   if (error) throw error;
@@ -144,10 +194,10 @@ export async function createCorrectivo(payload, actor) {
 }
 
 // `cambios` puede ser parcial (por ejemplo solo { avance } al mover la barra).
-export async function updateCorrectivo(id, cambios, actor) {
+export async function updateCorrectivo(id, cambios, actor, extendido = false) {
   const { personaId, nombre } = actorFields(actor);
   const completo = Object.keys(cambios).length > 1 || !("avance" in cambios);
-  const cuerpo = completo ? limpiar(cambios) : { avance: Math.max(0, Math.min(100, Math.round(Number(cambios.avance) || 0))) };
+  const cuerpo = completo ? limpiar(cambios, extendido) : { avance: Math.max(0, Math.min(100, Math.round(Number(cambios.avance) || 0))) };
   const { data, error } = await supabase
     .from(TABLA)
     .update({ ...cuerpo, updated_at: new Date().toISOString(), updated_by_persona_id: personaId, updated_by_nombre: nombre })
