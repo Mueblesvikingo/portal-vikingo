@@ -79,6 +79,45 @@ export async function getAvancePlanos() {
   return { estados, tablaFaltante: false, naDisponible: usado.na, validadoDisponible: usado.va, error: null };
 }
 
+// Historial de validaciones (tabla `sig_avance_planos_historial`, ver
+// sql/2026-10-sig_avance_planos_historial.sql): cada vez que se da el check
+// dorado o se retira queda una fila (quién, cuándo, qué plano). Solo se agrega:
+// el historial no se edita ni se borra.
+const TABLA_HISTORIAL = "sig_avance_planos_historial";
+export const ACCION_VALIDADO = "validado";
+export const ACCION_RETIRADO = "retirado";
+
+export async function getHistorialValidaciones(limite = 500) {
+  const { data, error } = await supabase
+    .from(TABLA_HISTORIAL)
+    .select("id,producto_id,area,tipo,accion,persona_id,persona_nombre,created_at")
+    .order("created_at", { ascending: false })
+    .limit(limite);
+  if (error) {
+    if (esTablaFaltante(error)) return { filas: [], tablaFaltante: true, error: null };
+    console.error("Error al cargar el historial de validaciones:", error);
+    return { filas: [], tablaFaltante: false, error };
+  }
+  return { filas: data || [], tablaFaltante: false, error: null };
+}
+
+export async function registrarValidacion({ productoId, area, tipo, accion }, actor) {
+  const { data, error } = await supabase
+    .from(TABLA_HISTORIAL)
+    .insert({
+      producto_id: Number(productoId),
+      area,
+      tipo,
+      accion,
+      persona_id: actor?.persona_id != null ? Number(actor.persona_id) : null,
+      persona_nombre: actor?.persona_nombre || actor?.nombre || actor?.usuario || null,
+    })
+    .select("id,producto_id,area,tipo,accion,persona_id,persona_nombre,created_at")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // estado: "si" (terminada), "va" (validada), "na" (no aplica) o "no" (vacía).
 // Una casilla validada también cuenta como terminada (completado = true).
 export async function setAvancePlano({ productoId, area, tipo, estado }, actor, disponibles = { na: true, va: true }) {

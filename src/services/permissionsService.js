@@ -347,6 +347,16 @@ export function canViewAvancePlanos(user) {
   );
 }
 
+// Check dorado (validado) de Avance de planos: lo da Beatriz (persona_id 11), con
+// el Director General como respaldo. El resto marca solo "terminado" y no puede
+// modificar un plano ya validado.
+const VALIDADORES_PLANOS_PERSONA_IDS = [11];
+
+export function canValidatePlanos(user) {
+  const roles = getApplicableRoles(user);
+  return roles.includes("Director General") || VALIDADORES_PLANOS_PERSONA_IDS.includes(Number(user?.persona_id));
+}
+
 // Edición del tablero Estratégico de Desempeño Organizacional: decisión
 // explícita del usuario de restringirla a estas dos personas puntuales
 // (Alejandro García Hernández y Cristian García Hernández), no a un rol —

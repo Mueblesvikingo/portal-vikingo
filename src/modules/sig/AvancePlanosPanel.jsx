@@ -4,11 +4,16 @@ import {
   ESTADO_HECHO,
   ESTADO_VALIDADO,
   ESTADO_NO_APLICA,
+  ACCION_VALIDADO,
+  ACCION_RETIRADO,
   claveAvance,
   getProductosPlanos,
   getAvancePlanos,
   setAvancePlano,
+  getHistorialValidaciones,
+  registrarValidacion,
 } from "../../services/avancePlanosService";
+import { canValidatePlanos } from "../../services/permissionsService";
 
 // Avance de planos 2D y 3D por producto y área (Corte, Costura, Carpintería,
 // Armado y Espuma; el 3D aplica solo a Armado). Implementación temporal
@@ -16,6 +21,12 @@ import {
 // Misma estructura visual que la tabla de Madurez Organizacional (encabezado
 // gris, barra oscura, casillas verdes y barra de avance azul marino).
 // Cada casilla se cicla con clic: vacía → ✓ verde (terminado) → ✓ dorado (validado) → N/A → vacía.
+// El check dorado solo lo da quien valida (Beatriz; ver canValidatePlanos) y cada
+// validación queda en el historial (quién, cuándo y qué plano). El resto marca
+// terminado / N/A y no puede cambiar un plano ya validado.
+
+const ETIQUETA_AREA = { corte: "Corte tela", costura: "Costura", carpinteria: "Carpintería", armado: "Armado", espuma: "Espuma", tapizado: "Tapizado" };
+const fechaHora = (iso) => (iso ? new Date(iso).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "");
 
 // Familias que no entran en este seguimiento (siguen en el catálogo de productos).
 const FAMILIAS_EXCLUIDAS = ["Buros", "Tocador"];
@@ -54,7 +65,62 @@ function Progress({ value, validado = 0 }) {
   );
 }
 
-function CheckCell({ estado, fijo, onCycle, titulo }) {
+function HistorialModal({ filas, productos, onClose }) {
+  useEffect(() => {
+    const alTeclear = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", alTeclear);
+    return () => window.removeEventListener("keydown", alTeclear);
+  }, [onClose]);
+  const productoDe = (id) => productos.find((p) => Number(p.id) === Number(id));
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div role="dialog" aria-label="Historial de validaciones" className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex h-11 shrink-0 items-center justify-between bg-[#111827] px-4 text-white">
+          <span className="text-sm font-black uppercase">Historial de validaciones <span className="ml-1 text-[10px] font-bold text-gray-400">{filas.length} registros</span></span>
+          <button type="button" onClick={onClose} className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-black uppercase hover:bg-white/20">Cerrar</button>
+        </div>
+        {filas.length === 0 ? (
+          <div className="py-10 text-center text-[11px] font-bold text-gray-300">Todavía no hay validaciones registradas.</div>
+        ) : (
+          <div className="overflow-auto">
+            <table className="w-full text-[10px]">
+              <thead className="sticky top-0 bg-gray-50">
+                <tr className="border-b border-gray-200 text-left font-black text-gray-500">
+                  <th className="px-3 py-1">Fecha</th>
+                  <th className="px-3 py-1">Producto</th>
+                  <th className="px-3 py-1">Plano</th>
+                  <th className="px-3 py-1">Acción</th>
+                  <th className="px-3 py-1">Quién</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map((f) => {
+                  const p = productoDe(f.producto_id);
+                  const validado = f.accion === ACCION_VALIDADO;
+                  return (
+                    <tr key={f.id} className="border-b border-gray-100">
+                      <td className="whitespace-nowrap px-3 py-1 font-semibold text-gray-500">{fechaHora(f.created_at)}</td>
+                      <td className="px-3 py-1 font-black">{p ? p.nombre : `Producto ${f.producto_id}`}{p?.codigo && <span className="ml-1.5 text-[9px] font-semibold text-gray-400">{p.codigo}</span>}</td>
+                      <td className="whitespace-nowrap px-3 py-1 font-semibold text-gray-600">{ETIQUETA_AREA[f.area] || f.area} · {f.tipo}</td>
+                      <td className="px-3 py-1">
+                        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${validado ? "border-amber-400 bg-amber-100 text-amber-600" : "border-gray-300 bg-gray-100 text-gray-500"}`}>
+                          {validado ? "✓ Validado" : "Retirado"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-1 font-semibold text-gray-700">{f.persona_nombre || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CheckCell({ estado, fijo, onCycle, titulo, detalle, ciclo }) {
   const clases =
     estado === ESTADO_VALIDADO
       ? "bg-amber-100 border-amber-400 text-amber-500"
@@ -67,7 +133,7 @@ function CheckCell({ estado, fijo, onCycle, titulo }) {
     <button
       type="button"
       onClick={fijo ? undefined : onCycle}
-      title={fijo ? `${titulo} · no aplica` : `${titulo} · clic: ✓ terminado → ✓ validado → N/A → vacío`}
+      title={fijo ? `${titulo} · no aplica` : `${titulo}${detalle ? ` · ${detalle}` : ""} · clic: ${ciclo}`}
       aria-label={titulo}
       aria-pressed={estado !== "no"}
       className={`relative w-5 h-4 rounded flex items-center justify-center border leading-none font-black mx-auto ${fijo ? "cursor-default" : "cursor-pointer hover:opacity-80"} ${clases} ${
@@ -88,12 +154,20 @@ export default function AvancePlanosPanel({ currentUser }) {
   const [validadoDisponible, setValidadoDisponible] = useState(true);
   const [message, setMessage] = useState("");
   const [familia, setFamilia] = useState("");
+  const [historial, setHistorial] = useState([]);
+  const [historialFaltante, setHistorialFaltante] = useState(false);
+  const [verHistorial, setVerHistorial] = useState(false);
+  const esValidador = canValidatePlanos(currentUser);
+  // Dar el check dorado exige poder dejar el registro: sin la tabla del historial no se valida.
+  const puedeValidar = esValidador && validadoDisponible && !historialFaltante;
 
   useEffect(() => {
     let cancelado = false;
     async function cargar() {
-      const [prods, avance] = await Promise.all([getProductosPlanos(), getAvancePlanos()]);
+      const [prods, avance, hist] = await Promise.all([getProductosPlanos(), getAvancePlanos(), getHistorialValidaciones()]);
       if (cancelado) return;
+      setHistorial(hist.filas);
+      setHistorialFaltante(hist.tablaFaltante);
       setProductos(prods.filter((p) => !esExcluido(p)));
       setEstados(avance.estados);
       setTablaFaltante(avance.tablaFaltante);
@@ -119,15 +193,38 @@ export default function AvancePlanosPanel({ currentUser }) {
   // En la vista de Bases no se muestra la columna de espuma (ninguna base la lleva).
   const columnas = COLUMNAS_PLANOS.filter((c) => !(familiaActiva === "Base" && REGLAS_NO_APLICA.some((r) => r.familia === "Base" && r.area === c.area)));
 
+  // Última validación de cada casilla (el historial viene del más nuevo al más viejo):
+  // sirve para decir quién validó y cuándo en el texto de la casilla.
+  const ultimaValidacion = useMemo(() => {
+    const mapa = new Map();
+    historial.forEach((h) => { const k = claveAvance(h.producto_id, h.area, h.tipo); if (!mapa.has(k)) mapa.set(k, h); });
+    return mapa;
+  }, [historial]);
+  const detalleValidado = (p, c) => {
+    const h = ultimaValidacion.get(claveAvance(p.id, c.area, c.tipo));
+    return h && h.accion === ACCION_VALIDADO ? `Validado por ${h.persona_nombre || "—"} el ${fechaHora(h.created_at)}` : "";
+  };
+  const cicloTexto = (estado) => (estado === ESTADO_VALIDADO && !puedeValidar
+    ? "solo quien valida puede cambiarlo"
+    : `✓ terminado${puedeValidar ? " → ✓ validado" : ""} → N/A → vacío`);
+
   const estadoDe = (p, c) => (esNoAplicaFijo(p, c) ? ESTADO_NO_APLICA : estados.get(claveAvance(p.id, c.area, c.tipo)) || "no");
 
   async function ciclar(producto, columna) {
     if (tablaFaltante || esNoAplicaFijo(producto, columna)) return;
     const clave = claveAvance(producto.id, columna.area, columna.tipo);
     const anterior = estados.get(clave) || "no";
-    // vacía → terminado → validado → N/A → vacía (se omiten los pasos cuya columna aún no existe)
-    const ciclo = ["no", ESTADO_HECHO, ...(validadoDisponible ? [ESTADO_VALIDADO] : []), ...(naDisponible ? [ESTADO_NO_APLICA] : [])];
+    // Un plano validado solo lo puede cambiar quien valida.
+    if (anterior === ESTADO_VALIDADO && !puedeValidar) {
+      setMessage(esValidador ? "Falta crear la tabla del historial para modificar planos validados." : "Este plano ya está validado: solo Beatriz puede cambiarlo.");
+      return;
+    }
+    // vacía → terminado → validado → N/A → vacía (el paso de validado solo para quien valida; se omiten los pasos cuya columna aún no existe)
+    const ciclo = ["no", ESTADO_HECHO, ...(puedeValidar ? [ESTADO_VALIDADO] : []), ...(naDisponible ? [ESTADO_NO_APLICA] : [])];
     const siguiente = ciclo[(Math.max(0, ciclo.indexOf(anterior)) + 1) % ciclo.length];
+    setMessage("");
+    // Cambios que dejan registro en el historial: dar el check dorado o retirarlo.
+    const accion = siguiente === ESTADO_VALIDADO ? ACCION_VALIDADO : anterior === ESTADO_VALIDADO ? ACCION_RETIRADO : null;
     const poner = (valor) => setEstados((actual) => {
       const copia = new Map(actual);
       if (valor === "no") copia.delete(clave); else copia.set(clave, valor);
@@ -136,6 +233,16 @@ export default function AvancePlanosPanel({ currentUser }) {
     poner(siguiente);
     try {
       await setAvancePlano({ productoId: producto.id, area: columna.area, tipo: columna.tipo, estado: siguiente }, currentUser, { na: naDisponible, va: validadoDisponible });
+      if (accion) {
+        try {
+          const registro = await registrarValidacion({ productoId: producto.id, area: columna.area, tipo: columna.tipo, accion }, currentUser);
+          setHistorial((actual) => [registro, ...actual]);
+        } catch (errHistorial) {
+          // Sin registro no se deja la validación: se regresa la casilla a como estaba.
+          await setAvancePlano({ productoId: producto.id, area: columna.area, tipo: columna.tipo, estado: anterior }, currentUser, { na: naDisponible, va: validadoDisponible }).catch(() => {});
+          throw errHistorial;
+        }
+      }
     } catch (err) {
       console.error("Error al guardar el avance de planos:", err);
       poner(anterior);
@@ -184,6 +291,12 @@ export default function AvancePlanosPanel({ currentUser }) {
         </div>
       )}
 
+      {!tablaFaltante && validadoDisponible && historialFaltante && esValidador && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+          Para poder dar el check dorado y guardar el historial de validaciones ejecuta una vez <span className="font-black">sql/2026-10-sig_avance_planos_historial.sql</span> en el SQL Editor y recarga la página.
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="h-11 bg-[#111827] text-white px-4 flex items-center justify-between text-sm font-black">
           <div className="flex items-center gap-3">
@@ -192,7 +305,18 @@ export default function AvancePlanosPanel({ currentUser }) {
             <span title="Planos validados (todos los productos)" className="rounded-md bg-white/10 px-2 py-0.5 text-sm leading-none font-black text-amber-300">{validadoGeneral}%</span>
             <span className="-ml-1.5 text-[10px] font-black uppercase tracking-wider text-amber-400">Validado</span>
           </div>
-          <div className="text-[10px] font-bold text-gray-400">{filtrados.length} productos</div>
+          <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400">
+            <button
+              type="button"
+              onClick={() => setVerHistorial(true)}
+              disabled={historialFaltante}
+              title={historialFaltante ? "Falta crear la tabla del historial en Supabase" : "Ver quién validó cada plano y cuándo"}
+              className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-300 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Historial de validaciones
+            </button>
+            <span>{filtrados.length} productos</span>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 border-b border-gray-200 bg-gray-50 px-3 py-1.5">
@@ -252,6 +376,8 @@ export default function AvancePlanosPanel({ currentUser }) {
                             fijo={esNoAplicaFijo(producto, c)}
                             onCycle={() => ciclar(producto, c)}
                             titulo={`${producto.nombre} · ${c.label} · plano ${c.tipo}`}
+                            detalle={detalleValidado(producto, c)}
+                            ciclo={cicloTexto(estadoDe(producto, c))}
                           />
                         </td>
                       ))}
@@ -280,6 +406,8 @@ export default function AvancePlanosPanel({ currentUser }) {
           </div>
         )}
       </div>
+
+      {verHistorial && <HistorialModal filas={historial} productos={productos} onClose={() => setVerHistorial(false)} />}
     </div>
   );
 }
