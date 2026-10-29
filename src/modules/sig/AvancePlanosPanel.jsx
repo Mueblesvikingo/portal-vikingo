@@ -12,6 +12,7 @@ import {
   setAvancePlano,
   getHistorialValidaciones,
   registrarValidacion,
+  borrarValidacion,
 } from "../../services/avancePlanosService";
 import { canValidatePlanos } from "../../services/permissionsService";
 
@@ -21,9 +22,11 @@ import { canValidatePlanos } from "../../services/permissionsService";
 // Misma estructura visual que la tabla de Madurez Organizacional (encabezado
 // gris, barra oscura, casillas verdes y barra de avance azul marino).
 // Cada casilla se cicla con clic: vacía → ✓ verde (terminado) → ✓ dorado (validado) → N/A → vacía.
-// El check dorado solo lo da quien valida (Beatriz; ver canValidatePlanos) y cada
-// validación queda en el historial (quién, cuándo y qué plano). El resto marca
-// terminado / N/A y no puede cambiar un plano ya validado.
+// El check dorado solo lo da quien valida (Beatriz, Coordinador SIG y Director General;
+// ver canValidatePlanos) y cada validación queda en el historial (quién, cuándo y qué
+// plano). Quien valida también puede revertirla desde el historial: el plano queda como
+// terminado y el registro se borra. El resto marca terminado / N/A y no puede cambiar un
+// plano ya validado.
 
 const ETIQUETA_AREA = { corte: "Corte tela", costura: "Costura", carpinteria: "Carpintería", armado: "Armado", espuma: "Espuma", tapizado: "Tapizado" };
 const fechaHora = (iso) => (iso ? new Date(iso).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "");
@@ -65,7 +68,7 @@ function Progress({ value, validado = 0 }) {
   );
 }
 
-function HistorialModal({ filas, productos, onClose }) {
+function HistorialModal({ filas, productos, onClose, aviso, puedeRevertir, onRevertir }) {
   useEffect(() => {
     const alTeclear = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", alTeclear);
@@ -79,6 +82,7 @@ function HistorialModal({ filas, productos, onClose }) {
           <span className="text-sm font-black uppercase">Historial de validaciones <span className="ml-1 text-[10px] font-bold text-gray-400">{filas.length} registros</span></span>
           <button type="button" onClick={onClose} className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-black uppercase hover:bg-white/20">Cerrar</button>
         </div>
+        {aviso && <div className="shrink-0 border-b border-red-100 bg-red-50 px-4 py-2 text-[10px] font-bold text-red-600">{aviso}</div>}
         {filas.length === 0 ? (
           <div className="py-10 text-center text-[11px] font-bold text-gray-300">Todavía no hay validaciones registradas.</div>
         ) : (
@@ -91,6 +95,7 @@ function HistorialModal({ filas, productos, onClose }) {
                   <th className="px-3 py-1">Plano</th>
                   <th className="px-3 py-1">Acción</th>
                   <th className="px-3 py-1">Quién</th>
+                  <th className="px-3 py-1" />
                 </tr>
               </thead>
               <tbody>
@@ -108,6 +113,18 @@ function HistorialModal({ filas, productos, onClose }) {
                         </span>
                       </td>
                       <td className="px-3 py-1 font-semibold text-gray-700">{f.persona_nombre || "—"}</td>
+                      <td className="px-3 py-1 text-right">
+                        {puedeRevertir(f) && (
+                          <button
+                            type="button"
+                            onClick={() => onRevertir(f)}
+                            title="Quita el check dorado (el plano queda como terminado) y borra este registro del historial"
+                            className="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[9px] font-black uppercase text-red-600 hover:bg-red-100"
+                          >
+                            Revertir
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -216,7 +233,7 @@ export default function AvancePlanosPanel({ currentUser }) {
     const anterior = estados.get(clave) || "no";
     // Un plano validado solo lo puede cambiar quien valida.
     if (anterior === ESTADO_VALIDADO && !puedeValidar) {
-      setMessage(esValidador ? "Falta crear la tabla del historial para modificar planos validados." : "Este plano ya está validado: solo Beatriz puede cambiarlo.");
+      setMessage(esValidador ? "Falta crear la tabla del historial para modificar planos validados." : "Este plano ya está validado: solo quien valida (Beatriz) puede cambiarlo.");
       return;
     }
     // vacía → terminado → validado → N/A → vacía (el paso de validado solo para quien valida; se omiten los pasos cuya columna aún no existe)
@@ -247,6 +264,38 @@ export default function AvancePlanosPanel({ currentUser }) {
       console.error("Error al guardar el avance de planos:", err);
       poner(anterior);
       setMessage("No fue posible guardar el cambio.");
+    }
+  }
+
+  // Revertir: solo la validación vigente de una casilla (la última, con la casilla aún dorada).
+  const claveDe = (h) => claveAvance(h.producto_id, h.area, h.tipo);
+  const esValidacionVigente = (h) => h.accion === ACCION_VALIDADO && ultimaValidacion.get(claveDe(h))?.id === h.id && estados.get(claveDe(h)) === ESTADO_VALIDADO;
+
+  // Quita el check dorado (el plano queda como terminado) y borra la validación del historial.
+  async function revertirValidacion(h) {
+    if (!puedeValidar || !esValidacionVigente(h)) return;
+    const p = productos.find((x) => Number(x.id) === Number(h.producto_id));
+    const plano = `${p ? p.nombre : `producto ${h.producto_id}`} · ${ETIQUETA_AREA[h.area] || h.area} ${h.tipo}`;
+    if (!window.confirm(`¿Revertir la validación de ${plano}?\n\nEl plano quedará como terminado y este registro se borrará del historial.`)) return;
+    const base = { productoId: h.producto_id, area: h.area, tipo: h.tipo };
+    const ponerEstado = (valor) => setEstados((actual) => new Map(actual).set(claveDe(h), valor));
+    setMessage("");
+    try {
+      await setAvancePlano({ ...base, estado: ESTADO_HECHO }, currentUser, { na: naDisponible, va: validadoDisponible });
+      try {
+        await borrarValidacion(h.id);
+      } catch (errBorrar) {
+        // Si no se pudo borrar el registro, la casilla vuelve a estar validada para no perder el historial.
+        await setAvancePlano({ ...base, estado: ESTADO_VALIDADO }, currentUser, { na: naDisponible, va: validadoDisponible }).catch(() => {});
+        throw errBorrar;
+      }
+      ponerEstado(ESTADO_HECHO);
+      setHistorial((actual) => actual.filter((x) => x.id !== h.id));
+    } catch (err) {
+      console.error("Error al revertir la validación:", err);
+      setMessage(err?.code === "SIN_PERMISO_BORRAR"
+        ? "Falta dar permiso para borrar del historial: ejecuta una vez sql/2026-10-sig_avance_planos_historial_borrar.sql en el SQL Editor y recarga la página."
+        : "No fue posible revertir la validación.");
     }
   }
 
@@ -407,7 +456,16 @@ export default function AvancePlanosPanel({ currentUser }) {
         )}
       </div>
 
-      {verHistorial && <HistorialModal filas={historial} productos={productos} onClose={() => setVerHistorial(false)} />}
+      {verHistorial && (
+        <HistorialModal
+          filas={historial}
+          productos={productos}
+          onClose={() => setVerHistorial(false)}
+          aviso={message}
+          puedeRevertir={(h) => puedeValidar && esValidacionVigente(h)}
+          onRevertir={revertirValidacion}
+        />
+      )}}
     </div>
   );
 }

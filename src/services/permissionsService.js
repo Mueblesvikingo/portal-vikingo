@@ -347,14 +347,14 @@ export function canViewAvancePlanos(user) {
   );
 }
 
-// Check dorado (validado) de Avance de planos: lo da Beatriz (persona_id 11), con
-// el Director General como respaldo. El resto marca solo "terminado" y no puede
+// Check dorado (validado) de Avance de planos: lo da Beatriz (persona_id 11), el
+// Coordinador SIG y el Director General. El resto marca solo "terminado" y no puede
 // modificar un plano ya validado.
 const VALIDADORES_PLANOS_PERSONA_IDS = [11];
 
 export function canValidatePlanos(user) {
   const roles = getApplicableRoles(user);
-  return roles.includes("Director General") || VALIDADORES_PLANOS_PERSONA_IDS.includes(Number(user?.persona_id));
+  return roles.includes("Coordinador SIG") || roles.includes("Director General") || VALIDADORES_PLANOS_PERSONA_IDS.includes(Number(user?.persona_id));
 }
 
 // Edición del tablero Estratégico de Desempeño Organizacional: decisión

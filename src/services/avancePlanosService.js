@@ -118,6 +118,19 @@ export async function registrarValidacion({ productoId, area, tipo, accion }, ac
   return data;
 }
 
+// Revertir una validación borra su fila del historial (sql/2026-10-sig_avance_planos_historial_borrar.sql
+// da el permiso). Si la base no deja borrar, PostgREST responde sin error y sin filas:
+// se detecta y se avisa con el código SIN_PERMISO_BORRAR.
+export async function borrarValidacion(id) {
+  const { data, error } = await supabase.from(TABLA_HISTORIAL).delete().eq("id", id).select("id");
+  if (error && error.code !== "42501") throw error;
+  if (error || !data || data.length === 0) {
+    const e = new Error("No se pudo borrar la validación del historial");
+    e.code = "SIN_PERMISO_BORRAR";
+    throw e;
+  }
+}
+
 // estado: "si" (terminada), "va" (validada), "na" (no aplica) o "no" (vacía).
 // Una casilla validada también cuenta como terminada (completado = true).
 export async function setAvancePlano({ productoId, area, tipo, estado }, actor, disponibles = { na: true, va: true }) {
