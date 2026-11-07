@@ -11,7 +11,7 @@ import {
   getCambios, createCambio, updateCambio, sendToDecisionCenter,
   createAccionCorrectivaPorCambio, getHistorial as getCambiosHistorial,
 } from "../../services/cambiosService";
-import { canEvaluateCambio, canApproveCambio, canImplementCambio, isDirectorGeneral, canViewAvancePlanos } from "../../services/permissionsService";
+import { canEvaluateCambio, canApproveCambio, canImplementCambio, isDirectorGeneral, canViewAvancePlanos, canViewSimulador } from "../../services/permissionsService";
 import {
   getAuditorias, createAuditoria, updateAuditoria, deleteAuditoria, createAccionDesdeHallazgo,
   getProgramas, createPrograma, updatePrograma, aprobarPrograma, downloadProgramaPdf,
@@ -21,6 +21,7 @@ import { getAcciones } from "../../services/accionesService";
 import { PM_PERSONA_ID } from "../../services/pmoService";
 import AuditoriaFichaPanel from "./AuditoriaFichaPanel";
 import AvancePlanosPanel from "./AvancePlanosPanel";
+import SimuladorPanel from "./SimuladorPanel";
 
 const ESTADOS_AUDITORIA = ["Programada", "En curso", "Cerrada"];
 const AUDITORIA_ESTADO_BADGE = {
@@ -1133,6 +1134,7 @@ export default function DiagnosticoSIGModule({ currentUser }) {
   const [esAuditado, setEsAuditado] = useState(false);
   const puedeVerAuditorias = canEdit || esAuditado;
   const puedeVerPlanos = canViewAvancePlanos(currentUser);
+  const puedeVerSimulador = canViewSimulador(currentUser);
   // Espejo de lo último realmente guardado en Supabase (no lo que se va
   // tecleando) — así commitEvidence puede saber qué cambió de verdad al
   // hacer blur, sin depender del estado de UI que ya se actualizó en vivo.
@@ -2006,6 +2008,9 @@ export default function DiagnosticoSIGModule({ currentUser }) {
             {puedeVerPlanos && (
               <button type="button" onClick={() => setView("planos")} className={`rounded-md px-3 py-1.5 transition ${view === "planos" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Avance de planos</button>
             )}
+            {puedeVerSimulador && (
+              <button type="button" onClick={() => setView("simulador")} className={`rounded-md px-3 py-1.5 transition ${view === "simulador" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>Simulador</button>
+            )}
           </div>
           {view === "plan" && (
             <button type="button" onClick={openPlanHistorial} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 transition hover:border-slate-300 hover:text-slate-700">⏱ Historial del plan</button>
@@ -2025,6 +2030,8 @@ export default function DiagnosticoSIGModule({ currentUser }) {
         </section>
 
         {view === "planos" && puedeVerPlanos && <AvancePlanosPanel currentUser={currentUser} />}
+
+        {view === "simulador" && puedeVerSimulador && <SimuladorPanel currentUser={currentUser} />}
 
         {view === "diagnostico" && (
         <>

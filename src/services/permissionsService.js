@@ -347,6 +347,15 @@ export function canViewAvancePlanos(user) {
   );
 }
 
+// Pestaña "Simulador" de Diagnóstico SIG (evaluaciones de inversión y análisis): solo el Coordinador SIG
+// (persona 15) y el Director General (pedido explícito del 7-nov-2026). No se extiende a otros roles.
+const SIMULADOR_PERSONA_IDS = [15];
+
+export function canViewSimulador(user) {
+  const roles = getApplicableRoles(user);
+  return roles.includes("Coordinador SIG") || roles.includes("Director General") || SIMULADOR_PERSONA_IDS.includes(Number(user?.persona_id));
+}
+
 // Check dorado (validado) de Avance de planos: lo da Beatriz (persona_id 11), el
 // Coordinador SIG y el Director General. El resto marca solo "terminado" y no puede
 // modificar un plano ya validado.
