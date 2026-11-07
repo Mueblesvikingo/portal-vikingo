@@ -39,23 +39,21 @@ const corto = (n) => {
 // Tope "redondo" (1, 2, 5 × 10^k) para que el deslizador se ajuste a lo capturado sin saltos
 const topeRedondo = (v) => { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))), f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
 
-// Paletas de las tarjetas (fondo, borde, texto de etiqueta, número)
-const TONOS = {
-  ambar: { caja: "bg-[#fff7e0] border-[#f1d98f]", etiqueta: "text-[#9a6700]", numero: "text-[#7a4b00]", sub: "text-[#a47a1f]", pastilla: "#fbe9a8" },
-  azul: { caja: "bg-[#eaf2ff] border-[#bcd3f7]", etiqueta: "text-[#1d4ed8]", numero: "text-[#1e40af]", sub: "text-[#4a76c7]", pastilla: "#cfe0fb" },
-  morado: { caja: "bg-[#f6ecfb] border-[#dcbdf0]", etiqueta: "text-[#7e22ce]", numero: "text-[#6b21a8]", sub: "text-[#9b59c8]", pastilla: "#ead3f6" },
-  verde: { caja: "bg-[#e9faf0] border-[#a8e0bb]", etiqueta: "text-[#15803d]", numero: "text-[#166534]", sub: "text-[#4b9d68]", pastilla: "#c9efd7" },
-  rojo: { caja: "bg-[#fdecec] border-[#f1b6b6]", etiqueta: "text-[#b91c1c]", numero: "text-[#991b1b]", sub: "text-[#c75a5a]", pastilla: "#f8d0d0" },
-  turquesa: { caja: "bg-[#e6fbf8] border-[#a6e6dd]", etiqueta: "text-[#0f766e]", numero: "text-[#115e59]", sub: "text-[#3f9d95]", pastilla: "#c4f1ea" },
-};
+// Tono sobrio: el color solo marca estado (verde = conviene, rojo = no conviene) y la
+// identidad de cada alternativa en la gráfica; controles y tarjetas van en neutro.
+const COLOR_CONTROL = "#0f1f3d";
+const PASTILLA_CONTROL = "#eef1f5";
 
-function Control({ etiqueta, valor, onChange, min = 0, minTope = 100, max, paso = 1, prefijo, sufijo, ayuda, color = "#d97706", pastilla = "#fbe9a8" }) {
+// Ayuda corta: se lee al pasar el cursor, sin ocupar una línea bajo cada control.
+const Ayuda = ({ texto }) => (texto ? <span title={texto} aria-label={texto} className="ml-1 cursor-help text-[11px] font-black text-slate-300 hover:text-slate-500">ⓘ</span> : null);
+
+function Control({ etiqueta, valor, onChange, min = 0, minTope = 100, max, paso = 1, prefijo, sufijo, ayuda, color = COLOR_CONTROL, pastilla = PASTILLA_CONTROL }) {
   const v = num(valor);
   const tope = max ?? topeRedondo(Math.max(minTope, v));
   return (
     <div>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] font-bold text-slate-700">{etiqueta}</span>
+        <span className="text-[12px] font-bold text-slate-700">{etiqueta}<Ayuda texto={ayuda} /></span>
         <span className="flex items-center rounded-full px-2.5 py-0.5" style={{ background: pastilla }}>
           {prefijo && <span className="mr-0.5 text-[11px] font-black" style={{ color }}>{prefijo}</span>}
           <input
@@ -81,28 +79,31 @@ function Control({ etiqueta, valor, onChange, min = 0, minTope = 100, max, paso 
         className="mt-1.5 h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/10"
         style={{ accentColor: color }}
       />
-      {ayuda && <div className="mt-0.5 text-[10px] leading-tight text-slate-400">{ayuda}</div>}
     </div>
   );
 }
 
-function Tarjeta({ titulo, tono, children, className = "" }) {
-  const t = TONOS[tono];
+function Tarjeta({ titulo, accion, children, className = "" }) {
   return (
-    <section className={`space-y-3 rounded-2xl border p-3.5 ${t.caja} ${className}`}>
-      <div className={`text-[10px] font-black uppercase tracking-[0.14em] ${t.etiqueta}`}>{titulo}</div>
+    <section className={`space-y-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm ${className}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">{titulo}</div>
+        {accion}
+      </div>
       {children}
     </section>
   );
 }
 
-function Kpi({ etiqueta, valor, sub, tono }) {
-  const t = TONOS[tono];
+// Indicador neutro; `estado` (bien | mal) pinta número y borde para que se lea sin interpretar.
+function Kpi({ etiqueta, valor, sub, estado }) {
+  const caja = estado === "bien" ? "border-emerald-200 bg-emerald-50" : estado === "mal" ? "border-red-200 bg-red-50" : "border-slate-200 bg-white";
+  const numero = estado === "bien" ? "text-emerald-700" : estado === "mal" ? "text-red-600" : "text-slate-900";
   return (
-    <div className={`rounded-2xl border px-4 py-3 ${t.caja}`}>
-      <div className={`text-[10px] font-black uppercase tracking-wide ${t.etiqueta}`}>{etiqueta}</div>
-      <div className={`mt-1 text-[26px] font-black leading-none ${t.numero}`}>{valor}</div>
-      <div className={`mt-1.5 text-[11px] leading-tight ${t.sub}`}>{sub}</div>
+    <div className={`rounded-2xl border px-4 py-3 shadow-sm ${caja}`}>
+      <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">{etiqueta}</div>
+      <div className={`mt-1 text-[24px] font-black leading-none ${numero}`}>{valor}</div>
+      <div className="mt-1.5 text-[11px] leading-tight text-slate-500">{sub}</div>
     </div>
   );
 }
@@ -161,6 +162,7 @@ export default function SimuladorPanel({ currentUser }) {
   const [nombreEscenario, setNombreEscenario] = useState("");
   const [verEscenarios, setVerEscenarios] = useState(false);
   const [aviso, setAviso] = useState("");
+  const [pestana, setPestana] = useState("grafica"); // grafica | flujo | sensibilidad
 
   useEffect(() => { guardar(CLAVE_ACTUAL, estado); }, [estado]);
   useEffect(() => {
@@ -287,8 +289,6 @@ export default function SimuladorPanel({ currentUser }) {
     return `${F.alt.nombre} no supera la tasa de descuento con ${numero(vol)} ${unidad} al año (VPN ${moneda(F.r.vpn)}). ${eq == null ? "Con estos costos no alcanza a empatar." : `Necesitaría al menos ${numero(eq)} ${unidad} al año.`}`;
   })();
 
-  const vpnTono = F.r.vpn > 0 ? "verde" : "rojo";
-
   return (
     <div className="space-y-4">
       {/* Encabezado */}
@@ -299,10 +299,7 @@ export default function SimuladorPanel({ currentUser }) {
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8 7h8M8 12h2M12 12h2M16 12h0M8 16h2M12 16h2M16 16h0" /></svg>
             </span>
             <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[18px] font-black leading-tight">Simulador financiero</h2>
-                <span className="rounded-md bg-white/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-300">Solo Coordinador SIG y Director</span>
-              </div>
+              <h2 className="text-[18px] font-black leading-tight">Simulador financiero</h2>
               <p className="mt-0.5 text-[12px] text-slate-300">Mueve cualquier control y todo se recalcula al momento.</p>
             </div>
           </div>
@@ -315,17 +312,6 @@ export default function SimuladorPanel({ currentUser }) {
             <button type="button" onClick={() => { setVerEscenarios((v) => !v); setGuardando(false); }} className="rounded-full bg-white/10 px-3 py-1.5 hover:bg-white/20">Consultar ({lista.length})</button>
             <button type="button" onClick={reiniciar} title="Volver a la plantilla inicial" aria-label="Reiniciar" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-[14px] hover:bg-white/20">↺</button>
             <button type="button" onClick={exportarCsv} className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-[#07162b] hover:bg-slate-100"><span aria-hidden="true">▤</span> Excel</button>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Ver</span>
-          <div className="flex flex-wrap items-center gap-1 rounded-full bg-white/10 p-1 text-[11px] font-black">
-            <button type="button" aria-pressed={vista < 0} onClick={() => setVista(-1)} className={`rounded-full px-3 py-1 transition ${vista < 0 ? "bg-amber-500 text-[#07162b]" : "text-slate-200 hover:text-white"}`}>Mejor opción</button>
-            {estado.alternativas.map((a, i) => (
-              <button key={i} type="button" aria-pressed={vista === i} onClick={() => { setVista(i); setEditando(i); }} className={`flex items-center gap-1.5 rounded-full px-3 py-1 transition ${vista === i ? "bg-amber-500 text-[#07162b]" : "text-slate-200 hover:text-white"}`}>
-                <span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORES[i] === "#203f73" ? "#7fb0ff" : COLORES[i] }} />{a.nombre.length > 24 ? `${a.nombre.slice(0, 24)}…` : a.nombre}
-              </button>
-            ))}
           </div>
         </div>
       </div>
@@ -389,68 +375,58 @@ export default function SimuladorPanel({ currentUser }) {
             </label>
           </section>
 
-          <Tarjeta titulo={`Volumen y ${esAhorro ? "costo actual" : "precio"}`} tono="azul">
-            <Control etiqueta={`Volumen al año`} valor={g.volumen} onChange={(v) => setGeneral("volumen", v)} minTope={5000} paso={10} sufijo={unidad} color="#1d4ed8" pastilla={TONOS.azul.pastilla} />
-            <Control etiqueta={esAhorro ? `Costo actual por ${unidad}` : `Precio de venta por ${unidad}`} valor={g.referencia} onChange={(v) => setGeneral("referencia", v)} minTope={100} paso={0.5} prefijo="$" color="#1d4ed8" pastilla={TONOS.azul.pastilla} />
-            <Control etiqueta="Crecimiento del volumen por año" valor={g.crecimiento} onChange={(v) => setGeneral("crecimiento", v)} min={-20} max={30} paso={1} sufijo="%" color="#1d4ed8" pastilla={TONOS.azul.pastilla} />
-          </Tarjeta>
-
-          <Tarjeta titulo="Finanzas" tono="ambar">
+          <Tarjeta titulo={`Volumen y ${esAhorro ? "costo actual" : "precio"}`}>
+            <Control etiqueta="Volumen al año" valor={g.volumen} onChange={(v) => setGeneral("volumen", v)} minTope={5000} paso={10} sufijo={unidad} />
+            <Control etiqueta={esAhorro ? `Costo actual por ${unidad}` : `Precio de venta por ${unidad}`} valor={g.referencia} onChange={(v) => setGeneral("referencia", v)} minTope={100} paso={0.5} prefijo="$" />
+            <Control etiqueta="Crecimiento del volumen por año" valor={g.crecimiento} onChange={(v) => setGeneral("crecimiento", v)} min={-20} max={30} paso={1} sufijo="%" />
             <Control etiqueta="Horizonte" valor={anios} onChange={(v) => setGeneral("anios", Math.min(MAX_ANIOS, Math.max(1, Math.round(num(v, 5)))))} min={1} max={MAX_ANIOS} paso={1} sufijo={anios === 1 ? "año" : "años"} />
-            <Control etiqueta="Tasa de descuento" valor={g.tasa} onChange={(v) => setGeneral("tasa", v)} max={50} paso={0.5} sufijo="%" ayuda="Su costo de capital o el rendimiento mínimo que espera." />
-            <Control etiqueta="ISR" valor={g.isr} onChange={(v) => setGeneral("isr", v)} max={50} paso={1} sufijo="%" />
-            <div>
-              <div className="text-[12px] font-bold text-slate-700">Depreciación fiscal por año <span className="text-[10px] font-semibold text-slate-400">(% de la inversión)</span></div>
-              <div className="mt-1 grid grid-cols-5 gap-1.5">
-                {Array.from({ length: anios }, (_, i) => (
-                  <label key={i} className="block">
-                    <span className="block text-center text-[9px] font-black text-[#9a6700]">AÑO {i + 1}</span>
-                    <input type="text" inputMode="decimal" value={g.depreciacion?.[i] ?? 0} onChange={(e) => setDep(i, e.target.value)} aria-label={`Depreciación del año ${i + 1}`} className="w-full rounded-lg border border-[#f1d98f] bg-white px-1 py-1 text-center text-[11px] font-black text-[#7a4b00] outline-none focus:border-[#d97706]" />
-                  </label>
-                ))}
-              </div>
-              <div className="mt-1 text-[10px] leading-tight text-slate-400">La tasa de depreciación y el IVA acreditable los confirma el contador.</div>
-            </div>
           </Tarjeta>
 
-          <Tarjeta titulo="Alternativas" tono="turquesa">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {estado.alternativas.map((a, i) => (
-                <button key={i} type="button" aria-pressed={ed === i} onClick={() => setEditando(i)} className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-black transition ${ed === i ? "border-[#07162b] bg-[#07162b] text-white" : "border-[#a6e6dd] bg-white text-slate-600 hover:border-[#0f766e]"}`}>
-                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: ed === i && i === 0 ? "#7fb0ff" : COLORES[i] }} />{String.fromCharCode(65 + i)}
-                </button>
-              ))}
-              {estado.alternativas.length < 3 && <button type="button" onClick={agregarAlt} className="rounded-full border border-dashed border-[#0f766e] px-3 py-1 text-[11px] font-black text-[#0f766e] hover:bg-white">+ Agregar</button>}
+          {/* Supuestos financieros: se capturan una vez; plegados para no alargar la columna */}
+          <details className="group rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-3">
+              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Supuestos financieros</span>
+              <span className="flex items-center gap-2 text-[11px] font-bold text-slate-600">Tasa {numero(tasa, 1)}% · ISR {numero(num(g.isr), 0)}%<span className="text-slate-400 transition group-open:rotate-90">▸</span></span>
+            </summary>
+            <div className="space-y-3 border-t border-slate-100 px-3.5 pb-3.5 pt-3">
+              <Control etiqueta="Tasa de descuento" valor={g.tasa} onChange={(v) => setGeneral("tasa", v)} max={50} paso={0.5} sufijo="%" ayuda="Su costo de capital o el rendimiento mínimo que espera." />
+              <Control etiqueta="ISR" valor={g.isr} onChange={(v) => setGeneral("isr", v)} max={50} paso={1} sufijo="%" />
+              <div>
+                <div className="text-[12px] font-bold text-slate-700">Depreciación fiscal por año <span className="text-[10px] font-semibold text-slate-400">(% de la inversión)</span><Ayuda texto="La tasa de depreciación y el IVA acreditable los confirma el contador." /></div>
+                <div className="mt-1 grid grid-cols-5 gap-1.5">
+                  {Array.from({ length: anios }, (_, i) => (
+                    <label key={i} className="block">
+                      <span className="block text-center text-[9px] font-black text-slate-400">AÑO {i + 1}</span>
+                      <input type="text" inputMode="decimal" value={g.depreciacion?.[i] ?? 0} onChange={(e) => setDep(i, e.target.value)} aria-label={`Depreciación del año ${i + 1}`} className="w-full rounded-lg border border-slate-200 bg-white px-1 py-1 text-center text-[11px] font-black text-slate-800 outline-none focus:border-slate-400" />
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
-            <label className="block"><span className="text-[11px] font-bold text-slate-600">Nombre de la alternativa {String.fromCharCode(65 + ed)}</span>
-              <input value={altEd.nombre} onChange={(e) => setAlt(ed, "nombre", e.target.value)} className="mt-0.5 w-full rounded-lg border border-[#a6e6dd] bg-white px-2 py-1.5 text-[12px] font-bold text-slate-800 outline-none focus:border-[#0f766e]" />
+          </details>
+
+          <Tarjeta
+            titulo={<span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORES[ed] }} />Alternativa {String.fromCharCode(65 + ed)}</span>}
+            accion={estado.alternativas.length < 3 && <button type="button" onClick={agregarAlt} className="rounded-full border border-dashed border-slate-300 px-2.5 py-0.5 text-[10px] font-black text-slate-500 hover:border-slate-500 hover:text-slate-700">+ Agregar</button>}
+          >
+            <label className="block"><span className="text-[11px] font-bold text-slate-600">Nombre</span>
+              <input value={altEd.nombre} onChange={(e) => setAlt(ed, "nombre", e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[12px] font-bold text-slate-800 outline-none focus:border-slate-400" />
             </label>
-            <Control etiqueta="Inversión inicial" valor={altEd.inversion} onChange={(v) => setAlt(ed, "inversion", v)} minTope={500000} paso={1000} prefijo="$" color="#0f766e" pastilla={TONOS.turquesa.pastilla} ayuda="Equipo, instalación, software y capacitación, sin IVA." />
-            <Control etiqueta={`Costo variable por ${unidad}`} valor={altEd.costoVariable} onChange={(v) => setAlt(ed, "costoVariable", v)} minTope={100} paso={0.5} prefijo="$" color="#0f766e" pastilla={TONOS.turquesa.pastilla} ayuda="Materiales, mano de obra y todo lo que crece con cada unidad." />
-            <Control etiqueta="Costos fijos al año" valor={altEd.costoFijo} onChange={(v) => setAlt(ed, "costoFijo", v)} minTope={50000} paso={500} prefijo="$" color="#0f766e" pastilla={TONOS.turquesa.pastilla} />
-            <Control etiqueta="Valor de rescate" valor={altEd.rescate} onChange={(v) => setAlt(ed, "rescate", v)} max={100} paso={1} sufijo="%" color="#0f766e" pastilla={TONOS.turquesa.pastilla} />
+            <Control etiqueta="Inversión inicial" valor={altEd.inversion} onChange={(v) => setAlt(ed, "inversion", v)} minTope={500000} paso={1000} prefijo="$" ayuda="Equipo, instalación, software y capacitación, sin IVA." />
+            <Control etiqueta={`Costo variable por ${unidad}`} valor={altEd.costoVariable} onChange={(v) => setAlt(ed, "costoVariable", v)} minTope={100} paso={0.5} prefijo="$" ayuda="Materiales, mano de obra y todo lo que crece con cada unidad." />
+            <Control etiqueta="Costos fijos al año" valor={altEd.costoFijo} onChange={(v) => setAlt(ed, "costoFijo", v)} minTope={50000} paso={500} prefijo="$" />
+            <Control etiqueta="Valor de rescate" valor={altEd.rescate} onChange={(v) => setAlt(ed, "rescate", v)} max={100} paso={1} sufijo="%" ayuda="Lo que vale el equipo al final; el último año lo suma neto de impuestos." />
             <label className="block"><span className="text-[11px] font-bold text-slate-600">Nota / origen del dato</span>
-              <textarea value={altEd.nota || ""} onChange={(e) => setAlt(ed, "nota", e.target.value)} rows={3} className="mt-0.5 w-full resize-none rounded-lg border border-[#a6e6dd] bg-white px-2 py-1.5 text-[11px] text-slate-700 outline-none focus:border-[#0f766e]" />
+              <textarea value={altEd.nota || ""} onChange={(e) => setAlt(ed, "nota", e.target.value)} rows={2} className="mt-0.5 w-full resize-none rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700 outline-none focus:border-slate-400" />
             </label>
-            {estado.alternativas.length > 1 && <button type="button" onClick={() => quitarAlt(ed)} className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[10px] font-black uppercase text-red-600 hover:bg-red-100">Quitar esta alternativa</button>}
+            {estado.alternativas.length > 1 && <button type="button" onClick={() => quitarAlt(ed)} className="text-[10px] font-black uppercase text-red-500 hover:text-red-700">Quitar esta alternativa</button>}
           </Tarjeta>
         </div>
 
         {/* ======= Tablero ======= */}
         <div className="min-w-0 space-y-4">
-          <div className="text-[11px] font-bold text-slate-500">
-            {vista < 0 ? "Mostrando la alternativa con más valor presente: " : "Mostrando: "}<span className="font-black text-slate-800">{F.alt.nombre}</span>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <Kpi etiqueta="Valor presente neto" valor={moneda(F.r.vpn)} sub={`a ${anios} ${anios === 1 ? "año" : "años"} · tasa ${numero(tasa, 1)}%`} tono={vpnTono} />
-            <Kpi etiqueta="Tasa interna de retorno" valor={porcentaje(F.r.tir)} sub={`contra ${numero(tasa, 1)}% de descuento`} tono="azul" />
-            <Kpi etiqueta="Recuperación" valor={F.r.payback == null ? "—" : `${F.r.payback.toFixed(1)}`} sub={F.r.payback == null ? `no se recupera en ${anios} ${anios === 1 ? "año" : "años"}` : "años para recuperar la inversión"} tono="morado" />
-            <Kpi etiqueta="Beneficio año 1" valor={moneda(F.r.beneficios[0])} sub={`antes de impuestos · ${moneda(F.r.flujos[1])} después`} tono="turquesa" />
-            <Kpi etiqueta="Punto de equilibrio" valor={F.eqVolumen == null ? "—" : numero(F.eqVolumen)} sub={F.eqVolumen == null ? "no alcanza a empatar" : vol > 0 ? `${unidad} al año · hoy ${numero(vol)} (${Math.round((vol / Math.max(1, F.eqVolumen)) * 100)}% del equilibrio)` : `${unidad} al año`} tono="ambar" />
-            <Kpi etiqueta={esAhorro ? `Costo propio por ${unidad}` : `Margen por ${unidad}`} valor={esAhorro ? (F.costoUnidad == null ? "—" : `$${numero(F.costoUnidad, 1)}`) : `$${numero(num(g.referencia) - num(F.alt.costoVariable), 1)}`} sub={esAhorro ? `contra $${numero(num(g.referencia), 1)} de la opción actual` : `precio $${numero(num(g.referencia), 1)} − costo $${numero(num(F.alt.costoVariable), 1)}`} tono="azul" />
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {/* Comparativo de alternativas: es también el único selector (muestra y edita la que se pulsa) */}
+          <div className={`grid gap-3 ${resultados.length === 1 ? "" : resultados.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-3"}`}>
             {resultados.map((x, i) => {
               const activo = foco === i;
               return (
@@ -461,7 +437,7 @@ export default function SimuladorPanel({ currentUser }) {
                     {mejor === i && hayGanadora && <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[8px] font-black uppercase text-emerald-700">✓ Mejor</span>}
                   </div>
                   <div className={`mt-1 text-[20px] font-black leading-tight ${x.r.vpn > 0 ? "text-emerald-700" : "text-red-600"}`}>{moneda(x.r.vpn)}</div>
-                  <div className="text-[10px] text-slate-400">{x.r.vpn > 0 ? "VPN · conviene" : "VPN · no conviene"} · inversión {moneda(num(x.alt.inversion))} · TIR {porcentaje(x.r.tir)}</div>
+                  <div className="text-[10px] text-slate-400">VPN · {x.r.vpn > 0 ? "conviene" : "no conviene"} · inversión {moneda(num(x.alt.inversion))}</div>
                 </button>
               );
             })}
@@ -472,19 +448,38 @@ export default function SimuladorPanel({ currentUser }) {
             {!hayGanadora && resultados.length > 1 && vista < 0 && <span> Ninguna alternativa supera la tasa de descuento con estos supuestos.</span>}
           </div>
 
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Kpi etiqueta="Valor presente neto" valor={moneda(F.r.vpn)} sub={`a ${anios} ${anios === 1 ? "año" : "años"} · tasa ${numero(tasa, 1)}%`} estado={F.r.vpn > 0 ? "bien" : "mal"} />
+            <Kpi etiqueta="Tasa interna de retorno" valor={porcentaje(F.r.tir)} sub={`contra ${numero(tasa, 1)}% de descuento`} />
+            <Kpi etiqueta="Recuperación" valor={F.r.payback == null ? "—" : `${F.r.payback.toFixed(1)} años`} sub={F.r.payback == null ? `no se recupera en ${anios} ${anios === 1 ? "año" : "años"}` : "para recuperar la inversión"} />
+            <Kpi etiqueta="Punto de equilibrio" valor={F.eqVolumen == null ? "—" : numero(F.eqVolumen)} sub={F.eqVolumen == null ? "no alcanza a empatar" : vol > 0 ? `${unidad} al año · hoy ${numero(vol)} (${Math.round((vol / Math.max(1, F.eqVolumen)) * 100)}%)` : `${unidad} al año`} />
+          </div>
+          <div className="-mt-1 px-1 text-[11px] text-slate-500">
+            {esAhorro
+              ? <>Costo propio por {unidad}: <span className="font-black text-slate-700">{F.costoUnidad == null ? "—" : `$${numero(F.costoUnidad, 1)}`}</span> contra ${numero(num(g.referencia), 1)} de la opción actual</>
+              : <>Margen por {unidad}: <span className="font-black text-slate-700">${numero(num(g.referencia) - num(F.alt.costoVariable), 1)}</span> (precio ${numero(num(g.referencia), 1)} − costo ${numero(num(F.alt.costoVariable), 1)})</>}
+            {" · "}Beneficio año 1: <span className="font-black text-slate-700">{moneda(F.r.beneficios[0])}</span> antes de impuestos
+          </div>
+
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-2 text-[14px] font-black text-slate-800">Año por año: lo que entra y lo que acumulas</div>
+            <div className="mb-3 flex flex-wrap gap-1 rounded-full bg-slate-100 p-1 text-[10px] font-black uppercase tracking-wide sm:inline-flex">
+              {[["grafica", "Gráfica"], ["flujo", "Flujo de caja"], ["sensibilidad", "Sensibilidad"]].map(([k, t]) => (
+                <button key={k} type="button" aria-pressed={pestana === k} onClick={() => setPestana(k)} className={`rounded-full px-3 py-1.5 transition ${pestana === k ? "bg-[#07162b] text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>{t}</button>
+              ))}
+            </div>
+
+            {pestana === "grafica" && (<>
+            <div className="mb-2 text-[13px] font-black text-slate-800">Año por año: lo que entra y lo que acumulas</div>
             <Grafica anios={anios} barras={F.r.flujos} colorBarras={COLORES[foco]} series={resultados.map((x, i) => ({ nombre: x.alt.nombre, color: COLORES[i], puntos: x.r.acumulado }))} />
             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-600">
               {resultados.map((x, i) => <span key={i} className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-5 rounded" style={{ background: COLORES[i] }} />{x.alt.nombre} (acumulado)</span>)}
-              <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm opacity-30" style={{ background: COLORES[foco] }} />Flujo del año de lo que se muestra</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm opacity-30" style={{ background: COLORES[foco] }} />Flujo del año de {F.alt.nombre}</span>
+              <Ayuda texto="La línea cruza el cero cuando la inversión se recupera. Pase el cursor por un punto o una barra para ver el monto." />
             </div>
-            <div className="mt-1 text-[10px] text-slate-400">La línea cruza el cero cuando la inversión se recupera. Pase el cursor por un punto o una barra para ver el monto.</div>
-          </section>
+            </>)}
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-2 text-[14px] font-black text-slate-800">Flujo de caja · {F.alt.nombre}</div>
+            {pestana === "flujo" && (<>
+              <div className="mb-2 text-[13px] font-black text-slate-800">Flujo de caja · {F.alt.nombre}<Ayuda texto="El último año incluye el valor de rescate neto de impuestos." /></div>
               <div className="overflow-x-auto">
                 <table className="w-full text-[11px]">
                   <thead><tr className="border-b border-slate-200 text-right text-[9px] font-black uppercase text-slate-400"><th className="px-2 py-1 text-left">Año</th><th className="px-2 py-1">Beneficio antes de imp.</th><th className="px-2 py-1">Flujo después de imp.</th><th className="px-2 py-1">Acumulado</th></tr></thead>
@@ -500,11 +495,10 @@ export default function SimuladorPanel({ currentUser }) {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-1 text-[10px] text-slate-400">El último año incluye el valor de rescate neto de impuestos.</div>
-            </section>
+            </>)}
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="text-[14px] font-black text-slate-800">¿Y si cambia el volumen o el {esAhorro ? "costo actual" : "precio"}?</div>
+            {pestana === "sensibilidad" && (<>
+              <div className="text-[13px] font-black text-slate-800">¿Y si cambia el volumen o el {esAhorro ? "costo actual" : "precio"}?</div>
               <div className="mb-2 text-[10px] text-slate-400">VPN de {F.alt.nombre}. Verde: conviene. Rojo: no conviene. El recuadro es el caso capturado.</div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[360px] border-separate border-spacing-0.5 text-center">
@@ -527,21 +521,12 @@ export default function SimuladorPanel({ currentUser }) {
                   </tbody>
                 </table>
               </div>
-            </section>
-          </div>
+            </>)}
+          </section>
 
-          {resultados.some((x) => num(x.alt.nota)) || resultados.some((x) => x.alt.nota) ? (
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-1 text-[11px] font-black uppercase tracking-wide text-slate-500">Origen de los datos</div>
-              <ul className="space-y-1 text-[11px] text-slate-600">
-                {resultados.filter((x) => x.alt.nota).map((x, i) => <li key={i}><span className="font-black text-slate-800">{x.alt.nombre}:</span> {x.alt.nota}</li>)}
-              </ul>
-            </section>
-          ) : null}
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[10px] leading-relaxed text-slate-500">
-            Los resultados son estimaciones con los supuestos capturados; no sustituyen una cotización ni la opinión del contador. Lo que está en pantalla se conserva en este navegador; para compartirlo con el director use Guardar. Los datos de las plantillas son de ejemplo y se deben confirmar antes de decidir.
-          </div>
+          <p className="px-1 text-[10px] leading-relaxed text-slate-400">
+            Estimaciones con los supuestos capturados: no sustituyen una cotización ni la opinión del contador; los datos de las plantillas son de ejemplo. Para compartir lo que está en pantalla con el director, use Guardar.
+          </p>
         </div>
       </div>
     </div>
