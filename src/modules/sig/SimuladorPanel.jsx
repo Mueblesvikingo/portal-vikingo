@@ -335,28 +335,27 @@ export default function SimuladorPanel({ currentUser }) {
   return (
     <div className="space-y-4">
       {/* Encabezado */}
-      <div className="rounded-3xl bg-[#07162b] px-5 py-4 text-white shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-white/10" aria-hidden="true">
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8 7h8M8 12h2M12 12h2M16 12h0M8 16h2M12 16h2M16 16h0" /></svg>
-            </span>
-            <div>
-              <h2 className="text-[18px] font-black leading-tight">Simulador financiero</h2>
-              <p className="mt-0.5 text-[12px] text-slate-300">Mueve cualquier control y todo se recalcula al momento.</p>
-            </div>
+      {/* Encabezado: una sola franja (título a la izquierda, acciones a la derecha); en pantallas chicas las acciones bajan */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl bg-[#07162b] px-4 py-2 text-white shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/10" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8 7h8M8 12h2M12 12h2M16 12h0M8 16h2M12 16h2M16 16h0" /></svg>
+          </span>
+          <div className="min-w-0 leading-tight">
+            <h2 className="text-[15px] font-black">Simulador financiero</h2>
+            <p className="truncate text-[11px] text-slate-400">Mueve cualquier control y todo se recalcula al momento.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-black uppercase">
-            <button type="button" onClick={() => setVerGuia(true)} className="flex items-center gap-1.5 rounded-full border border-amber-300/60 bg-amber-400/15 px-3 py-1.5 text-amber-200 hover:bg-amber-400/25"><span aria-hidden="true">?</span> Guía</button>
-            <select aria-label="Plantilla" value="" onChange={(e) => e.target.value && cargarPlantilla(e.target.value)} className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase text-white outline-none">
-              <option value="" className="text-slate-900">Plantilla…</option>
-              {PLANTILLAS.map((p) => <option key={p.id} value={p.id} className="text-slate-900">{p.nombre}</option>)}
-            </select>
-            <button type="button" onClick={() => { setGuardando((v) => !v); setVerEscenarios(false); }} className="rounded-full bg-white/10 px-3 py-1.5 hover:bg-white/20">Guardar</button>
-            <button type="button" onClick={() => { setVerEscenarios((v) => !v); setGuardando(false); }} className="rounded-full bg-white/10 px-3 py-1.5 hover:bg-white/20">Consultar ({lista.length})</button>
-            <button type="button" onClick={reiniciar} title="Volver a la plantilla inicial" aria-label="Reiniciar" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-[14px] hover:bg-white/20">↺</button>
-            <button type="button" onClick={exportarCsv} className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-[#07162b] hover:bg-slate-100"><span aria-hidden="true">▤</span> Excel</button>
-          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-black uppercase">
+          <button type="button" onClick={() => setVerGuia(true)} className="flex items-center gap-1 rounded-full border border-amber-300/60 bg-amber-400/15 px-2.5 py-1 text-amber-200 hover:bg-amber-400/25"><span aria-hidden="true">?</span> Guía</button>
+          <select aria-label="Plantilla" value="" onChange={(e) => e.target.value && cargarPlantilla(e.target.value)} className="w-[118px] rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase text-white outline-none">
+            <option value="" className="text-slate-900">Plantilla…</option>
+            {PLANTILLAS.map((p) => <option key={p.id} value={p.id} className="text-slate-900">{p.nombre}</option>)}
+          </select>
+          <button type="button" onClick={() => { setGuardando((v) => !v); setVerEscenarios(false); }} className="rounded-full bg-white/10 px-2.5 py-1 hover:bg-white/20">Guardar</button>
+          <button type="button" onClick={() => { setVerEscenarios((v) => !v); setGuardando(false); }} className="rounded-full bg-white/10 px-2.5 py-1 hover:bg-white/20">Consultar ({lista.length})</button>
+          <button type="button" onClick={reiniciar} title="Volver a la plantilla inicial" aria-label="Reiniciar" className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[12px] hover:bg-white/20">↺</button>
+          <button type="button" onClick={exportarCsv} className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-[#07162b] hover:bg-slate-100"><span aria-hidden="true">▤</span> Excel</button>
         </div>
       </div>
 
