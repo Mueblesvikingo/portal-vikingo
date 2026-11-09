@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MAX_ANIOS,
   PLANTILLAS,
@@ -14,6 +14,7 @@ import {
   sensibilidad,
 } from "./simuladorInversion";
 import { deleteSimulacion, getSimulaciones, saveSimulacion } from "../../services/simuladorService";
+import SimuladorGuia from "./SimuladorGuia";
 
 // Simulador financiero (Diagnóstico SIG). Solo lo ven el Coordinador SIG y el Director General.
 // Tablero interactivo: mueve cualquier control y todo se recalcula al momento. Sirve para cualquier evaluación de inversión
@@ -46,6 +47,41 @@ const PASTILLA_CONTROL = "#eef1f5";
 
 // Ayuda corta: se lee al pasar el cursor, sin ocupar una línea bajo cada control.
 const Ayuda = ({ texto }) => (texto ? <span title={texto} aria-label={texto} className="ml-1 cursor-help text-[11px] font-black text-slate-300 hover:text-slate-500">ⓘ</span> : null);
+
+// Botón "?" de cada sección: abre un recuadro con la explicación (funciona con clic y en celular, a
+// diferencia del ⓘ que solo se ve al pasar el cursor). `lado`: hacia dónde abre el recuadro.
+function AyudaBloque({ titulo, lado = "izquierda", children }) {
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const fuera = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); };
+    const tecla = (e) => { if (e.key === "Escape") setAbierto(false); };
+    document.addEventListener("mousedown", fuera);
+    document.addEventListener("keydown", tecla);
+    return () => { document.removeEventListener("mousedown", fuera); document.removeEventListener("keydown", tecla); };
+  }, [abierto]);
+  return (
+    <span ref={ref} className="relative inline-flex align-middle">
+      <button
+        type="button"
+        aria-label={`Ayuda: ${titulo}`}
+        aria-expanded={abierto}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAbierto((v) => !v); }}
+        className={`flex h-4 w-4 items-center justify-center rounded-full border text-[9px] font-black transition ${abierto ? "border-[#0f1f3d] bg-[#0f1f3d] text-white" : "border-slate-300 bg-white text-slate-500 hover:border-slate-500 hover:text-slate-800"}`}
+      >
+        ?
+      </button>
+      {abierto && (
+        <span role="dialog" className={`absolute top-6 z-30 block w-64 max-w-[calc(100vw-3rem)] rounded-xl border border-slate-200 bg-white p-3 text-left text-[11px] font-normal normal-case leading-snug tracking-normal text-slate-600 shadow-xl ${lado === "derecha" ? "right-0" : "left-0"}`}>
+          <span className="mb-1 block text-[11px] font-black text-slate-800">{titulo}</span>
+          {children}
+        </span>
+      )}
+    </span>
+  );
+}
+const Linea = ({ termino, children }) => <span className="mt-1 block"><b className="text-slate-800">{termino}:</b> {children}</span>;
 
 function Control({ etiqueta, valor, onChange, min = 0, minTope = 100, max, paso = 1, prefijo, sufijo, ayuda, color = COLOR_CONTROL, pastilla = PASTILLA_CONTROL }) {
   const v = num(valor);
@@ -83,11 +119,11 @@ function Control({ etiqueta, valor, onChange, min = 0, minTope = 100, max, paso 
   );
 }
 
-function Tarjeta({ titulo, accion, children, className = "" }) {
+function Tarjeta({ titulo, accion, ayuda, children, className = "" }) {
   return (
     <section className={`space-y-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm ${className}`}>
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">{titulo}</div>
+        <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">{titulo}{ayuda}</div>
         {accion}
       </div>
       {children}
@@ -96,12 +132,12 @@ function Tarjeta({ titulo, accion, children, className = "" }) {
 }
 
 // Indicador neutro; `estado` (bien | mal) pinta número y borde para que se lea sin interpretar.
-function Kpi({ etiqueta, valor, sub, estado }) {
+function Kpi({ etiqueta, valor, sub, estado, ayuda }) {
   const caja = estado === "bien" ? "border-emerald-200 bg-emerald-50" : estado === "mal" ? "border-red-200 bg-red-50" : "border-slate-200 bg-white";
   const numero = estado === "bien" ? "text-emerald-700" : estado === "mal" ? "text-red-600" : "text-slate-900";
   return (
     <div className={`rounded-2xl border px-4 py-3 shadow-sm ${caja}`}>
-      <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">{etiqueta}</div>
+      <div className="flex items-start justify-between gap-2 text-[10px] font-black uppercase tracking-wide text-slate-400"><span>{etiqueta}</span>{ayuda}</div>
       <div className={`mt-1 text-[24px] font-black leading-none ${numero}`}>{valor}</div>
       <div className="mt-1.5 text-[11px] leading-tight text-slate-500">{sub}</div>
     </div>
@@ -169,6 +205,7 @@ export default function SimuladorPanel({ currentUser }) {
   const [verEscenarios, setVerEscenarios] = useState(false);
   const [aviso, setAviso] = useState("");
   const [pestana, setPestana] = useState("grafica"); // grafica | flujo | sensibilidad
+  const [verGuia, setVerGuia] = useState(false);
 
   useEffect(() => { guardar(CLAVE_ACTUAL, estado); }, [estado]);
   useEffect(() => {
@@ -310,6 +347,7 @@ export default function SimuladorPanel({ currentUser }) {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-black uppercase">
+            <button type="button" onClick={() => setVerGuia(true)} className="flex items-center gap-1.5 rounded-full border border-amber-300/60 bg-amber-400/15 px-3 py-1.5 text-amber-200 hover:bg-amber-400/25"><span aria-hidden="true">?</span> Guía</button>
             <select aria-label="Plantilla" value="" onChange={(e) => e.target.value && cargarPlantilla(e.target.value)} className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase text-white outline-none">
               <option value="" className="text-slate-900">Plantilla…</option>
               {PLANTILLAS.map((p) => <option key={p.id} value={p.id} className="text-slate-900">{p.nombre}</option>)}
@@ -321,6 +359,8 @@ export default function SimuladorPanel({ currentUser }) {
           </div>
         </div>
       </div>
+
+      {verGuia && <SimuladorGuia onClose={() => setVerGuia(false)} />}
 
       {tablaFaltante && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] font-semibold text-amber-800">
@@ -364,7 +404,13 @@ export default function SimuladorPanel({ currentUser }) {
         {/* ======= Controles ======= */}
         <div className="space-y-3">
           <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
-            <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Análisis</div>
+            <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Análisis
+              <AyudaBloque titulo="Tipo de análisis">
+                <Linea termino="Ahorro vs. opción actual">comparas comprar contra lo que pagas hoy, por ejemplo un servicio externo.</Linea>
+                <Linea termino="Ingresos por venta">para un producto nuevo: comparas contra el precio al que lo vendes.</Linea>
+                <Linea termino="Unidad">en qué se mide todo: metro lineal, pieza, juego.</Linea>
+              </AyudaBloque>
+            </div>
             <label className="block"><span className="text-[11px] font-bold text-slate-600">Nombre</span>
               <input value={estado.titulo} onChange={(e) => setEstado((x) => ({ ...x, titulo: e.target.value }))} className="mt-0.5 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[12px] font-bold text-slate-800 outline-none focus:border-slate-400" />
             </label>
@@ -381,7 +427,17 @@ export default function SimuladorPanel({ currentUser }) {
             </label>
           </section>
 
-          <Tarjeta titulo={`Volumen y ${esAhorro ? "costo actual" : "precio"}`}>
+          <Tarjeta
+            titulo={`Volumen y ${esAhorro ? "costo actual" : "precio"}`}
+            ayuda={(
+              <AyudaBloque titulo="La situación de hoy">
+                <Linea termino="Volumen al año">cuántas unidades haces o usas en un año.</Linea>
+                <Linea termino={esAhorro ? "Costo actual" : "Precio de venta"}>{esAhorro ? "lo que pagas hoy por cada unidad." : "lo que cobras por cada unidad."}</Linea>
+                <Linea termino="Crecimiento">si cada año harás más (+) o menos (−).</Linea>
+                <Linea termino="Horizonte">cuántos años evalúas; normalmente la vida útil del equipo (5 años).</Linea>
+              </AyudaBloque>
+            )}
+          >
             <Control etiqueta="Volumen al año" valor={g.volumen} onChange={(v) => setGeneral("volumen", v)} minTope={5000} paso={10} sufijo={unidad} />
             <Control etiqueta={esAhorro ? `Costo actual por ${unidad}` : `Precio de venta por ${unidad}`} valor={g.referencia} onChange={(v) => setGeneral("referencia", v)} minTope={100} paso={0.5} prefijo="$" />
             <Control etiqueta="Crecimiento del volumen por año" valor={g.crecimiento} onChange={(v) => setGeneral("crecimiento", v)} min={-20} max={30} paso={1} sufijo="%" />
@@ -391,7 +447,13 @@ export default function SimuladorPanel({ currentUser }) {
           {/* Supuestos financieros: se capturan una vez; plegados para no alargar la columna */}
           <details className="group rounded-2xl border border-slate-200 bg-white shadow-sm">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-3">
-              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Supuestos financieros</span>
+              <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Supuestos financieros
+                <AyudaBloque titulo="Supuestos financieros">
+                  <Linea termino="Tasa de descuento">lo mínimo que esperas que rinda tu dinero, o lo que te cuesta un préstamo. Más alta = más exigente.</Linea>
+                  <Linea termino="ISR">el impuesto que se paga sobre los ahorros.</Linea>
+                  <Linea termino="Depreciación">la parte del equipo que deduces de impuestos cada año. La confirma el contador.</Linea>
+                </AyudaBloque>
+              </span>
               <span className="flex items-center gap-2 text-[11px] font-bold text-slate-600">Tasa {numero(tasa, 1)}% · ISR {numero(num(g.isr), 0)}%<span className="text-slate-400 transition group-open:rotate-90">▸</span></span>
             </summary>
             <div className="space-y-3 border-t border-slate-100 px-3.5 pb-3.5 pt-3">
@@ -413,6 +475,15 @@ export default function SimuladorPanel({ currentUser }) {
 
           <Tarjeta
             titulo={<span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORES[ed] }} />Alternativa {String.fromCharCode(65 + ed)}</span>}
+            ayuda={(
+              <AyudaBloque titulo="La opción a evaluar">
+                <Linea termino="Inversión">precio sin IVA, más instalación, capacitación y mesa.</Linea>
+                <Linea termino="Costo variable">insumos de cada unidad (papel, tinta, material).</Linea>
+                <Linea termino="Costos fijos">lo que pagas al año aunque no la uses: mantenimiento, póliza.</Linea>
+                <Linea termino="Rescate">lo que valdría al venderla al final.</Linea>
+                <span className="mt-1 block text-slate-500">Con “+ Agregar” comparas hasta 3 opciones.</span>
+              </AyudaBloque>
+            )}
             accion={estado.alternativas.length < 3 && <button type="button" onClick={agregarAlt} className="rounded-full border border-dashed border-slate-300 px-2.5 py-0.5 text-[10px] font-black text-slate-500 hover:border-slate-500 hover:text-slate-700">+ Agregar</button>}
           >
             <label className="block"><span className="text-[11px] font-bold text-slate-600">Nombre</span>
@@ -432,6 +503,14 @@ export default function SimuladorPanel({ currentUser }) {
         {/* ======= Tablero ======= */}
         <div className="min-w-0 space-y-4">
           {/* Comparativo de alternativas: es también el único selector (muestra y edita la que se pulsa) */}
+          <div className="-mb-2 flex items-center gap-1.5 px-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+            {resultados.length > 1 ? "Opciones" : "Opción"} · valor presente neto
+            <AyudaBloque titulo="Comparativo de opciones">
+              <span className="block">Cada tarjeta es una opción con su ganancia total (VPN).</span>
+              <Linea termino="Verde">conviene. <b className="text-slate-800">Rojo:</b> no conviene con estos datos.</Linea>
+              <span className="mt-1 block">Haz clic en una tarjeta para ver sus números abajo y editarla a la izquierda.</span>
+            </AyudaBloque>
+          </div>
           <div className={`grid gap-3 ${resultados.length === 1 ? "" : resultados.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-3"}`}>
             {resultados.map((x, i) => {
               const activo = foco === i;
@@ -455,10 +534,14 @@ export default function SimuladorPanel({ currentUser }) {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Kpi etiqueta="Valor presente neto" valor={moneda(F.r.vpn)} sub={`a ${anios} ${anios === 1 ? "año" : "años"} · tasa ${numero(tasa, 1)}%`} estado={F.r.vpn > 0 ? "bien" : "mal"} />
-            <Kpi etiqueta="Tasa interna de retorno" valor={porcentaje(F.r.tir)} sub={`contra ${numero(tasa, 1)}% de descuento`} />
-            <Kpi etiqueta="Recuperación" valor={F.r.payback == null ? "—" : `${F.r.payback.toFixed(1)} años`} sub={F.r.payback == null ? `no se recupera en ${anios} ${anios === 1 ? "año" : "años"}` : "para recuperar la inversión"} />
-            <Kpi etiqueta="Punto de equilibrio" valor={F.eqVolumen == null ? "—" : numero(F.eqVolumen)} sub={F.eqVolumen == null ? "no alcanza a empatar" : vol > 0 ? `${unidad} al año · hoy ${numero(vol)} (${Math.round((vol / Math.max(1, F.eqVolumen)) * 100)}%)` : `${unidad} al año`} />
+            <Kpi etiqueta="Valor presente neto" valor={moneda(F.r.vpn)} sub={`a ${anios} ${anios === 1 ? "año" : "años"} · tasa ${numero(tasa, 1)}%`} estado={F.r.vpn > 0 ? "bien" : "mal"}
+              ayuda={<AyudaBloque titulo="¿Cuánto gano?" lado="derecha">La ganancia total en pesos de hoy, ya descontada la compra. <b className="text-slate-800">Mayor que $0 = conviene.</b></AyudaBloque>} />
+            <Kpi etiqueta="Tasa interna de retorno" valor={porcentaje(F.r.tir)} sub={`contra ${numero(tasa, 1)}% de descuento`}
+              ayuda={<AyudaBloque titulo="¿Qué tan rentable es?" lado="derecha">El rendimiento anual de tu dinero en esta inversión. <b className="text-slate-800">Si es mayor que tu tasa de descuento ({numero(tasa, 1)}%), conviene.</b></AyudaBloque>} />
+            <Kpi etiqueta="Recuperación" valor={F.r.payback == null ? "—" : `${F.r.payback.toFixed(1)} años`} sub={F.r.payback == null ? `no se recupera en ${anios} ${anios === 1 ? "año" : "años"}` : "para recuperar la inversión"}
+              ayuda={<AyudaBloque titulo="¿Cuándo regresa mi dinero?" lado="derecha">Los años que tardan los ahorros en pagar la compra. <b className="text-slate-800">Menos años = menos riesgo.</b></AyudaBloque>} />
+            <Kpi etiqueta="Punto de equilibrio" valor={F.eqVolumen == null ? "—" : numero(F.eqVolumen)} sub={F.eqVolumen == null ? "no alcanza a empatar" : vol > 0 ? `${unidad} al año · hoy ${numero(vol)} (${Math.round((vol / Math.max(1, F.eqVolumen)) * 100)}%)` : `${unidad} al año`}
+              ayuda={<AyudaBloque titulo="¿Cuánto debo usarla?" lado="derecha">Las {unidad} al año a partir de las cuales comprar conviene más que seguir como hoy. El % compara tu volumen contra ese mínimo: <b className="text-slate-800">arriba de 100% conviene.</b></AyudaBloque>} />
           </div>
           <div className="-mt-1 px-1 text-[11px] text-slate-500">
             {esAhorro
@@ -472,6 +555,28 @@ export default function SimuladorPanel({ currentUser }) {
               {[["grafica", "Gráfica"], ["flujo", "Flujo de caja"], ["sensibilidad", "Sensibilidad"]].map(([k, t]) => (
                 <button key={k} type="button" aria-pressed={pestana === k} onClick={() => setPestana(k)} className={`rounded-full px-3 py-1.5 transition ${pestana === k ? "bg-[#07162b] text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>{t}</button>
               ))}
+              <span className="flex items-center px-1.5">
+                {pestana === "grafica" && (
+                  <AyudaBloque titulo="Cómo leer la gráfica">
+                    <Linea termino="Barras">lo que entra (o sale) cada año.</Linea>
+                    <Linea termino="Línea">lo que llevas acumulado. Cuando cruza $0, ya recuperaste la inversión.</Linea>
+                  </AyudaBloque>
+                )}
+                {pestana === "flujo" && (
+                  <AyudaBloque titulo="Cómo leer el flujo de caja">
+                    <Linea termino="Beneficio antes de impuestos">lo que ahorras en el año menos los costos.</Linea>
+                    <Linea termino="Flujo después de impuestos">lo que de verdad queda, con ISR y depreciación.</Linea>
+                    <Linea termino="Acumulado">la suma desde la compra; en verde ya recuperaste.</Linea>
+                  </AyudaBloque>
+                )}
+                {pestana === "sensibilidad" && (
+                  <AyudaBloque titulo="Qué pasaría si…">
+                    <span className="block">El VPN si el volumen (filas) o el {esAhorro ? "costo actual" : "precio"} (columnas) fueran distintos.</span>
+                    <Linea termino="Verde">sigue conviniendo. <b className="text-slate-800">Rojo:</b> ya no.</Linea>
+                    <span className="mt-1 block">El recuadro marca tu caso actual. Si casi todo es verde, la decisión es segura.</span>
+                  </AyudaBloque>
+                )}
+              </span>
             </div>
 
             {pestana === "grafica" && (<>
