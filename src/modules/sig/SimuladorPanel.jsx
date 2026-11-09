@@ -15,6 +15,7 @@ import {
 } from "./simuladorInversion";
 import { deleteSimulacion, getSimulaciones, saveSimulacion } from "../../services/simuladorService";
 import SimuladorGuia from "./SimuladorGuia";
+import { IlusAnalisis, IlusVolumen, IlusSupuestos, IlusEquipo, IlusAlcancia, IconoRendimiento, IconoReloj, IconoMeta, IconoEtiqueta } from "./SimuladorIlustraciones";
 
 // Simulador financiero (Diagnóstico SIG). Solo lo ven el Coordinador SIG y el Director General.
 // Tablero interactivo: mueve cualquier control y todo se recalcula al momento. Sirve para cualquier evaluación de inversión
@@ -40,10 +41,16 @@ const corto = (n) => {
 // Tope "redondo" (1, 2, 5 × 10^k) para que el deslizador se ajuste a lo capturado sin saltos
 const topeRedondo = (v) => { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))), f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
 
-// Tono sobrio: el color solo marca estado (verde = conviene, rojo = no conviene) y la
-// identidad de cada alternativa en la gráfica; controles y tarjetas van en neutro.
+// Cada sección lleva un tinte pastel muy claro (pedido del 9-nov-2026) para ubicarla de un vistazo;
+// el verde y el rojo quedan reservados para "conviene / no conviene" (VPN, flujos).
 const COLOR_CONTROL = "#0f1f3d";
 const PASTILLA_CONTROL = "#eef1f5";
+const TONOS = {
+  lila: { caja: "border-[#e7e0f6] bg-[#fbf9ff]", titulo: "text-[#7a62ad]", color: "#6d4fb0", pastilla: "#eee8fa" },
+  azul: { caja: "border-[#dbe6f8] bg-[#f7faff]", titulo: "text-[#4a6aa5]", color: "#2f5ea8", pastilla: "#e5eefc" },
+  ambar: { caja: "border-[#f1e2c2] bg-[#fffbf3]", titulo: "text-[#9a7224]", color: "#a86a12", pastilla: "#fbefd6" },
+  turquesa: { caja: "border-[#cfece5] bg-[#f5fcfa]", titulo: "text-[#2b7f72]", color: "#1f7a6c", pastilla: "#ddf3ed" },
+};
 
 // Ayuda corta: se lee al pasar el cursor, sin ocupar una línea bajo cada control.
 const Ayuda = ({ texto }) => (texto ? <span title={texto} aria-label={texto} className="ml-1 cursor-help text-[11px] font-black text-slate-300 hover:text-slate-500">ⓘ</span> : null);
@@ -83,7 +90,8 @@ function AyudaBloque({ titulo, lado = "izquierda", children }) {
 }
 const Linea = ({ termino, children }) => <span className="mt-1 block"><b className="text-slate-800">{termino}:</b> {children}</span>;
 
-function Control({ etiqueta, valor, onChange, min = 0, minTope = 100, max, paso = 1, prefijo, sufijo, ayuda, color = COLOR_CONTROL, pastilla = PASTILLA_CONTROL }) {
+function Control({ etiqueta, valor, onChange, min = 0, minTope = 100, max, paso = 1, prefijo, sufijo, ayuda, tono }) {
+  const color = TONOS[tono]?.color || COLOR_CONTROL, pastilla = TONOS[tono]?.pastilla || PASTILLA_CONTROL;
   const v = num(valor);
   const tope = max ?? topeRedondo(Math.max(minTope, v));
   return (
@@ -119,32 +127,62 @@ function Control({ etiqueta, valor, onChange, min = 0, minTope = 100, max, paso 
   );
 }
 
-function Tarjeta({ titulo, accion, ayuda, children, className = "" }) {
+// Encabezado de sección al estilo CORELI: ilustración, título en minúsculas con subtítulo, ayuda y acción.
+function Encabezado({ Ilus, titulo, sub, ayuda, accion }) {
   return (
-    <section className={`space-y-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm ${className}`}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">{titulo}{ayuda}</div>
-        {accion}
+    <div className="flex items-center gap-3">
+      {Ilus && <Ilus className="h-11 w-11 shrink-0" />}
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 text-[13px] font-bold text-slate-800">{titulo}{ayuda}</p>
+        {sub && <p className="truncate text-[11px] text-slate-500">{sub}</p>}
       </div>
+      {accion}
+    </div>
+  );
+}
+
+function Tarjeta({ titulo, sub, Ilus, accion, ayuda, tono, children, className = "" }) {
+  const t = TONOS[tono];
+  return (
+    <section className={`space-y-3 rounded-2xl border p-3.5 shadow-sm ${t ? t.caja : "border-slate-200 bg-white"} ${className}`}>
+      <Encabezado Ilus={Ilus} titulo={titulo} sub={sub} ayuda={ayuda} accion={accion} />
       {children}
     </section>
   );
 }
 
-// Indicador neutro; `estado` (bien | mal) pinta número y borde para que se lea sin interpretar.
-function Kpi({ etiqueta, valor, sub, estado, ayuda }) {
-  const caja = estado === "bien" ? "border-emerald-200 bg-emerald-50" : estado === "mal" ? "border-red-200 bg-red-50" : "border-slate-200 bg-white";
-  const numero = estado === "bien" ? "text-emerald-700" : estado === "mal" ? "text-red-600" : "text-slate-900";
+// Indicador al estilo CORELI: insignia redonda con ícono, título, número grande, nota y una mini gráfica.
+const INSIGNIA = { azul: "bg-blue-50 text-blue-600", lila: "bg-purple-50 text-purple-600", ambar: "bg-amber-50 text-amber-600", turquesa: "bg-teal-50 text-teal-600" };
+function KpiVisual({ Icono, tono, etiqueta, valor, nota, ayuda, children }) {
   return (
-    <div className={`rounded-2xl border px-4 py-3 shadow-sm ${caja}`}>
-      <div className="flex items-start justify-between gap-2 text-[10px] font-black uppercase tracking-wide text-slate-400"><span>{etiqueta}</span>{ayuda}</div>
-      <div className={`mt-1 text-[24px] font-black leading-none ${numero}`}>{valor}</div>
-      <div className="mt-1.5 text-[11px] leading-tight text-slate-500">{sub}</div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center gap-2.5">
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${INSIGNIA[tono]}`}><Icono className="h-4 w-4" /></span>
+        <p className="min-w-0 flex-1 text-[12px] font-medium leading-tight text-slate-500">{etiqueta}</p>
+        {ayuda}
+      </div>
+      <p className="mt-2.5 text-[24px] font-bold leading-none tracking-tight text-slate-900">{valor}</p>
+      <div className="mt-2.5">{children}</div>
+      {nota && <p className="mt-1.5 text-[11px] leading-tight text-slate-500">{nota}</p>}
     </div>
   );
 }
 
-function Grafica({ series, anios, barras, colorBarras }) {
+// Barra de avance con marcador opcional (p. ej. tu volumen contra el mínimo, o la TIR contra la tasa).
+function BarraMeta({ valor, meta, max, color, marca }) {
+  const tope = Math.max(1e-9, max);
+  const pct = (v) => `${Math.max(0, Math.min(100, (v / tope) * 100))}%`;
+  return (
+    <div className="relative h-2 rounded-full bg-slate-100">
+      <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: pct(valor), background: color }} />
+      {meta != null && <div className="absolute -top-1 h-4 w-0.5 rounded bg-slate-700" style={{ left: pct(meta) }} title={marca} />}
+    </div>
+  );
+}
+
+// Colores suaves: barras en verde (entra dinero) o rojo (sale), franja verde muy tenue arriba del cero
+// y un sombreado ligero bajo cada línea de acumulado. `colorBarras` queda por compatibilidad.
+function Grafica({ series, anios, barras, colorBarras }) { // eslint-disable-line no-unused-vars
   const W = 640, H = 230, pl = 56, pr = 16, pt = 14, pb = 28;
   const todos = [...series.flatMap((s) => s.puntos), ...barras, 0];
   let mn = Math.min(...todos), mx = Math.max(...todos);
@@ -156,6 +194,17 @@ function Grafica({ series, anios, barras, colorBarras }) {
   const marcas = [mn + holgura, 0, mx - holgura].filter((v, i, a) => a.findIndex((w) => Math.abs(w - v) < (mx - mn) * 0.07) === i);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Flujo de caja por año y acumulado por alternativa">
+      <defs>
+        {series.map((s, k) => (
+          <linearGradient key={k} id={`sombra-${k}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={s.color} stopOpacity="0.16" />
+            <stop offset="100%" stopColor={s.color} stopOpacity="0" />
+          </linearGradient>
+        ))}
+      </defs>
+      {/* zona de ganancia (arriba del cero) y de pérdida, en tintes muy suaves */}
+      <rect x={pl} y={pt} width={W - pl - pr} height={Math.max(0, y(0) - pt)} fill="#ecfdf5" opacity="0.7" />
+      <rect x={pl} y={y(0)} width={W - pl - pr} height={Math.max(0, H - pb - y(0))} fill="#fef2f2" opacity="0.6" />
       {marcas.map((v) => (
         <g key={v}>
           <line x1={pl} x2={W - pr} y1={y(v)} y2={y(v)} stroke={v === 0 ? "#64748b" : "#e2e8f0"} strokeWidth={v === 0 ? 1.3 : 0.8} strokeDasharray={v === 0 ? "4 3" : undefined} />
@@ -163,15 +212,16 @@ function Grafica({ series, anios, barras, colorBarras }) {
         </g>
       ))}
       {barras.map((v, t) => (
-        <rect key={t} x={x(t) - paso * 0.28} width={paso * 0.56} y={Math.min(y(v), y(0))} height={Math.max(1, Math.abs(y(v) - y(0)))} rx="3" fill={colorBarras} opacity="0.22">
+        <rect key={t} x={x(t) - paso * 0.28} width={paso * 0.56} y={Math.min(y(v), y(0))} height={Math.max(1, Math.abs(y(v) - y(0)))} rx="3" fill={v >= 0 ? "#6ee7b7" : "#fca5a5"} stroke={v >= 0 ? "#34d399" : "#f87171"} strokeWidth="0.8" opacity="0.75">
           <title>{t === 0 ? "Año 0 (compra)" : `Año ${t}`}: {moneda(v)}</title>
         </rect>
       ))}
       {Array.from({ length: anios + 1 }, (_, t) => (
         <text key={t} x={x(t)} y={H - 9} fontSize="10" fill="#64748b" textAnchor="middle">{t === 0 ? "Compra" : `Año ${t}`}</text>
       ))}
-      {series.map((s) => (
+      {series.map((s, k) => (
         <g key={s.nombre}>
+          <polygon fill={`url(#sombra-${k})`} points={`${x(0)},${H - pb} ${s.puntos.map((v, t) => `${x(t)},${y(v)}`).join(" ")} ${x(s.puntos.length - 1)},${H - pb}`} />
           <polyline fill="none" stroke={s.color} strokeWidth="2.6" strokeLinejoin="round" points={s.puntos.map((v, t) => `${x(t)},${y(v)}`).join(" ")} />
           {s.puntos.map((v, t) => (
             <circle key={t} cx={x(t)} cy={y(v)} r="3.4" fill="#fff" stroke={s.color} strokeWidth="2">
@@ -402,14 +452,16 @@ export default function SimuladorPanel({ currentUser }) {
       <div className="grid items-start gap-4 lg:grid-cols-[370px_1fr]">
         {/* ======= Controles ======= */}
         <div className="space-y-3">
-          <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
-            <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Análisis
-              <AyudaBloque titulo="Tipo de análisis">
-                <Linea termino="Ahorro vs. opción actual">comparas comprar contra lo que pagas hoy, por ejemplo un servicio externo.</Linea>
-                <Linea termino="Ingresos por venta">para un producto nuevo: comparas contra el precio al que lo vendes.</Linea>
-                <Linea termino="Unidad">en qué se mide todo: metro lineal, pieza, juego.</Linea>
-              </AyudaBloque>
-            </div>
+          <section className="space-y-3 rounded-2xl border border-[#e7e0f6] bg-[#fbf9ff] p-3.5 shadow-sm">
+            <Encabezado Ilus={IlusAnalisis} titulo="Análisis" sub="Qué estás evaluando"
+              ayuda={(
+                <AyudaBloque titulo="Tipo de análisis">
+                  <Linea termino="Ahorro vs. opción actual">comparas comprar contra lo que pagas hoy, por ejemplo un servicio externo.</Linea>
+                  <Linea termino="Ingresos por venta">para un producto nuevo: comparas contra el precio al que lo vendes.</Linea>
+                  <Linea termino="Unidad">en qué se mide todo: metro lineal, pieza, juego.</Linea>
+                </AyudaBloque>
+              )}
+            />
             <label className="block"><span className="text-[11px] font-bold text-slate-600">Nombre</span>
               <input value={estado.titulo} onChange={(e) => setEstado((x) => ({ ...x, titulo: e.target.value }))} className="mt-0.5 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[12px] font-bold text-slate-800 outline-none focus:border-slate-400" />
             </label>
@@ -426,7 +478,7 @@ export default function SimuladorPanel({ currentUser }) {
             </label>
           </section>
 
-          <Tarjeta
+          <Tarjeta tono="azul" Ilus={IlusVolumen} sub="Cómo trabajas hoy"
             titulo={`Volumen y ${esAhorro ? "costo actual" : "precio"}`}
             ayuda={(
               <AyudaBloque titulo="La situación de hoy">
@@ -437,27 +489,29 @@ export default function SimuladorPanel({ currentUser }) {
               </AyudaBloque>
             )}
           >
-            <Control etiqueta="Volumen al año" valor={g.volumen} onChange={(v) => setGeneral("volumen", v)} minTope={5000} paso={10} sufijo={unidad} />
-            <Control etiqueta={esAhorro ? `Costo actual por ${unidad}` : `Precio de venta por ${unidad}`} valor={g.referencia} onChange={(v) => setGeneral("referencia", v)} minTope={100} paso={0.5} prefijo="$" />
-            <Control etiqueta="Crecimiento del volumen por año" valor={g.crecimiento} onChange={(v) => setGeneral("crecimiento", v)} min={-20} max={30} paso={1} sufijo="%" />
-            <Control etiqueta="Horizonte" valor={anios} onChange={(v) => setGeneral("anios", Math.min(MAX_ANIOS, Math.max(1, Math.round(num(v, 5)))))} min={1} max={MAX_ANIOS} paso={1} sufijo={anios === 1 ? "año" : "años"} />
+            <Control tono="azul" etiqueta="Volumen al año" valor={g.volumen} onChange={(v) => setGeneral("volumen", v)} minTope={5000} paso={10} sufijo={unidad} />
+            <Control tono="azul" etiqueta={esAhorro ? `Costo actual por ${unidad}` : `Precio de venta por ${unidad}`} valor={g.referencia} onChange={(v) => setGeneral("referencia", v)} minTope={100} paso={0.5} prefijo="$" />
+            <Control tono="azul" etiqueta="Crecimiento del volumen por año" valor={g.crecimiento} onChange={(v) => setGeneral("crecimiento", v)} min={-20} max={30} paso={1} sufijo="%" />
+            <Control tono="azul" etiqueta="Horizonte" valor={anios} onChange={(v) => setGeneral("anios", Math.min(MAX_ANIOS, Math.max(1, Math.round(num(v, 5)))))} min={1} max={MAX_ANIOS} paso={1} sufijo={anios === 1 ? "año" : "años"} />
           </Tarjeta>
 
           {/* Supuestos financieros: se capturan una vez; plegados para no alargar la columna */}
-          <details className="group rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-3">
-              <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Supuestos financieros
-                <AyudaBloque titulo="Supuestos financieros">
-                  <Linea termino="Tasa de descuento">lo mínimo que esperas que rinda tu dinero, o lo que te cuesta un préstamo. Más alta = más exigente.</Linea>
-                  <Linea termino="ISR">el impuesto que se paga sobre los ahorros.</Linea>
-                  <Linea termino="Depreciación">la parte del equipo que deduces de impuestos cada año. La confirma el contador.</Linea>
-                </AyudaBloque>
-              </span>
-              <span className="flex items-center gap-2 text-[11px] font-bold text-slate-600">Tasa {numero(tasa, 1)}% · ISR {numero(num(g.isr), 0)}%<span className="text-slate-400 transition group-open:rotate-90">▸</span></span>
+          <details className="group rounded-2xl border border-[#f1e2c2] bg-[#fffbf3] shadow-sm">
+            <summary className="cursor-pointer list-none px-3.5 py-3">
+              <Encabezado Ilus={IlusSupuestos} titulo="Supuestos financieros" sub={`Tasa ${numero(tasa, 1)}% · ISR ${numero(num(g.isr), 0)}%`}
+                ayuda={(
+                  <AyudaBloque titulo="Supuestos financieros">
+                    <Linea termino="Tasa de descuento">lo mínimo que esperas que rinda tu dinero, o lo que te cuesta un préstamo. Más alta = más exigente.</Linea>
+                    <Linea termino="ISR">el impuesto que se paga sobre los ahorros.</Linea>
+                    <Linea termino="Depreciación">la parte del equipo que deduces de impuestos cada año. La confirma el contador.</Linea>
+                  </AyudaBloque>
+                )}
+                accion={<span className="text-slate-400 transition group-open:rotate-90">▸</span>}
+              />
             </summary>
             <div className="space-y-3 border-t border-slate-100 px-3.5 pb-3.5 pt-3">
-              <Control etiqueta="Tasa de descuento" valor={g.tasa} onChange={(v) => setGeneral("tasa", v)} max={50} paso={0.5} sufijo="%" ayuda="Su costo de capital o el rendimiento mínimo que espera." />
-              <Control etiqueta="ISR" valor={g.isr} onChange={(v) => setGeneral("isr", v)} max={50} paso={1} sufijo="%" />
+              <Control tono="ambar" etiqueta="Tasa de descuento" valor={g.tasa} onChange={(v) => setGeneral("tasa", v)} max={50} paso={0.5} sufijo="%" ayuda="Su costo de capital o el rendimiento mínimo que espera." />
+              <Control tono="ambar" etiqueta="ISR" valor={g.isr} onChange={(v) => setGeneral("isr", v)} max={50} paso={1} sufijo="%" />
               <div>
                 <div className="text-[12px] font-bold text-slate-700">Depreciación fiscal por año <span className="text-[10px] font-semibold text-slate-400">(% de la inversión)</span><Ayuda texto="La tasa de depreciación y el IVA acreditable los confirma el contador." /></div>
                 <div className="mt-1 grid grid-cols-5 gap-1.5">
@@ -472,8 +526,8 @@ export default function SimuladorPanel({ currentUser }) {
             </div>
           </details>
 
-          <Tarjeta
-            titulo={<span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORES[ed] }} />Alternativa {String.fromCharCode(65 + ed)}</span>}
+          <Tarjeta tono="turquesa" Ilus={IlusEquipo} sub={estado.alternativas.length > 1 ? `Opción ${String.fromCharCode(65 + ed)} de ${estado.alternativas.length}` : "Lo que costaría invertir"}
+            titulo={<span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORES[ed] }} />La opción a evaluar</span>}
             ayuda={(
               <AyudaBloque titulo="La opción a evaluar">
                 <Linea termino="Inversión">precio sin IVA, más instalación, capacitación y mesa.</Linea>
@@ -488,10 +542,10 @@ export default function SimuladorPanel({ currentUser }) {
             <label className="block"><span className="text-[11px] font-bold text-slate-600">Nombre</span>
               <input value={altEd.nombre} onChange={(e) => setAlt(ed, "nombre", e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[12px] font-bold text-slate-800 outline-none focus:border-slate-400" />
             </label>
-            <Control etiqueta="Inversión inicial" valor={altEd.inversion} onChange={(v) => setAlt(ed, "inversion", v)} minTope={500000} paso={1000} prefijo="$" ayuda="Equipo, instalación, software y capacitación, sin IVA." />
-            <Control etiqueta={`Costo variable por ${unidad}`} valor={altEd.costoVariable} onChange={(v) => setAlt(ed, "costoVariable", v)} minTope={100} paso={0.5} prefijo="$" ayuda="Materiales, mano de obra y todo lo que crece con cada unidad." />
-            <Control etiqueta="Costos fijos al año" valor={altEd.costoFijo} onChange={(v) => setAlt(ed, "costoFijo", v)} minTope={50000} paso={500} prefijo="$" />
-            <Control etiqueta="Valor de rescate" valor={altEd.rescate} onChange={(v) => setAlt(ed, "rescate", v)} max={100} paso={1} sufijo="%" ayuda="Lo que vale el equipo al final; el último año lo suma neto de impuestos." />
+            <Control tono="turquesa" etiqueta="Inversión inicial" valor={altEd.inversion} onChange={(v) => setAlt(ed, "inversion", v)} minTope={500000} paso={1000} prefijo="$" ayuda="Equipo, instalación, software y capacitación, sin IVA." />
+            <Control tono="turquesa" etiqueta={`Costo variable por ${unidad}`} valor={altEd.costoVariable} onChange={(v) => setAlt(ed, "costoVariable", v)} minTope={100} paso={0.5} prefijo="$" ayuda="Materiales, mano de obra y todo lo que crece con cada unidad." />
+            <Control tono="turquesa" etiqueta="Costos fijos al año" valor={altEd.costoFijo} onChange={(v) => setAlt(ed, "costoFijo", v)} minTope={50000} paso={500} prefijo="$" />
+            <Control tono="turquesa" etiqueta="Valor de rescate" valor={altEd.rescate} onChange={(v) => setAlt(ed, "rescate", v)} max={100} paso={1} sufijo="%" ayuda="Lo que vale el equipo al final; el último año lo suma neto de impuestos." />
             <label className="block"><span className="text-[11px] font-bold text-slate-600">Nota / origen del dato</span>
               <textarea value={altEd.nota || ""} onChange={(e) => setAlt(ed, "nota", e.target.value)} rows={2} className="mt-0.5 w-full resize-none rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700 outline-none focus:border-slate-400" />
             </label>
@@ -499,54 +553,92 @@ export default function SimuladorPanel({ currentUser }) {
           </Tarjeta>
         </div>
 
-        {/* ======= Tablero ======= */}
-        <div className="min-w-0 space-y-4">
-          {/* Comparativo de alternativas: es también el único selector (muestra y edita la que se pulsa) */}
-          <div className="-mb-2 flex items-center gap-1.5 px-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
-            {resultados.length > 1 ? "Opciones" : "Opción"} · valor presente neto
-            <AyudaBloque titulo="Comparativo de opciones">
-              <span className="block">Cada tarjeta es una opción con su ganancia total (VPN).</span>
-              <Linea termino="Verde">conviene. <b className="text-slate-800">Rojo:</b> no conviene con estos datos.</Linea>
-              <span className="mt-1 block">Haz clic en una tarjeta para ver sus números abajo y editarla a la izquierda.</span>
-            </AyudaBloque>
-          </div>
-          <div className={`grid gap-3 ${resultados.length === 1 ? "" : resultados.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-3"}`}>
-            {resultados.map((x, i) => {
-              const activo = foco === i;
-              return (
-                <button key={i} type="button" onClick={() => { setVista(i); setEditando(i); }} aria-pressed={activo} className={`rounded-2xl border bg-white px-4 py-3 text-left shadow-sm transition hover:shadow ${activo ? "border-slate-800 ring-1 ring-slate-800" : "border-slate-200"}`}>
+        {/* ======= Tablero (en celular va primero: el resultado antes que los controles) ======= */}
+        <div className="order-first min-w-0 space-y-4 lg:order-none">
+          {/* Varias opciones: pastillas para elegir cuál se muestra y se edita */}
+          {resultados.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {resultados.map((x, i) => {
+                const activo = foco === i;
+                return (
+                  <button key={i} type="button" onClick={() => { setVista(i); setEditando(i); }} aria-pressed={activo} className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-left shadow-sm transition ${activo ? "border-slate-800 bg-white ring-1 ring-slate-800" : "border-slate-200 bg-white hover:border-slate-400"}`}>
+                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLORES[i] }} />
+                    <span className="max-w-[200px] truncate text-[12px] font-semibold text-slate-800">{x.alt.nombre}</span>
+                    <span className={`text-[12px] font-bold ${x.r.vpn > 0 ? "text-emerald-600" : "text-red-600"}`}>{corto(x.r.vpn)}</span>
+                    {mejor === i && hayGanadora && <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">✓ Mejor</span>}
+                  </button>
+                );
+              })}
+              <AyudaBloque titulo="Comparativo de opciones" lado="derecha">Cada pastilla es una opción con su ganancia (VPN). Tócala para ver sus números y editarla a la izquierda.</AyudaBloque>
+            </div>
+          )}
+
+          {/* Veredicto: alcancía feliz o triste, la ganancia total y una lista de revisión */}
+          {(() => {
+            const conviene = F.r.vpn > 0;
+            const checks = [
+              { ok: F.r.vpn > 0, texto: "Deja ganancia (VPN mayor que $0)" },
+              { ok: F.r.tir != null && F.r.tir * 100 > tasa, texto: `Rinde más que tu tasa (${numero(tasa, 1)}%)` },
+              { ok: F.r.payback != null && F.r.payback <= anios, texto: `Se paga dentro de ${anios} ${anios === 1 ? "año" : "años"}` },
+              { ok: F.eqVolumen != null && vol >= F.eqVolumen, texto: "Tu volumen supera el mínimo" },
+            ];
+            return (
+              <section className={`grid items-center gap-4 rounded-2xl border p-4 shadow-sm md:grid-cols-[auto_1fr_auto] ${conviene ? "border-emerald-200 bg-gradient-to-br from-emerald-50 to-white" : "border-red-200 bg-gradient-to-br from-red-50 to-white"}`}>
+                <IlusAlcancia feliz={conviene} className="mx-auto h-24 w-24 md:mx-0" />
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="inline-block h-6 w-1 rounded-full" style={{ background: COLORES[i] }} />
-                    <div className="min-w-0 flex-1 truncate text-[12px] font-black text-slate-800">{x.alt.nombre}</div>
-                    {mejor === i && hayGanadora && resultados.length > 1 && <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[8px] font-black uppercase text-emerald-700">✓ Mejor</span>}
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${conviene ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}>{conviene ? "Conviene invertir" : "No conviene todavía"}</span>
+                    <AyudaBloque titulo="¿Cuánto gano?">La ganancia total en pesos de hoy, ya descontada la compra (VPN). <b className="text-slate-800">Mayor que $0 = conviene.</b></AyudaBloque>
                   </div>
-                  <div className={`mt-1 text-[20px] font-black leading-tight ${x.r.vpn > 0 ? "text-emerald-700" : "text-red-600"}`}>{moneda(x.r.vpn)}</div>
-                  <div className="text-[10px] text-slate-400">VPN · {x.r.vpn > 0 ? "conviene" : "no conviene"} · inversión {moneda(num(x.alt.inversion))}</div>
-                </button>
-              );
-            })}
-          </div>
+                  <p className={`mt-1.5 text-[30px] font-bold leading-none tracking-tight ${conviene ? "text-emerald-700" : "text-red-600"}`}>{moneda(F.r.vpn)}</p>
+                  <p className="mt-1 text-[11px] text-slate-500">Ganancia total en pesos de hoy · {anios} {anios === 1 ? "año" : "años"} · inversión {moneda(num(F.alt.inversion))}</p>
+                  <p className="mt-2 text-[12px] leading-snug text-slate-700">{lectura}{!hayGanadora && resultados.length > 1 && vista < 0 ? " Ninguna opción supera la tasa con estos datos." : ""}</p>
+                </div>
+                <ul className="space-y-1.5 md:min-w-[220px]">
+                  {checks.map((c) => (
+                    <li key={c.texto} className="flex items-center gap-2 text-[12px] text-slate-700">
+                      <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${c.ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>{c.ok ? "✓" : "✕"}</span>
+                      {c.texto}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })()}
 
-          <div className={`rounded-2xl border px-4 py-3 text-[12px] leading-snug ${F.r.vpn > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
-            <span className="font-black">{F.r.vpn > 0 ? "Lectura: " : "Ojo: "}</span>{lectura}
-            {!hayGanadora && resultados.length > 1 && vista < 0 && <span> Ninguna alternativa supera la tasa de descuento con estos supuestos.</span>}
-          </div>
-
+          {/* Indicadores con mini gráfica */}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Kpi etiqueta="Valor presente neto" valor={moneda(F.r.vpn)} sub={`a ${anios} ${anios === 1 ? "año" : "años"} · tasa ${numero(tasa, 1)}%`} estado={F.r.vpn > 0 ? "bien" : "mal"}
-              ayuda={<AyudaBloque titulo="¿Cuánto gano?" lado="derecha">La ganancia total en pesos de hoy, ya descontada la compra. <b className="text-slate-800">Mayor que $0 = conviene.</b></AyudaBloque>} />
-            <Kpi etiqueta="Tasa interna de retorno" valor={porcentaje(F.r.tir)} sub={`contra ${numero(tasa, 1)}% de descuento`}
-              ayuda={<AyudaBloque titulo="¿Qué tan rentable es?" lado="derecha">El rendimiento anual de tu dinero en esta inversión. <b className="text-slate-800">Si es mayor que tu tasa de descuento ({numero(tasa, 1)}%), conviene.</b></AyudaBloque>} />
-            <Kpi etiqueta="Recuperación" valor={F.r.payback == null ? "—" : `${F.r.payback.toFixed(1)} años`} sub={F.r.payback == null ? `no se recupera en ${anios} ${anios === 1 ? "año" : "años"}` : "para recuperar la inversión"}
-              ayuda={<AyudaBloque titulo="¿Cuándo regresa mi dinero?" lado="derecha">Los años que tardan los ahorros en pagar la compra. <b className="text-slate-800">Menos años = menos riesgo.</b></AyudaBloque>} />
-            <Kpi etiqueta="Punto de equilibrio" valor={F.eqVolumen == null ? "—" : numero(F.eqVolumen)} sub={F.eqVolumen == null ? "no alcanza a empatar" : vol > 0 ? `${unidad} al año · hoy ${numero(vol)} (${Math.round((vol / Math.max(1, F.eqVolumen)) * 100)}%)` : `${unidad} al año`}
-              ayuda={<AyudaBloque titulo="¿Cuánto debo usarla?" lado="derecha">Las {unidad} al año a partir de las cuales comprar conviene más que seguir como hoy. El % compara tu volumen contra ese mínimo: <b className="text-slate-800">arriba de 100% conviene.</b></AyudaBloque>} />
-          </div>
-          <div className="-mt-1 px-1 text-[11px] text-slate-500">
-            {esAhorro
-              ? <>Costo propio por {unidad}: <span className="font-black text-slate-700">{F.costoUnidad == null ? "—" : `$${numero(F.costoUnidad, 1)}`}</span> contra ${numero(num(g.referencia), 1)} de la opción actual</>
-              : <>Margen por {unidad}: <span className="font-black text-slate-700">${numero(num(g.referencia) - num(F.alt.costoVariable), 1)}</span> (precio ${numero(num(g.referencia), 1)} − costo ${numero(num(F.alt.costoVariable), 1)})</>}
-            {" · "}Beneficio año 1: <span className="font-black text-slate-700">{moneda(F.r.beneficios[0])}</span> antes de impuestos
+            <KpiVisual Icono={IconoRendimiento} tono="azul" etiqueta="Rendimiento anual (TIR)" valor={porcentaje(F.r.tir)} nota={`La línea marca tu tasa mínima (${numero(tasa, 1)}%)`}
+              ayuda={<AyudaBloque titulo="¿Qué tan rentable es?" lado="derecha">El rendimiento anual de tu dinero en esta inversión. <b className="text-slate-800">Si pasa la línea de tu tasa ({numero(tasa, 1)}%), conviene.</b></AyudaBloque>}>
+              <BarraMeta valor={(F.r.tir ?? 0) * 100} meta={tasa} max={Math.max(tasa * 2, (F.r.tir ?? 0) * 100)} color="#60a5fa" marca="Tasa mínima" />
+            </KpiVisual>
+            <KpiVisual Icono={IconoReloj} tono="lila" etiqueta="Recuperas tu dinero en" valor={F.r.payback == null ? "—" : `${F.r.payback.toFixed(1)} años`} nota={F.r.payback == null ? `No se recupera en ${anios} ${anios === 1 ? "año" : "años"}` : `De ${anios} ${anios === 1 ? "año" : "años"} del análisis`}
+              ayuda={<AyudaBloque titulo="¿Cuándo regresa mi dinero?" lado="derecha">Los años que tardan los ahorros en pagar la compra. <b className="text-slate-800">Menos años = menos riesgo.</b></AyudaBloque>}>
+              <div className="flex gap-1">
+                {Array.from({ length: anios }, (_, k) => {
+                  const lleno = F.r.payback != null && F.r.payback > k ? Math.min(1, F.r.payback - k) : 0;
+                  return <div key={k} className="relative h-2 flex-1 overflow-hidden rounded-full bg-slate-100"><div className="absolute inset-y-0 left-0 rounded-full bg-purple-300" style={{ width: `${lleno * 100}%` }} /></div>;
+                })}
+              </div>
+            </KpiVisual>
+            <KpiVisual Icono={IconoMeta} tono="ambar" etiqueta="Volumen mínimo para que convenga" valor={F.eqVolumen == null ? "—" : numero(F.eqVolumen)} nota={F.eqVolumen == null ? "Con estos costos no alcanza a empatar" : `${unidad} al año · tú: ${numero(vol)} (${Math.round((vol / Math.max(1, F.eqVolumen)) * 100)}%)`}
+              ayuda={<AyudaBloque titulo="¿Cuánto debo usarla?" lado="derecha">Las {unidad} al año a partir de las cuales comprar conviene más que seguir como hoy. La barra es tu volumen; la línea, ese mínimo.</AyudaBloque>}>
+              <BarraMeta valor={vol} meta={F.eqVolumen} max={Math.max(vol, F.eqVolumen ?? 0) * 1.1} color={F.eqVolumen != null && vol >= F.eqVolumen ? "#fbbf24" : "#fca5a5"} marca="Mínimo" />
+            </KpiVisual>
+            {esAhorro ? (
+              <KpiVisual Icono={IconoEtiqueta} tono="turquesa" etiqueta={`Costo por ${unidad} con equipo propio`} valor={F.costoUnidad == null ? "—" : `$${numero(F.costoUnidad, 1)}`} nota={`Hoy pagas $${numero(num(g.referencia), 1)} · ahorro año 1: ${corto(F.r.beneficios[0])}`}
+                ayuda={<AyudaBloque titulo="¿Cuánto me cuesta cada unidad?" lado="derecha">Insumos, costos fijos y la compra repartida en los años del análisis, por cada {unidad}. La barra verde es tu costo; la gris, lo que pagas hoy.</AyudaBloque>}>
+                <div className="space-y-1">
+                  <BarraMeta valor={F.costoUnidad ?? 0} max={Math.max(num(g.referencia), F.costoUnidad ?? 0)} color="#5eead4" />
+                  <BarraMeta valor={num(g.referencia)} max={Math.max(num(g.referencia), F.costoUnidad ?? 0)} color="#cbd5e1" />
+                </div>
+              </KpiVisual>
+            ) : (
+              <KpiVisual Icono={IconoEtiqueta} tono="turquesa" etiqueta={`Margen por ${unidad}`} valor={`$${numero(num(g.referencia) - num(F.alt.costoVariable), 1)}`} nota={`Precio $${numero(num(g.referencia), 1)} − costo $${numero(num(F.alt.costoVariable), 1)}`}
+                ayuda={<AyudaBloque titulo="¿Cuánto me deja cada unidad?" lado="derecha">Lo que queda de cada venta después del costo variable.</AyudaBloque>}>
+                <BarraMeta valor={num(g.referencia) - num(F.alt.costoVariable)} max={Math.max(1, num(g.referencia))} color="#5eead4" />
+              </KpiVisual>
+            )}
           </div>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -583,7 +675,7 @@ export default function SimuladorPanel({ currentUser }) {
             <Grafica anios={anios} barras={F.r.flujos} colorBarras={COLORES[foco]} series={resultados.map((x, i) => ({ nombre: x.alt.nombre, color: COLORES[i], puntos: x.r.acumulado }))} />
             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-600">
               {resultados.map((x, i) => <span key={i} className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-5 rounded" style={{ background: COLORES[i] }} />{x.alt.nombre} (acumulado)</span>)}
-              <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm opacity-30" style={{ background: COLORES[foco] }} />Flujo del año de {F.alt.nombre}</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm bg-emerald-300" /><span className="-ml-1 inline-block h-3 w-3 rounded-sm bg-red-300" />Flujo del año de {F.alt.nombre} (verde entra, rojo sale)</span>
               <Ayuda texto="La línea cruza el cero cuando la inversión se recupera. Pase el cursor por un punto o una barra para ver el monto." />
             </div>
             </>)}
