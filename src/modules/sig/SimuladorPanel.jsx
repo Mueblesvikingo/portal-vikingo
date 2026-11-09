@@ -15,7 +15,7 @@ import {
 } from "./simuladorInversion";
 import { deleteSimulacion, getSimulaciones, saveSimulacion } from "../../services/simuladorService";
 import SimuladorGuia from "./SimuladorGuia";
-import { IlusAnalisis, IlusVolumen, IlusSupuestos, IlusEquipo, IlusAlcancia, IconoRendimiento, IconoReloj, IconoMeta, IconoEtiqueta } from "./SimuladorIlustraciones";
+import { IlusAnalisis, IlusVolumen, IlusSupuestos, IlusEquipo, IlusCofre, IconoRendimiento, IconoReloj, IconoMeta, IconoEtiqueta } from "./SimuladorIlustraciones";
 
 // Simulador financiero (Diagnóstico SIG). Solo lo ven el Coordinador SIG y el Director General.
 // Tablero interactivo: mueve cualquier control y todo se recalcula al momento. Sirve para cualquier evaluación de inversión
@@ -584,7 +584,7 @@ export default function SimuladorPanel({ currentUser }) {
             ];
             return (
               <section className={`grid items-center gap-4 rounded-2xl border p-4 shadow-sm md:grid-cols-[auto_1fr_auto] ${conviene ? "border-emerald-200 bg-gradient-to-br from-emerald-50 to-white" : "border-red-200 bg-gradient-to-br from-red-50 to-white"}`}>
-                <IlusAlcancia feliz={conviene} className="mx-auto h-24 w-24 md:mx-0" />
+                <IlusCofre conviene={conviene} className="mx-auto h-24 w-24 md:mx-0" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${conviene ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}>{conviene ? "Conviene invertir" : "No conviene todavía"}</span>

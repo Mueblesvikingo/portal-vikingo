@@ -1,102 +1,106 @@
-// Ilustraciones del Simulador con el mismo lenguaje visual de CORELI (contorno grueso #1f2a33,
-// rellenos pastel y carita), dibujadas para este módulo. Solo presentación.
+// Ilustraciones del Simulador en el estilo "Vikingo" de la apariencia de CORELI: emblema plano de
+// aristas rectas, contorno fino #15191E y paleta de madera, acero, oro viejo, rojo sangre y pergamino.
+// El cofre del veredicto es el mismo emblema de Finanzas de esa apariencia. Solo presentación.
 
-const TINTA = "#1f2a33";
+const C = {
+  tinta: "#15191E",
+  madera: "#7E5B3C",
+  maderaOscura: "#553B27",
+  acero: "#8E9AA7",
+  aceroOscuro: "#5D6873",
+  aceroAzul: "#89A6B6",
+  azulProfundo: "#57778A",
+  oro: "#BE9640",
+  oroClaro: "#D9B867",
+  rojo: "#82231C",
+  pergamino: "#DCD0B4",
+};
 
-// Ojos con brillo, sonrisa (o boca triste) y chapitas, centrados en (cx, cy).
-function Carita({ cx, cy, sep = 26, feliz = true, chapas = true }) {
-  return (
-    <g>
-      <circle cx={cx - sep} cy={cy} r="9" fill={TINTA} />
-      <circle cx={cx + sep} cy={cy} r="9" fill={TINTA} />
-      <circle cx={cx - sep + 3} cy={cy - 3} r="2.9" fill="#fff" />
-      <circle cx={cx + sep + 3} cy={cy - 3} r="2.9" fill="#fff" />
-      <path d={feliz ? `M${cx - 10} ${cy + 16} Q${cx} ${cy + 26} ${cx + 10} ${cy + 16}` : `M${cx - 10} ${cy + 24} Q${cx} ${cy + 14} ${cx + 10} ${cy + 24}`} fill="none" stroke={TINTA} strokeWidth="5.5" strokeLinecap="round" />
-      {chapas && <ellipse cx={cx - sep - 12} cy={cy + 20} rx="12" ry="7" fill="#f08a84" opacity="0.75" />}
-      {chapas && <ellipse cx={cx + sep + 12} cy={cy + 20} rx="12" ry="7" fill="#f08a84" opacity="0.75" />}
-    </g>
-  );
-}
-
-const Lienzo = ({ className, children, titulo }) => (
-  <svg viewBox="-6 -10 332 300" className={className} role="img" aria-label={titulo}>{children}</svg>
+// Trazo común del estilo: fino, esquinas rectas.
+const Emblema = ({ viewBox, className, titulo, children }) => (
+  <svg viewBox={viewBox} className={className} role="img" aria-label={titulo}>
+    <g stroke={C.tinta} strokeWidth="4" strokeLinejoin="miter" strokeLinecap="square">{children}</g>
+  </svg>
 );
 
+// Pergamino con sello de cera: el análisis que estás armando.
 export function IlusAnalisis({ className = "h-12 w-12" }) {
   return (
-    <Lienzo className={className} titulo="Análisis">
-      <g stroke={TINTA} strokeWidth="11" strokeLinejoin="round">
-        <rect x="62" y="40" width="196" height="232" rx="22" fill="#d8ccf5" />
-        <rect x="112" y="18" width="96" height="46" rx="14" fill="#f7c873" />
-      </g>
-      <g stroke={TINTA} strokeWidth="9" strokeLinecap="round">
-        <path d="M100 196 L220 196" /><path d="M100 230 L180 230" />
-      </g>
-      <Carita cx={160} cy={124} />
-    </Lienzo>
+    <Emblema viewBox="40 40 320 320" className={className} titulo="Análisis">
+      <path d="M96 72 H304 V328 H96 Z" fill={C.pergamino} />
+      <path d="M76 60 H324 V88 H76 Z M76 312 H324 V340 H76 Z" fill={C.madera} />
+      <path d="M128 132 H272 M128 170 H272 M128 208 H232" fill="none" stroke={C.aceroOscuro} strokeWidth="10" />
+      <path d="M228 238 L276 238 L290 270 L252 296 L214 270 Z" fill={C.rojo} />
+      <circle cx="252" cy="266" r="10" fill={C.oro} />
+    </Emblema>
   );
 }
 
+// Columnas de madera, acero y oro: el volumen de trabajo.
 export function IlusVolumen({ className = "h-12 w-12" }) {
   return (
-    <Lienzo className={className} titulo="Volumen">
-      <g stroke={TINTA} strokeWidth="11" strokeLinejoin="round">
-        <path d="M70 70 L250 70 L250 230 L70 230 Z" fill="#9ad0f5" />
-        <ellipse cx="70" cy="150" rx="30" ry="80" fill="#c6e6fb" />
-        <path d="M250 200 L300 200 L300 262 L222 262" fill="#ffffff" />
-      </g>
-      <ellipse cx="70" cy="150" rx="9" ry="24" fill={TINTA} />
-      <Carita cx={168} cy={136} />
-    </Lienzo>
+    <Emblema viewBox="46 92 308 260" className={className} titulo="Volumen">
+      <path d="M72 224 H144 V336 H72 Z" fill={C.madera} />
+      <path d="M164 164 H236 V336 H164 Z" fill={C.aceroAzul} />
+      <path d="M256 96 H328 V336 H256 Z" fill={C.oro} />
+      <path d="M50 334 H350 V348 H50 Z" fill={C.tinta} />
+    </Emblema>
   );
 }
 
+// Moneda de oro con el porcentaje grabado: tasa e impuestos.
 export function IlusSupuestos({ className = "h-12 w-12" }) {
   return (
-    <Lienzo className={className} titulo="Supuestos financieros">
-      <circle cx="160" cy="146" r="116" fill="#f7c873" stroke={TINTA} strokeWidth="11" />
-      <circle cx="160" cy="146" r="86" fill="none" stroke="#e0a840" strokeWidth="8" />
-      <text x="160" y="96" textAnchor="middle" fontFamily="Arial Black, Arial, sans-serif" fontWeight="900" fontSize="58" fill={TINTA}>%</text>
-      <Carita cx={160} cy={156} sep={30} />
-    </Lienzo>
+    <Emblema viewBox="40 40 320 320" className={className} titulo="Supuestos financieros">
+      <circle cx="200" cy="200" r="150" fill={C.acero} />
+      <circle cx="200" cy="200" r="126" fill={C.oro} />
+      <circle cx="200" cy="200" r="100" fill={C.oroClaro} />
+      <path d="M150 260 L250 140" fill="none" stroke={C.tinta} strokeWidth="18" />
+      <circle cx="156" cy="152" r="24" fill={C.maderaOscura} />
+      <circle cx="244" cy="248" r="24" fill={C.maderaOscura} />
+      <circle cx="340" cy="200" r="5" fill={C.aceroOscuro} /><circle cx="60" cy="200" r="5" fill={C.aceroOscuro} />
+      <circle cx="200" cy="60" r="5" fill={C.aceroOscuro} /><circle cx="200" cy="340" r="5" fill={C.aceroOscuro} />
+    </Emblema>
   );
 }
 
+// Plotter de acero con banda de oro y la hoja de pergamino saliendo: el equipo a evaluar.
 export function IlusEquipo({ className = "h-12 w-12" }) {
   return (
-    <Lienzo className={className} titulo="Equipo a evaluar">
-      <g stroke={TINTA} strokeWidth="11" strokeLinejoin="round" strokeLinecap="round">
-        <path d="M118 118 L202 118 L224 262 L96 262 Z" fill="#ffffff" />
-        <rect x="24" y="40" width="272" height="110" rx="34" fill="#8fd3a8" />
-        <path d="M60 150 L60 200 M260 150 L260 200" fill="none" />
-      </g>
-      <g stroke={TINTA} strokeWidth="7" strokeLinecap="round"><path d="M128 210 L192 210" /><path d="M134 236 L176 236" /></g>
-      <Carita cx={160} cy={86} sep={30} />
-    </Lienzo>
+    <Emblema viewBox="40 60 320 300" className={className} titulo="Equipo a evaluar">
+      <path d="M140 196 H260 L284 350 H116 Z" fill={C.pergamino} />
+      <path d="M150 248 H250 M156 290 H236" fill="none" stroke={C.aceroOscuro} strokeWidth="8" />
+      <path d="M52 92 H348 V200 H52 Z" fill={C.aceroOscuro} />
+      <path d="M52 92 H348 V118 H52 Z" fill={C.acero} />
+      <path d="M52 176 H348 V200 H52 Z" fill={C.oro} />
+      <path d="M84 132 H176 V164 H84 Z" fill={C.azulProfundo} />
+      <circle cx="296" cy="148" r="14" fill={C.rojo} />
+      <path d="M68 200 V272 H92 V200 M308 200 V272 H332 V200" fill={C.madera} />
+    </Emblema>
   );
 }
 
-// Alcancía: feliz si la inversión conviene, triste si no.
-export function IlusAlcancia({ feliz = true, className = "h-24 w-24" }) {
+// Cofre: lleno de oro si la inversión conviene (emblema de Finanzas), cerrado y apagado si no.
+export function IlusCofre({ conviene = true, className = "h-24 w-24" }) {
+  const madera = conviene ? C.madera : "#8a8278";
+  const tapa = conviene ? C.maderaOscura : "#6b655d";
   return (
-    <Lienzo className={className} titulo={feliz ? "Conviene" : "No conviene"}>
-      <g stroke={TINTA} strokeWidth="11" strokeLinejoin="round" strokeLinecap="round">
-        <ellipse cx="156" cy="168" rx="122" ry="92" fill={feliz ? "#f4a5a0" : "#e5e7eb"} />
-        <path d="M84 98 L72 52 L118 80" fill={feliz ? "#f4a5a0" : "#e5e7eb"} />
-        <rect x="248" y="142" width="42" height="56" rx="18" fill={feliz ? "#f8c1bd" : "#f1f2f4"} />
-        <path d="M96 252 L96 270 M210 252 L210 270" fill="none" />
-        <path d="M130 84 L190 84" fill="none" />
-      </g>
-      <circle cx="262" cy="170" r="5" fill={TINTA} />
-      <circle cx="278" cy="170" r="5" fill={TINTA} />
-      <Carita cx={160} cy={150} sep={30} feliz={feliz} />
-      {feliz ? (
-        <g stroke={TINTA} strokeWidth="10" strokeLinejoin="round">
-          <circle cx="160" cy="28" r="30" fill="#8fd3a8" />
-          <text x="160" y="43" textAnchor="middle" fontFamily="Arial Black, Arial, sans-serif" fontWeight="900" fontSize="40" fill={TINTA} stroke="none">$</text>
-        </g>
-      ) : null}
-    </Lienzo>
+    <Emblema viewBox="60 48 280 294" className={className} titulo={conviene ? "Conviene" : "No conviene"}>
+      {conviene && (
+        <>
+          <circle cx="140" cy="98" r="26" fill={C.oro} />
+          <circle cx="194" cy="80" r="28" fill={C.oroClaro} />
+          <circle cx="250" cy="98" r="24" fill={C.oro} />
+        </>
+      )}
+      <path d={conviene ? "M70 176 L92 112 H308 L330 176 Z" : "M64 170 L76 128 H324 L336 170 Z"} fill={tapa} />
+      <path d="M64 170 H336 V338 H64 Z" fill={madera} />
+      <path d="M80 220 H320 M80 268 H320 M80 312 H320" fill="none" stroke={tapa} strokeWidth="4" />
+      <path d="M64 170 H336 V194 H64 Z" fill={C.acero} />
+      <path d={conviene ? "M104 112 H130 V338 H104 Z M270 112 H296 V338 H270 Z" : "M104 128 H130 V338 H104 Z M270 128 H296 V338 H270 Z"} fill={C.acero} />
+      <path d="M172 190 H228 V248 L200 262 L172 248 Z" fill={conviene ? C.oro : C.rojo} />
+      <circle cx="200" cy="220" r="7" fill={C.tinta} />
+    </Emblema>
   );
 }
 
