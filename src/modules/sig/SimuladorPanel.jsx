@@ -607,7 +607,7 @@ export default function SimuladorPanel({ currentUser }) {
           })()}
 
           {/* Indicadores con mini gráfica */}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-3">
             <KpiVisual Icono={IconoRendimiento} tono="azul" etiqueta="Rendimiento anual (TIR)" valor={porcentaje(F.r.tir)} nota={`La línea marca tu tasa mínima (${numero(tasa, 1)}%)`}
               ayuda={<AyudaBloque titulo="¿Qué tan rentable es?" lado="derecha">El rendimiento anual de tu dinero en esta inversión. <b className="text-slate-800">Si pasa la línea de tu tasa ({numero(tasa, 1)}%), conviene.</b></AyudaBloque>}>
               <BarraMeta valor={(F.r.tir ?? 0) * 100} meta={tasa} max={Math.max(tasa * 2, (F.r.tir ?? 0) * 100)} color="#60a5fa" marca="Tasa mínima" />
