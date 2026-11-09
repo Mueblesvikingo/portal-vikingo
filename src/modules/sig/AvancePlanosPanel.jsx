@@ -465,7 +465,7 @@ export default function AvancePlanosPanel({ currentUser }) {
           puedeRevertir={(h) => puedeValidar && esValidacionVigente(h)}
           onRevertir={revertirValidacion}
         />
-      )}}
+      )}
     </div>
   );
 }
