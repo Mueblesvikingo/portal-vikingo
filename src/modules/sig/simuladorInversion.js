@@ -84,17 +84,17 @@ const DEP_COMPUTO = [30, 30, 30, 10];
 
 export const PLANTILLAS = [
   {
+    // Ajuste del 9-nov-2026: solo la opción elegida (Audaces Jet Lux Plus 185, cotización Galga) contra el servicio externo.
     id: "plotter",
-    nombre: "Compra de plotter de 1.40 m o más",
-    descripcion: "Imprimir tendidos de hasta 30 m en casa contra pagar el servicio externo. Los números son estimaciones por confirmar con cotización.",
+    nombre: "Plotter Audaces Jet Lux Plus 185",
+    descripcion: "Imprimir los tendidos en casa con el Jet Lux Plus 185 contra pagar el servicio externo ($75 por metro). Insumos, costos fijos, volumen y rescate por confirmar.",
     ejemplo: true,
     datos: {
-      titulo: "Compra de plotter de 1.40 m o más",
+      titulo: "Compra del plotter Audaces Jet Lux Plus 185",
       modo: "ahorro", unidad: "m lineal",
-      general: { volumen: 3000, referencia: 55, tasa: 18, isr: 30, anios: 5, crecimiento: 0, depreciacion: DEP_COMPUTO },
+      general: { volumen: 3000, referencia: 75, tasa: 18, isr: 30, anios: 5, crecimiento: 0, depreciacion: DEP_COMPUTO },
       alternativas: [
-        { nombre: "A · Plotter de patrones 1.8 m (importado)", inversion: 65000, costoVariable: 13.5, costoFijo: 3000, rescate: 10, nota: "Listados de €735 a €2,700 + flete, aranceles y mesa. Sin garantía local confirmada." },
-        { nombre: "B · Epson SureColor P20570 64\" (local)", inversion: 300000, costoVariable: 15.5, costoFijo: 12000, rescate: 25, nota: "$218,128 listado + mesa y software de impresión larga. Verificar que imprima 30 m continuos." },
+        { nombre: "Audaces Jet Lux Plus 185 (Galga)", inversion: 155172, costoVariable: 13.5, costoFijo: 3000, rescate: 10, nota: "Cotización Galga: $180,000 con IVA ($155,172 sin IVA). 185 cm de ancho, 70–100 m²/h, papel de 40 a 80 g/m², Ethernet, 150 W. Por confirmar: insumos ($13.5/m), costos fijos, volumen al año y valor de rescate." },
       ],
     },
   },

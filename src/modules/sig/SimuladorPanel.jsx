@@ -149,7 +149,13 @@ function Grafica({ series, anios, barras, colorBarras }) {
 }
 
 export default function SimuladorPanel({ currentUser }) {
-  const [estado, setEstado] = useState(() => leer(CLAVE_ACTUAL, null) || { ...clonar(PLANTILLAS[0].datos), plantillaId: PLANTILLAS[0].id });
+  const [estado, setEstado] = useState(() => {
+    const previo = leer(CLAVE_ACTUAL, null);
+    // El análisis anterior de dos plotters (importado vs. Epson) se reemplaza por la plantilla del Jet Lux Plus 185;
+    // cualquier otro análisis en pantalla se respeta. Los escenarios guardados no se tocan.
+    const esPlotterAnterior = previo?.plantillaId === "plotter" && (previo.alternativas || []).some((a) => /Epson SureColor|Plotter de patrones 1\.8 m/.test(a?.nombre || ""));
+    return previo && !esPlotterAnterior ? previo : { ...clonar(PLANTILLAS[0].datos), plantillaId: PLANTILLAS[0].id };
+  });
   const [locales, setLocales] = useState(() => leer(CLAVE_ESCENARIOS, []));
   const [remotos, setRemotos] = useState([]);
   const [tablaFaltante, setTablaFaltante] = useState(false);
@@ -282,7 +288,7 @@ export default function SimuladorPanel({ currentUser }) {
   const lectura = (() => {
     if (!F) return "";
     const eq = F.eqVolumen;
-    if (hayGanadora && vista < 0) {
+    if (hayGanadora && vista < 0 && resultados.length > 1) {
       return `${F.alt.nombre} es la que más valor deja: VPN ${moneda(F.r.vpn)} y se recupera en ${fmtAnios(F.r.payback)}. ${eq == null ? "" : `Necesita ${numero(eq)} ${unidad} al año para empatar y hoy se capturan ${numero(vol)}.`}`;
     }
     if (F.r.vpn > 0) return `${F.alt.nombre} supera la tasa de descuento: VPN ${moneda(F.r.vpn)}, recuperación en ${fmtAnios(F.r.payback)}. ${eq == null ? "" : `Empata con ${numero(eq)} ${unidad} al año.`}`;
@@ -434,7 +440,7 @@ export default function SimuladorPanel({ currentUser }) {
                   <div className="flex items-center gap-2">
                     <span className="inline-block h-6 w-1 rounded-full" style={{ background: COLORES[i] }} />
                     <div className="min-w-0 flex-1 truncate text-[12px] font-black text-slate-800">{x.alt.nombre}</div>
-                    {mejor === i && hayGanadora && <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[8px] font-black uppercase text-emerald-700">✓ Mejor</span>}
+                    {mejor === i && hayGanadora && resultados.length > 1 && <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[8px] font-black uppercase text-emerald-700">✓ Mejor</span>}
                   </div>
                   <div className={`mt-1 text-[20px] font-black leading-tight ${x.r.vpn > 0 ? "text-emerald-700" : "text-red-600"}`}>{moneda(x.r.vpn)}</div>
                   <div className="text-[10px] text-slate-400">VPN · {x.r.vpn > 0 ? "conviene" : "no conviene"} · inversión {moneda(num(x.alt.inversion))}</div>
