@@ -36,7 +36,10 @@ const FAMILIAS_EXCLUIDAS = ["Buros", "Tocador"];
 
 // Tampoco entran las bases de tela (todas): se sigue el avance de las demás bases.
 const esBaseDeTela = (p) => familiaDe(p.nombre) === "Base" && /tela/i.test(p.nombre);
-const esExcluido = (p) => FAMILIAS_EXCLUIDAS.includes(familiaDe(p.nombre)) || esBaseDeTela(p);
+// Productos puntuales que no entran: Sala Grecia (611) y Sala Modular Liverpool (615).
+// Siguen en el catálogo; solo se quitan de este seguimiento (sus marcas guardadas no se borran).
+const CODIGOS_EXCLUIDOS = ["611", "615"];
+const esExcluido = (p) => FAMILIAS_EXCLUIDAS.includes(familiaDe(p.nombre)) || esBaseDeTela(p) || CODIGOS_EXCLUIDOS.includes(String(p.codigo || "").trim());
 
 // Casillas que nunca aplican: ninguna base lleva plano de espuma. Se calculan por
 // regla (no se guardan en la base) y no se pueden cambiar.
