@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MAX_ANIOS,
   PLANTILLAS,
+  TIPOS_PROYECTO,
+  etiquetaTipo,
+  tipoDe,
+  tipoPorId,
   anios as fmtAnios,
   costoPorUnidad,
   equilibrioReferencia,
@@ -256,6 +260,8 @@ export default function SimuladorPanel({ currentUser }) {
   const [aviso, setAviso] = useState("");
   const [pestana, setPestana] = useState("grafica"); // grafica | flujo | sensibilidad
   const [verGuia, setVerGuia] = useState(false);
+  const [verNueva, setVerNueva] = useState(false);
+  const [filtroTipo, setFiltroTipo] = useState("todos");
 
   useEffect(() => { guardar(CLAVE_ACTUAL, estado); }, [estado]);
   useEffect(() => {
@@ -277,10 +283,14 @@ export default function SimuladorPanel({ currentUser }) {
   const unidad = estado.unidad || "unidad";
   const anios = Math.min(MAX_ANIOS, Math.max(1, Math.round(num(g.anios, 5))));
   const tasa = num(g.tasa);
+  const tipo = tipoDe(estado);
+  const ET = (clave) => etiquetaTipo(tipo, clave, unidad);
   const lista = tablaFaltante
-    ? locales.map((e) => ({ id: e.id, nombre: e.nombre, fecha: e.fecha, autor: "", resumen: e.resumen, datos: e.datos }))
-    : remotos.map((e) => ({ id: e.id, nombre: e.nombre, fecha: e.updated_at || e.created_at, autor: e.updated_by_nombre || e.created_by_nombre || "", resumen: e.resumen, datos: e.datos }));
+    ? locales.map((e) => ({ id: e.id, nombre: e.nombre, fecha: e.fecha, autor: "", resumen: e.resumen, datos: e.datos, tipo: tipoDe(e.datos).id }))
+    : remotos.map((e) => ({ id: e.id, nombre: e.nombre, fecha: e.updated_at || e.created_at, autor: e.updated_by_nombre || e.created_by_nombre || "", resumen: e.resumen, datos: e.datos, tipo: tipoDe(e.datos).id }));
 
+  const listaFiltrada = filtroTipo === "todos" ? lista : lista.filter((e) => e.tipo === filtroTipo);
+  const cambiarTipo = (id) => { const t = tipoPorId(id); if (t) setEstado((e) => ({ ...e, tipo: t.id, modo: t.modo })); };
   const setGeneral = (campo, valor) => setEstado((e) => ({ ...e, general: { ...e.general, [campo]: valor } }));
   const setDep = (i, valor) => setEstado((e) => { const dep = Array.from({ length: MAX_ANIOS }, (_, k) => e.general.depreciacion?.[k] ?? 0); dep[i] = valor; return { ...e, general: { ...e.general, depreciacion: dep } }; });
   const setAlt = (i, campo, valor) => setEstado((e) => ({ ...e, alternativas: e.alternativas.map((a, k) => (k === i ? { ...a, [campo]: valor } : a)) }));
@@ -313,29 +323,30 @@ export default function SimuladorPanel({ currentUser }) {
   const ed = Math.min(editando, estado.alternativas.length - 1);
   const altEd = estado.alternativas[ed];
 
-  const cargarPlantilla = (id) => {
-    const p = PLANTILLAS.find((x) => x.id === id);
-    if (!p) return;
-    if (!window.confirm("Cargar la plantilla reemplaza lo que está en pantalla. Si quiere conservarlo, guárdelo antes como escenario. ¿Continuar?")) return;
-    setEstado({ ...clonar(p.datos), plantillaId: p.id }); setEditando(0); setVista(-1); setAviso(p.ejemplo ? `Plantilla cargada: ${p.descripcion}` : "");
+  // Simulación nueva de un tipo de proyecto: no queda ligada a ningún escenario guardado (guardarla crea uno nuevo)
+  const crearDesdeTipo = (id, confirmar = true) => {
+    const t = tipoPorId(id) || TIPOS_PROYECTO[TIPOS_PROYECTO.length - 1];
+    if (confirmar && !window.confirm("Una simulación nueva reemplaza lo que está en pantalla. Si quiere conservar lo actual, guárdelo antes. ¿Continuar?")) return;
+    setEstado({ ...clonar(t.datos), tipo: t.id, plantillaId: t.id }); setAbierto(null); setNombreEscenario(""); setEditando(0); setVista(-1); setVerNueva(false); setVerEscenarios(false); setGuardando(false);
+    setAviso(t.ejemplo ? `Simulación nueva de ${t.nombre}. Los números son un ejemplo: cámbielos por los reales.` : "");
   };
-  const reiniciar = () => cargarPlantilla(estado.plantillaId || PLANTILLAS[0].id);
+  const reiniciar = () => crearDesdeTipo(tipo.id);
 
   const armarResumen = () => {
     const m = resultados[Math.max(0, mejor)];
-    return { mejor: m.alt.nombre, vpn: Math.round(m.r.vpn), tir: m.r.tir, payback: m.r.payback, alternativas: resultados.length, volumen: num(g.volumen), unidad };
+    return { tipo: tipo.id, tipoNombre: tipo.corto, mejor: m.alt.nombre, vpn: Math.round(m.r.vpn), tir: m.r.tir, payback: m.r.payback, alternativas: resultados.length, volumen: num(g.volumen), unidad };
   };
   const guardarEscenario = async (comoNuevo = false) => {
     const nombre = nombreEscenario.trim() || (abierto && !comoNuevo ? abierto.nombre : estado.titulo) || "Escenario";
     setOcupado(true);
     try {
       if (tablaFaltante) {
-        const nuevo = { id: Date.now(), nombre, fecha: new Date().toISOString(), datos: clonar(estado), resumen: armarResumen() };
+        const nuevo = { id: Date.now(), nombre, fecha: new Date().toISOString(), datos: { ...clonar(estado), tipo: tipo.id }, resumen: armarResumen() };
         const lst = [nuevo, ...locales].slice(0, 30);
         setLocales(lst); guardar(CLAVE_ESCENARIOS, lst); setAbierto({ id: nuevo.id, nombre });
         setAviso(`Escenario "${nombre}" guardado solo en este navegador.`);
       } else {
-        const fila = await saveSimulacion({ id: comoNuevo ? null : abierto?.id ?? null, nombre, datos: clonar(estado), resumen: armarResumen() }, currentUser);
+        const fila = await saveSimulacion({ id: comoNuevo ? null : abierto?.id ?? null, nombre, datos: { ...clonar(estado), tipo: tipo.id }, resumen: armarResumen() }, currentUser);
         setRemotos((prev) => [fila, ...prev.filter((x) => x.id !== fila.id)]); setAbierto({ id: fila.id, nombre: fila.nombre });
         setAviso(`Escenario "${fila.nombre}" ${comoNuevo || !abierto ? "guardado" : "actualizado"} y disponible para el director.`);
       }
@@ -358,7 +369,7 @@ export default function SimuladorPanel({ currentUser }) {
   const exportarCsv = () => {
     const f = (t) => `"${String(t).replace(/"/g, '""')}"`;
     const filas = [
-      [f("Análisis"), f(estado.titulo)], [f("Tipo"), f(esAhorro ? "Ahorro frente a la opción actual" : "Ingresos por venta")], [f("Unidad"), f(unidad)],
+      [f("Análisis"), f(estado.titulo)], [f("Tipo de proyecto"), f(tipo.nombre)], [f("Tipo"), f(esAhorro ? "Ahorro frente a la opción actual" : "Ingresos por venta")], [f("Unidad"), f(unidad)],
       [f("Unidades al año"), num(g.volumen)], [f(esAhorro ? "Costo de la opción actual por unidad" : "Precio de venta por unidad"), num(g.referencia)],
       [f("Tasa de descuento %"), num(g.tasa)], [f("ISR %"), num(g.isr)], [f("Horizonte (años)"), anios], [f("Crecimiento anual de unidades %"), num(g.crecimiento)], [],
       [f("Alternativa"), f("Inversión"), f("Costo variable/unidad"), f("Costos fijos/año"), f("Rescate %"), f("VPN"), f("TIR"), f("Recuperación (años)"), f("Equilibrio (unidades/año)")],
@@ -398,18 +409,43 @@ export default function SimuladorPanel({ currentUser }) {
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-black uppercase">
           <button type="button" onClick={() => setVerGuia(true)} className="flex items-center gap-1 rounded-full border border-amber-300/60 bg-amber-400/15 px-2.5 py-1 text-amber-200 hover:bg-amber-400/25"><span aria-hidden="true">?</span> Guía</button>
-          <select aria-label="Plantilla" value="" onChange={(e) => e.target.value && cargarPlantilla(e.target.value)} className="w-[118px] rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase text-white outline-none">
-            <option value="" className="text-slate-900">Plantilla…</option>
-            {PLANTILLAS.map((p) => <option key={p.id} value={p.id} className="text-slate-900">{p.nombre}</option>)}
-          </select>
-          <button type="button" onClick={() => { setGuardando((v) => !v); setVerEscenarios(false); }} className="rounded-full bg-white/10 px-2.5 py-1 hover:bg-white/20">Guardar</button>
-          <button type="button" onClick={() => { setVerEscenarios((v) => !v); setGuardando(false); }} className="rounded-full bg-white/10 px-2.5 py-1 hover:bg-white/20">Consultar ({lista.length})</button>
+          <button type="button" onClick={() => { setVerNueva((v) => !v); setGuardando(false); setVerEscenarios(false); }} className="rounded-full bg-amber-400 px-3 py-1 text-[#07162b] hover:bg-amber-300">+ Nueva</button>
+          <button type="button" onClick={() => { setGuardando((v) => !v); setVerEscenarios(false); setVerNueva(false); }} className="rounded-full bg-white/10 px-2.5 py-1 hover:bg-white/20">Guardar</button>
+          <button type="button" onClick={() => { setVerEscenarios((v) => !v); setGuardando(false); setVerNueva(false); }} className="rounded-full bg-white/10 px-2.5 py-1 hover:bg-white/20">Consultar ({lista.length})</button>
           <button type="button" onClick={reiniciar} title="Volver a la plantilla inicial" aria-label="Reiniciar" className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[12px] hover:bg-white/20">↺</button>
           <button type="button" onClick={exportarCsv} className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-[#07162b] hover:bg-slate-100"><span aria-hidden="true">▤</span> Excel</button>
         </div>
       </div>
 
       {verGuia && <SimuladorGuia onClose={() => setVerGuia(false)} />}
+
+      {verNueva && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-[14px] font-black text-slate-800">Nueva simulación</div>
+              <div className="text-[11px] text-slate-500">¿Qué tipo de proyecto vas a evaluar? Cada tipo trae sus campos con las palabras de ese proyecto y un ejemplo para arrancar.</div>
+            </div>
+            <button type="button" onClick={() => setVerNueva(false)} className="rounded-full border border-slate-200 px-3 py-1 text-[10px] font-black uppercase text-slate-500 hover:bg-slate-50">Cerrar</button>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {TIPOS_PROYECTO.map((t) => (
+              <button key={t.id} type="button" onClick={() => crearDesdeTipo(t.id)} className="group rounded-2xl border border-slate-200 bg-white p-3.5 text-left transition hover:border-slate-400 hover:shadow-md">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-8 w-1.5 rounded-full" style={{ background: t.color }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-black text-slate-800">{t.nombre}</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{t.modo === "ahorro" ? "Ahorro" : "Ingresos"} · en {t.unidad}</div>
+                  </div>
+                  {t.ejemplo && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[8px] font-black uppercase text-amber-700">Con ejemplo</span>}
+                </div>
+                <p className="mt-2 text-[11px] leading-snug text-slate-500">{t.descripcion}</p>
+                <span className="mt-2 inline-block text-[10px] font-black uppercase text-slate-400 group-hover:text-slate-700">Crear →</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {tablaFaltante && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] font-semibold text-amber-800">
@@ -429,12 +465,21 @@ export default function SimuladorPanel({ currentUser }) {
       {verEscenarios && (
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
           <div className="pt-1 text-[10px] font-black uppercase tracking-wide text-slate-400">{tablaFaltante ? "Guardados en este navegador" : "Escenarios guardados · compartidos con el director"}</div>
-          {cargandoLista ? <div className="py-3 text-center text-[12px] font-bold text-slate-300">Cargando…</div> : lista.length === 0 ? <div className="py-3 text-center text-[12px] font-bold text-slate-300">Todavía no hay escenarios guardados.</div> : (
+          {lista.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 pb-1 pt-1.5">
+              {[{ id: "todos", corto: "Todas", color: "#07162b", n: lista.length }, ...TIPOS_PROYECTO.map((t) => ({ id: t.id, corto: t.corto, color: t.color, n: lista.filter((e) => e.tipo === t.id).length })).filter((t) => t.n > 0)].map((t) => (
+                <button key={t.id} type="button" aria-pressed={filtroTipo === t.id} onClick={() => setFiltroTipo(t.id)} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-black transition ${filtroTipo === t.id ? "border-[#07162b] bg-[#07162b] text-white" : "border-slate-200 bg-white text-slate-500 hover:border-slate-400"}`}>
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: t.color }} />{t.corto} <span className={filtroTipo === t.id ? "text-slate-300" : "text-slate-300"}>{t.n}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {cargandoLista ? <div className="py-3 text-center text-[12px] font-bold text-slate-300">Cargando…</div> : listaFiltrada.length === 0 ? <div className="py-3 text-center text-[12px] font-bold text-slate-300">Todavía no hay escenarios guardados.</div> : (
             <ul className="divide-y divide-slate-100">
-              {lista.map((e) => (
+              {listaFiltrada.map((e) => (
                 <li key={e.id} className={`flex flex-wrap items-center justify-between gap-2 py-2 ${abierto?.id === e.id ? "bg-amber-50/50" : ""}`}>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2"><span className="truncate text-[12px] font-black text-slate-800">{e.nombre}</span>{abierto?.id === e.id && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[8px] font-black uppercase text-amber-700">Abierto</span>}</div>
+                    <div className="flex items-center gap-2"><span className="truncate text-[12px] font-black text-slate-800">{e.nombre}</span><span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[8px] font-black uppercase text-slate-500"><span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: (tipoPorId(e.tipo) || {}).color || "#475569" }} />{(tipoPorId(e.tipo) || {}).corto || "Otro"}</span>{abierto?.id === e.id && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[8px] font-black uppercase text-amber-700">Abierto</span>}</div>
                     <div className="text-[10px] text-slate-400">{e.autor ? `${e.autor} · ` : ""}{new Date(e.fecha).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}{e.resumen ? ` · Mejor: ${e.resumen.mejor} (VPN ${moneda(e.resumen.vpn)})` : ""}</div>
                   </div>
                   <div className="flex gap-1.5">
@@ -453,7 +498,7 @@ export default function SimuladorPanel({ currentUser }) {
         {/* ======= Controles ======= */}
         <div className="space-y-3">
           <section className="space-y-3 rounded-2xl border border-[#e7e0f6] bg-[#fbf9ff] p-3.5 shadow-sm">
-            <Encabezado Ilus={IlusAnalisis} titulo="Análisis" sub="Qué estás evaluando"
+            <Encabezado Ilus={IlusAnalisis} titulo="Análisis" sub={tipo.nombre}
               ayuda={(
                 <AyudaBloque titulo="Tipo de análisis">
                   <Linea termino="Ahorro vs. opción actual">comparas comprar contra lo que pagas hoy, por ejemplo un servicio externo.</Linea>
@@ -462,6 +507,12 @@ export default function SimuladorPanel({ currentUser }) {
                 </AyudaBloque>
               )}
             />
+            <label className="block"><span className="text-[11px] font-bold text-slate-600">Tipo de proyecto</span>
+              <select value={tipo.id} onChange={(e) => cambiarTipo(e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[12px] font-bold text-slate-800 outline-none focus:border-slate-400">
+                {TIPOS_PROYECTO.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+              </select>
+              <span className="mt-0.5 block text-[10px] leading-tight text-slate-400">Cambiar el tipo cambia los nombres de los campos y el tipo de análisis; los números no se tocan.</span>
+            </label>
             <label className="block"><span className="text-[11px] font-bold text-slate-600">Nombre</span>
               <input value={estado.titulo} onChange={(e) => setEstado((x) => ({ ...x, titulo: e.target.value }))} className="mt-0.5 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[12px] font-bold text-slate-800 outline-none focus:border-slate-400" />
             </label>
@@ -489,8 +540,8 @@ export default function SimuladorPanel({ currentUser }) {
               </AyudaBloque>
             )}
           >
-            <Control tono="azul" etiqueta="Volumen al año" valor={g.volumen} onChange={(v) => setGeneral("volumen", v)} minTope={5000} paso={10} sufijo={unidad} />
-            <Control tono="azul" etiqueta={esAhorro ? `Costo actual por ${unidad}` : `Precio de venta por ${unidad}`} valor={g.referencia} onChange={(v) => setGeneral("referencia", v)} minTope={100} paso={0.5} prefijo="$" />
+            <Control tono="azul" etiqueta={ET("volumen")} valor={g.volumen} onChange={(v) => setGeneral("volumen", v)} minTope={5000} paso={10} sufijo={unidad} />
+            <Control tono="azul" etiqueta={ET("referencia")} valor={g.referencia} onChange={(v) => setGeneral("referencia", v)} minTope={100} paso={0.5} prefijo="$" />
             <Control tono="azul" etiqueta="Crecimiento del volumen por año" valor={g.crecimiento} onChange={(v) => setGeneral("crecimiento", v)} min={-20} max={30} paso={1} sufijo="%" />
             <Control tono="azul" etiqueta="Horizonte" valor={anios} onChange={(v) => setGeneral("anios", Math.min(MAX_ANIOS, Math.max(1, Math.round(num(v, 5)))))} min={1} max={MAX_ANIOS} paso={1} sufijo={anios === 1 ? "año" : "años"} />
           </Tarjeta>
@@ -527,7 +578,7 @@ export default function SimuladorPanel({ currentUser }) {
           </details>
 
           <Tarjeta tono="turquesa" Ilus={IlusEquipo} sub={estado.alternativas.length > 1 ? `Opción ${String.fromCharCode(65 + ed)} de ${estado.alternativas.length}` : "Lo que costaría invertir"}
-            titulo={<span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORES[ed] }} />La opción a evaluar</span>}
+            titulo={<span className="flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORES[ed] }} />{ET("alternativa")}</span>}
             ayuda={(
               <AyudaBloque titulo="La opción a evaluar">
                 <Linea termino="Inversión">precio sin IVA, más instalación, capacitación y mesa.</Linea>
@@ -542,10 +593,10 @@ export default function SimuladorPanel({ currentUser }) {
             <label className="block"><span className="text-[11px] font-bold text-slate-600">Nombre</span>
               <input value={altEd.nombre} onChange={(e) => setAlt(ed, "nombre", e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[12px] font-bold text-slate-800 outline-none focus:border-slate-400" />
             </label>
-            <Control tono="turquesa" etiqueta="Inversión inicial" valor={altEd.inversion} onChange={(v) => setAlt(ed, "inversion", v)} minTope={500000} paso={1000} prefijo="$" ayuda="Equipo, instalación, software y capacitación, sin IVA." />
-            <Control tono="turquesa" etiqueta={`Costo variable por ${unidad}`} valor={altEd.costoVariable} onChange={(v) => setAlt(ed, "costoVariable", v)} minTope={100} paso={0.5} prefijo="$" ayuda="Materiales, mano de obra y todo lo que crece con cada unidad." />
-            <Control tono="turquesa" etiqueta="Costos fijos al año" valor={altEd.costoFijo} onChange={(v) => setAlt(ed, "costoFijo", v)} minTope={50000} paso={500} prefijo="$" />
-            <Control tono="turquesa" etiqueta="Valor de rescate" valor={altEd.rescate} onChange={(v) => setAlt(ed, "rescate", v)} max={100} paso={1} sufijo="%" ayuda="Lo que vale el equipo al final; el último año lo suma neto de impuestos." />
+            <Control tono="turquesa" etiqueta={ET("inversion")} valor={altEd.inversion} onChange={(v) => setAlt(ed, "inversion", v)} minTope={500000} paso={1000} prefijo="$" ayuda={ET("ayudaInversion")} />
+            <Control tono="turquesa" etiqueta={ET("costoVariable")} valor={altEd.costoVariable} onChange={(v) => setAlt(ed, "costoVariable", v)} minTope={100} paso={0.5} prefijo="$" ayuda={ET("ayudaVariable")} />
+            <Control tono="turquesa" etiqueta={ET("costoFijo")} valor={altEd.costoFijo} onChange={(v) => setAlt(ed, "costoFijo", v)} minTope={50000} paso={500} prefijo="$" ayuda={ET("ayudaFijo")} />
+            <Control tono="turquesa" etiqueta="Valor de rescate" valor={altEd.rescate} onChange={(v) => setAlt(ed, "rescate", v)} max={100} paso={1} sufijo="%" ayuda={ET("ayudaRescate")} />
             <label className="block"><span className="text-[11px] font-bold text-slate-600">Nota / origen del dato</span>
               <textarea value={altEd.nota || ""} onChange={(e) => setAlt(ed, "nota", e.target.value)} rows={2} className="mt-0.5 w-full resize-none rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700 outline-none focus:border-slate-400" />
             </label>

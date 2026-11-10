@@ -123,3 +123,80 @@ export const PLANTILLAS = [
     },
   },
 ];
+
+// ---- Tipos de proyecto ----
+// Cada tipo trae su modo de análisis (ahorro o ingresos), la unidad de medida, los nombres de los campos con las palabras de ese
+// proyecto ("{u}" es la unidad) y un ejemplo para arrancar. Los números de los ejemplos son ilustrativos: se cambian en pantalla.
+// Los cálculos son los mismos para todos; un análisis guardado sin tipo se reconoce por su plantilla (ver tipoDe).
+const DEP_10 = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+const base = (modo, unidad, general, alternativas, titulo) => ({ titulo, modo, unidad, general: { crecimiento: 0, tasa: 18, isr: 30, anios: 5, ...general }, alternativas });
+const alt = (nombre, inversion, costoVariable, costoFijo, rescate, nota = "") => ({ nombre, inversion, costoVariable, costoFijo, rescate, nota });
+
+export const TIPOS_PROYECTO = [
+  {
+    id: "equipo", nombre: "Compra de equipo", corto: "Equipo", color: "#0f766e",
+    descripcion: "Comprar una máquina o equipo contra seguir pagando el servicio externo (por ejemplo, el plotter).",
+    ejemplo: true, modo: "ahorro", unidad: "m lineal",
+    etiquetas: { volumen: "Volumen al año", referencia: "Costo actual por {u}", costoVariable: "Insumos por {u}", costoFijo: "Mantenimiento y servicio al año", inversion: "Equipo e instalación", alternativa: "El equipo a evaluar",
+      ayudaInversion: "Precio sin IVA, más instalación, capacitación y mesa.", ayudaVariable: "Insumos de cada unidad (papel, tinta, material).", ayudaFijo: "Lo que pagas al año aunque no lo uses: mantenimiento, póliza.", ayudaRescate: "Lo que valdría al venderlo al final; el último año lo suma neto de impuestos." },
+    datos: PLANTILLAS[0].datos,
+  },
+  {
+    id: "mejora", nombre: "Mejora de proceso o ahorro de costos", corto: "Mejora", color: "#2563eb",
+    descripcion: "Una inversión que baja el costo de hacer algo (automatizar un corte, reducir desperdicio, cambiar un método).",
+    ejemplo: true, modo: "ahorro", unidad: "pieza",
+    etiquetas: { volumen: "Piezas al año", referencia: "Costo actual por {u}", costoVariable: "Costo con la mejora por {u}", costoFijo: "Costos fijos de la mejora al año", inversion: "Inversión de la mejora", alternativa: "La mejora a evaluar",
+      ayudaInversion: "Equipo, adecuaciones y capacitación, sin IVA.", ayudaVariable: "Lo que costará cada unidad una vez hecha la mejora.", ayudaFijo: "Mantenimiento o licencias que genera la mejora cada año.", ayudaRescate: "Lo que valdría al final, si algo se puede recuperar." },
+    datos: base("ahorro", "pieza", { volumen: 6000, referencia: 85, depreciacion: DEP_10 }, [alt("Celda de corte automatizada", 250000, 60, 12000, 10, "Ejemplo ilustrativo: reemplazar con las cotizaciones y costos reales.")], "Mejora de proceso"),
+  },
+  {
+    id: "producto", nombre: "Nuevo producto o línea", corto: "Producto", color: "#b45309",
+    descripcion: "Lanzar un producto nuevo: la inversión de arranque contra el margen que deja cada pieza vendida.",
+    ejemplo: true, modo: "ingreso", unidad: "pieza",
+    etiquetas: { volumen: "Ventas al año", referencia: "Precio de venta por {u}", costoVariable: "Costo de producir por {u}", costoFijo: "Costos fijos del producto al año", inversion: "Moldes, herramental y arranque", alternativa: "El escenario a evaluar",
+      ayudaInversion: "Diseño, moldes, herramental, muestras y arranque, sin IVA.", ayudaVariable: "Materiales y mano de obra de cada pieza.", ayudaFijo: "Publicidad, personal dedicado y lo que se paga aunque no se venda.", ayudaRescate: "Lo que valdrían moldes y equipo al final." },
+    datos: PLANTILLAS[1].datos,
+  },
+  {
+    id: "capacidad", nombre: "Ampliar capacidad de producción", corto: "Capacidad", color: "#7c3aed",
+    descripcion: "Una máquina o turno adicional para producir y vender más de lo que hoy se alcanza.",
+    ejemplo: true, modo: "ingreso", unidad: "juego",
+    etiquetas: { volumen: "Unidades adicionales al año", referencia: "Precio de venta por {u}", costoVariable: "Costo variable por {u}", costoFijo: "Costos fijos adicionales al año", inversion: "Máquina e instalación", alternativa: "La ampliación a evaluar",
+      ayudaInversion: "Máquina, instalación eléctrica, piso y capacitación, sin IVA.", ayudaVariable: "Materiales, energía y mano de obra por cada unidad adicional.", ayudaFijo: "Operadores, supervisión y mantenimiento que se suman cada año.", ayudaRescate: "Lo que valdría la máquina al venderla al final." },
+    datos: base("ingreso", "juego", { volumen: 300, referencia: 9500, crecimiento: 5, depreciacion: DEP_10 }, [alt("Segundo turno con máquina nueva", 1200000, 6200, 90000, 20, "Ejemplo ilustrativo: capturar las unidades extra que de verdad se venderían.")], "Ampliación de capacidad"),
+  },
+  {
+    id: "sistema", nombre: "Software o sistema", corto: "Sistema", color: "#0e7490",
+    descripcion: "Un sistema que ahorra horas de trabajo: la implementación y las licencias contra el costo de hacerlo a mano.",
+    ejemplo: true, modo: "ahorro", unidad: "hora",
+    etiquetas: { volumen: "Horas ahorradas al año", referencia: "Costo por {u} de trabajo manual", costoVariable: "Costo por {u} con el sistema", costoFijo: "Licencias y soporte al año", inversion: "Implementación y capacitación", alternativa: "El sistema a evaluar",
+      ayudaInversion: "Compra o desarrollo, implementación, migración de datos y capacitación, sin IVA.", ayudaVariable: "Lo que cuesta cada hora de trabajo que sí sigue haciéndose con el sistema (suele ser casi cero).", ayudaFijo: "Licencias, nube y soporte que se pagan cada año.", ayudaRescate: "Normalmente cero en un sistema." },
+    datos: base("ahorro", "hora", { volumen: 2500, referencia: 120, depreciacion: [30, 30, 30, 10] }, [alt("Sistema de seguimiento de producción", 180000, 15, 60000, 0, "Ejemplo ilustrativo: horas que se dejan de gastar en captura, revisión y reportes.")], "Software o sistema"),
+  },
+  {
+    id: "sucursal", nombre: "Punto de venta o sucursal", corto: "Sucursal", color: "#be185d",
+    descripcion: "Abrir una tienda o showroom: la inversión y los gastos fijos contra el margen de cada venta.",
+    ejemplo: true, modo: "ingreso", unidad: "venta",
+    etiquetas: { volumen: "Ventas al año", referencia: "Ticket promedio por {u}", costoVariable: "Costo directo por {u}", costoFijo: "Renta, nómina y servicios al año", inversion: "Adecuación, inventario y equipo", alternativa: "El punto de venta a evaluar",
+      ayudaInversion: "Adecuación del local, mobiliario, inventario inicial y depósitos, sin IVA.", ayudaVariable: "Lo que cuesta producir, entregar y comisionar cada venta.", ayudaFijo: "Renta, sueldos, luz, publicidad y todo lo que se paga aunque no haya ventas.", ayudaRescate: "Lo que se recuperaría al cerrar: mobiliario, inventario." },
+    datos: base("ingreso", "venta", { volumen: 400, referencia: 4200, crecimiento: 8, depreciacion: DEP_10 }, [alt("Showroom en la ciudad", 900000, 2900, 480000, 10, "Ejemplo ilustrativo: ventas y gastos por confirmar con el estudio de la zona.")], "Punto de venta o sucursal"),
+  },
+  {
+    id: "blanco", nombre: "Otro proyecto (en blanco)", corto: "Otro", color: "#475569",
+    descripcion: "Todos los campos en cero, para capturar cualquier evaluación que no encaje en los tipos anteriores.",
+    ejemplo: false, modo: "ahorro", unidad: "unidad",
+    etiquetas: { volumen: "Volumen al año", referencia: "Referencia por {u}", costoVariable: "Costo variable por {u}", costoFijo: "Costos fijos al año", inversion: "Inversión inicial", alternativa: "La opción a evaluar",
+      ayudaInversion: "Equipo, instalación, software y capacitación, sin IVA.", ayudaVariable: "Materiales, mano de obra y todo lo que crece con cada unidad.", ayudaFijo: "Lo que se paga cada año sin importar el volumen.", ayudaRescate: "Lo que valdría al final; el último año lo suma neto de impuestos." },
+    datos: PLANTILLAS[2].datos,
+  },
+];
+
+// Análisis guardados antes de existir los tipos: se reconocen por la plantilla con la que nacieron.
+const TIPO_POR_PLANTILLA = { plotter: "equipo", "nuevo-producto": "producto", blanco: "blanco" };
+export const tipoDe = (estado) => {
+  const id = estado?.tipo || TIPO_POR_PLANTILLA[estado?.plantillaId] || "blanco";
+  return TIPOS_PROYECTO.find((t) => t.id === id) || TIPOS_PROYECTO[TIPOS_PROYECTO.length - 1];
+};
+export const tipoPorId = (id) => TIPOS_PROYECTO.find((t) => t.id === id) || null;
+// Texto del tipo con la unidad capturada en lugar de "{u}"
+export const etiquetaTipo = (tipo, clave, unidad) => String(tipo.etiquetas[clave] ?? "").replace("{u}", unidad || "unidad");
