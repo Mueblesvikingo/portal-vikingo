@@ -94,7 +94,7 @@ export const PLANTILLAS = [
       modo: "ahorro", unidad: "m lineal",
       general: { volumen: 3000, referencia: 75, tasa: 18, isr: 30, anios: 5, crecimiento: 0, depreciacion: DEP_COMPUTO },
       alternativas: [
-        { nombre: "Audaces Jet Lux Plus 185 (Galga)", inversion: 155172, costoVariable: 13.5, costoFijo: 3000, rescate: 10, nota: "Cotización Galga: $180,000 con IVA ($155,172 sin IVA). 185 cm de ancho, 70–100 m²/h, papel de 40 a 80 g/m², Ethernet, 150 W. Por confirmar: insumos ($13.5/m), costos fijos, volumen al año y valor de rescate." },
+        { nombre: "Audaces Jet Lux Plus 185 (Galga)", inversion: 155172, costoVariable: 9, costoFijo: 3000, rescate: 10, nota: "Cotización Galga: $180,000 con IVA ($155,172 sin IVA). 185 cm de ancho, 70–100 m²/h, papel de 40 a 80 g/m², Ethernet, 150 W. Insumos $9/m lineal en papel estraza (precios del 12-nov-2026): papel ≈ $6/m (rollo de 1.83 m, 50–60 g/m², $50–75/kg → $4.6 a $8.2/m) + tinta ≈ $3/m (cartucho HP 45 a $1,432, suponiendo 500 m por cartucho; si rinde 1,000 m baja a $1.4/m y si rinde 200 m sube a $7.2/m). Por confirmar con Galga: rendimiento del cartucho y que el equipo acepte estraza (la pelusa puede tapar los cabezales). También por confirmar: costos fijos, volumen al año y valor de rescate." },
       ],
     },
   },
